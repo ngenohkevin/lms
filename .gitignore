@@ -1,11 +1,89 @@
-CLAUDE.md
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Dependency directories (remove the comment below to include it)
+vendor/
+
+# Go workspace file
+go.work
+
+# Build directory
+build/
+tmp/
+
+# Environment variables
 .env
-*.env
+.env.local
+.env.development
+.env.staging
+.env.production
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Air
+.air.toml.local
+
+# Coverage
+coverage.out
+coverage.html
+
+# Uploads
+uploads/
+
+# Config files (keep example files)
+config.yaml
+config.yml
+config.json
+
+# Docker
+docker-compose.override.yml
+
+# Test databases
+*_test.db
+
+# Temporary files
+*.tmp
+*.temp
+
+# Local development
+local/
+
+# Miscellaneous
+excalidraw.log
 flow.md
 progress.md
-.mcp.json
-.claude
-.idea
-
-excalidraw.log
-
+CLAUDE.md
+.claude/
