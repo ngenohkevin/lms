@@ -14,6 +14,7 @@ import (
 	"github.com/ngenohkevin/lms/internal/database"
 	"github.com/ngenohkevin/lms/internal/handlers"
 	"github.com/ngenohkevin/lms/internal/middleware"
+	"github.com/ngenohkevin/lms/internal/services"
 )
 
 func main() {
@@ -49,22 +50,60 @@ func main() {
 	}
 	defer redis.Close()
 
+	// Initialize services
+	authService := services.NewAuthService(
+		[]byte(cfg.JWT.Secret),
+		[]byte(cfg.JWT.RefreshSecret),
+		time.Duration(cfg.JWT.ExpiryHours)*time.Hour,
+		7*24*time.Hour, // 7 days for refresh token
+		logger,
+	)
+	userService := services.NewUserService(db.Pool, logger)
+
 	// Initialize Gin router
 	r := gin.New()
 
-	// Add middleware
+	// Add global middleware
 	r.Use(middleware.Logger())
 	r.Use(middleware.Recovery())
 	r.Use(middleware.CORS())
+	r.Use(middleware.SecurityHeaders())
+	r.Use(middleware.SecureJSON())
+
+	// Initialize rate limiter
+	rateLimiter := middleware.NewRateLimiter(redis.Client)
+
+	// Initialize middleware
+	authMiddleware := middleware.NewAuthMiddleware(authService)
 
 	// Initialize handlers
 	healthHandler := handlers.NewHealthHandler(db, redis)
+	authHandler := handlers.NewAuthHandler(authService, userService)
 
-	// API routes
-	api := r.Group("/api/v1")
+	// Public routes (no authentication required)
+	public := r.Group("/api/v1")
 	{
-		api.GET("/ping", healthHandler.Ping)
-		api.GET("/health", healthHandler.Health)
+		public.GET("/ping", healthHandler.Ping)
+		public.GET("/health", healthHandler.Health)
+
+		// Authentication routes with rate limiting
+		auth := public.Group("/auth")
+		auth.Use(rateLimiter.AuthLimit())
+		{
+			auth.POST("/login", authHandler.Login)
+			auth.POST("/refresh", authHandler.RefreshToken)
+		}
+	}
+
+	// Protected routes (authentication required)
+	protected := r.Group("/api/v1")
+	protected.Use(authMiddleware.RequireAuth())
+	protected.Use(rateLimiter.APILimit())
+	{
+		// Profile management
+		protected.GET("/profile", authHandler.GetProfile)
+		protected.POST("/auth/logout", authHandler.Logout)
+		protected.POST("/auth/change-password", authHandler.ChangePassword)
 	}
 
 	// Root health check
