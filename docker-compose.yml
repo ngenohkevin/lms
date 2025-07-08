@@ -1,20 +1,18 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:15-alpine
     container_name: lms-postgres
     environment:
-      POSTGRES_DB: lms_dev
-      POSTGRES_USER: lms_user
-      POSTGRES_PASSWORD: lms_password
+      POSTGRES_DB: ${LMS_DATABASE_NAME:-lms_dev}
+      POSTGRES_USER: ${LMS_DATABASE_USER:-lms_user}
+      POSTGRES_PASSWORD: ${LMS_DATABASE_PASSWORD:?Database password is required}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./migrations:/docker-entrypoint-initdb.d/migrations:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lms_user -d lms_dev"]
+      test: ["CMD-SHELL", "pg_isready -U ${LMS_DATABASE_USER:-lms_user} -d ${LMS_DATABASE_NAME:-lms_dev}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -43,11 +41,11 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - DATABASE_URL=postgres://lms_user:lms_password@postgres:5432/lms_dev?sslmode=disable
+      - DATABASE_URL=postgres://${LMS_DATABASE_USER:-lms_user}:${LMS_DATABASE_PASSWORD:?Database password is required}@postgres:5432/${LMS_DATABASE_NAME:-lms_dev}?sslmode=disable
       - REDIS_URL=redis://redis:6379/0
-      - LMS_SERVER_MODE=debug
-      - LMS_JWT_SECRET=your-very-secure-secret-key-here
-      - LMS_JWT_REFRESH_SECRET=your-refresh-secret-key-here
+      - LMS_SERVER_MODE=${LMS_SERVER_MODE:-debug}
+      - LMS_JWT_SECRET=${LMS_JWT_SECRET:?JWT secret is required}
+      - LMS_JWT_REFRESH_SECRET=${LMS_JWT_REFRESH_SECRET:?JWT refresh secret is required}
     volumes:
       - ./uploads:/app/uploads
     restart: unless-stopped

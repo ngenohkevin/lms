@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache git ca-certificates tzdata
@@ -36,7 +36,7 @@ WORKDIR /app
 COPY --from=builder /app/main .
 
 # Copy configuration files
-COPY --from=builder /app/config ./config
+COPY --from=builder /app/internal/config ./internal/config
 
 # Create uploads directory
 RUN mkdir -p uploads && \

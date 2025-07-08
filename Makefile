@@ -10,7 +10,7 @@ GREEN=\033[0;32m
 YELLOW=\033[1;33m
 NC=\033[0m # No Color
 
-.PHONY: all build run clean test test-watch test-cover lint fmt help deps migrate-up migrate-down migrate-create docker-build docker-run
+.PHONY: all build run clean test test-watch test-cover lint fmt help deps migrate-up migrate-down migrate-create docker-build docker-run docker-services docker-stop setup-env
 
 # Default target
 all: clean deps fmt lint test build
@@ -23,12 +23,12 @@ build:
 # Run the application
 run:
 	@echo "$(GREEN)Running $(BINARY_NAME)...$(NC)"
-	@go run $(MAIN_PATH)
+	@bash -c "set -a; [ -f .env ] && source .env; [ -f .env.local ] && source .env.local; set +a; go run $(MAIN_PATH)"
 
 # Run with hot reload using Air
 dev:
 	@echo "$(GREEN)Starting development server with hot reload...$(NC)"
-	@air
+	@./scripts/dev.sh
 
 # Clean build artifacts
 clean:
@@ -82,11 +82,13 @@ deps:
 # Database migrations
 migrate-up:
 	@echo "$(GREEN)Running database migrations...$(NC)"
-	@migrate -path migrations -database "$(DATABASE_URL)" up
+	@if [ -z "$$DATABASE_URL" ]; then echo "$(RED)ERROR: DATABASE_URL not set$(NC)"; exit 1; fi
+	@migrate -path migrations -database "$$DATABASE_URL" up
 
 migrate-down:
 	@echo "$(YELLOW)Rolling back database migrations...$(NC)"
-	@migrate -path migrations -database "$(DATABASE_URL)" down
+	@if [ -z "$$DATABASE_URL" ]; then echo "$(RED)ERROR: DATABASE_URL not set$(NC)"; exit 1; fi
+	@migrate -path migrations -database "$$DATABASE_URL" down
 
 migrate-create:
 	@echo "$(GREEN)Creating migration: $(NAME)$(NC)"
@@ -97,13 +99,18 @@ docker-build:
 	@echo "$(GREEN)Building Docker image...$(NC)"
 	@docker build -t lms-backend .
 
+# Start only database services
+docker-services:
+	@echo "$(GREEN)Starting database services...$(NC)"
+	@docker compose up -d postgres redis
+
 docker-run:
-	@echo "$(GREEN)Running Docker container...$(NC)"
-	@docker-compose up -d
+	@echo "$(GREEN)Running all Docker containers...$(NC)"
+	@docker compose up -d
 
 docker-stop:
 	@echo "$(YELLOW)Stopping Docker containers...$(NC)"
-	@docker-compose down
+	@docker compose down
 
 # Database operations
 db-seed:
@@ -131,6 +138,11 @@ benchmark:
 	@echo "$(GREEN)Running benchmark tests...$(NC)"
 	@go test -bench=. ./...
 
+# Environment setup
+setup-env:
+	@echo "$(GREEN)Setting up development environment...$(NC)"
+	@./scripts/setup-env.sh
+
 # Help target
 help:
 	@echo "$(GREEN)Available targets:$(NC)"
@@ -150,8 +162,10 @@ help:
 	@echo "  $(YELLOW)migrate-down$(NC)   - Rollback database migrations"
 	@echo "  $(YELLOW)migrate-create$(NC) - Create new migration"
 	@echo "  $(YELLOW)docker-build$(NC)   - Build Docker image"
-	@echo "  $(YELLOW)docker-run$(NC)     - Run Docker container"
+	@echo "  $(YELLOW)docker-services$(NC) - Start database services only"
+	@echo "  $(YELLOW)docker-run$(NC)     - Run all Docker containers"
 	@echo "  $(YELLOW)docker-stop$(NC)    - Stop Docker containers"
+	@echo "  $(YELLOW)setup-env$(NC)      - Setup development environment"
 	@echo "  $(YELLOW)db-seed$(NC)        - Seed database"
 	@echo "  $(YELLOW)db-reset$(NC)       - Reset database"
 	@echo "  $(YELLOW)generate$(NC)       - Generate code"
