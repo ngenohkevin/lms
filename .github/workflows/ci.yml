@@ -44,7 +44,7 @@ jobs:
         go-version: '1.23'
 
     - name: Cache Go modules
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/go/pkg/mod
         key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
@@ -86,7 +86,7 @@ jobs:
       run: go tool cover -html=coverage.out -o coverage.html
 
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       if: github.event_name == 'push'
       with:
         file: ./coverage.out
@@ -106,13 +106,16 @@ jobs:
       with:
         go-version: '1.23'
 
+    - name: Install Gosec Security Scanner
+      run: |
+        curl -sfL https://raw.githubusercontent.com/securecodewarrior/gosec/master/install.sh | sh -s -- -b $(go env GOPATH)/bin latest
+        
     - name: Run Gosec Security Scanner
-      uses: securecodewarrior/github-action-gosec@master
-      with:
-        args: '-no-fail -fmt json -out gosec-report.json ./...'
+      run: |
+        $(go env GOPATH)/bin/gosec -no-fail -fmt json -out gosec-report.json ./...
 
     - name: Upload Gosec results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: gosec-results
         path: gosec-report.json

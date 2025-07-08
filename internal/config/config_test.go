@@ -73,7 +73,7 @@ func TestLoad(t *testing.T) {
 func TestConfigDefaults(t *testing.T) {
 	// Save current environment
 	envVars := []string{
-		"LMS_SERVER_PORT", "LMS_SERVER_MODE", "LMS_DATABASE_HOST", 
+		"LMS_SERVER_PORT", "LMS_SERVER_MODE", "LMS_DATABASE_HOST",
 		"LMS_DATABASE_PORT", "LMS_REDIS_HOST", "LMS_REDIS_PORT",
 		"LMS_JWT_EXPIRY_HOURS", "DATABASE_URL", "REDIS_URL",
 	}
@@ -82,7 +82,7 @@ func TestConfigDefaults(t *testing.T) {
 		savedEnv[env] = os.Getenv(env)
 		os.Unsetenv(env)
 	}
-	
+
 	// Restore environment after test
 	defer func() {
 		for env, value := range savedEnv {

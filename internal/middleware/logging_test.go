@@ -152,12 +152,12 @@ func TestRecovery(t *testing.T) {
 func TestMain(m *testing.M) {
 	// Save original logger
 	originalLogger := slog.Default()
-	
+
 	// Run tests
 	code := m.Run()
-	
+
 	// Restore original logger
 	slog.SetDefault(originalLogger)
-	
+
 	os.Exit(code)
 }
