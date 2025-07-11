@@ -69,7 +69,10 @@ func Load() (*Config, error) {
 		var configFileNotFoundError viper.ConfigFileNotFoundError
 		if errors.As(err, &configFileNotFoundError) {
 			// Config file not found, use defaults and environment variables
-			fmt.Printf("Config file not found, using defaults and environment variables\n")
+			// Only print message if not in test environment
+			if os.Getenv("GO_ENV") != "test" {
+				fmt.Printf("Config file not found, using defaults and environment variables\n")
+			}
 		}
 	}
 

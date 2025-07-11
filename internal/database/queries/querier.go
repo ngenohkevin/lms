@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	CancelReservation(ctx context.Context, id int32) (Reservation, error)
 	CountActiveReservationsByBook(ctx context.Context, bookID int32) (int64, error)
 	CountActiveReservationsByStudent(ctx context.Context, studentID int32) (int64, error)
 	CountAuditLogs(ctx context.Context) (int64, error)
@@ -47,6 +48,7 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id int32) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
+	ListActiveBorrowings(ctx context.Context, arg ListActiveBorrowingsParams) ([]ListActiveBorrowingsRow, error)
 	ListActiveReservations(ctx context.Context) ([]ListActiveReservationsRow, error)
 	ListActiveTransactionsByStudent(ctx context.Context, studentID int32) ([]ListActiveTransactionsByStudentRow, error)
 	ListAuditLogs(ctx context.Context, arg ListAuditLogsParams) ([]AuditLog, error)
@@ -76,6 +78,7 @@ type Querier interface {
 	MarkNotificationAsRead(ctx context.Context, id int32) error
 	MarkNotificationAsSent(ctx context.Context, id int32) error
 	PayTransactionFine(ctx context.Context, id int32) error
+	ReturnBook(ctx context.Context, arg ReturnBookParams) (Transaction, error)
 	SearchBooks(ctx context.Context, arg SearchBooksParams) ([]Book, error)
 	SearchBooksByGenre(ctx context.Context, arg SearchBooksByGenreParams) ([]Book, error)
 	SearchStudents(ctx context.Context, arg SearchStudentsParams) ([]Student, error)

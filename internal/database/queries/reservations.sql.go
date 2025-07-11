@@ -11,6 +11,30 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const cancelReservation = `-- name: CancelReservation :one
+UPDATE reservations
+SET status = 'cancelled', updated_at = NOW()
+WHERE id = $1
+RETURNING id, student_id, book_id, reserved_at, expires_at, status, fulfilled_at, created_at, updated_at
+`
+
+func (q *Queries) CancelReservation(ctx context.Context, id int32) (Reservation, error) {
+	row := q.db.QueryRow(ctx, cancelReservation, id)
+	var i Reservation
+	err := row.Scan(
+		&i.ID,
+		&i.StudentID,
+		&i.BookID,
+		&i.ReservedAt,
+		&i.ExpiresAt,
+		&i.Status,
+		&i.FulfilledAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const countActiveReservationsByBook = `-- name: CountActiveReservationsByBook :one
 SELECT COUNT(*) FROM reservations
 WHERE book_id = $1 AND status = 'active'
