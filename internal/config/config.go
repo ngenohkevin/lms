@@ -37,9 +37,11 @@ type RedisConfig struct {
 }
 
 type JWTConfig struct {
-	Secret        string `mapstructure:"secret"`
-	RefreshSecret string `mapstructure:"refresh_secret"`
-	ExpiryHours   int    `mapstructure:"expiry_hours"`
+	Secret            string `mapstructure:"secret"`
+	RefreshSecret     string `mapstructure:"refresh_secret"`
+	PrivateKey        string `mapstructure:"private_key"`
+	RefreshPrivateKey string `mapstructure:"refresh_private_key"`
+	ExpiryHours       int    `mapstructure:"expiry_hours"`
 }
 
 func Load() (*Config, error) {

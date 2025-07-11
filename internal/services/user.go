@@ -9,6 +9,18 @@ import (
 	"github.com/ngenohkevin/lms/internal/models"
 )
 
+// UserServiceInterface defines the interface for user service operations
+type UserServiceInterface interface {
+	GetUserByUsername(username string) (*models.User, error)
+	GetUserByEmail(email string) (*models.User, error)
+	GetUserByID(id int) (*models.User, error)
+	GetStudentByStudentID(studentID string) (*models.Student, error)
+	GetStudentByID(id int) (*models.Student, error)
+	UpdateLastLogin(userID int) error
+	UpdatePassword(userID int, hashedPassword string) error
+	UpdateStudentPassword(studentID int, hashedPassword string) error
+}
+
 type UserService struct {
 	db     *pgxpool.Pool
 	logger *slog.Logger

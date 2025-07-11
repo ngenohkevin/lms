@@ -9,7 +9,21 @@ import (
 	"github.com/ngenohkevin/lms/internal/config"
 )
 
+// getTestDBPassword returns test database password from environment or default
+func getTestDBPassword() string {
+	if password := os.Getenv("TEST_DB_PASSWORD"); password != "" {
+		return password
+	}
+	// Default password for local development - should not be used in production
+	return "test_password"
+}
+
 func TestDatabase_New(t *testing.T) {
+	// Skip if no test database credentials provided
+	if os.Getenv("TEST_DB_PASSWORD") == "" {
+		t.Skip("TEST_DB_PASSWORD not set, skipping database connection test")
+	}
+
 	tests := []struct {
 		name    string
 		cfg     *config.Config
@@ -22,7 +36,7 @@ func TestDatabase_New(t *testing.T) {
 					Host:     "localhost",
 					Port:     5432,
 					User:     "postgres",
-					Password: "dfJlcWtCjzJ8KaQ9",
+					Password: getTestDBPassword(),
 					Name:     "postgres",
 					SSLMode:  "disable",
 				},
@@ -93,7 +107,7 @@ func TestDatabase_Health(t *testing.T) {
 			Host:     "localhost",
 			Port:     5432,
 			User:     "test_user",
-			Password: "test_password",
+			Password: getTestDBPassword(),
 			Name:     "test_db",
 			SSLMode:  "disable",
 		},
@@ -120,7 +134,7 @@ func TestDatabase_Close(t *testing.T) {
 			Host:     "localhost",
 			Port:     5432,
 			User:     "test_user",
-			Password: "test_password",
+			Password: getTestDBPassword(),
 			Name:     "test_db",
 			SSLMode:  "disable",
 		},
@@ -144,7 +158,7 @@ func TestDatabase_ConnectionPoolConfiguration(t *testing.T) {
 			Host:     "localhost",
 			Port:     5432,
 			User:     "test_user",
-			Password: "test_password",
+			Password: getTestDBPassword(),
 			Name:     "test_db",
 			SSLMode:  "disable",
 		},
@@ -179,7 +193,7 @@ func BenchmarkDatabase_Health(b *testing.B) {
 			Host:     "localhost",
 			Port:     5432,
 			User:     "test_user",
-			Password: "test_password",
+			Password: getTestDBPassword(),
 			Name:     "test_db",
 			SSLMode:  "disable",
 		},

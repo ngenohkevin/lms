@@ -2,6 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"log/slog"
 	"net/http"
 	"os"
@@ -51,13 +55,29 @@ func main() {
 	defer redis.Close()
 
 	// Initialize services
-	authService := services.NewAuthService(
-		[]byte(cfg.JWT.Secret),
-		[]byte(cfg.JWT.RefreshSecret),
+	// Use RSA keys if available, otherwise generate fallback keys
+	jwtPrivateKey := cfg.JWT.PrivateKey
+	refreshPrivateKey := cfg.JWT.RefreshPrivateKey
+
+	if jwtPrivateKey == "" {
+		jwtPrivateKey = getDefaultRSAPrivateKey()
+	}
+	if refreshPrivateKey == "" {
+		refreshPrivateKey = getDefaultRSAPrivateKey()
+	}
+
+	authService, err := services.NewAuthService(
+		jwtPrivateKey,
+		refreshPrivateKey,
 		time.Duration(cfg.JWT.ExpiryHours)*time.Hour,
 		7*24*time.Hour, // 7 days for refresh token
 		logger,
+		redis.Client,
 	)
+	if err != nil {
+		slog.Error("Failed to initialize auth service", "error", err)
+		os.Exit(1)
+	}
 	userService := services.NewUserService(db.Pool, logger)
 
 	// Initialize Gin router
@@ -92,6 +112,8 @@ func main() {
 		{
 			auth.POST("/login", authHandler.Login)
 			auth.POST("/refresh", authHandler.RefreshToken)
+			auth.POST("/forgot-password", authHandler.ForgotPassword)
+			auth.POST("/reset-password", authHandler.ResetPassword)
 		}
 	}
 
@@ -148,4 +170,21 @@ func main() {
 	}
 
 	slog.Info("Server exited")
+}
+
+// getDefaultRSAPrivateKey generates a default RSA private key for development
+// In production, use proper RSA keys from configuration
+func getDefaultRSAPrivateKey() string {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		slog.Error("Failed to generate RSA key", "error", err)
+		os.Exit(1)
+	}
+
+	privateKeyPEM := &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
+	}
+
+	return string(pem.EncodeToMemory(privateKeyPEM))
 }

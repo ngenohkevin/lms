@@ -66,6 +66,15 @@ type ChangePasswordRequest struct {
 	NewPassword     string `json:"new_password" binding:"required,min=8"`
 }
 
+type ForgotPasswordRequest struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+type ResetPasswordRequest struct {
+	Token       string `json:"token" binding:"required"`
+	NewPassword string `json:"new_password" binding:"required,min=8"`
+}
+
 type JWTClaims struct {
 	UserID   int      `json:"user_id"`
 	Username string   `json:"username"`

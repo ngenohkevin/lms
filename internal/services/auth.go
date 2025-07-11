@@ -1,8 +1,12 @@
 package services
 
 import (
+	"context"
 	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/base64"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -11,6 +15,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/ngenohkevin/lms/internal/models"
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/argon2"
 )
 
@@ -21,15 +26,20 @@ var (
 	ErrInvalidToken       = errors.New("invalid token")
 	ErrTokenExpired       = errors.New("token has expired")
 	ErrInvalidPassword    = errors.New("invalid password format")
+	ErrInvalidRSAKey      = errors.New("invalid RSA key")
+	ErrInvalidResetToken  = errors.New("invalid or expired reset token")
 )
 
 type AuthService struct {
-	jwtSecret     []byte
-	refreshSecret []byte
-	tokenExpiry   time.Duration
-	refreshExpiry time.Duration
-	argon2Config  *Argon2Config
-	logger        *slog.Logger
+	jwtPrivateKey     *rsa.PrivateKey
+	jwtPublicKey      *rsa.PublicKey
+	refreshPrivateKey *rsa.PrivateKey
+	refreshPublicKey  *rsa.PublicKey
+	tokenExpiry       time.Duration
+	refreshExpiry     time.Duration
+	argon2Config      *Argon2Config
+	logger            *slog.Logger
+	redisClient       *redis.Client
 }
 
 type Argon2Config struct {
@@ -40,12 +50,26 @@ type Argon2Config struct {
 	KeyLength   uint32
 }
 
-func NewAuthService(jwtSecret, refreshSecret []byte, tokenExpiry, refreshExpiry time.Duration, logger *slog.Logger) *AuthService {
+func NewAuthService(jwtPrivateKeyPEM, refreshPrivateKeyPEM string, tokenExpiry, refreshExpiry time.Duration, logger *slog.Logger, redisClient *redis.Client) (*AuthService, error) {
+	// Parse JWT private key
+	jwtPrivateKey, err := parseRSAPrivateKey(jwtPrivateKeyPEM)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse JWT private key: %w", err)
+	}
+
+	// Parse refresh private key
+	refreshPrivateKey, err := parseRSAPrivateKey(refreshPrivateKeyPEM)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse refresh private key: %w", err)
+	}
+
 	return &AuthService{
-		jwtSecret:     jwtSecret,
-		refreshSecret: refreshSecret,
-		tokenExpiry:   tokenExpiry,
-		refreshExpiry: refreshExpiry,
+		jwtPrivateKey:     jwtPrivateKey,
+		jwtPublicKey:      &jwtPrivateKey.PublicKey,
+		refreshPrivateKey: refreshPrivateKey,
+		refreshPublicKey:  &refreshPrivateKey.PublicKey,
+		tokenExpiry:       tokenExpiry,
+		refreshExpiry:     refreshExpiry,
 		argon2Config: &Argon2Config{
 			Memory:      64 * 1024,
 			Iterations:  3,
@@ -53,8 +77,31 @@ func NewAuthService(jwtSecret, refreshSecret []byte, tokenExpiry, refreshExpiry 
 			SaltLength:  16,
 			KeyLength:   32,
 		},
-		logger: logger,
+		logger:      logger,
+		redisClient: redisClient,
+	}, nil
+}
+
+func parseRSAPrivateKey(privateKeyPEM string) (*rsa.PrivateKey, error) {
+	block, _ := pem.Decode([]byte(privateKeyPEM))
+	if block == nil {
+		return nil, ErrInvalidRSAKey
 	}
+
+	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	if err != nil {
+		// Try PKCS8 format
+		parsedKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+		if err != nil {
+			return nil, err
+		}
+		if rsaKey, ok := parsedKey.(*rsa.PrivateKey); ok {
+			return rsaKey, nil
+		}
+		return nil, ErrInvalidRSAKey
+	}
+
+	return privateKey, nil
 }
 
 func (s *AuthService) HashPassword(password string) (string, error) {
@@ -167,8 +214,8 @@ func (s *AuthService) GenerateTokens(user *models.User, userType string) (string
 		},
 	}
 
-	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims)
-	accessTokenString, err := accessToken.SignedString(s.jwtSecret)
+	accessToken := jwt.NewWithClaims(jwt.SigningMethodRS256, accessClaims)
+	accessTokenString, err := accessToken.SignedString(s.jwtPrivateKey)
 	if err != nil {
 		return "", "", err
 	}
@@ -186,8 +233,8 @@ func (s *AuthService) GenerateTokens(user *models.User, userType string) (string
 		},
 	}
 
-	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims)
-	refreshTokenString, err := refreshToken.SignedString(s.refreshSecret)
+	refreshToken := jwt.NewWithClaims(jwt.SigningMethodRS256, refreshClaims)
+	refreshTokenString, err := refreshToken.SignedString(s.refreshPrivateKey)
 	if err != nil {
 		return "", "", err
 	}
@@ -212,8 +259,8 @@ func (s *AuthService) GenerateStudentTokens(student *models.Student) (string, st
 		},
 	}
 
-	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims)
-	accessTokenString, err := accessToken.SignedString(s.jwtSecret)
+	accessToken := jwt.NewWithClaims(jwt.SigningMethodRS256, accessClaims)
+	accessTokenString, err := accessToken.SignedString(s.jwtPrivateKey)
 	if err != nil {
 		return "", "", err
 	}
@@ -231,8 +278,8 @@ func (s *AuthService) GenerateStudentTokens(student *models.Student) (string, st
 		},
 	}
 
-	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims)
-	refreshTokenString, err := refreshToken.SignedString(s.refreshSecret)
+	refreshToken := jwt.NewWithClaims(jwt.SigningMethodRS256, refreshClaims)
+	refreshTokenString, err := refreshToken.SignedString(s.refreshPrivateKey)
 	if err != nil {
 		return "", "", err
 	}
@@ -242,10 +289,10 @@ func (s *AuthService) GenerateStudentTokens(student *models.Student) (string, st
 
 func (s *AuthService) ValidateToken(tokenString string) (*models.JWTClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &models.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		return s.jwtSecret, nil
+		return s.jwtPublicKey, nil
 	})
 
 	if err != nil {
@@ -253,6 +300,18 @@ func (s *AuthService) ValidateToken(tokenString string) (*models.JWTClaims, erro
 	}
 
 	if claims, ok := token.Claims.(*models.JWTClaims); ok && token.Valid {
+		// Check if token is blacklisted
+		if s.redisClient != nil {
+			ctx := context.Background()
+			blacklisted, err := s.redisClient.Exists(ctx, fmt.Sprintf("blacklist:%s", tokenString)).Result()
+			if err != nil {
+				s.logger.Error("Failed to check token blacklist", "error", err)
+				// Continue validation if Redis is down
+			}
+			if blacklisted > 0 {
+				return nil, ErrInvalidToken
+			}
+		}
 		return claims, nil
 	}
 
@@ -261,10 +320,10 @@ func (s *AuthService) ValidateToken(tokenString string) (*models.JWTClaims, erro
 
 func (s *AuthService) ValidateRefreshToken(tokenString string) (*models.RefreshTokenClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &models.RefreshTokenClaims{}, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		return s.refreshSecret, nil
+		return s.refreshPublicKey, nil
 	})
 
 	if err != nil {
@@ -272,6 +331,18 @@ func (s *AuthService) ValidateRefreshToken(tokenString string) (*models.RefreshT
 	}
 
 	if claims, ok := token.Claims.(*models.RefreshTokenClaims); ok && token.Valid {
+		// Check if refresh token is blacklisted
+		if s.redisClient != nil {
+			ctx := context.Background()
+			blacklisted, err := s.redisClient.Exists(ctx, fmt.Sprintf("blacklist:refresh:%s", tokenString)).Result()
+			if err != nil {
+				s.logger.Error("Failed to check refresh token blacklist", "error", err)
+				// Continue validation if Redis is down
+			}
+			if blacklisted > 0 {
+				return nil, ErrInvalidToken
+			}
+		}
 		return claims, nil
 	}
 
@@ -293,4 +364,154 @@ func (s *AuthService) RefreshTokens(refreshTokenString string) (string, string, 
 	}
 
 	return s.GenerateTokens(user, claims.UserType)
+}
+
+// BlacklistToken adds a token to the blacklist
+func (s *AuthService) BlacklistToken(tokenString string) error {
+	if s.redisClient == nil {
+		return errors.New("redis client not configured")
+	}
+
+	ctx := context.Background()
+
+	// Parse token to get expiry time
+	token, err := jwt.ParseWithClaims(tokenString, &models.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return s.jwtPublicKey, nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	if claims, ok := token.Claims.(*models.JWTClaims); ok {
+		// Set blacklist entry with expiry time
+		expiry := time.Until(claims.ExpiresAt.Time)
+		if expiry <= 0 {
+			// Token already expired, no need to blacklist
+			return nil
+		}
+
+		err = s.redisClient.Set(ctx, fmt.Sprintf("blacklist:%s", tokenString), "1", expiry).Err()
+		if err != nil {
+			s.logger.Error("Failed to blacklist token", "error", err)
+			return err
+		}
+
+		s.logger.Info("Token blacklisted successfully", "user_id", claims.UserID)
+		return nil
+	}
+
+	return ErrInvalidToken
+}
+
+// BlacklistRefreshToken adds a refresh token to the blacklist
+func (s *AuthService) BlacklistRefreshToken(tokenString string) error {
+	if s.redisClient == nil {
+		return errors.New("redis client not configured")
+	}
+
+	ctx := context.Background()
+
+	// Parse token to get expiry time
+	token, err := jwt.ParseWithClaims(tokenString, &models.RefreshTokenClaims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return s.refreshPublicKey, nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	if claims, ok := token.Claims.(*models.RefreshTokenClaims); ok {
+		// Set blacklist entry with expiry time
+		expiry := time.Until(claims.ExpiresAt.Time)
+		if expiry <= 0 {
+			// Token already expired, no need to blacklist
+			return nil
+		}
+
+		err = s.redisClient.Set(ctx, fmt.Sprintf("blacklist:refresh:%s", tokenString), "1", expiry).Err()
+		if err != nil {
+			s.logger.Error("Failed to blacklist refresh token", "error", err)
+			return err
+		}
+
+		s.logger.Info("Refresh token blacklisted successfully", "user_id", claims.UserID)
+		return nil
+	}
+
+	return ErrInvalidToken
+}
+
+// GeneratePasswordResetToken generates a secure password reset token
+func (s *AuthService) GeneratePasswordResetToken(email string) (string, error) {
+	if s.redisClient == nil {
+		return "", errors.New("redis client not configured")
+	}
+
+	ctx := context.Background()
+
+	// Generate a secure random token
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		return "", fmt.Errorf("failed to generate token: %w", err)
+	}
+
+	token := base64.URLEncoding.EncodeToString(tokenBytes)
+
+	// Store token in Redis with 1 hour expiry
+	key := fmt.Sprintf("password_reset:%s", token)
+	err := s.redisClient.Set(ctx, key, email, time.Hour).Err()
+	if err != nil {
+		s.logger.Error("Failed to store password reset token", "error", err)
+		return "", err
+	}
+
+	s.logger.Info("Password reset token generated", "email", email)
+	return token, nil
+}
+
+// ValidatePasswordResetToken validates a password reset token and returns the associated email
+func (s *AuthService) ValidatePasswordResetToken(token string) (string, error) {
+	if s.redisClient == nil {
+		return "", errors.New("redis client not configured")
+	}
+
+	ctx := context.Background()
+	key := fmt.Sprintf("password_reset:%s", token)
+
+	email, err := s.redisClient.Get(ctx, key).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return "", ErrInvalidResetToken
+		}
+		s.logger.Error("Failed to validate password reset token", "error", err)
+		return "", err
+	}
+
+	return email, nil
+}
+
+// InvalidatePasswordResetToken removes a password reset token from Redis
+func (s *AuthService) InvalidatePasswordResetToken(token string) error {
+	if s.redisClient == nil {
+		return errors.New("redis client not configured")
+	}
+
+	ctx := context.Background()
+	key := fmt.Sprintf("password_reset:%s", token)
+
+	err := s.redisClient.Del(ctx, key).Err()
+	if err != nil {
+		s.logger.Error("Failed to invalidate password reset token", "error", err)
+		return err
+	}
+
+	s.logger.Info("Password reset token invalidated")
+	return nil
 }

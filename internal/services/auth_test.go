@@ -1,6 +1,10 @@
 package services
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"log/slog"
 	"os"
 	"testing"
@@ -11,15 +15,32 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// generateTestRSAKey generates a test RSA private key
+func generateTestRSAKey() string {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		panic(err)
+	}
+
+	privateKeyPEM := &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
+	}
+
+	return string(pem.EncodeToMemory(privateKeyPEM))
+}
+
 func TestAuthService_HashPassword(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	authService := NewAuthService(
-		[]byte("test-secret"),
-		[]byte("test-refresh-secret"),
+	authService, err := NewAuthService(
+		generateTestRSAKey(),
+		generateTestRSAKey(),
 		time.Hour,
 		24*time.Hour,
 		logger,
+		nil, // Redis client not needed for password hashing tests
 	)
+	require.NoError(t, err)
 
 	tests := []struct {
 		name     string
@@ -28,12 +49,12 @@ func TestAuthService_HashPassword(t *testing.T) {
 	}{
 		{
 			name:     "valid password",
-			password: "password123",
+			password: "SecureTest123!",
 			wantErr:  false,
 		},
 		{
 			name:     "minimum length password",
-			password: "12345678",
+			password: "Test123!",
 			wantErr:  false,
 		},
 		{
@@ -66,15 +87,17 @@ func TestAuthService_HashPassword(t *testing.T) {
 
 func TestAuthService_VerifyPassword(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	authService := NewAuthService(
-		[]byte("test-secret"),
-		[]byte("test-refresh-secret"),
+	authService, err := NewAuthService(
+		generateTestRSAKey(),
+		generateTestRSAKey(),
 		time.Hour,
 		24*time.Hour,
 		logger,
+		nil, // Redis client not needed for password hashing tests
 	)
+	require.NoError(t, err)
 
-	password := "password123"
+	password := "SecureTest123!"
 	hash, err := authService.HashPassword(password)
 	require.NoError(t, err)
 	t.Logf("Generated hash: %s", hash)
@@ -125,13 +148,15 @@ func TestAuthService_VerifyPassword(t *testing.T) {
 
 func TestAuthService_GenerateTokens(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	authService := NewAuthService(
-		[]byte("test-secret"),
-		[]byte("test-refresh-secret"),
+	authService, err := NewAuthService(
+		generateTestRSAKey(),
+		generateTestRSAKey(),
 		time.Hour,
 		24*time.Hour,
 		logger,
+		nil, // Redis client not needed for password hashing tests
 	)
+	require.NoError(t, err)
 
 	user := &models.User{
 		ID:       1,
@@ -149,13 +174,15 @@ func TestAuthService_GenerateTokens(t *testing.T) {
 
 func TestAuthService_ValidateToken(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	authService := NewAuthService(
-		[]byte("test-secret"),
-		[]byte("test-refresh-secret"),
+	authService, err := NewAuthService(
+		generateTestRSAKey(),
+		generateTestRSAKey(),
 		time.Hour,
 		24*time.Hour,
 		logger,
+		nil, // Redis client not needed for password hashing tests
 	)
+	require.NoError(t, err)
 
 	user := &models.User{
 		ID:       1,
@@ -208,13 +235,15 @@ func TestAuthService_ValidateToken(t *testing.T) {
 
 func TestAuthService_GenerateStudentTokens(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	authService := NewAuthService(
-		[]byte("test-secret"),
-		[]byte("test-refresh-secret"),
+	authService, err := NewAuthService(
+		generateTestRSAKey(),
+		generateTestRSAKey(),
 		time.Hour,
 		24*time.Hour,
 		logger,
+		nil, // Redis client not needed for password hashing tests
 	)
+	require.NoError(t, err)
 
 	student := &models.Student{
 		ID:        1,
