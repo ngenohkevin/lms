@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -20,13 +21,13 @@ func TestDatabase_New(t *testing.T) {
 				Database: config.DatabaseConfig{
 					Host:     "localhost",
 					Port:     5432,
-					User:     "test_user",
-					Password: "test_password",
-					Name:     "test_db",
+					User:     "postgres",
+					Password: "dfJlcWtCjzJ8KaQ9",
+					Name:     "postgres",
 					SSLMode:  "disable",
 				},
 			},
-			wantErr: true, // Expected to fail without real database
+			wantErr: false, // Should succeed with local database
 		},
 		{
 			name: "invalid config - empty host",
@@ -40,7 +41,7 @@ func TestDatabase_New(t *testing.T) {
 					SSLMode:  "disable",
 				},
 			},
-			wantErr: true,
+			wantErr: true, // Should fail with empty host
 		},
 		{
 			name: "invalid config - zero port",
@@ -54,12 +55,21 @@ func TestDatabase_New(t *testing.T) {
 					SSLMode:  "disable",
 				},
 			},
-			wantErr: true,
+			wantErr: true, // Should fail with zero port
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Clear DATABASE_URL to test individual configs
+			oldDBURL := os.Getenv("DATABASE_URL")
+			os.Unsetenv("DATABASE_URL")
+			defer func() {
+				if oldDBURL != "" {
+					os.Setenv("DATABASE_URL", oldDBURL)
+				}
+			}()
+
 			db, err := New(tt.cfg)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("New() error = %v, wantErr %v", err, tt.wantErr)

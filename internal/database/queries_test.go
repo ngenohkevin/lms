@@ -41,16 +41,16 @@ func TestQueries_UserOperations(t *testing.T) {
 
 	// Test CreateUser
 	user, err := q.CreateUser(ctx, queries.CreateUserParams{
-		Username:     "testuser",
-		Email:        "test@example.com",
+		Username:     "testuser_queries",
+		Email:        "testqueries@example.com",
 		PasswordHash: "hashedpassword",
 		Role:         pgtype.Text{String: "librarian", Valid: true},
 	})
 	require.NoError(t, err)
 	assert.NotZero(t, user.ID)
-	assert.Equal(t, "testuser", user.Username)
-	assert.Equal(t, "test@example.com", user.Email)
-	assert.Equal(t, "librarian", user.Role)
+	assert.Equal(t, "testuser_queries", user.Username)
+	assert.Equal(t, "testqueries@example.com", user.Email)
+	assert.Equal(t, "librarian", user.Role.String)
 
 	// Test GetUserByID
 	foundUser, err := q.GetUserByID(ctx, user.ID)
@@ -59,12 +59,12 @@ func TestQueries_UserOperations(t *testing.T) {
 	assert.Equal(t, user.Username, foundUser.Username)
 
 	// Test GetUserByUsername
-	foundUser, err = q.GetUserByUsername(ctx, "testuser")
+	foundUser, err = q.GetUserByUsername(ctx, "testuser_queries")
 	require.NoError(t, err)
 	assert.Equal(t, user.ID, foundUser.ID)
 
 	// Test GetUserByEmail
-	foundUser, err = q.GetUserByEmail(ctx, "test@example.com")
+	foundUser, err = q.GetUserByEmail(ctx, "testqueries@example.com")
 	require.NoError(t, err)
 	assert.Equal(t, user.ID, foundUser.ID)
 
@@ -79,7 +79,7 @@ func TestQueries_UserOperations(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "updateduser", updatedUser.Username)
 	assert.Equal(t, "updated@example.com", updatedUser.Email)
-	assert.Equal(t, "admin", updatedUser.Role)
+	assert.Equal(t, "admin", updatedUser.Role.String)
 
 	// Test UpdateUserLastLogin
 	err = q.UpdateUserLastLogin(ctx, user.ID)
@@ -198,17 +198,17 @@ func TestQueries_BookOperations(t *testing.T) {
 
 	// Test CreateBook
 	book, err := q.CreateBook(ctx, queries.CreateBookParams{
-		BookID:           "BOOK001",
-		Isbn:             pgtype.Text{String: "978-1234567890", Valid: true},
-		Title:            "Test Book",
-		Author:           "Test Author",
-		Publisher:        pgtype.Text{String: "Test Publisher", Valid: true},
-		PublishedYear:    pgtype.Int4{Int32: 2023, Valid: true},
-		Genre:            pgtype.Text{String: "Fiction", Valid: true},
-		Description:      pgtype.Text{String: "A test book", Valid: true},
-		TotalCopies:      pgtype.Int4{Int32: 5, Valid: true},
-		AvailableCopies:  pgtype.Int4{Int32: 5, Valid: true},
-		ShelfLocation:    pgtype.Text{String: "A1-001", Valid: true},
+		BookID:          "BOOK001",
+		Isbn:            pgtype.Text{String: "978-1234567890", Valid: true},
+		Title:           "Test Book",
+		Author:          "Test Author",
+		Publisher:       pgtype.Text{String: "Test Publisher", Valid: true},
+		PublishedYear:   pgtype.Int4{Int32: 2023, Valid: true},
+		Genre:           pgtype.Text{String: "Fiction", Valid: true},
+		Description:     pgtype.Text{String: "A test book", Valid: true},
+		TotalCopies:     pgtype.Int4{Int32: 5, Valid: true},
+		AvailableCopies: pgtype.Int4{Int32: 5, Valid: true},
+		ShelfLocation:   pgtype.Text{String: "A1-001", Valid: true},
 	})
 	require.NoError(t, err)
 	assert.NotZero(t, book.ID)
@@ -246,8 +246,8 @@ func TestQueries_BookOperations(t *testing.T) {
 
 	// Test SearchBooks (simplified - actual search implementation may vary)
 	searchResults, err := q.ListBooks(ctx, queries.ListBooksParams{
-		Limit:      10,
-		Offset:     0,
+		Limit:  10,
+		Offset: 0,
 	})
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(searchResults), 1)
@@ -339,7 +339,7 @@ func BenchmarkQueries_CreateUser(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		username := "benchuser" + string(rune(i))
 		email := "bench" + string(rune(i)) + "@example.com"
-		
+
 		user, err := q.CreateUser(ctx, queries.CreateUserParams{
 			Username:     username,
 			Email:        email,
