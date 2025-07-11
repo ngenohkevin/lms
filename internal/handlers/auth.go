@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/ngenohkevin/lms/internal/middleware"
@@ -11,10 +12,10 @@ import (
 
 type AuthHandler struct {
 	authService *services.AuthService
-	userService *services.UserService
+	userService services.UserServiceInterface
 }
 
-func NewAuthHandler(authService *services.AuthService, userService *services.UserService) *AuthHandler {
+func NewAuthHandler(authService *services.AuthService, userService services.UserServiceInterface) *AuthHandler {
 	return &AuthHandler{
 		authService: authService,
 		userService: userService,
@@ -49,6 +50,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 				},
 			})
 			return
+
 		}
 
 		if !isValid {
@@ -240,8 +242,34 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
-	// In a more sophisticated system, we would invalidate the token
-	// For now, we'll just return a success response
+	// Get token from Authorization header
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "Logout successful",
+		})
+		return
+	}
+
+	// Extract token from Bearer header
+	parts := strings.Split(authHeader, " ")
+	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "Logout successful",
+		})
+		return
+	}
+
+	tokenString := parts[1]
+
+	// Blacklist the access token
+	if err := h.authService.BlacklistToken(tokenString); err != nil {
+		// Log error but don't fail the logout
+		// User should still be logged out on the client side
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Logout successful",
@@ -428,5 +456,132 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Password updated successfully",
+	})
+}
+
+func (h *AuthHandler) ForgotPassword(c *gin.Context) {
+	var req models.ForgotPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "VALIDATION_ERROR",
+				"message": "Invalid request data",
+				"details": err.Error(),
+			},
+		})
+		return
+	}
+
+	// Check if user exists
+	_, err := h.userService.GetUserByEmail(req.Email)
+	if err != nil {
+		// Don't reveal whether user exists or not for security
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "If an account with this email exists, a password reset link has been sent",
+		})
+		return
+	}
+
+	// Generate password reset token
+	token, err := h.authService.GeneratePasswordResetToken(req.Email)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "INTERNAL_ERROR",
+				"message": "Error generating reset token",
+			},
+		})
+		return
+	}
+
+	// In a real application, you would send this token via email
+	// For now, we'll just log it (DON'T DO THIS IN PRODUCTION)
+	// You should integrate with an email service like SendGrid, SES, etc.
+	_ = token // TODO: Send via email
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "If an account with this email exists, a password reset link has been sent",
+	})
+}
+
+func (h *AuthHandler) ResetPassword(c *gin.Context) {
+	var req models.ResetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "VALIDATION_ERROR",
+				"message": "Invalid request data",
+				"details": err.Error(),
+			},
+		})
+		return
+	}
+
+	// Validate reset token
+	email, err := h.authService.ValidatePasswordResetToken(req.Token)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "INVALID_RESET_TOKEN",
+				"message": "Invalid or expired reset token",
+			},
+		})
+		return
+	}
+
+	// Get user by email
+	user, err := h.userService.GetUserByEmail(email)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "USER_NOT_FOUND",
+				"message": "User not found",
+			},
+		})
+		return
+	}
+
+	// Hash new password
+	hashedPassword, err := h.authService.HashPassword(req.NewPassword)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "INVALID_PASSWORD",
+				"message": "Password must be at least 8 characters long",
+			},
+		})
+		return
+	}
+
+	// Update password
+	err = h.userService.UpdatePassword(user.ID, hashedPassword)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "UPDATE_ERROR",
+				"message": "Error updating password",
+			},
+		})
+		return
+	}
+
+	// Invalidate the reset token
+	err = h.authService.InvalidatePasswordResetToken(req.Token)
+	if err != nil {
+		// Log error but don't fail the request
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Password reset successful",
 	})
 }
