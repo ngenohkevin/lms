@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupTestAuditLogger(t *testing.T) (*AuditLogger, *database.Database) {
+func setupTestAuditLogger(t *testing.T) (*AuditLogger, *database.Database, int32) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -32,7 +32,18 @@ func setupTestAuditLogger(t *testing.T) (*AuditLogger, *database.Database) {
 	require.NoError(t, err)
 
 	auditLogger := NewAuditLogger(db.Pool)
-	return auditLogger, db
+
+	// Create a test user for foreign key constraints
+	ctx := context.Background()
+	var userID int32
+	err = db.Pool.QueryRow(ctx, `
+		INSERT INTO users (username, email, password_hash, role) 
+		VALUES ($1, $2, $3, $4) 
+		RETURNING id
+	`, "testuser", "test@example.com", "hashed_password", "librarian").Scan(&userID)
+	require.NoError(t, err)
+
+	return auditLogger, db, userID
 }
 
 func TestNewAuditLogger(t *testing.T) {
@@ -45,8 +56,15 @@ func TestNewAuditLogger(t *testing.T) {
 }
 
 func TestAuditLogger_LogCreate(t *testing.T) {
-	auditLogger, db := setupTestAuditLogger(t)
-	defer db.Close()
+	auditLogger, db, userID := setupTestAuditLogger(t)
+	defer func() {
+		// Cleanup audit logs first
+		ctx := context.Background()
+		_, _ = db.Pool.Exec(ctx, "DELETE FROM audit_logs WHERE table_name = 'users' AND record_id = 123")
+		// Then cleanup the test user
+		_, _ = db.Pool.Exec(ctx, "DELETE FROM users WHERE id = $1", userID)
+		db.Close()
+	}()
 
 	ctx := context.Background()
 	testData := map[string]interface{}{
@@ -54,18 +72,20 @@ func TestAuditLogger_LogCreate(t *testing.T) {
 		"email":    "test@example.com",
 	}
 
-	userID := int32(1)
 	err := auditLogger.LogCreate(ctx, "users", 123, testData, &userID, "librarian", "192.168.1.1", "test-agent")
 	assert.NoError(t, err)
-
-	// Cleanup
-	_, err = db.Pool.Exec(ctx, "DELETE FROM audit_logs WHERE table_name = 'users' AND record_id = 123")
-	require.NoError(t, err)
 }
 
 func TestAuditLogger_LogUpdate(t *testing.T) {
-	auditLogger, db := setupTestAuditLogger(t)
-	defer db.Close()
+	auditLogger, db, userID := setupTestAuditLogger(t)
+	defer func() {
+		// Cleanup audit logs first
+		ctx := context.Background()
+		_, _ = db.Pool.Exec(ctx, "DELETE FROM audit_logs WHERE table_name = 'users' AND record_id = 124")
+		// Then cleanup the test user
+		_, _ = db.Pool.Exec(ctx, "DELETE FROM users WHERE id = $1", userID)
+		db.Close()
+	}()
 
 	ctx := context.Background()
 	oldData := map[string]interface{}{
@@ -77,18 +97,20 @@ func TestAuditLogger_LogUpdate(t *testing.T) {
 		"email":    "new@example.com",
 	}
 
-	userID := int32(1)
 	err := auditLogger.LogUpdate(ctx, "users", 124, oldData, newData, &userID, "librarian", "192.168.1.1", "test-agent")
 	assert.NoError(t, err)
-
-	// Cleanup
-	_, err = db.Pool.Exec(ctx, "DELETE FROM audit_logs WHERE table_name = 'users' AND record_id = 124")
-	require.NoError(t, err)
 }
 
 func TestAuditLogger_LogDelete(t *testing.T) {
-	auditLogger, db := setupTestAuditLogger(t)
-	defer db.Close()
+	auditLogger, db, userID := setupTestAuditLogger(t)
+	defer func() {
+		// Cleanup audit logs first
+		ctx := context.Background()
+		_, _ = db.Pool.Exec(ctx, "DELETE FROM audit_logs WHERE table_name = 'users' AND record_id = 125")
+		// Then cleanup the test user
+		_, _ = db.Pool.Exec(ctx, "DELETE FROM users WHERE id = $1", userID)
+		db.Close()
+	}()
 
 	ctx := context.Background()
 	deletedData := map[string]interface{}{
@@ -96,25 +118,24 @@ func TestAuditLogger_LogDelete(t *testing.T) {
 		"email":    "deleted@example.com",
 	}
 
-	userID := int32(1)
 	err := auditLogger.LogDelete(ctx, "users", 125, deletedData, &userID, "librarian", "192.168.1.1", "test-agent")
 	assert.NoError(t, err)
-
-	// Cleanup
-	_, err = db.Pool.Exec(ctx, "DELETE FROM audit_logs WHERE table_name = 'users' AND record_id = 125")
-	require.NoError(t, err)
 }
 
 func TestAuditLogger_LogCreateWithInvalidJSON(t *testing.T) {
-	auditLogger, db := setupTestAuditLogger(t)
-	defer db.Close()
+	auditLogger, db, userID := setupTestAuditLogger(t)
+	defer func() {
+		// Cleanup the test user
+		ctx := context.Background()
+		_, _ = db.Pool.Exec(ctx, "DELETE FROM users WHERE id = $1", userID)
+		db.Close()
+	}()
 
 	ctx := context.Background()
-	
+
 	// Create invalid JSON data (channel cannot be marshaled)
 	invalidData := make(chan int)
 
-	userID := int32(1)
 	err := auditLogger.LogCreate(ctx, "users", 126, invalidData, &userID, "librarian", "192.168.1.1", "test-agent")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to marshal")
@@ -123,7 +144,7 @@ func TestAuditLogger_LogCreateWithInvalidJSON(t *testing.T) {
 func TestAuditMiddleware(t *testing.T) {
 	// Setup mock audit logger for unit test
 	gin.SetMode(gin.TestMode)
-	
+
 	// Create a mock pool (won't be used in this test)
 	var mockPool *pgxpool.Pool
 	auditLogger := NewAuditLogger(mockPool)
@@ -152,10 +173,10 @@ func TestGetClientIP(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
-		name           string
-		headers        map[string]string
-		remoteAddr     string
-		expectedIP     string
+		name       string
+		headers    map[string]string
+		remoteAddr string
+		expectedIP string
 	}{
 		{
 			name: "X-Forwarded-For header",
@@ -202,15 +223,21 @@ func TestGetClientIP(t *testing.T) {
 func TestLogAuditFromContext(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	auditLogger, db := setupTestAuditLogger(t)
-	defer db.Close()
+	auditLogger, db, userID := setupTestAuditLogger(t)
+	defer func() {
+		// Cleanup audit logs first
+		ctx := context.Background()
+		_, _ = db.Pool.Exec(ctx, "DELETE FROM audit_logs WHERE table_name = 'users' AND record_id IN (127, 128, 129)")
+		// Then cleanup the test user
+		_, _ = db.Pool.Exec(ctx, "DELETE FROM users WHERE id = $1", userID)
+		db.Close()
+	}()
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
 	// Set up context with audit information
 	c.Set("audit_logger", auditLogger)
-	userID := int32(1)
 	c.Set("audit_user_id", &userID)
 	c.Set("audit_user_type", "librarian")
 	c.Set("audit_ip_address", "192.168.1.1")
@@ -242,10 +269,6 @@ func TestLogAuditFromContext(t *testing.T) {
 	err = LogAuditFromContext(c, "users", 130, "INVALID", nil, testData)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown action")
-
-	// Cleanup
-	_, err = db.Pool.Exec(ctx, "DELETE FROM audit_logs WHERE table_name = 'users' AND record_id IN (127, 128, 129)")
-	require.NoError(t, err)
 }
 
 func TestLogAuditFromContext_MissingAuditLogger(t *testing.T) {
@@ -313,12 +336,20 @@ func BenchmarkAuditLogger_LogCreate(b *testing.B) {
 	auditLogger := NewAuditLogger(db.Pool)
 	ctx := context.Background()
 
+	// Create a test user for foreign key constraints
+	var userID int32
+	err = db.Pool.QueryRow(ctx, `
+		INSERT INTO users (username, email, password_hash, role) 
+		VALUES ($1, $2, $3, $4) 
+		RETURNING id
+	`, "benchuser", "bench@example.com", "hashed_password", "librarian").Scan(&userID)
+	require.NoError(b, err)
+
 	testData := map[string]interface{}{
 		"username": "benchuser",
 		"email":    "bench@example.com",
 	}
 
-	userID := int32(1)
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
@@ -331,6 +362,8 @@ func BenchmarkAuditLogger_LogCreate(b *testing.B) {
 
 	// Cleanup
 	_, err = db.Pool.Exec(ctx, "DELETE FROM audit_logs WHERE table_name = 'users' AND record_id >= 1000")
+	require.NoError(b, err)
+	_, err = db.Pool.Exec(ctx, "DELETE FROM users WHERE id = $1", userID)
 	require.NoError(b, err)
 }
 

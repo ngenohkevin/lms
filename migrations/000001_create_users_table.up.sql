@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
     role VARCHAR(20) DEFAULT 'librarian' CHECK (role IN ('librarian', 'admin', 'staff')),
     is_active BOOLEAN DEFAULT true,
     last_login TIMESTAMP,
+    deleted_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
