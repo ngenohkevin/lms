@@ -38,8 +38,10 @@ clean:
 
 # Run tests
 test:
+	@echo "$(GREEN)Setting up test environment...$(NC)"
+	@bash -c "set -a; [ -f .env ] && source .env; [ -f .env.local ] && source .env.local; set +a; ./scripts/test-setup.sh"
 	@echo "$(GREEN)Running tests...$(NC)"
-	@go test -v ./...
+	@bash -c "set -a; [ -f .env ] && source .env; [ -f .env.local ] && source .env.local; GO_ENV=test; set +a; go test -v ./..."
 
 # Run tests in watch mode
 test-watch:
@@ -48,20 +50,24 @@ test-watch:
 
 # Run tests with coverage
 test-cover:
+	@echo "$(GREEN)Setting up test environment...$(NC)"
+	@./scripts/test-setup.sh
 	@echo "$(GREEN)Running tests with coverage...$(NC)"
-	@go test -v -coverprofile=coverage.out ./...
+	@bash -c "set -a; [ -f .env ] && source .env; [ -f .env.local ] && source .env.local; GO_ENV=test; set +a; go test -v -coverprofile=coverage.out ./..."
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "$(GREEN)Coverage report generated: coverage.html$(NC)"
 
 # Run unit tests only
 test-unit:
 	@echo "$(GREEN)Running unit tests...$(NC)"
-	@go test -v -short ./...
+	@GO_ENV=test go test -v -short ./...
 
 # Run integration tests only
 test-integration:
+	@echo "$(GREEN)Setting up test environment...$(NC)"
+	@./scripts/test-setup.sh
 	@echo "$(GREEN)Running integration tests...$(NC)"
-	@go test -v -run Integration ./...
+	@bash -c "set -a; [ -f .env ] && source .env; [ -f .env.local ] && source .env.local; GO_ENV=test; set +a; go test -v -run Integration ./..."
 
 # Run linting
 lint:

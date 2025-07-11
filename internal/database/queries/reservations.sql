@@ -70,3 +70,9 @@ JOIN students s ON r.student_id = s.id
 WHERE r.book_id = $1 AND r.status = 'active'
 ORDER BY r.reserved_at ASC
 LIMIT 1;
+
+-- name: CancelReservation :one
+UPDATE reservations
+SET status = 'cancelled', updated_at = NOW()
+WHERE id = $1
+RETURNING *;
