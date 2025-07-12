@@ -54,6 +54,17 @@ jobs:
     - name: Install dependencies
       run: go mod download
 
+    - name: Install golang-migrate
+      run: |
+        curl -L https://github.com/golang-migrate/migrate/releases/download/v4.16.2/migrate.linux-amd64.tar.gz | tar xvz
+        sudo mv migrate /usr/local/bin/
+
+    - name: Run database migrations
+      env:
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/lms_test?sslmode=disable
+      run: |
+        migrate -path migrations -database $DATABASE_URL up
+
     - name: Run go fmt
       run: |
         if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
@@ -72,6 +83,13 @@ jobs:
         LMS_SERVER_MODE: test
         LMS_JWT_SECRET: test-secret-key
         LMS_JWT_REFRESH_SECRET: test-refresh-secret
+        LMS_DATABASE_HOST: localhost
+        LMS_DATABASE_PORT: 5432
+        LMS_DATABASE_USER: postgres
+        LMS_DATABASE_PASSWORD: postgres
+        LMS_DATABASE_NAME: lms_test
+        LMS_DATABASE_SSL_MODE: disable
+        TEST_DB_PASSWORD: postgres
       run: |
         go test -v -race -coverprofile=coverage.out ./...
 
