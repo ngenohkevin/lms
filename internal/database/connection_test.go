@@ -9,20 +9,32 @@ import (
 	"github.com/ngenohkevin/lms/internal/config"
 )
 
-// getTestDBPassword returns test database password from environment or default
-func getTestDBPassword() string {
-	if password := os.Getenv("TEST_DB_PASSWORD"); password != "" {
-		return password
+// getTestDBConfig returns test database configuration from environment variables
+func getTestDBConfig() config.DatabaseConfig {
+	return config.DatabaseConfig{
+		Host:     getEnvOrDefault("LMS_DATABASE_HOST", "localhost"),
+		Port:     5432,
+		User:     getEnvOrDefault("LMS_DATABASE_USER", "postgres"),
+		Password: getEnvOrDefault("LMS_DATABASE_PASSWORD", ""),
+		Name:     getEnvOrDefault("LMS_DATABASE_NAME", "postgres"),
+		SSLMode:  getEnvOrDefault("LMS_DATABASE_SSL_MODE", "disable"),
 	}
-	// Default password for local development - should not be used in production
-	return "test_password"
+}
+
+func getEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
 }
 
 func TestDatabase_New(t *testing.T) {
 	// Skip if no test database credentials provided
-	if os.Getenv("TEST_DB_PASSWORD") == "" {
-		t.Skip("TEST_DB_PASSWORD not set, skipping database connection test")
+	if os.Getenv("LMS_DATABASE_PASSWORD") == "" {
+		t.Skip("LMS_DATABASE_PASSWORD not set, skipping database connection test")
 	}
+
+	testDBConfig := getTestDBConfig()
 
 	tests := []struct {
 		name    string
@@ -32,16 +44,9 @@ func TestDatabase_New(t *testing.T) {
 		{
 			name: "valid config",
 			cfg: &config.Config{
-				Database: config.DatabaseConfig{
-					Host:     "localhost",
-					Port:     5432,
-					User:     "postgres",
-					Password: getTestDBPassword(),
-					Name:     "postgres",
-					SSLMode:  "disable",
-				},
+				Database: testDBConfig,
 			},
-			wantErr: false, // Should succeed with local database
+			wantErr: false, // Should succeed with test database
 		},
 		{
 			name: "invalid config - empty host",
@@ -107,7 +112,7 @@ func TestDatabase_Health(t *testing.T) {
 			Host:     "localhost",
 			Port:     5432,
 			User:     "test_user",
-			Password: getTestDBPassword(),
+			Password: getEnvOrDefault("LMS_DATABASE_PASSWORD", ""),
 			Name:     "test_db",
 			SSLMode:  "disable",
 		},
@@ -134,7 +139,7 @@ func TestDatabase_Close(t *testing.T) {
 			Host:     "localhost",
 			Port:     5432,
 			User:     "test_user",
-			Password: getTestDBPassword(),
+			Password: getEnvOrDefault("LMS_DATABASE_PASSWORD", ""),
 			Name:     "test_db",
 			SSLMode:  "disable",
 		},
@@ -158,7 +163,7 @@ func TestDatabase_ConnectionPoolConfiguration(t *testing.T) {
 			Host:     "localhost",
 			Port:     5432,
 			User:     "test_user",
-			Password: getTestDBPassword(),
+			Password: getEnvOrDefault("LMS_DATABASE_PASSWORD", ""),
 			Name:     "test_db",
 			SSLMode:  "disable",
 		},
@@ -193,7 +198,7 @@ func BenchmarkDatabase_Health(b *testing.B) {
 			Host:     "localhost",
 			Port:     5432,
 			User:     "test_user",
-			Password: getTestDBPassword(),
+			Password: getEnvOrDefault("LMS_DATABASE_PASSWORD", ""),
 			Name:     "test_db",
 			SSLMode:  "disable",
 		},

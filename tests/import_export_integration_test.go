@@ -28,6 +28,11 @@ func TestImportExportIntegration(t *testing.T) {
 		t.Skip("Skipping integration test in short mode")
 	}
 
+	// Skip if DATABASE_URL is not set
+	if os.Getenv("DATABASE_URL") == "" {
+		t.Skip("DATABASE_URL not set, skipping database integration test")
+	}
+
 	// Load test configuration
 	cfg, err := config.Load()
 	require.NoError(t, err)
@@ -321,6 +326,11 @@ func int32Ptr(i int32) *int32 {
 }
 
 func TestImportExportFileOperations(t *testing.T) {
+	// Skip if DATABASE_URL is not set
+	if os.Getenv("DATABASE_URL") == "" {
+		t.Skip("DATABASE_URL not set, skipping database integration test")
+	}
+
 	// Test file upload size limits
 	t.Run("ImportBooks_FileSizeLimit", func(t *testing.T) {
 		cfg, err := config.Load()
@@ -417,6 +427,11 @@ func TestImportExportFileOperations(t *testing.T) {
 }
 
 func TestImportExportPersistence(t *testing.T) {
+	// Skip if DATABASE_URL is not set
+	if os.Getenv("DATABASE_URL") == "" {
+		t.Skip("DATABASE_URL not set, skipping database integration test")
+	}
+
 	t.Run("TestImportedDataPersistence", func(t *testing.T) {
 		cfg, err := config.Load()
 		require.NoError(t, err)
