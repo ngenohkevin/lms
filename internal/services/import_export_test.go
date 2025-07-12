@@ -112,18 +112,18 @@ func TestImportExportService(t *testing.T) {
 	t.Run("GenerateImportTemplate", func(t *testing.T) {
 		template, err := service.GenerateImportTemplate("csv")
 		require.NoError(t, err)
-		
+
 		assert.Equal(t, "csv", template.Format)
 		assert.NotEmpty(t, template.Headers)
 		assert.NotEmpty(t, template.SampleData)
 		assert.NotEmpty(t, template.Instructions)
-		
+
 		// Check that required headers are present
 		expectedHeaders := []string{"book_id", "title", "author", "isbn", "publisher", "published_year", "genre", "description", "total_copies", "available_copies", "shelf_location"}
 		for _, header := range expectedHeaders {
 			assert.Contains(t, template.Headers, header)
 		}
-		
+
 		// Check sample data
 		assert.Len(t, template.SampleData, 2)
 		assert.Equal(t, "BK001", template.SampleData[0].BookID)
@@ -204,7 +204,7 @@ TEST003,,,978-0-123456-79-6,Test Publisher,2023,Non-Fiction,Test Description 2,3
 		assert.Equal(t, 2, result.FailureCount)
 		assert.Len(t, result.Errors, 2)
 		assert.Empty(t, result.ImportedBooks)
-		
+
 		// Check that errors contain validation messages
 		assert.Contains(t, result.Errors[0].Message, "Book ID is required")
 		assert.Contains(t, result.Errors[1].Message, "Title is required")
@@ -282,7 +282,7 @@ this is not a valid csv file`
 				Total: 1,
 			},
 		}
-		
+
 		mockBookService.On("SearchBooks", mock.Anything, mock.AnythingOfType("models.BookSearchRequest")).Return(expectedBooks, nil)
 
 		// Create export request
@@ -313,7 +313,7 @@ this is not a valid csv file`
 	})
 
 	t.Run("ExportBooksToExcel", func(t *testing.T) {
-		// Setup mock expectations for SearchBooks  
+		// Setup mock expectations for SearchBooks
 		expectedBooks := models.BookListResponse{
 			Books: []models.BookResponse{
 				{
@@ -327,7 +327,7 @@ this is not a valid csv file`
 			},
 			Pagination: models.Pagination{Total: 1},
 		}
-		
+
 		mockBookService.On("SearchBooks", mock.Anything, mock.AnythingOfType("models.BookSearchRequest")).Return(expectedBooks, nil)
 
 		// Create export request

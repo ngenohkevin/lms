@@ -21,30 +21,30 @@ type BookImportRequest struct {
 
 // BookExportData represents the data structure for exporting books
 type BookExportData struct {
-	BookID          string     `json:"book_id" csv:"book_id"`
-	Title           string     `json:"title" csv:"title"`
-	Author          string     `json:"author" csv:"author"`
-	ISBN            string     `json:"isbn" csv:"isbn"`
-	Publisher       string     `json:"publisher" csv:"publisher"`
-	PublishedYear   int32      `json:"published_year" csv:"published_year"`
-	Genre           string     `json:"genre" csv:"genre"`
-	Description     string     `json:"description" csv:"description"`
-	TotalCopies     int32      `json:"total_copies" csv:"total_copies"`
-	AvailableCopies int32      `json:"available_copies" csv:"available_copies"`
-	ShelfLocation   string     `json:"shelf_location" csv:"shelf_location"`
-	Status          string     `json:"status" csv:"status"`
-	CreatedAt       time.Time  `json:"created_at" csv:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at" csv:"updated_at"`
+	BookID          string    `json:"book_id" csv:"book_id"`
+	Title           string    `json:"title" csv:"title"`
+	Author          string    `json:"author" csv:"author"`
+	ISBN            string    `json:"isbn" csv:"isbn"`
+	Publisher       string    `json:"publisher" csv:"publisher"`
+	PublishedYear   int32     `json:"published_year" csv:"published_year"`
+	Genre           string    `json:"genre" csv:"genre"`
+	Description     string    `json:"description" csv:"description"`
+	TotalCopies     int32     `json:"total_copies" csv:"total_copies"`
+	AvailableCopies int32     `json:"available_copies" csv:"available_copies"`
+	ShelfLocation   string    `json:"shelf_location" csv:"shelf_location"`
+	Status          string    `json:"status" csv:"status"`
+	CreatedAt       time.Time `json:"created_at" csv:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at" csv:"updated_at"`
 }
 
 // ImportResult represents the result of an import operation
 type ImportResult struct {
-	TotalRecords    int                   `json:"total_records"`
-	SuccessCount    int                   `json:"success_count"`
-	FailureCount    int                   `json:"failure_count"`
-	Errors          []ImportError         `json:"errors,omitempty"`
-	ImportedBooks   []BookResponse        `json:"imported_books,omitempty"`
-	Summary         ImportSummary         `json:"summary"`
+	TotalRecords  int            `json:"total_records"`
+	SuccessCount  int            `json:"success_count"`
+	FailureCount  int            `json:"failure_count"`
+	Errors        []ImportError  `json:"errors,omitempty"`
+	ImportedBooks []BookResponse `json:"imported_books,omitempty"`
+	Summary       ImportSummary  `json:"summary"`
 }
 
 // ImportError represents an error that occurred during import
@@ -69,10 +69,10 @@ type ImportSummary struct {
 
 // ExportRequest represents a request to export books
 type ExportRequest struct {
-	Format      string   `json:"format" validate:"required,oneof=csv excel"`
-	Filters     ExportFilters `json:"filters,omitempty"`
-	Fields      []string `json:"fields,omitempty"` // Optional: specify which fields to export
-	FileName    string   `json:"file_name,omitempty"`
+	Format   string        `json:"format" validate:"required,oneof=csv excel"`
+	Filters  ExportFilters `json:"filters,omitempty"`
+	Fields   []string      `json:"fields,omitempty"` // Optional: specify which fields to export
+	FileName string        `json:"file_name,omitempty"`
 }
 
 // ExportFilters represents filters for book export
@@ -99,10 +99,10 @@ type ExportResult struct {
 
 // ImportTemplate represents the template structure for import
 type ImportTemplate struct {
-	Headers     []string `json:"headers"`
-	SampleData  []BookImportRequest `json:"sample_data"`
-	Instructions string   `json:"instructions"`
-	Format      string   `json:"format"` // csv or excel
+	Headers      []string            `json:"headers"`
+	SampleData   []BookImportRequest `json:"sample_data"`
+	Instructions string              `json:"instructions"`
+	Format       string              `json:"format"` // csv or excel
 }
 
 // Validate validates the book import request

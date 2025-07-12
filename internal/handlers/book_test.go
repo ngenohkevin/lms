@@ -89,10 +89,10 @@ func (m *MockBookService) UpdateBookAvailability(ctx context.Context, bookID int
 func setupBookTestRouter(mockService *MockBookService) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	
+
 	// Use the mock service with interface-based dependency injection
 	handler := NewBookHandler(mockService)
-	
+
 	v1 := router.Group("/api/v1")
 	{
 		books := v1.Group("/books")
@@ -107,7 +107,7 @@ func setupBookTestRouter(mockService *MockBookService) *gin.Engine {
 			books.DELETE("/:id", handler.DeleteBook)
 		}
 	}
-	
+
 	return router
 }
 
@@ -677,15 +677,15 @@ func TestBookHandler_GetBookStats(t *testing.T) {
 
 func TestParsePaginationParams(t *testing.T) {
 	tests := []struct {
-		name         string
-		queryParams  map[string]string
-		expectedPage int
+		name          string
+		queryParams   map[string]string
+		expectedPage  int
 		expectedLimit int
 	}{
 		{
-			name:         "default values",
-			queryParams:  map[string]string{},
-			expectedPage: 1,
+			name:          "default values",
+			queryParams:   map[string]string{},
+			expectedPage:  1,
 			expectedLimit: 20,
 		},
 		{
@@ -694,7 +694,7 @@ func TestParsePaginationParams(t *testing.T) {
 				"page":  "2",
 				"limit": "50",
 			},
-			expectedPage: 2,
+			expectedPage:  2,
 			expectedLimit: 50,
 		},
 		{
@@ -703,7 +703,7 @@ func TestParsePaginationParams(t *testing.T) {
 				"page":  "invalid",
 				"limit": "30",
 			},
-			expectedPage: 1,
+			expectedPage:  1,
 			expectedLimit: 30,
 		},
 		{
@@ -712,7 +712,7 @@ func TestParsePaginationParams(t *testing.T) {
 				"page":  "1",
 				"limit": "200",
 			},
-			expectedPage: 1,
+			expectedPage:  1,
 			expectedLimit: 100,
 		},
 		{
@@ -721,7 +721,7 @@ func TestParsePaginationParams(t *testing.T) {
 				"page":  "-1",
 				"limit": "-10",
 			},
-			expectedPage: 1,
+			expectedPage:  1,
 			expectedLimit: 20,
 		},
 	}

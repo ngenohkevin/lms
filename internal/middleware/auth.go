@@ -214,11 +214,11 @@ func GetUserID(c *gin.Context) int {
 	if !exists {
 		return 0
 	}
-	
+
 	if id, ok := userID.(int); ok {
 		return id
 	}
-	
+
 	return 0
 }
 
@@ -227,11 +227,11 @@ func GetUsername(c *gin.Context) string {
 	if !exists {
 		return ""
 	}
-	
+
 	if name, ok := username.(string); ok {
 		return name
 	}
-	
+
 	return ""
 }
 
@@ -240,11 +240,11 @@ func GetUserRole(c *gin.Context) models.UserRole {
 	if !exists {
 		return ""
 	}
-	
+
 	if role, ok := userRole.(models.UserRole); ok {
 		return role
 	}
-	
+
 	return ""
 }
 
@@ -253,10 +253,10 @@ func GetUserType(c *gin.Context) string {
 	if !exists {
 		return ""
 	}
-	
+
 	if uType, ok := userType.(string); ok {
 		return uType
 	}
-	
+
 	return ""
 }

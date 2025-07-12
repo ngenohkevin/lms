@@ -417,11 +417,11 @@ func TestBookService_UpdateBookAvailability(t *testing.T) {
 	service := NewBookService(mockQuerier)
 
 	tests := []struct {
-		name              string
-		bookID            int32
-		availableCopies   int32
-		setup             func()
-		wantErr           bool
+		name            string
+		bookID          int32
+		availableCopies int32
+		setup           func()
+		wantErr         bool
 	}{
 		{
 			name:            "successful availability update",

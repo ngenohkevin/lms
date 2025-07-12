@@ -133,7 +133,7 @@ func (m *MockUserService) AddStudent(student *models.Student) {
 
 func TestAuthenticationFlow(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	
+
 	// Setup services
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	authService, err := services.NewAuthService(
@@ -146,13 +146,11 @@ func TestAuthenticationFlow(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	
 	userService := NewMockUserService()
-	
 
 	hashedPassword, err := authService.HashPassword("password123")
 	require.NoError(t, err)
-	
+
 	testUser := &models.User{
 		ID:           1,
 		Username:     "testuser",
@@ -162,10 +160,10 @@ func TestAuthenticationFlow(t *testing.T) {
 		IsActive:     true,
 	}
 	userService.AddUser(testUser)
-	
+
 	studentHashedPassword, err := authService.HashPassword("STU001password")
 	require.NoError(t, err)
-	
+
 	testStudent := &models.Student{
 		ID:           1,
 		StudentID:    "STU001",
@@ -176,18 +174,17 @@ func TestAuthenticationFlow(t *testing.T) {
 		IsActive:     true,
 	}
 	userService.AddStudent(testStudent)
-	
 
 	authHandler := handlers.NewAuthHandler(authService, userService)
 	authMiddleware := middleware.NewAuthMiddleware(authService)
-	
+
 	// Setup router
 	router := gin.New()
 	router.POST("/auth/login", authHandler.Login)
 	router.POST("/auth/refresh", authHandler.RefreshToken)
 	router.POST("/auth/forgot-password", authHandler.ForgotPassword)
 	router.POST("/auth/reset-password", authHandler.ResetPassword)
-	
+
 	protected := router.Group("/protected")
 	protected.Use(authMiddleware.RequireAuth())
 	{
@@ -195,43 +192,41 @@ func TestAuthenticationFlow(t *testing.T) {
 		protected.POST("/logout", authHandler.Logout)
 		protected.POST("/change-password", authHandler.ChangePassword)
 	}
-	
+
 	t.Run("librarian login flow", func(t *testing.T) {
 		// Test login
 		loginReq := models.LoginRequest{
 			Username: "testuser",
 			Password: "password123",
 		}
-		
+
 		loginJSON, _ := json.Marshal(loginReq)
 		req, _ := http.NewRequest("POST", "/auth/login", bytes.NewBuffer(loginJSON))
 		req.Header.Set("Content-Type", "application/json")
 
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
-		
+
 		assert.Equal(t, http.StatusOK, w.Code)
-		
+
 		var loginResp map[string]interface{}
 		err := json.Unmarshal(w.Body.Bytes(), &loginResp)
 		require.NoError(t, err)
-		
 
 		assert.NotEmpty(t, loginResp["data"].(map[string]interface{})["access_token"])
 		assert.NotEmpty(t, loginResp["data"].(map[string]interface{})["refresh_token"])
 
 		accessToken := loginResp["data"].(map[string]interface{})["access_token"].(string)
 		refreshToken := loginResp["data"].(map[string]interface{})["refresh_token"].(string)
-		
 
 		req, _ = http.NewRequest("GET", "/protected/profile", nil)
 		req.Header.Set("Authorization", "Bearer "+accessToken)
 
 		w = httptest.NewRecorder()
 		router.ServeHTTP(w, req)
-		
+
 		assert.Equal(t, http.StatusOK, w.Code)
-		
+
 		// Test token refresh
 		refreshReq := map[string]string{
 			"refresh_token": refreshToken,
@@ -243,16 +238,15 @@ func TestAuthenticationFlow(t *testing.T) {
 
 		w = httptest.NewRecorder()
 		router.ServeHTTP(w, req)
-		
+
 		assert.Equal(t, http.StatusOK, w.Code)
-		
+
 		var refreshResp map[string]interface{}
 		err = json.Unmarshal(w.Body.Bytes(), &refreshResp)
 		require.NoError(t, err)
 
 		assert.True(t, refreshResp["success"].(bool))
 		assert.NotEmpty(t, refreshResp["data"].(map[string]interface{})["access_token"])
-		
 
 		req, _ = http.NewRequest("POST", "/protected/logout", nil)
 		req.Header.Set("Authorization", "Bearer "+accessToken)
@@ -262,74 +256,72 @@ func TestAuthenticationFlow(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 	})
-	
+
 	t.Run("student login flow", func(t *testing.T) {
 		// Test student login with default password (StudentID)
 		loginReq := models.LoginRequest{
 			Username: "STU001",
 			Password: "STU001password",
 		}
-		
+
 		loginJSON, _ := json.Marshal(loginReq)
 		req, _ := http.NewRequest("POST", "/auth/login", bytes.NewBuffer(loginJSON))
 		req.Header.Set("Content-Type", "application/json")
 
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
-		
+
 		assert.Equal(t, http.StatusOK, w.Code)
-		
+
 		var loginResp map[string]interface{}
 		err := json.Unmarshal(w.Body.Bytes(), &loginResp)
 		require.NoError(t, err)
 
 		assert.True(t, loginResp["success"].(bool))
 
-		
 		accessToken := loginResp["data"].(map[string]interface{})["access_token"].(string)
-		
 
 		req, _ = http.NewRequest("GET", "/protected/profile", nil)
 		req.Header.Set("Authorization", "Bearer "+accessToken)
 
 		w = httptest.NewRecorder()
 		router.ServeHTTP(w, req)
-		
+
 		assert.Equal(t, http.StatusOK, w.Code)
-		
+
 		var profileResp map[string]interface{}
 		err = json.Unmarshal(w.Body.Bytes(), &profileResp)
 		require.NoError(t, err)
-		
+
 		studentData := profileResp["data"].(map[string]interface{})
 
 		assert.Equal(t, "John", studentData["first_name"])
 	})
-	
+
 	t.Run("password change flow", func(t *testing.T) {
 		// Login first
 		loginReq := models.LoginRequest{
 			Username: "testuser",
 			Password: "password123",
 		}
-		
+
 		loginJSON, _ := json.Marshal(loginReq)
 		req, _ := http.NewRequest("POST", "/auth/login", bytes.NewBuffer(loginJSON))
 		req.Header.Set("Content-Type", "application/json")
 
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
-		
+
 		var loginResp map[string]interface{}
 		json.Unmarshal(w.Body.Bytes(), &loginResp)
 		accessToken := loginResp["data"].(map[string]interface{})["access_token"].(string)
-		
+
 		// Change password
 		changePasswordReq := models.ChangePasswordRequest{
 			CurrentPassword: "password123",
 			NewPassword:     "newpassword123",
 		}
-		
+
 		changePasswordJSON, _ := json.Marshal(changePasswordReq)
 		req, _ = http.NewRequest("POST", "/protected/change-password", bytes.NewBuffer(changePasswordJSON))
 		req.Header.Set("Authorization", "Bearer "+accessToken)
@@ -337,9 +329,9 @@ func TestAuthenticationFlow(t *testing.T) {
 
 		w = httptest.NewRecorder()
 		router.ServeHTTP(w, req)
-		
+
 		assert.Equal(t, http.StatusOK, w.Code)
-		
+
 		// Test login with new password
 		loginReq.Password = "newpassword123"
 		loginJSON, _ = json.Marshal(loginReq)
@@ -348,9 +340,9 @@ func TestAuthenticationFlow(t *testing.T) {
 
 		w = httptest.NewRecorder()
 		router.ServeHTTP(w, req)
-		
+
 		assert.Equal(t, http.StatusOK, w.Code)
-		
+
 		// Test login with old password should fail
 		loginReq.Password = "password123"
 		loginJSON, _ = json.Marshal(loginReq)
@@ -362,29 +354,29 @@ func TestAuthenticationFlow(t *testing.T) {
 
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 	})
-	
+
 	t.Run("invalid credentials", func(t *testing.T) {
 		loginReq := models.LoginRequest{
 			Username: "testuser",
 			Password: "wrongpassword",
 		}
-		
+
 		loginJSON, _ := json.Marshal(loginReq)
 		req, _ := http.NewRequest("POST", "/auth/login", bytes.NewBuffer(loginJSON))
 		req.Header.Set("Content-Type", "application/json")
 
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
-		
+
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
-		
+
 		var resp map[string]interface{}
 		err := json.Unmarshal(w.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		
+
 		assert.Contains(t, resp["error"].(map[string]interface{})["code"], "INVALID_CREDENTIALS")
 	})
-	
+
 	t.Run("test protected route without token", func(t *testing.T) {
 		// Test protected route without token
 		req, _ := http.NewRequest("GET", "/protected/profile", nil)
@@ -394,14 +386,14 @@ func TestAuthenticationFlow(t *testing.T) {
 
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 	})
-	
+
 	t.Run("test protected route with invalid token", func(t *testing.T) {
 		req, _ := http.NewRequest("GET", "/protected/profile", nil)
 		req.Header.Set("Authorization", "Bearer invalid-token")
 
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
-		
+
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 	})
 }

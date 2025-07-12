@@ -44,7 +44,7 @@ func NewImportExportService(bookService BookServiceInterface, uploadPath string)
 // ImportBooksFromCSV imports books from a CSV file
 func (s *ImportExportService) ImportBooksFromCSV(ctx context.Context, reader io.Reader, fileName string) (*models.ImportResult, error) {
 	startTime := time.Now()
-	
+
 	// Parse CSV
 	var importData []models.BookImportRequest
 	if err := gocsv.Unmarshal(reader, &importData); err != nil {
@@ -57,7 +57,7 @@ func (s *ImportExportService) ImportBooksFromCSV(ctx context.Context, reader io.
 // ImportBooksFromExcel imports books from an Excel file
 func (s *ImportExportService) ImportBooksFromExcel(ctx context.Context, reader io.Reader, fileName string) (*models.ImportResult, error) {
 	startTime := time.Now()
-	
+
 	// Create temporary file to handle Excel reading
 	tempFile, err := s.createTempFile(reader)
 	if err != nil {
@@ -95,8 +95,8 @@ func (s *ImportExportService) ImportBooksFromExcel(ctx context.Context, reader i
 // processImport processes the import data and creates books
 func (s *ImportExportService) processImport(ctx context.Context, importData []models.BookImportRequest, fileName string, startTime time.Time) (*models.ImportResult, error) {
 	result := &models.ImportResult{
-		TotalRecords: len(importData),
-		Errors:       make([]models.ImportError, 0),
+		TotalRecords:  len(importData),
+		Errors:        make([]models.ImportError, 0),
 		ImportedBooks: make([]models.BookResponse, 0),
 		Summary: models.ImportSummary{
 			ProcessedAt:     startTime,
@@ -146,7 +146,7 @@ func (s *ImportExportService) processImport(ctx context.Context, importData []mo
 				errorType = "duplicate"
 				result.Summary.DuplicatesFound++
 			}
-			
+
 			result.Errors = append(result.Errors, models.ImportError{
 				Row:     rowNum,
 				BookID:  bookData.BookID,
@@ -173,7 +173,7 @@ func (s *ImportExportService) processImport(ctx context.Context, importData []mo
 // ExportBooksToCSV exports books to CSV format
 func (s *ImportExportService) ExportBooksToCSV(ctx context.Context, req models.ExportRequest) (*models.ExportResult, error) {
 	startTime := time.Now()
-	
+
 	// Get books based on filters
 	books, err := s.getBooksForExport(ctx, req.Filters)
 	if err != nil {
@@ -222,7 +222,7 @@ func (s *ImportExportService) ExportBooksToCSV(ctx context.Context, req models.E
 // ExportBooksToExcel exports books to Excel format
 func (s *ImportExportService) ExportBooksToExcel(ctx context.Context, req models.ExportRequest) (*models.ExportResult, error) {
 	startTime := time.Now()
-	
+
 	// Get books based on filters
 	books, err := s.getBooksForExport(ctx, req.Filters)
 	if err != nil {
@@ -384,7 +384,7 @@ func (s *ImportExportService) convertExcelRowsToImportData(rows [][]string) ([]m
 	}
 
 	var importData []models.BookImportRequest
-	
+
 	for i, row := range rows[1:] { // Skip header row
 		if len(row) < 3 { // At least book_id, title, author
 			return nil, fmt.Errorf("row %d has insufficient columns", i+2)
@@ -438,7 +438,7 @@ func (s *ImportExportService) getBooksForExport(ctx context.Context, filters mod
 
 func (s *ImportExportService) convertBooksToExportData(books []models.BookResponse) []models.BookExportData {
 	exportData := make([]models.BookExportData, len(books))
-	
+
 	for i, book := range books {
 		exportData[i] = models.BookExportData{
 			BookID:          book.BookID,
@@ -504,7 +504,7 @@ func (s *ImportExportService) ExportBooksToCSVContent(ctx context.Context, req m
 
 	// Generate CSV content
 	var csvBuffer strings.Builder
-	
+
 	if err := gocsv.Marshal(exportData, &csvBuffer); err != nil {
 		return "", "", fmt.Errorf("failed to generate CSV content: %w", err)
 	}

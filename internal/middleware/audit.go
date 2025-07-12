@@ -17,15 +17,15 @@ type AuditLogger struct {
 }
 
 type AuditLogEntry struct {
-	TableName  string      `json:"table_name"`
-	RecordID   int32       `json:"record_id"`
-	Action     string      `json:"action"`
-	OldValues  interface{} `json:"old_values,omitempty"`
-	NewValues  interface{} `json:"new_values,omitempty"`
-	UserID     *int32      `json:"user_id,omitempty"`
-	UserType   string      `json:"user_type"`
-	IPAddress  string      `json:"ip_address,omitempty"`
-	UserAgent  string      `json:"user_agent,omitempty"`
+	TableName string      `json:"table_name"`
+	RecordID  int32       `json:"record_id"`
+	Action    string      `json:"action"`
+	OldValues interface{} `json:"old_values,omitempty"`
+	NewValues interface{} `json:"new_values,omitempty"`
+	UserID    *int32      `json:"user_id,omitempty"`
+	UserType  string      `json:"user_type"`
+	IPAddress string      `json:"ip_address,omitempty"`
+	UserAgent string      `json:"user_agent,omitempty"`
 }
 
 func NewAuditLogger(db *pgxpool.Pool) *AuditLogger {

@@ -349,8 +349,8 @@ func TestImportExportHandler_GetImportTemplate(t *testing.T) {
 			queryParam: "csv",
 			setupMock: func(m *MockImportExportService) {
 				template := &models.ImportTemplate{
-					Format:   "csv",
-					Headers:  []string{"book_id", "title", "author"},
+					Format:       "csv",
+					Headers:      []string{"book_id", "title", "author"},
 					Instructions: "Sample instructions",
 				}
 				m.On("GenerateImportTemplate", "csv").Return(template, nil)
@@ -429,23 +429,23 @@ func TestImportExportHandler_DownloadImportTemplate(t *testing.T) {
 		totalCopies := int32(5)
 		availableCopies := int32(5)
 		shelfLocation := "A1-001"
-		
+
 		template := &models.ImportTemplate{
-			Format:      "csv",
-			Headers:     []string{"book_id", "title", "author"},
-			SampleData:  []models.BookImportRequest{
+			Format:  "csv",
+			Headers: []string{"book_id", "title", "author"},
+			SampleData: []models.BookImportRequest{
 				{
-					BookID: "BK001", 
-					Title: "Sample Book", 
-					Author: "Sample Author",
-					ISBN: &isbn,
-					Publisher: &publisher,
-					PublishedYear: &publishedYear,
-					Genre: &genre,
-					Description: &description,
-					TotalCopies: &totalCopies,
+					BookID:          "BK001",
+					Title:           "Sample Book",
+					Author:          "Sample Author",
+					ISBN:            &isbn,
+					Publisher:       &publisher,
+					PublishedYear:   &publishedYear,
+					Genre:           &genre,
+					Description:     &description,
+					TotalCopies:     &totalCopies,
 					AvailableCopies: &availableCopies,
-					ShelfLocation: &shelfLocation,
+					ShelfLocation:   &shelfLocation,
 				},
 			},
 			Instructions: "Sample instructions",

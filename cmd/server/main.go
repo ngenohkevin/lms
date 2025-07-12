@@ -144,11 +144,11 @@ func main() {
 			books.GET("/book/:book_id", bookHandler.GetBookByBookID)
 			books.PUT("/:id", bookHandler.UpdateBook)
 			books.DELETE("/:id", bookHandler.DeleteBook)
-			
+
 			// File upload routes
 			books.POST("/:id/cover", uploadHandler.UploadBookCover)
 			books.DELETE("/:id/cover", uploadHandler.DeleteBookCover)
-			
+
 			// Import/Export routes
 			books.POST("/import", importExportHandler.ImportBooks)
 			books.POST("/export", importExportHandler.ExportBooks)

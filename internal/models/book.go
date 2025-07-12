@@ -33,12 +33,12 @@ type Book struct {
 type BookStatus string
 
 const (
-	BookStatusAvailable    BookStatus = "available"
-	BookStatusBorrowed     BookStatus = "borrowed"
-	BookStatusReserved     BookStatus = "reserved"
-	BookStatusMaintenance  BookStatus = "maintenance"
-	BookStatusLost         BookStatus = "lost"
-	BookStatusDamaged      BookStatus = "damaged"
+	BookStatusAvailable   BookStatus = "available"
+	BookStatusBorrowed    BookStatus = "borrowed"
+	BookStatusReserved    BookStatus = "reserved"
+	BookStatusMaintenance BookStatus = "maintenance"
+	BookStatusLost        BookStatus = "lost"
+	BookStatusDamaged     BookStatus = "damaged"
 )
 
 // CreateBookRequest represents the request to create a new book
@@ -86,23 +86,23 @@ type BookSearchRequest struct {
 
 // BookResponse represents the response for book operations
 type BookResponse struct {
-	ID              int32     `json:"id"`
-	BookID          string    `json:"book_id"`
-	ISBN            *string   `json:"isbn"`
-	Title           string    `json:"title"`
-	Author          string    `json:"author"`
-	Publisher       *string   `json:"publisher"`
-	PublishedYear   *int32    `json:"published_year"`
-	Genre           *string   `json:"genre"`
-	Description     *string   `json:"description"`
-	CoverImageURL   *string   `json:"cover_image_url"`
-	TotalCopies     int32     `json:"total_copies"`
-	AvailableCopies int32     `json:"available_copies"`
-	ShelfLocation   *string   `json:"shelf_location"`
-	IsActive        bool      `json:"is_active"`
+	ID              int32      `json:"id"`
+	BookID          string     `json:"book_id"`
+	ISBN            *string    `json:"isbn"`
+	Title           string     `json:"title"`
+	Author          string     `json:"author"`
+	Publisher       *string    `json:"publisher"`
+	PublishedYear   *int32     `json:"published_year"`
+	Genre           *string    `json:"genre"`
+	Description     *string    `json:"description"`
+	CoverImageURL   *string    `json:"cover_image_url"`
+	TotalCopies     int32      `json:"total_copies"`
+	AvailableCopies int32      `json:"available_copies"`
+	ShelfLocation   *string    `json:"shelf_location"`
+	IsActive        bool       `json:"is_active"`
 	Status          BookStatus `json:"status"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 // BookListResponse represents the response for book list operations
@@ -265,11 +265,11 @@ func (b *Book) GetStatus() BookStatus {
 	if !b.IsActive.Valid || !b.IsActive.Bool {
 		return BookStatusMaintenance
 	}
-	
+
 	if b.AvailableCopies.Valid && b.AvailableCopies.Int32 > 0 {
 		return BookStatusAvailable
 	}
-	
+
 	return BookStatusBorrowed
 }
 

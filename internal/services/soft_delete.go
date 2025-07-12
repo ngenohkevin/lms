@@ -111,7 +111,7 @@ func (s *SoftDeleteService) ListDeletedUsers(ctx context.Context, limit, offset 
 		WHERE deleted_at IS NOT NULL 
 		ORDER BY deleted_at DESC 
 		LIMIT $1 OFFSET $2`
-	
+
 	rows, err := s.db.Query(ctx, query, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query deleted users: %w", err)
@@ -143,7 +143,7 @@ func (s *SoftDeleteService) ListDeletedStudents(ctx context.Context, limit, offs
 		WHERE deleted_at IS NOT NULL 
 		ORDER BY deleted_at DESC 
 		LIMIT $1 OFFSET $2`
-	
+
 	rows, err := s.db.Query(ctx, query, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query deleted students: %w", err)
@@ -178,7 +178,7 @@ func (s *SoftDeleteService) ListDeletedBooks(ctx context.Context, limit, offset 
 		WHERE deleted_at IS NOT NULL 
 		ORDER BY deleted_at DESC 
 		LIMIT $1 OFFSET $2`
-	
+
 	rows, err := s.db.Query(ctx, query, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query deleted books: %w", err)

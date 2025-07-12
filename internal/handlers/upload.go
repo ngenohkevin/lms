@@ -187,10 +187,10 @@ func (h *UploadHandler) UploadBookCover(c *gin.Context) {
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data: gin.H{
-			"book":       updatedBook,
-			"image_url":  imageURL,
-			"filename":   filename,
-			"file_size":  header.Size,
+			"book":      updatedBook,
+			"image_url": imageURL,
+			"filename":  filename,
+			"file_size": header.Size,
 		},
 		Message: "Book cover uploaded successfully",
 	})
@@ -307,7 +307,7 @@ func validateImageFile(header *multipart.FileHeader) error {
 	// Check file extension
 	ext := strings.ToLower(filepath.Ext(header.Filename))
 	allowedExtensions := []string{".jpg", ".jpeg", ".png", ".gif", ".webp"}
-	
+
 	isAllowed := false
 	for _, allowedExt := range allowedExtensions {
 		if ext == allowedExt {
@@ -315,7 +315,7 @@ func validateImageFile(header *multipart.FileHeader) error {
 			break
 		}
 	}
-	
+
 	if !isAllowed {
 		return fmt.Errorf("file type not allowed. Allowed types: %v", allowedExtensions)
 	}
@@ -327,7 +327,7 @@ func validateImageFile(header *multipart.FileHeader) error {
 		"image/gif",
 		"image/webp",
 	}
-	
+
 	mimeType := header.Header.Get("Content-Type")
 	isAllowedMime := false
 	for _, allowedMime := range allowedMimeTypes {
@@ -336,7 +336,7 @@ func validateImageFile(header *multipart.FileHeader) error {
 			break
 		}
 	}
-	
+
 	if !isAllowedMime {
 		return fmt.Errorf("invalid MIME type. Allowed types: %v", allowedMimeTypes)
 	}

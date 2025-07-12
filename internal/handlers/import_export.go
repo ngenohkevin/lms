@@ -55,7 +55,7 @@ func (h *ImportExportHandler) ImportBooks(c *gin.Context) {
 	// Validate file type
 	fileName := header.Filename
 	fileExt := strings.ToLower(filepath.Ext(fileName))
-	
+
 	if fileExt != ".csv" && fileExt != ".xlsx" && fileExt != ".xls" {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Success: false,
@@ -224,7 +224,7 @@ func (h *ImportExportHandler) ExportBooks(c *gin.Context) {
 // @Router /api/v1/books/import-template [get]
 func (h *ImportExportHandler) GetImportTemplate(c *gin.Context) {
 	format := c.DefaultQuery("format", "csv")
-	
+
 	if format != "csv" && format != "excel" {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Success: false,
@@ -270,7 +270,7 @@ func (h *ImportExportHandler) GetImportTemplate(c *gin.Context) {
 // @Router /api/v1/books/import-template/download [get]
 func (h *ImportExportHandler) DownloadImportTemplate(c *gin.Context) {
 	format := c.DefaultQuery("format", "csv")
-	
+
 	if format != "csv" && format != "excel" {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Success: false,
@@ -304,7 +304,7 @@ func (h *ImportExportHandler) DownloadImportTemplate(c *gin.Context) {
 	} else {
 		c.Header("Content-Type", "text/csv")
 	}
-	
+
 	c.Header("Content-Disposition", "attachment; filename=\""+fileName+"\"")
 	c.Header("Content-Transfer-Encoding", "binary")
 	c.Header("Cache-Control", "no-cache")
@@ -321,7 +321,7 @@ func (h *ImportExportHandler) DownloadImportTemplate(c *gin.Context) {
 				}
 				return *ptr
 			}
-			
+
 			// Helper function to safely get int32 value
 			safeInt32 := func(ptr *int32) int32 {
 				if ptr == nil {
@@ -329,7 +329,7 @@ func (h *ImportExportHandler) DownloadImportTemplate(c *gin.Context) {
 				}
 				return *ptr
 			}
-			
+
 			csvContent += fmt.Sprintf("%s,%s,%s,%s,%s,%d,%s,%s,%d,%d,%s\n",
 				sample.BookID,
 				sample.Title,

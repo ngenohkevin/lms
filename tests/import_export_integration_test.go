@@ -66,10 +66,10 @@ func TestImportExportIntegration(t *testing.T) {
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		
+
 		var response struct {
-			Success bool                    `json:"success"`
-			Data    models.ImportTemplate   `json:"data"`
+			Success bool                  `json:"success"`
+			Data    models.ImportTemplate `json:"data"`
 		}
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		require.NoError(t, err)
@@ -100,21 +100,21 @@ TEST002,Test Book 2,Test Author 2,978-0-123456-79-6,Test Publisher,2023,Non-Fict
 		writer := multipart.NewWriter(body)
 		part, err := writer.CreateFormFile("file", "test_books.csv")
 		require.NoError(t, err)
-		
+
 		_, err = part.Write([]byte(csvContent))
 		require.NoError(t, err)
-		
+
 		err = writer.Close()
 		require.NoError(t, err)
 
 		req, _ := http.NewRequest("POST", "/api/v1/books/import", body)
 		req.Header.Set("Content-Type", writer.FormDataContentType())
-		
+
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		
+
 		var response struct {
 			Success bool                `json:"success"`
 			Data    models.ImportResult `json:"data"`
@@ -137,21 +137,21 @@ TEST002,Test Book 2,Test Author 2,978-0-123456-79-6,Test Publisher,2023,Non-Fict
 		writer := multipart.NewWriter(body)
 		part, err := writer.CreateFormFile("file", "invalid_books.csv")
 		require.NoError(t, err)
-		
+
 		_, err = part.Write([]byte(csvContent))
 		require.NoError(t, err)
-		
+
 		err = writer.Close()
 		require.NoError(t, err)
 
 		req, _ := http.NewRequest("POST", "/api/v1/books/import", body)
 		req.Header.Set("Content-Type", writer.FormDataContentType())
-		
+
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusOK, w.Code)
-		
+
 		var response struct {
 			Success bool                `json:"success"`
 			Data    models.ImportResult `json:"data"`
@@ -174,21 +174,21 @@ TEST002,Test Book 2,Test Author 2,978-0-123456-79-6,Test Publisher,2023,Non-Fict
 		writer := multipart.NewWriter(body)
 		part, err := writer.CreateFormFile("file", "test.txt")
 		require.NoError(t, err)
-		
+
 		_, err = part.Write([]byte(textContent))
 		require.NoError(t, err)
-		
+
 		err = writer.Close()
 		require.NoError(t, err)
 
 		req, _ := http.NewRequest("POST", "/api/v1/books/import", body)
 		req.Header.Set("Content-Type", writer.FormDataContentType())
-		
+
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		
+
 		var response struct {
 			Success bool `json:"success"`
 			Error   struct {
@@ -210,13 +210,13 @@ TEST002,Test Book 2,Test Author 2,978-0-123456-79-6,Test Publisher,2023,Non-Fict
 		exportReq := map[string]interface{}{
 			"format": "csv",
 		}
-		
+
 		reqBody, err := json.Marshal(exportReq)
 		require.NoError(t, err)
 
 		req, _ := http.NewRequest("POST", "/api/v1/books/export", bytes.NewBuffer(reqBody))
 		req.Header.Set("Content-Type", "application/json")
-		
+
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -231,13 +231,13 @@ TEST002,Test Book 2,Test Author 2,978-0-123456-79-6,Test Publisher,2023,Non-Fict
 		exportReq := map[string]interface{}{
 			"format": "excel",
 		}
-		
+
 		reqBody, err := json.Marshal(exportReq)
 		require.NoError(t, err)
 
 		req, _ := http.NewRequest("POST", "/api/v1/books/export", bytes.NewBuffer(reqBody))
 		req.Header.Set("Content-Type", "application/json")
-		
+
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -251,18 +251,18 @@ TEST002,Test Book 2,Test Author 2,978-0-123456-79-6,Test Publisher,2023,Non-Fict
 		exportReq := map[string]interface{}{
 			"format": "invalid",
 		}
-		
+
 		reqBody, err := json.Marshal(exportReq)
 		require.NoError(t, err)
 
 		req, _ := http.NewRequest("POST", "/api/v1/books/export", bytes.NewBuffer(reqBody))
 		req.Header.Set("Content-Type", "application/json")
-		
+
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		
+
 		var response struct {
 			Success bool `json:"success"`
 			Error   struct {
@@ -358,16 +358,16 @@ func TestImportExportFileOperations(t *testing.T) {
 		writer := multipart.NewWriter(body)
 		part, err := writer.CreateFormFile("file", "large_file.csv")
 		require.NoError(t, err)
-		
+
 		_, err = part.Write(largeContent)
 		require.NoError(t, err)
-		
+
 		err = writer.Close()
 		require.NoError(t, err)
 
 		req, _ := http.NewRequest("POST", "/api/v1/books/import", body)
 		req.Header.Set("Content-Type", writer.FormDataContentType())
-		
+
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
@@ -397,21 +397,21 @@ func TestImportExportFileOperations(t *testing.T) {
 		writer := multipart.NewWriter(body)
 		part, err := writer.CreateFormFile("file", "empty_file.csv")
 		require.NoError(t, err)
-		
+
 		_, err = part.Write([]byte(""))
 		require.NoError(t, err)
-		
+
 		err = writer.Close()
 		require.NoError(t, err)
 
 		req, _ := http.NewRequest("POST", "/api/v1/books/import", body)
 		req.Header.Set("Content-Type", writer.FormDataContentType())
-		
+
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
-		
+
 		var response struct {
 			Success bool `json:"success"`
 			Error   struct {
@@ -469,12 +469,12 @@ func TestImportExportPersistence(t *testing.T) {
 		// Import books
 		result, err := importExportService.ImportBooksFromCSV(context.Background(), file, "test_import.csv")
 		require.NoError(t, err)
-		
+
 		// Debug output
 		if result.FailureCount > 0 {
 			t.Logf("Import failures: %+v", result.Errors)
 		}
-		
+
 		assert.Equal(t, 1, result.TotalRecords)
 		assert.Equal(t, 1, result.SuccessCount)
 		assert.Equal(t, 0, result.FailureCount)
