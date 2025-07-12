@@ -80,6 +80,7 @@ func main() {
 	}
 	userService := services.NewUserService(db.Pool, logger)
 	bookService := services.NewBookService(db.Queries)
+	studentService := services.NewStudentService(db.Queries, authService)
 	importExportService := services.NewImportExportService(bookService, "./uploads")
 
 	// Initialize Gin router
@@ -102,6 +103,7 @@ func main() {
 	healthHandler := handlers.NewHealthHandler(db, redis)
 	authHandler := handlers.NewAuthHandler(authService, userService)
 	bookHandler := handlers.NewBookHandler(bookService)
+	studentHandler := handlers.NewStudentHandler(studentService)
 	uploadHandler := handlers.NewUploadHandler(bookService)
 	importExportHandler := handlers.NewImportExportHandler(importExportService)
 
@@ -156,6 +158,29 @@ func main() {
 			books.GET("/import-template/download", importExportHandler.DownloadImportTemplate)
 			books.GET("/import-history", importExportHandler.GetImportHistory)
 			books.GET("/export-history", importExportHandler.GetExportHistory)
+		}
+
+		// Student management routes (librarian access required)
+		students := protected.Group("/students")
+		students.Use(authMiddleware.RequireLibrarian())
+		{
+			students.POST("", studentHandler.CreateStudent)
+			students.GET("", studentHandler.ListStudents)
+			students.GET("/search", studentHandler.SearchStudents)
+			students.GET("/statistics", studentHandler.GetStudentStatistics)
+			students.POST("/generate-id", studentHandler.GenerateStudentID)
+			students.POST("/bulk-import", studentHandler.BulkImportStudents)
+			students.GET("/:id", studentHandler.GetStudent)
+			students.PUT("/:id", studentHandler.UpdateStudent)
+			students.DELETE("/:id", studentHandler.DeleteStudent)
+			students.PUT("/:id/password", studentHandler.ChangeStudentPassword)
+		}
+
+		// Student profile management (for student self-service)
+		profile := protected.Group("/students/profile")
+		{
+			profile.GET("", studentHandler.GetStudentProfile)
+			profile.PUT("", studentHandler.UpdateStudentProfile)
 		}
 	}
 
