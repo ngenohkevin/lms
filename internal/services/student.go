@@ -395,7 +395,7 @@ func (s *StudentService) ListStudents(ctx context.Context, req *models.StudentSe
 
 	// Calculate pagination
 	totalPages := int((totalCount + int64(req.Limit) - 1) / int64(req.Limit))
-	
+
 	pagination := models.Pagination{
 		Page:       req.Page,
 		Limit:      req.Limit,
@@ -543,10 +543,10 @@ func (s *StudentService) BulkImportStudents(ctx context.Context, requests []mode
 func (s *StudentService) GenerateNextStudentID(ctx context.Context, year int) (string, error) {
 	// Get the current count of students for this year
 	yearPrefix := fmt.Sprintf("STU%d", year)
-	
+
 	// This is a simplified approach - in production, you might want a more sophisticated sequence
 	// For now, we'll get the highest sequence number for the year and increment it
-	
+
 	// Search for existing student IDs with this year prefix
 	searchPattern := yearPrefix + "%"
 	students, err := s.queries.SearchStudents(ctx, queries.SearchStudentsParams{

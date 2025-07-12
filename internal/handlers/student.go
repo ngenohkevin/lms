@@ -28,7 +28,7 @@ func NewStudentHandler(studentService *services.StudentService) *StudentHandler 
 // CreateStudent handles POST /api/v1/students
 func (h *StudentHandler) CreateStudent(c *gin.Context) {
 	var req models.CreateStudentRequest
-	
+
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Success: false,
@@ -269,7 +269,7 @@ func (h *StudentHandler) DeleteStudent(c *gin.Context) {
 // ListStudents handles GET /api/v1/students
 func (h *StudentHandler) ListStudents(c *gin.Context) {
 	var req models.StudentSearchRequest
-	
+
 	// Bind query parameters
 	if err := c.ShouldBindQuery(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
@@ -314,7 +314,7 @@ func (h *StudentHandler) ListStudents(c *gin.Context) {
 // SearchStudents handles GET /api/v1/students/search
 func (h *StudentHandler) SearchStudents(c *gin.Context) {
 	var req models.StudentSearchRequest
-	
+
 	// Bind query parameters
 	if err := c.ShouldBindQuery(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{

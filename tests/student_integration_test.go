@@ -3,13 +3,21 @@ package tests
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -22,13 +30,6 @@ import (
 	"github.com/ngenohkevin/lms/internal/middleware"
 	"github.com/ngenohkevin/lms/internal/models"
 	"github.com/ngenohkevin/lms/internal/services"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
-	"log/slog"
-	"time"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // MockAuthService is a mock implementation of AuthService for testing
@@ -70,7 +71,7 @@ type StudentIntegrationTestSuite struct {
 	queries     *queries.Queries
 	userService *services.UserService
 	authService *services.AuthService
-	
+
 	// Test data
 	testUser    *models.User
 	authToken   string
@@ -82,17 +83,12 @@ func (suite *StudentIntegrationTestSuite) SetupSuite() {
 	// Set Gin to test mode
 	gin.SetMode(gin.TestMode)
 
-	// Load test configuration
+	// Load test configuration from environment variables
 	cfg, err := config.Load()
 	require.NoError(suite.T(), err)
 
-	// Override with test database configuration
-	cfg.Database.Host = "localhost"
-	cfg.Database.Port = 5432
-	cfg.Database.User = "postgres"
-	cfg.Database.Password = "postgres"
-	cfg.Database.Name = "lms_test"
-	cfg.Database.SSLMode = "disable"
+	// Configuration should be loaded from environment variables via .env.test
+	// No need to override here as config.Load() handles environment variables automatically
 
 	// Initialize database
 	suite.db, err = database.New(cfg)
@@ -111,7 +107,7 @@ func (suite *StudentIntegrationTestSuite) SetupSuite() {
 		nil, // No Redis for tests
 	)
 	require.NoError(suite.T(), err)
-	
+
 	suite.userService = services.NewUserService(suite.db.Pool, slog.Default())
 
 	// Set up router with middleware
@@ -122,11 +118,11 @@ func (suite *StudentIntegrationTestSuite) SetupSuite() {
 
 	// Set up API routes (students endpoints will be added by the test)
 	api := suite.router.Group("/api/v1")
-	
+
 	// TODO: Add authentication endpoints when auth service is ready
 	// authHandler := handlers.NewAuthHandler(suite.authService, suite.userService)
 	// api.POST("/auth/login", authHandler.Login)
-	
+
 	// Student endpoints will be set up in individual tests
 	suite.setupStudentRoutes(api)
 }
@@ -191,7 +187,7 @@ func (suite *StudentIntegrationTestSuite) TearDownSuite() {
 // cleanDatabase removes all test data from the database
 func (suite *StudentIntegrationTestSuite) cleanDatabase() {
 	ctx := context.Background()
-	
+
 	// Delete in reverse order of dependencies
 	suite.db.Pool.Exec(ctx, "DELETE FROM audit_logs")
 	suite.db.Pool.Exec(ctx, "DELETE FROM transactions")
@@ -208,25 +204,41 @@ func (suite *StudentIntegrationTestSuite) cleanDatabase() {
 // createTestUser creates a test librarian user
 func (suite *StudentIntegrationTestSuite) createTestUser() {
 	ctx := context.Background()
-	
+
+	// Get test user credentials from environment variables
+	testUsername := os.Getenv("LMS_TEST_USER_USERNAME")
+	if testUsername == "" {
+		testUsername = "testlibrarian" // fallback
+	}
+
+	testEmail := os.Getenv("LMS_TEST_USER_EMAIL")
+	if testEmail == "" {
+		testEmail = "librarian@test.com" // fallback
+	}
+
+	testPassword := os.Getenv("LMS_TEST_USER_PASSWORD")
+	if testPassword == "" {
+		testPassword = "TestPass123!" // fallback
+	}
+
 	// Create user directly in database for testing
-	hashedPassword, err := suite.authService.HashPassword("TestPass123!")
+	hashedPassword, err := suite.authService.HashPassword(testPassword)
 	require.NoError(suite.T(), err)
-	
+
 	// Create pgtype values
 	role := pgtype.Text{}
 	role.Scan("librarian")
-	
+
 	userParams := queries.CreateUserParams{
-		Username:     "testlibrarian",
-		Email:        "librarian@test.com",
+		Username:     testUsername,
+		Email:        testEmail,
 		PasswordHash: hashedPassword,
 		Role:         role,
 	}
-	
+
 	user, err := suite.queries.CreateUser(ctx, userParams)
 	require.NoError(suite.T(), err)
-	
+
 	suite.testUser = &models.User{
 		ID:       int(user.ID),
 		Username: user.Username,
@@ -244,28 +256,10 @@ func (suite *StudentIntegrationTestSuite) generateAuthToken() {
 }
 
 // authenticateTestUser authenticates the test user and gets an auth token
+// NOTE: This function is no longer needed as we use generateAuthToken() directly
 func (suite *StudentIntegrationTestSuite) authenticateTestUser() {
-	// TODO: Implement authentication when auth service is available
-	// For now, skip authentication for testing
-	// loginReq := models.LoginRequest{
-	// 	Username: "testlibrarian",
-	// 	Password: "TestPass123!",
-	// }
-
-	// body, _ := json.Marshal(loginReq)
-	// req := httptest.NewRequest("POST", "/api/v1/auth/login", bytes.NewBuffer(body))
-	// req.Header.Set("Content-Type", "application/json")
-
-	// w := httptest.NewRecorder()
-	// suite.router.ServeHTTP(w, req)
-
-	// require.Equal(suite.T(), http.StatusOK, w.Code)
-
-	// var response models.LoginResponse
-	// err := json.Unmarshal(w.Body.Bytes(), &response)
-	// require.NoError(suite.T(), err)
-
-	// suite.authToken = response.AccessToken
+	// Authentication is now handled by generateAuthToken() which creates JWT tokens directly
+	// This function is kept for backward compatibility but is not used
 }
 
 // makeAuthenticatedRequest creates an authenticated HTTP request with authorization header
@@ -395,7 +389,7 @@ func (suite *StudentIntegrationTestSuite) TestCreateStudent() {
 			} else {
 				assert.True(suite.T(), response["success"].(bool))
 				assert.NotEmpty(suite.T(), response["data"])
-				
+
 				// Verify student data in response
 				data := response["data"].(map[string]interface{})
 				assert.Equal(suite.T(), tt.studentData.StudentID, data["student_id"])
@@ -652,7 +646,7 @@ func (suite *StudentIntegrationTestSuite) TestListStudents() {
 				data := response["data"].(map[string]interface{})
 				students := data["students"].([]interface{})
 				assert.Equal(suite.T(), tt.expectedCount, len(students))
-				
+
 				// Verify pagination metadata
 				pagination := data["pagination"].(map[string]interface{})
 				assert.NotNil(suite.T(), pagination)
@@ -801,9 +795,9 @@ func (suite *StudentIntegrationTestSuite) TestStudentValidation() {
 		{
 			name: "Empty student ID",
 			studentData: map[string]interface{}{
-				"student_id":   "",
-				"first_name":   "John",
-				"last_name":    "Doe",
+				"student_id":    "",
+				"first_name":    "John",
+				"last_name":     "Doe",
 				"year_of_study": 1,
 			},
 			expectedCode: http.StatusBadRequest,
@@ -812,9 +806,9 @@ func (suite *StudentIntegrationTestSuite) TestStudentValidation() {
 		{
 			name: "Invalid student ID pattern",
 			studentData: map[string]interface{}{
-				"student_id":   "INVALID123",
-				"first_name":   "John",
-				"last_name":    "Doe",
+				"student_id":    "INVALID123",
+				"first_name":    "John",
+				"last_name":     "Doe",
 				"year_of_study": 1,
 			},
 			expectedCode: http.StatusBadRequest,
@@ -823,9 +817,9 @@ func (suite *StudentIntegrationTestSuite) TestStudentValidation() {
 		{
 			name: "Year of study too low",
 			studentData: map[string]interface{}{
-				"student_id":   "STU2024001",
-				"first_name":   "John",
-				"last_name":    "Doe",
+				"student_id":    "STU2024001",
+				"first_name":    "John",
+				"last_name":     "Doe",
 				"year_of_study": 0,
 			},
 			expectedCode: http.StatusBadRequest,
@@ -834,9 +828,9 @@ func (suite *StudentIntegrationTestSuite) TestStudentValidation() {
 		{
 			name: "Year of study too high",
 			studentData: map[string]interface{}{
-				"student_id":   "STU2024001",
-				"first_name":   "John",
-				"last_name":    "Doe",
+				"student_id":    "STU2024001",
+				"first_name":    "John",
+				"last_name":     "Doe",
 				"year_of_study": 10,
 			},
 			expectedCode: http.StatusBadRequest,
@@ -845,10 +839,10 @@ func (suite *StudentIntegrationTestSuite) TestStudentValidation() {
 		{
 			name: "Invalid email format",
 			studentData: map[string]interface{}{
-				"student_id":   "STU2024001",
-				"first_name":   "John",
-				"last_name":    "Doe",
-				"email":        "invalid-email",
+				"student_id":    "STU2024001",
+				"first_name":    "John",
+				"last_name":     "Doe",
+				"email":         "invalid-email",
 				"year_of_study": 1,
 			},
 			expectedCode: http.StatusBadRequest,

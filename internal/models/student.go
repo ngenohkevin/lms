@@ -57,7 +57,6 @@ type UpdateStudentProfileRequest struct {
 	Phone     string `json:"phone" binding:"omitempty"`
 }
 
-
 // StudentResponse represents the response payload for student operations
 type StudentResponse struct {
 	ID             int32  `json:"id"`
@@ -77,9 +76,8 @@ type StudentResponse struct {
 // StudentListResponse represents the response payload for listing students
 type StudentListResponse struct {
 	Students   []StudentResponse `json:"students"`
-	Pagination Pagination `json:"pagination"`
+	Pagination Pagination        `json:"pagination"`
 }
-
 
 // StudentSearchRequest represents the request payload for searching students
 type StudentSearchRequest struct {
@@ -104,11 +102,11 @@ type BulkImportStudentRequest struct {
 
 // BulkImportResponse represents the response for bulk import operations
 type BulkImportResponse struct {
-	TotalRecords    int                        `json:"total_records"`
-	SuccessfulCount int                        `json:"successful_count"`
-	FailedCount     int                        `json:"failed_count"`
-	Errors          []BulkImportError          `json:"errors,omitempty"`
-	CreatedStudents []StudentResponse          `json:"created_students,omitempty"`
+	TotalRecords    int               `json:"total_records"`
+	SuccessfulCount int               `json:"successful_count"`
+	FailedCount     int               `json:"failed_count"`
+	Errors          []BulkImportError `json:"errors,omitempty"`
+	CreatedStudents []StudentResponse `json:"created_students,omitempty"`
 }
 
 // BulkImportError represents an error in bulk import
@@ -123,21 +121,21 @@ type BulkImportError struct {
 var (
 	// StudentIDPattern defines the valid pattern for student IDs (e.g., STU2024001, STU2024002, etc.)
 	StudentIDPattern = regexp.MustCompile(`^STU\d{4}\d{3}$`)
-	
+
 	// PhonePattern defines the valid pattern for phone numbers
 	PhonePattern = regexp.MustCompile(`^\+?[\d\s\-\(\)]+$`)
 )
 
 // Common validation errors
 var (
-	ErrInvalidStudentID    = errors.New("student ID must follow format STU + year + 3-digit number (e.g., STU2024001)")
-	ErrInvalidYear         = errors.New("year of study must be between 1 and 8")
-	ErrInvalidEmail        = errors.New("invalid email format")
-	ErrInvalidPhone        = errors.New("invalid phone number format")
-	ErrStudentIDExists     = errors.New("student ID already exists")
-	ErrEmailExists         = errors.New("email already exists")
-	ErrStudentNotFound     = errors.New("student not found")
-	ErrStudentInactive     = errors.New("student account is inactive")
+	ErrInvalidStudentID     = errors.New("student ID must follow format STU + year + 3-digit number (e.g., STU2024001)")
+	ErrInvalidYear          = errors.New("year of study must be between 1 and 8")
+	ErrInvalidEmail         = errors.New("invalid email format")
+	ErrInvalidPhone         = errors.New("invalid phone number format")
+	ErrStudentIDExists      = errors.New("student ID already exists")
+	ErrEmailExists          = errors.New("email already exists")
+	ErrStudentNotFound      = errors.New("student not found")
+	ErrStudentInactive      = errors.New("student account is inactive")
 	ErrMissingRequiredField = errors.New("required field is missing")
 )
 
@@ -267,7 +265,6 @@ func (r *BulkImportStudentRequest) Validate() error {
 	return nil
 }
 
-
 // ToResponse converts a database StudentDB to StudentResponse
 func (s *StudentDB) ToResponse() StudentResponse {
 	response := StudentResponse{
@@ -303,7 +300,6 @@ func (s *StudentDB) ToResponse() StudentResponse {
 
 	return response
 }
-
 
 // GenerateStudentID generates a new student ID based on current year and next sequence number
 func GenerateStudentID(year int, sequence int) string {

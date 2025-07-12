@@ -20,7 +20,7 @@ type MockQueries struct {
 	mock.Mock
 }
 
-// MockAuthService is a mock implementation of AuthServiceInterface for testing  
+// MockAuthService is a mock implementation of AuthServiceInterface for testing
 type MockAuthService struct {
 	mock.Mock
 }
@@ -133,11 +133,11 @@ func TestStudentService_CreateStudent(t *testing.T) {
 			setupMocks: func(m *MockQueries) {
 				// Student ID doesn't exist
 				m.On("GetStudentByStudentID", mock.Anything, "STU2024001").Return(queries.Student{}, assert.AnError)
-				
+
 				// Email doesn't exist
 				email := pgtype.Text{String: "john.doe@test.com", Valid: true}
 				m.On("GetStudentByEmail", mock.Anything, email).Return(queries.Student{}, assert.AnError)
-				
+
 				// Create student succeeds
 				m.On("CreateStudent", mock.Anything, mock.MatchedBy(func(params queries.CreateStudentParams) bool {
 					return params.StudentID == "STU2024001" &&
@@ -188,7 +188,7 @@ func TestStudentService_CreateStudent(t *testing.T) {
 			setupMocks: func(m *MockQueries) {
 				// Student ID doesn't exist
 				m.On("GetStudentByStudentID", mock.Anything, "STU2024002").Return(queries.Student{}, assert.AnError)
-				
+
 				// Email exists
 				email := pgtype.Text{String: "existing@test.com", Valid: true}
 				m.On("GetStudentByEmail", mock.Anything, email).Return(createMockStudent(), nil)
@@ -239,7 +239,7 @@ func TestStudentService_CreateStudent(t *testing.T) {
 			if tt.expectError {
 				assert.Error(t, err)
 				assert.Nil(t, result)
-				
+
 				if tt.errorType != nil {
 					assert.ErrorIs(t, err, tt.errorType)
 				}
@@ -298,7 +298,7 @@ func TestStudentService_GetStudentByID(t *testing.T) {
 			if tt.expectError {
 				assert.Error(t, err)
 				assert.Nil(t, result)
-				
+
 				if tt.errorType != nil {
 					assert.ErrorIs(t, err, tt.errorType)
 				}
@@ -335,11 +335,11 @@ func TestStudentService_UpdateStudent(t *testing.T) {
 			setupMocks: func(m *MockQueries) {
 				// Student exists
 				m.On("GetStudentByID", mock.Anything, int32(1)).Return(createMockStudent(), nil)
-				
+
 				// Email doesn't exist for other students
 				email := pgtype.Text{String: "updated@test.com", Valid: true}
 				m.On("GetStudentByEmail", mock.Anything, email).Return(queries.Student{}, assert.AnError)
-				
+
 				// Update succeeds
 				updatedStudent := createMockStudent()
 				updatedStudent.FirstName = "UpdatedJohn"
@@ -378,7 +378,7 @@ func TestStudentService_UpdateStudent(t *testing.T) {
 			setupMocks: func(m *MockQueries) {
 				// Student exists
 				m.On("GetStudentByID", mock.Anything, int32(1)).Return(createMockStudent(), nil)
-				
+
 				// Email exists for different student
 				email := pgtype.Text{String: "existing@test.com", Valid: true}
 				existingStudent := createMockStudent()
@@ -405,7 +405,7 @@ func TestStudentService_UpdateStudent(t *testing.T) {
 			if tt.expectError {
 				assert.Error(t, err)
 				assert.Nil(t, result)
-				
+
 				if tt.errorType != nil {
 					assert.ErrorIs(t, err, tt.errorType)
 				}
@@ -463,7 +463,7 @@ func TestStudentService_DeleteStudent(t *testing.T) {
 
 			if tt.expectError {
 				assert.Error(t, err)
-				
+
 				if tt.errorType != nil {
 					assert.ErrorIs(t, err, tt.errorType)
 				}
@@ -490,11 +490,11 @@ func TestStudentService_ListStudents(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		request        *models.StudentSearchRequest
-		setupMocks     func(*MockQueries)
-		expectedCount  int
-		expectError    bool
+		name          string
+		request       *models.StudentSearchRequest
+		setupMocks    func(*MockQueries)
+		expectedCount int
+		expectError   bool
 	}{
 		{
 			name: "list all students with default pagination",
@@ -579,11 +579,11 @@ func TestStudentService_SearchStudents(t *testing.T) {
 	mockStudents := []queries.Student{createMockStudent()}
 
 	tests := []struct {
-		name           string
-		request        *models.StudentSearchRequest
-		setupMocks     func(*MockQueries)
-		expectedCount  int
-		expectError    bool
+		name          string
+		request       *models.StudentSearchRequest
+		setupMocks    func(*MockQueries)
+		expectedCount int
+		expectError   bool
 	}{
 		{
 			name: "search by query",
@@ -595,8 +595,8 @@ func TestStudentService_SearchStudents(t *testing.T) {
 			setupMocks: func(m *MockQueries) {
 				m.On("SearchStudents", mock.Anything, queries.SearchStudentsParams{
 					FirstName: "%john%",
-					Limit:   20,
-					Offset:  0,
+					Limit:     20,
+					Offset:    0,
 				}).Return(mockStudents, nil)
 			},
 			expectedCount: 1,
@@ -702,7 +702,7 @@ func TestStudentService_BulkImportStudents(t *testing.T) {
 				for _, req := range validRequests {
 					// Student ID doesn't exist
 					m.On("GetStudentByStudentID", mock.Anything, req.StudentID).Return(queries.Student{}, assert.AnError)
-					
+
 					// Create student succeeds
 					mockStudent := createMockStudent()
 					mockStudent.StudentID = req.StudentID
@@ -723,7 +723,7 @@ func TestStudentService_BulkImportStudents(t *testing.T) {
 				for _, req := range validRequests {
 					// Student ID doesn't exist
 					m.On("GetStudentByStudentID", mock.Anything, req.StudentID).Return(queries.Student{}, assert.AnError)
-					
+
 					// Create student succeeds
 					mockStudent := createMockStudent()
 					mockStudent.StudentID = req.StudentID
@@ -765,11 +765,11 @@ func TestStudentService_BulkImportStudents(t *testing.T) {
 
 func TestStudentService_GenerateNextStudentID(t *testing.T) {
 	tests := []struct {
-		name         string
-		year         int
-		setupMocks   func(*MockQueries)
-		expectedID   string
-		expectError  bool
+		name        string
+		year        int
+		setupMocks  func(*MockQueries)
+		expectedID  string
+		expectError bool
 	}{
 		{
 			name: "first student for year",
@@ -827,10 +827,10 @@ func TestStudentService_GenerateNextStudentID(t *testing.T) {
 
 func TestStudentService_GetStudentStatistics(t *testing.T) {
 	mockQueries := new(MockQueries)
-	
+
 	// Set up mocks for total count
 	mockQueries.On("CountStudents", mock.Anything).Return(int64(100), nil)
-	
+
 	// Set up mocks for year counts
 	yearCounts := map[int32]int64{
 		1: 25,
@@ -842,7 +842,7 @@ func TestStudentService_GetStudentStatistics(t *testing.T) {
 		7: 2,
 		8: 1,
 	}
-	
+
 	for year, count := range yearCounts {
 		mockQueries.On("CountStudentsByYear", mock.Anything, year).Return(count, nil)
 	}
@@ -863,7 +863,7 @@ func TestStudentService_GetStudentStatistics(t *testing.T) {
 	// Check year statistics
 	byYear, ok := result["by_year"].(map[string]int64)
 	require.True(t, ok)
-	
+
 	for year, expectedCount := range yearCounts {
 		yearKey := fmt.Sprintf("year_%d", year)
 		assert.Equal(t, expectedCount, byYear[yearKey])
@@ -887,7 +887,7 @@ func TestStudentRequestValidation(t *testing.T) {
 			YearOfStudy: 1,
 			Department:  "Computer Science",
 		}
-		
+
 		assert.NoError(t, validRequest.Validate())
 
 		// Test invalid student ID
@@ -913,7 +913,7 @@ func TestStudentRequestValidation(t *testing.T) {
 			Email:       "john@test.com",
 			YearOfStudy: 1,
 		}
-		
+
 		assert.NoError(t, validRequest.Validate())
 
 		// Test invalid year
@@ -929,7 +929,7 @@ func TestStudentRequestValidation(t *testing.T) {
 			LastName:    "Doe",
 			YearOfStudy: 1,
 		}
-		
+
 		assert.NoError(t, validRequest.Validate())
 
 		// Test invalid student ID pattern
