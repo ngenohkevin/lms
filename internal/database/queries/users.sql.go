@@ -26,7 +26,7 @@ func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (username, email, password_hash, role)
 VALUES ($1, $2, $3, $4)
-RETURNING id, username, email, password_hash, role, is_active, last_login, created_at, updated_at
+RETURNING id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at
 `
 
 type CreateUserParams struct {
@@ -52,6 +52,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Role,
 		&i.IsActive,
 		&i.LastLogin,
+		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -59,7 +60,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, username, email, password_hash, role, is_active, last_login, created_at, updated_at FROM users
+SELECT id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at FROM users
 WHERE email = $1 AND deleted_at IS NULL
 `
 
@@ -74,6 +75,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Role,
 		&i.IsActive,
 		&i.LastLogin,
+		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -81,7 +83,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, email, password_hash, role, is_active, last_login, created_at, updated_at FROM users
+SELECT id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at FROM users
 WHERE id = $1 AND deleted_at IS NULL
 `
 
@@ -96,6 +98,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id int32) (User, error) {
 		&i.Role,
 		&i.IsActive,
 		&i.LastLogin,
+		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -103,7 +106,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id int32) (User, error) {
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, email, password_hash, role, is_active, last_login, created_at, updated_at FROM users
+SELECT id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at FROM users
 WHERE username = $1 AND deleted_at IS NULL
 `
 
@@ -118,6 +121,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.Role,
 		&i.IsActive,
 		&i.LastLogin,
+		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -125,7 +129,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, email, password_hash, role, is_active, last_login, created_at, updated_at FROM users
+SELECT id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at FROM users
 WHERE deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
@@ -153,6 +157,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.Role,
 			&i.IsActive,
 			&i.LastLogin,
+			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -181,7 +186,7 @@ const updateUser = `-- name: UpdateUser :one
 UPDATE users
 SET username = $2, email = $3, password_hash = $4, role = $5, updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, username, email, password_hash, role, is_active, last_login, created_at, updated_at
+RETURNING id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at
 `
 
 type UpdateUserParams struct {
@@ -209,6 +214,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.Role,
 		&i.IsActive,
 		&i.LastLogin,
+		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

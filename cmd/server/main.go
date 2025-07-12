@@ -79,6 +79,8 @@ func main() {
 		os.Exit(1)
 	}
 	userService := services.NewUserService(db.Pool, logger)
+	bookService := services.NewBookService(db.Queries)
+	importExportService := services.NewImportExportService(bookService, "./uploads")
 
 	// Initialize Gin router
 	r := gin.New()
@@ -99,6 +101,9 @@ func main() {
 	// Initialize handlers
 	healthHandler := handlers.NewHealthHandler(db, redis)
 	authHandler := handlers.NewAuthHandler(authService, userService)
+	bookHandler := handlers.NewBookHandler(bookService)
+	uploadHandler := handlers.NewUploadHandler(bookService)
+	importExportHandler := handlers.NewImportExportHandler(importExportService)
 
 	// Public routes (no authentication required)
 	public := r.Group("/api/v1")
@@ -126,7 +131,36 @@ func main() {
 		protected.GET("/profile", authHandler.GetProfile)
 		protected.POST("/auth/logout", authHandler.Logout)
 		protected.POST("/auth/change-password", authHandler.ChangePassword)
+
+		// Book management routes (librarian access required)
+		books := protected.Group("/books")
+		books.Use(authMiddleware.RequireLibrarian())
+		{
+			books.POST("", bookHandler.CreateBook)
+			books.GET("", bookHandler.ListBooks)
+			books.GET("/search", bookHandler.SearchBooks)
+			books.GET("/stats", bookHandler.GetBookStats)
+			books.GET("/:id", bookHandler.GetBook)
+			books.GET("/book/:book_id", bookHandler.GetBookByBookID)
+			books.PUT("/:id", bookHandler.UpdateBook)
+			books.DELETE("/:id", bookHandler.DeleteBook)
+			
+			// File upload routes
+			books.POST("/:id/cover", uploadHandler.UploadBookCover)
+			books.DELETE("/:id/cover", uploadHandler.DeleteBookCover)
+			
+			// Import/Export routes
+			books.POST("/import", importExportHandler.ImportBooks)
+			books.POST("/export", importExportHandler.ExportBooks)
+			books.GET("/import-template", importExportHandler.GetImportTemplate)
+			books.GET("/import-template/download", importExportHandler.DownloadImportTemplate)
+			books.GET("/import-history", importExportHandler.GetImportHistory)
+			books.GET("/export-history", importExportHandler.GetExportHistory)
+		}
 	}
+
+	// Static file serving for uploaded images
+	r.Static("/uploads", "./uploads")
 
 	// Root health check
 	r.GET("/health", healthHandler.Health)

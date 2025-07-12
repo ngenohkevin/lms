@@ -109,6 +109,7 @@ type User struct {
 	Role         pgtype.Text      `db:"role" json:"role"`
 	IsActive     pgtype.Bool      `db:"is_active" json:"is_active"`
 	LastLogin    pgtype.Timestamp `db:"last_login" json:"last_login"`
+	DeletedAt    pgtype.Timestamp `db:"deleted_at" json:"deleted_at"`
 	CreatedAt    pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt    pgtype.Timestamp `db:"updated_at" json:"updated_at"`
 }

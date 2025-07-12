@@ -9,10 +9,12 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/ngenohkevin/lms/internal/config"
+	"github.com/ngenohkevin/lms/internal/database/queries"
 )
 
 type Database struct {
-	Pool *pgxpool.Pool
+	Pool    *pgxpool.Pool
+	Queries *queries.Queries
 }
 
 func New(cfg *config.Config) (*Database, error) {
@@ -62,7 +64,8 @@ func New(cfg *config.Config) (*Database, error) {
 	log.Println("Successfully connected to database")
 
 	return &Database{
-		Pool: pool,
+		Pool:    pool,
+		Queries: queries.New(pool),
 	}, nil
 }
 

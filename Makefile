@@ -39,9 +39,18 @@ clean:
 # Run tests
 test:
 	@echo "$(GREEN)Setting up test environment...$(NC)"
-	@bash -c "set -a; [ -f .env ] && source .env; [ -f .env.local ] && source .env.local; set +a; ./scripts/test-setup.sh"
+	@bash -c "set -a; [ -f .env.test ] && source .env.test; set +a; ./scripts/test_db_setup_simple.sh > /dev/null 2>&1 || true"
 	@echo "$(GREEN)Running tests...$(NC)"
-	@bash -c "set -a; [ -f .env ] && source .env; [ -f .env.local ] && source .env.local; GO_ENV=test; set +a; go test -v ./..."
+	@bash -c "set -a; [ -f .env.test ] && source .env.test; set +a; go test -v ./..."
+
+# Run tests with database
+test-db:
+	@echo "$(GREEN)Setting up test database...$(NC)"
+	@./scripts/test_db_setup_simple.sh
+	@echo "$(GREEN)Running tests with database...$(NC)"
+	@export DATABASE_URL="postgres://lms_test_user:lms_test_password@localhost:5432/lms_test_db?sslmode=disable" && \
+	export TEST_DB_PASSWORD="lms_test_password" && \
+	go test -v ./...
 
 # Run tests in watch mode
 test-watch:
@@ -51,9 +60,9 @@ test-watch:
 # Run tests with coverage
 test-cover:
 	@echo "$(GREEN)Setting up test environment...$(NC)"
-	@./scripts/test-setup.sh
+	@bash -c "set -a; [ -f .env.test ] && source .env.test; set +a; ./scripts/test_db_setup_simple.sh > /dev/null 2>&1 || true"
 	@echo "$(GREEN)Running tests with coverage...$(NC)"
-	@bash -c "set -a; [ -f .env ] && source .env; [ -f .env.local ] && source .env.local; GO_ENV=test; set +a; go test -v -coverprofile=coverage.out ./..."
+	@bash -c "set -a; [ -f .env.test ] && source .env.test; set +a; go test -v -coverprofile=coverage.out ./..."
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "$(GREEN)Coverage report generated: coverage.html$(NC)"
 
@@ -65,9 +74,9 @@ test-unit:
 # Run integration tests only
 test-integration:
 	@echo "$(GREEN)Setting up test environment...$(NC)"
-	@./scripts/test-setup.sh
+	@./scripts/setup_test_db.sh
 	@echo "$(GREEN)Running integration tests...$(NC)"
-	@bash -c "set -a; [ -f .env ] && source .env; [ -f .env.local ] && source .env.local; GO_ENV=test; set +a; go test -v -run Integration ./..."
+	@bash -c "set -a; [ -f .env.test ] && source .env.test; set +a; go test -v -run Integration ./..."
 
 # Run linting
 lint:
@@ -161,6 +170,7 @@ help:
 	@echo "  $(YELLOW)test-cover$(NC)     - Run tests with coverage"
 	@echo "  $(YELLOW)test-unit$(NC)      - Run unit tests only"
 	@echo "  $(YELLOW)test-integration$(NC) - Run integration tests only"
+	@echo "  $(YELLOW)test-db$(NC)        - Run tests with test database"
 	@echo "  $(YELLOW)lint$(NC)           - Run linting"
 	@echo "  $(YELLOW)fmt$(NC)            - Format code"
 	@echo "  $(YELLOW)deps$(NC)           - Install dependencies"

@@ -1,0 +1,6 @@
+book_id,title,author,isbn,publisher,published_year,genre,description,total_copies,available_copies,shelf_location
+BOOK001,The Great Gatsby,F. Scott Fitzgerald,978-0-7432-7356-5,Scribner,1925,Fiction,A classic American novel about the Jazz Age,5,5,A1-001
+BOOK002,To Kill a Mockingbird,Harper Lee,978-0-06-112008-4,J.B. Lippincott & Co.,1960,Fiction,A novel about racial injustice in the American South,3,3,A1-002
+BOOK003,1984,George Orwell,978-0-452-28423-4,Secker & Warburg,1949,Dystopian Fiction,A dystopian social science fiction novel,4,4,A1-003
+BOOK004,Pride and Prejudice,Jane Austen,978-0-14-143951-8,T. Egerton,1813,Romance,A romantic novel of manners,2,2,A1-004
+BOOK005,The Catcher in the Rye,J.D. Salinger,978-0-316-76948-0,Little Brown and Company,1951,Fiction,A controversial coming-of-age story,3,3,A1-005
