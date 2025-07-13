@@ -308,6 +308,54 @@ func (q *Queries) SearchStudents(ctx context.Context, arg SearchStudentsParams) 
 	return items, nil
 }
 
+const searchStudentsIncludingDeleted = `-- name: SearchStudentsIncludingDeleted :many
+SELECT id, student_id, first_name, last_name, email, phone, year_of_study, department, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at FROM students
+WHERE student_id ILIKE $1
+ORDER BY student_id
+LIMIT $2 OFFSET $3
+`
+
+type SearchStudentsIncludingDeletedParams struct {
+	StudentID string `db:"student_id" json:"student_id"`
+	Limit     int32  `db:"limit" json:"limit"`
+	Offset    int32  `db:"offset" json:"offset"`
+}
+
+func (q *Queries) SearchStudentsIncludingDeleted(ctx context.Context, arg SearchStudentsIncludingDeletedParams) ([]Student, error) {
+	rows, err := q.db.Query(ctx, searchStudentsIncludingDeleted, arg.StudentID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Student{}
+	for rows.Next() {
+		var i Student
+		if err := rows.Scan(
+			&i.ID,
+			&i.StudentID,
+			&i.FirstName,
+			&i.LastName,
+			&i.Email,
+			&i.Phone,
+			&i.YearOfStudy,
+			&i.Department,
+			&i.EnrollmentDate,
+			&i.PasswordHash,
+			&i.IsActive,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const softDeleteStudent = `-- name: SoftDeleteStudent :exec
 UPDATE students
 SET deleted_at = NOW(), updated_at = NOW()

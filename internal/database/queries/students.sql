@@ -57,3 +57,9 @@ WHERE deleted_at IS NULL;
 -- name: CountStudentsByYear :one
 SELECT COUNT(*) FROM students
 WHERE year_of_study = $1 AND deleted_at IS NULL;
+
+-- name: SearchStudentsIncludingDeleted :many
+SELECT * FROM students
+WHERE student_id ILIKE $1
+ORDER BY student_id
+LIMIT $2 OFFSET $3;

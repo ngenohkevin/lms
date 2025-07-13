@@ -30,6 +30,11 @@ func (m *MockAuthService) HashPassword(password string) (string, error) {
 	return args.String(0), args.Error(1)
 }
 
+func (m *MockAuthService) VerifyPassword(hashedPassword, password string) (bool, error) {
+	args := m.Called(hashedPassword, password)
+	return args.Bool(0), args.Error(1)
+}
+
 func (m *MockQueries) CreateStudent(ctx context.Context, params queries.CreateStudentParams) (queries.Student, error) {
 	args := m.Called(ctx, params)
 	return args.Get(0).(queries.Student), args.Error(1)
@@ -86,6 +91,11 @@ func (m *MockQueries) CountStudentsByYear(ctx context.Context, yearOfStudy int32
 }
 
 func (m *MockQueries) SearchStudents(ctx context.Context, params queries.SearchStudentsParams) ([]queries.Student, error) {
+	args := m.Called(ctx, params)
+	return args.Get(0).([]queries.Student), args.Error(1)
+}
+
+func (m *MockQueries) SearchStudentsIncludingDeleted(ctx context.Context, params queries.SearchStudentsIncludingDeletedParams) ([]queries.Student, error) {
 	args := m.Called(ctx, params)
 	return args.Get(0).([]queries.Student), args.Error(1)
 }
@@ -775,8 +785,8 @@ func TestStudentService_GenerateNextStudentID(t *testing.T) {
 			name: "first student for year",
 			year: 2024,
 			setupMocks: func(m *MockQueries) {
-				m.On("SearchStudents", mock.Anything, mock.MatchedBy(func(params queries.SearchStudentsParams) bool {
-					return params.FirstName == "STU2024%"
+				m.On("SearchStudentsIncludingDeleted", mock.Anything, mock.MatchedBy(func(params queries.SearchStudentsIncludingDeletedParams) bool {
+					return params.StudentID == "STU2024%"
 				})).Return([]queries.Student{}, nil)
 			},
 			expectedID:  "STU2024001",
@@ -791,8 +801,8 @@ func TestStudentService_GenerateNextStudentID(t *testing.T) {
 					{StudentID: "STU2024003"},
 					{StudentID: "STU2024002"},
 				}
-				m.On("SearchStudents", mock.Anything, mock.MatchedBy(func(params queries.SearchStudentsParams) bool {
-					return params.FirstName == "STU2024%"
+				m.On("SearchStudentsIncludingDeleted", mock.Anything, mock.MatchedBy(func(params queries.SearchStudentsIncludingDeletedParams) bool {
+					return params.StudentID == "STU2024%"
 				})).Return(existingStudents, nil)
 			},
 			expectedID:  "STU2024004",
@@ -937,4 +947,323 @@ func TestStudentRequestValidation(t *testing.T) {
 		invalidIDRequest.StudentID = "WRONG123"
 		assert.ErrorIs(t, invalidIDRequest.Validate(), models.ErrInvalidStudentID)
 	})
+}
+
+// TestStudentService_UpdateStudentPassword tests password update functionality
+func TestStudentService_UpdateStudentPassword(t *testing.T) {
+	tests := []struct {
+		name        string
+		studentID   int32
+		newPassword string
+		setupMocks  func(*MockQueries, *MockAuthService)
+		expectError bool
+		errorType   error
+	}{
+		{
+			name:        "successful password update",
+			studentID:   1,
+			newPassword: "newpassword123",
+			setupMocks: func(m *MockQueries, a *MockAuthService) {
+				// Student exists
+				m.On("GetStudentByID", mock.Anything, int32(1)).Return(createMockStudent(), nil)
+
+				// Password hashing succeeds
+				a.On("HashPassword", "newpassword123").Return("hashed_new_password", nil)
+
+				// Password update succeeds
+				m.On("UpdateStudentPassword", mock.Anything, mock.MatchedBy(func(params queries.UpdateStudentPasswordParams) bool {
+					return params.ID == int32(1) && params.PasswordHash.String == "hashed_new_password"
+				})).Return(nil)
+			},
+			expectError: false,
+		},
+		{
+			name:        "student not found",
+			studentID:   999,
+			newPassword: "newpassword123",
+			setupMocks: func(m *MockQueries, a *MockAuthService) {
+				m.On("GetStudentByID", mock.Anything, int32(999)).Return(queries.Student{}, assert.AnError)
+			},
+			expectError: true,
+			errorType:   models.ErrStudentNotFound,
+		},
+		{
+			name:        "password hashing fails",
+			studentID:   1,
+			newPassword: "newpassword123",
+			setupMocks: func(m *MockQueries, a *MockAuthService) {
+				// Student exists
+				m.On("GetStudentByID", mock.Anything, int32(1)).Return(createMockStudent(), nil)
+
+				// Password hashing fails
+				a.On("HashPassword", "newpassword123").Return("", assert.AnError)
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockQueries := new(MockQueries)
+			mockAuth := new(MockAuthService)
+			tt.setupMocks(mockQueries, mockAuth)
+
+			service := NewStudentService(mockQueries, mockAuth)
+			ctx := context.Background()
+
+			err := service.UpdateStudentPassword(ctx, tt.studentID, tt.newPassword)
+
+			if tt.expectError {
+				assert.Error(t, err)
+				if tt.errorType != nil {
+					assert.ErrorIs(t, err, tt.errorType)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+
+			mockQueries.AssertExpectations(t)
+			mockAuth.AssertExpectations(t)
+		})
+	}
+}
+
+// TestStudentService_StudentIDAsDefaultPassword tests that student ID is used as default password
+func TestStudentService_StudentIDAsDefaultPassword(t *testing.T) {
+	tests := []struct {
+		name         string
+		studentID    string
+		setupMocks   func(*MockQueries, *MockAuthService)
+		expectError  bool
+		passwordUsed string
+	}{
+		{
+			name:      "student ID used as password",
+			studentID: "STU2024001",
+			setupMocks: func(m *MockQueries, a *MockAuthService) {
+				// Student ID doesn't exist
+				m.On("GetStudentByStudentID", mock.Anything, "STU2024001").Return(queries.Student{}, assert.AnError)
+
+				// Password should be the student ID
+				a.On("HashPassword", "STU2024001").Return("hashed_STU2024001", nil)
+
+				// Create student succeeds
+				m.On("CreateStudent", mock.Anything, mock.MatchedBy(func(params queries.CreateStudentParams) bool {
+					return params.StudentID == "STU2024001" &&
+						params.PasswordHash.String == "hashed_STU2024001" &&
+						params.PasswordHash.Valid == true
+				})).Return(createMockStudent(), nil)
+			},
+			expectError:  false,
+			passwordUsed: "STU2024001",
+		},
+		{
+			name:      "different student ID used as password",
+			studentID: "STU2024999",
+			setupMocks: func(m *MockQueries, a *MockAuthService) {
+				// Student ID doesn't exist
+				m.On("GetStudentByStudentID", mock.Anything, "STU2024999").Return(queries.Student{}, assert.AnError)
+
+				// Password should be the student ID
+				a.On("HashPassword", "STU2024999").Return("hashed_STU2024999", nil)
+
+				// Create student succeeds
+				mockStudent := createMockStudent()
+				mockStudent.StudentID = "STU2024999"
+				m.On("CreateStudent", mock.Anything, mock.MatchedBy(func(params queries.CreateStudentParams) bool {
+					return params.StudentID == "STU2024999" &&
+						params.PasswordHash.String == "hashed_STU2024999" &&
+						params.PasswordHash.Valid == true
+				})).Return(mockStudent, nil)
+			},
+			expectError:  false,
+			passwordUsed: "STU2024999",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockQueries := new(MockQueries)
+			mockAuth := new(MockAuthService)
+			tt.setupMocks(mockQueries, mockAuth)
+
+			service := NewStudentService(mockQueries, mockAuth)
+			ctx := context.Background()
+
+			request := &models.CreateStudentRequest{
+				StudentID:   tt.studentID,
+				FirstName:   "Test",
+				LastName:    "User",
+				YearOfStudy: 1,
+			}
+
+			student, err := service.CreateStudent(ctx, request)
+
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.Nil(t, student)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, student)
+				assert.Equal(t, tt.studentID, student.StudentID)
+				
+				// Verify that the auth service was called with the student ID as password
+				mockAuth.AssertCalled(t, "HashPassword", tt.passwordUsed)
+			}
+
+			mockQueries.AssertExpectations(t)
+			mockAuth.AssertExpectations(t)
+		})
+	}
+}
+
+// TestStudentService_QuickAccountCreation tests the quick account creation workflow
+func TestStudentService_QuickAccountCreation(t *testing.T) {
+	tests := []struct {
+		name             string
+		studentData      *models.CreateStudentRequest
+		setupMocks       func(*MockQueries, *MockAuthService)
+		expectError      bool
+		expectedStudentID string
+		expectedPasswordSet bool
+	}{
+		{
+			name: "minimal required fields with auto password",
+			studentData: &models.CreateStudentRequest{
+				StudentID:   "STU2024001",
+				FirstName:   "John",
+				LastName:    "Doe",
+				YearOfStudy: 1,
+			},
+			setupMocks: func(m *MockQueries, a *MockAuthService) {
+				// Student ID doesn't exist
+				m.On("GetStudentByStudentID", mock.Anything, "STU2024001").Return(queries.Student{}, assert.AnError)
+
+				// Password is auto-generated from student ID
+				a.On("HashPassword", "STU2024001").Return("hashed_STU2024001", nil)
+
+				// Create student succeeds
+				mockStudent := createMockStudent()
+				mockStudent.StudentID = "STU2024001"
+				mockStudent.FirstName = "John"
+				mockStudent.LastName = "Doe"
+				mockStudent.PasswordHash = pgtype.Text{String: "hashed_STU2024001", Valid: true}
+				m.On("CreateStudent", mock.Anything, mock.MatchedBy(func(params queries.CreateStudentParams) bool {
+					return params.StudentID == "STU2024001" &&
+						params.FirstName == "John" &&
+						params.LastName == "Doe" &&
+						params.YearOfStudy == 1 &&
+						params.PasswordHash.Valid == true &&
+						params.PasswordHash.String == "hashed_STU2024001"
+				})).Return(mockStudent, nil)
+			},
+			expectError:         false,
+			expectedStudentID:   "STU2024001",
+			expectedPasswordSet: true,
+		},
+		{
+			name: "full data with auto password",
+			studentData: &models.CreateStudentRequest{
+				StudentID:   "STU2024002",
+				FirstName:   "Jane",
+				LastName:    "Smith",
+				Email:       "jane.smith@university.edu",
+				Phone:       "+1234567890",
+				YearOfStudy: 2,
+				Department:  "Mathematics",
+			},
+			setupMocks: func(m *MockQueries, a *MockAuthService) {
+				// Student ID doesn't exist
+				m.On("GetStudentByStudentID", mock.Anything, "STU2024002").Return(queries.Student{}, assert.AnError)
+
+				// Email doesn't exist
+				email := pgtype.Text{String: "jane.smith@university.edu", Valid: true}
+				m.On("GetStudentByEmail", mock.Anything, email).Return(queries.Student{}, assert.AnError)
+
+				// Password is auto-generated from student ID
+				a.On("HashPassword", "STU2024002").Return("hashed_STU2024002", nil)
+
+				// Create student succeeds
+				mockStudent := createMockStudent()
+				mockStudent.StudentID = "STU2024002"
+				mockStudent.FirstName = "Jane"
+				mockStudent.LastName = "Smith"
+				mockStudent.Email = pgtype.Text{String: "jane.smith@university.edu", Valid: true}
+				mockStudent.Phone = pgtype.Text{String: "+1234567890", Valid: true}
+				mockStudent.YearOfStudy = 2
+				mockStudent.Department = pgtype.Text{String: "Mathematics", Valid: true}
+				mockStudent.PasswordHash = pgtype.Text{String: "hashed_STU2024002", Valid: true}
+
+				m.On("CreateStudent", mock.Anything, mock.MatchedBy(func(params queries.CreateStudentParams) bool {
+					return params.StudentID == "STU2024002" &&
+						params.FirstName == "Jane" &&
+						params.LastName == "Smith" &&
+						params.Email.String == "jane.smith@university.edu" &&
+						params.Phone.String == "+1234567890" &&
+						params.YearOfStudy == 2 &&
+						params.Department.String == "Mathematics" &&
+						params.PasswordHash.Valid == true &&
+						params.PasswordHash.String == "hashed_STU2024002"
+				})).Return(mockStudent, nil)
+			},
+			expectError:         false,
+			expectedStudentID:   "STU2024002",
+			expectedPasswordSet: true,
+		},
+		{
+			name: "account creation with password hashing failure",
+			studentData: &models.CreateStudentRequest{
+				StudentID:   "STU2024003",
+				FirstName:   "Bob",
+				LastName:    "Wilson",
+				YearOfStudy: 1,
+			},
+			setupMocks: func(m *MockQueries, a *MockAuthService) {
+				// Student ID doesn't exist
+				m.On("GetStudentByStudentID", mock.Anything, "STU2024003").Return(queries.Student{}, assert.AnError)
+
+				// Password hashing fails
+				a.On("HashPassword", "STU2024003").Return("", assert.AnError)
+			},
+			expectError:         true,
+			expectedPasswordSet: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockQueries := new(MockQueries)
+			mockAuth := new(MockAuthService)
+			tt.setupMocks(mockQueries, mockAuth)
+
+			service := NewStudentService(mockQueries, mockAuth)
+			ctx := context.Background()
+
+			student, err := service.CreateStudent(ctx, tt.studentData)
+
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.Nil(t, student)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, student)
+				assert.Equal(t, tt.expectedStudentID, student.StudentID)
+				assert.Equal(t, tt.studentData.FirstName, student.FirstName)
+				assert.Equal(t, tt.studentData.LastName, student.LastName)
+				assert.Equal(t, tt.studentData.YearOfStudy, student.YearOfStudy)
+
+				if tt.expectedPasswordSet {
+					// Verify password hash is set
+					assert.True(t, student.PasswordHash.Valid)
+					assert.NotEmpty(t, student.PasswordHash.String)
+					
+					// Verify that the auth service was called with the student ID as password
+					mockAuth.AssertCalled(t, "HashPassword", tt.expectedStudentID)
+				}
+			}
+
+			mockQueries.AssertExpectations(t)
+			mockAuth.AssertExpectations(t)
+		})
+	}
 }
