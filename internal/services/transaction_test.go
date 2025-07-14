@@ -418,7 +418,7 @@ func TestTransactionService_CalculateFine_WithFine(t *testing.T) {
 
 	fine := service.calculateFine(dueDate, returnDate)
 	expected := decimal.NewFromFloat(1.50) // 3 days * $0.50 (exactly 3 calendar days)
-	
+
 	assert.True(t, expected.Equal(fine))
 }
 

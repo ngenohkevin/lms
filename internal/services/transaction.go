@@ -287,7 +287,7 @@ func (s *TransactionService) calculateFine(dueDate, returnDate time.Time) decima
 	// Calculate the exact number of overdue days
 	// Use a more precise approach: calculate the number of full days between dates
 	daysDiff := int(returnDateMidnight.Sub(dueDateMidnight) / (24 * time.Hour))
-	
+
 	if daysDiff <= 0 {
 		return decimal.Zero
 	}
