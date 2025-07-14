@@ -147,11 +147,11 @@ func TestStudentAccountWorkflow(t *testing.T) {
 		// but we can verify the password hash was created from the student ID
 		retrievedStudent, err := studentService.GetStudentByStudentID(ctx, studentID)
 		require.NoError(t, err)
-
+		
 		// Verify password hash is set and not empty
 		assert.True(t, retrievedStudent.PasswordHash.Valid)
 		assert.NotEmpty(t, retrievedStudent.PasswordHash.String)
-
+		
 		// Verify the password can be verified using the auth service
 		isValid, err := authService.VerifyPassword(retrievedStudent.PasswordHash.String, studentID)
 		require.NoError(t, err)
@@ -165,7 +165,7 @@ func TestStudentAccountWorkflow(t *testing.T) {
 		// Step 6: Verify old password (student ID) no longer works
 		updatedStudent, err := studentService.GetStudentByStudentID(ctx, studentID)
 		require.NoError(t, err)
-
+		
 		oldPasswordValid, err := authService.VerifyPassword(updatedStudent.PasswordHash.String, studentID)
 		require.NoError(t, err)
 		assert.False(t, oldPasswordValid, "Old password (student ID) should no longer work")
@@ -286,7 +286,7 @@ func TestStudentAccountWorkflow(t *testing.T) {
 	t.Run("account creation validation workflow", func(t *testing.T) {
 		// Test duplicate student ID validation
 		studentID := "STU2024500"
-
+		
 		// Create first student
 		createReq1 := &models.CreateStudentRequest{
 			StudentID:   studentID,
@@ -314,7 +314,7 @@ func TestStudentAccountWorkflow(t *testing.T) {
 
 		// Test duplicate email validation
 		email := "unique.email@university.edu"
-
+		
 		// Update first student with email
 		updateReq := &models.UpdateStudentRequest{
 			FirstName:   "First",
@@ -390,7 +390,7 @@ func TestStudentAccountWorkflow(t *testing.T) {
 		// Verify new password works
 		updatedStudent, err = studentService.GetStudentByStudentID(ctx, studentID)
 		require.NoError(t, err)
-
+		
 		newPasswordValid, err := authService.VerifyPassword(updatedStudent.PasswordHash.String, newPassword)
 		require.NoError(t, err)
 		assert.True(t, newPasswordValid, "New password should work")

@@ -237,12 +237,12 @@ func TestStudentService_GetStudentsByStatus(t *testing.T) {
 // TestStudentService_GetStatusStatistics tests status distribution analytics
 func TestStudentService_GetStatusStatistics(t *testing.T) {
 	tests := []struct {
-		name             string
-		setupMocks       func(*MockQueries)
-		expectedTotal    int64
-		expectedActive   int64
-		expectedInactive int64
-		expectError      bool
+		name               string
+		setupMocks         func(*MockQueries)
+		expectedTotal      int64
+		expectedActive     int64
+		expectedInactive   int64
+		expectError        bool
 	}{
 		{
 			name: "successful status statistics",
@@ -308,10 +308,10 @@ func TestStudentService_GetStatusStatistics(t *testing.T) {
 // TestStudentService_BulkUpdateStatus tests bulk status updates
 func TestStudentService_BulkUpdateStatus(t *testing.T) {
 	tests := []struct {
-		name          string
-		request       *models.StatusUpdateRequest
-		setupMocks    func(*MockQueries)
-		expectError   bool
+		name        string
+		request     *models.StatusUpdateRequest
+		setupMocks  func(*MockQueries)
+		expectError bool
 		errorContains string
 	}{
 		{
@@ -331,9 +331,9 @@ func TestStudentService_BulkUpdateStatus(t *testing.T) {
 
 				// Bulk update succeeds
 				m.On("BulkUpdateStudentStatus", mock.Anything, mock.MatchedBy(func(params queries.BulkUpdateStudentStatusParams) bool {
-					return len(params.Column1) == 3 &&
-						params.IsActive.Bool == false &&
-						params.IsActive.Valid == true
+					return len(params.Column1) == 3 && 
+						   params.IsActive.Bool == false && 
+						   params.IsActive.Valid == true
 				})).Return(nil)
 			},
 			expectError: false,
@@ -420,12 +420,12 @@ func TestStudentService_BulkUpdateStatus(t *testing.T) {
 // TestStudentService_StatusValidation tests status-dependent operations
 func TestStudentService_StatusValidation(t *testing.T) {
 	tests := []struct {
-		name              string
-		studentID         int32
-		operation         string
-		setupMocks        func(*MockQueries)
-		expectRestriction bool
-		restrictionReason string
+		name               string
+		studentID          int32
+		operation          string
+		setupMocks         func(*MockQueries)
+		expectRestriction  bool
+		restrictionReason  string
 	}{
 		{
 			name:      "active student can perform operations",

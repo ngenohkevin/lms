@@ -360,14 +360,14 @@ type YearDistribution struct {
 
 // YearDistributionResponse represents the response for year distribution analysis
 type YearDistributionResponse struct {
-	TotalStudents    int64              `json:"total_students"`
-	YearDistribution []YearDistribution `json:"year_distribution"`
-	HighestYear      int32              `json:"highest_year"`
-	HighestCount     int64              `json:"highest_count"`
-	LowestYear       int32              `json:"lowest_year"`
-	LowestCount      int64              `json:"lowest_count"`
-	AveragePerYear   float64            `json:"average_per_year"`
-	GeneratedAt      time.Time          `json:"generated_at"`
+	TotalStudents     int64              `json:"total_students"`
+	YearDistribution  []YearDistribution `json:"year_distribution"`
+	HighestYear       int32              `json:"highest_year"`
+	HighestCount      int64              `json:"highest_count"`
+	LowestYear        int32              `json:"lowest_year"`
+	LowestCount       int64              `json:"lowest_count"`
+	AveragePerYear    float64            `json:"average_per_year"`
+	GeneratedAt       time.Time          `json:"generated_at"`
 }
 
 // YearComparisonResponse represents the response for comparing two years
@@ -383,13 +383,13 @@ type YearComparisonResponse struct {
 
 // StudentActivityData represents student activity information
 type StudentActivityData struct {
-	StudentID       string    `json:"student_id"`
-	LastLogin       time.Time `json:"last_login,omitempty"`
-	TotalLogins     int64     `json:"total_logins"`
+	StudentID      string    `json:"student_id"`
+	LastLogin      time.Time `json:"last_login,omitempty"`
+	TotalLogins    int64     `json:"total_logins"`
 	BooksCheckedOut int64     `json:"books_checked_out"`
-	OverdueBooks    int64     `json:"overdue_books"`
-	FinesOwed       float64   `json:"fines_owed"`
-	ActivityScore   float64   `json:"activity_score"`
+	OverdueBooks   int64     `json:"overdue_books"`
+	FinesOwed      float64   `json:"fines_owed"`
+	ActivityScore  float64   `json:"activity_score"`
 }
 
 // StudentStatusData represents student status information
@@ -413,11 +413,11 @@ const (
 
 // StudentExportRequest represents a request to export student data
 type StudentExportRequest struct {
-	Format          StudentExportFormat `json:"format" binding:"required,oneof=csv json xlsx"`
-	YearOfStudy     *int32              `json:"year_of_study,omitempty" binding:"omitempty,min=1,max=8"`
-	Department      string              `json:"department,omitempty"`
-	IncludeInactive bool                `json:"include_inactive"`
-	Fields          []string            `json:"fields,omitempty"` // If empty, export all fields
+	Format      StudentExportFormat `json:"format" binding:"required,oneof=csv json xlsx"`
+	YearOfStudy *int32              `json:"year_of_study,omitempty" binding:"omitempty,min=1,max=8"`
+	Department  string              `json:"department,omitempty"`
+	IncludeInactive bool            `json:"include_inactive"`
+	Fields      []string            `json:"fields,omitempty"` // If empty, export all fields
 }
 
 // StudentExportResponse represents the response for export operations
@@ -450,11 +450,11 @@ type StatusStatisticsResponse struct {
 
 // StudentDemographics represents demographic distribution
 type StudentDemographics struct {
-	TotalStudents        int64                       `json:"total_students"`
-	DepartmentBreakdown  map[string]int64            `json:"department_breakdown"`
-	YearBreakdown        map[string]int64            `json:"year_breakdown"`
+	TotalStudents     int64                       `json:"total_students"`
+	DepartmentBreakdown map[string]int64          `json:"department_breakdown"`
+	YearBreakdown     map[string]int64            `json:"year_breakdown"`
 	YearDepartmentMatrix map[string]map[string]int64 `json:"year_department_matrix"`
-	GeneratedAt          time.Time                   `json:"generated_at"`
+	GeneratedAt       time.Time                   `json:"generated_at"`
 }
 
 // EnrollmentTrend represents enrollment trend data
