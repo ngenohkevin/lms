@@ -412,12 +412,13 @@ func TestTransactionService_CalculateFine_WithFine(t *testing.T) {
 		finePerDay: decimal.NewFromFloat(0.50),
 	}
 
-	// Book returned 3 days late (calendar days), fine calculation includes return day
+	// Book returned 3 days late (calendar days)
 	dueDate := time.Now().AddDate(0, 0, -3)
 	returnDate := time.Now()
 
 	fine := service.calculateFine(dueDate, returnDate)
-	expected := decimal.NewFromFloat(2.00) // 4 days * $0.50 (3 calendar days + 1 for return day)
+	expected := decimal.NewFromFloat(1.50) // 3 days * $0.50 (exactly 3 calendar days)
+	
 	assert.True(t, expected.Equal(fine))
 }
 

@@ -280,12 +280,14 @@ func (s *TransactionService) calculateFine(dueDate, returnDate time.Time) decima
 
 	// Calculate calendar days difference for overdue period
 	// Fine calculation: count each day the book is overdue, starting from the day after due date
-	// Truncate to midnight for consistent calculation
-	dueDateMidnight := time.Date(dueDate.Year(), dueDate.Month(), dueDate.Day(), 0, 0, 0, 0, dueDate.Location())
-	returnDateMidnight := time.Date(returnDate.Year(), returnDate.Month(), returnDate.Day(), 0, 0, 0, 0, returnDate.Location())
+	// Truncate to midnight for consistent calculation, using UTC to avoid timezone issues
+	dueDateMidnight := time.Date(dueDate.Year(), dueDate.Month(), dueDate.Day(), 0, 0, 0, 0, time.UTC)
+	returnDateMidnight := time.Date(returnDate.Year(), returnDate.Month(), returnDate.Day(), 0, 0, 0, 0, time.UTC)
 
-	// Add 1 day to include the current day in overdue calculation
-	daysDiff := int(returnDateMidnight.Sub(dueDateMidnight).Hours()/24) + 1
+	// Calculate the exact number of overdue days
+	// Use a more precise approach: calculate the number of full days between dates
+	daysDiff := int(returnDateMidnight.Sub(dueDateMidnight) / (24 * time.Hour))
+	
 	if daysDiff <= 0 {
 		return decimal.Zero
 	}
