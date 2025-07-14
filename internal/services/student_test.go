@@ -100,6 +100,38 @@ func (m *MockQueries) SearchStudentsIncludingDeleted(ctx context.Context, params
 	return args.Get(0).([]queries.Student), args.Error(1)
 }
 
+// Status Management Mock Methods
+func (m *MockQueries) UpdateStudentStatus(ctx context.Context, params queries.UpdateStudentStatusParams) (queries.Student, error) {
+	args := m.Called(ctx, params)
+	return args.Get(0).(queries.Student), args.Error(1)
+}
+
+func (m *MockQueries) GetStudentsByStatus(ctx context.Context, params queries.GetStudentsByStatusParams) ([]queries.Student, error) {
+	args := m.Called(ctx, params)
+	return args.Get(0).([]queries.Student), args.Error(1)
+}
+
+func (m *MockQueries) CountStudentsByStatus(ctx context.Context, isActive pgtype.Bool) (int64, error) {
+	args := m.Called(ctx, isActive)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockQueries) BulkUpdateStudentStatus(ctx context.Context, params queries.BulkUpdateStudentStatusParams) error {
+	args := m.Called(ctx, params)
+	return args.Error(0)
+}
+
+// Enhanced Statistics Mock Methods
+func (m *MockQueries) GetStudentCountByYearAndDepartment(ctx context.Context) ([]queries.GetStudentCountByYearAndDepartmentRow, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]queries.GetStudentCountByYearAndDepartmentRow), args.Error(1)
+}
+
+func (m *MockQueries) GetStudentEnrollmentTrends(ctx context.Context, params queries.GetStudentEnrollmentTrendsParams) ([]queries.GetStudentEnrollmentTrendsRow, error) {
+	args := m.Called(ctx, params)
+	return args.Get(0).([]queries.GetStudentEnrollmentTrendsRow), args.Error(1)
+}
+
 // Helper function to create a mock student
 func createMockStudent() queries.Student {
 	now := time.Now()
@@ -1264,6 +1296,112 @@ func TestStudentService_QuickAccountCreation(t *testing.T) {
 
 			mockQueries.AssertExpectations(t)
 			mockAuth.AssertExpectations(t)
+		})
+	}
+}
+
+// TestStudentService_YearOrganization tests year-based organization functionality
+func TestStudentService_YearOrganization(t *testing.T) {
+	tests := []struct {
+		name           string
+		year           int32
+		setupMocks     func(*MockQueries)
+		expectedCount  int64
+		expectError    bool
+	}{
+		{
+			name: "get students by year 1",
+			year: 1,
+			setupMocks: func(m *MockQueries) {
+				year1Students := []queries.Student{
+					createMockStudent(),
+					{
+						ID:          2,
+						StudentID:   "STU2024002",
+						FirstName:   "Jane",
+						LastName:    "Smith",
+						YearOfStudy: 1,
+						IsActive:    pgtype.Bool{Bool: true, Valid: true},
+					},
+				}
+				m.On("ListStudentsByYear", mock.Anything, queries.ListStudentsByYearParams{
+					YearOfStudy: 1,
+					Limit:       20,
+					Offset:      0,
+				}).Return(year1Students, nil)
+				m.On("CountStudentsByYear", mock.Anything, int32(1)).Return(int64(2), nil)
+			},
+			expectedCount: 2,
+			expectError:   false,
+		},
+		{
+			name: "get students by year 3",
+			year: 3,
+			setupMocks: func(m *MockQueries) {
+				year3Students := []queries.Student{
+					{
+						ID:          3,
+						StudentID:   "STU2022001",
+						FirstName:   "Senior",
+						LastName:    "Student",
+						YearOfStudy: 3,
+						IsActive:    pgtype.Bool{Bool: true, Valid: true},
+					},
+				}
+				m.On("ListStudentsByYear", mock.Anything, queries.ListStudentsByYearParams{
+					YearOfStudy: 3,
+					Limit:       20,
+					Offset:      0,
+				}).Return(year3Students, nil)
+				m.On("CountStudentsByYear", mock.Anything, int32(3)).Return(int64(1), nil)
+			},
+			expectedCount: 1,
+			expectError:   false,
+		},
+		{
+			name: "get students by year with no students",
+			year: 8,
+			setupMocks: func(m *MockQueries) {
+				m.On("ListStudentsByYear", mock.Anything, queries.ListStudentsByYearParams{
+					YearOfStudy: 8,
+					Limit:       20,
+					Offset:      0,
+				}).Return([]queries.Student{}, nil)
+				m.On("CountStudentsByYear", mock.Anything, int32(8)).Return(int64(0), nil)
+			},
+			expectedCount: 0,
+			expectError:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockQueries := new(MockQueries)
+			tt.setupMocks(mockQueries)
+
+			mockAuth := &MockAuthService{}
+			service := NewStudentService(mockQueries, mockAuth)
+			ctx := context.Background()
+
+			request := &models.StudentSearchRequest{
+				YearOfStudy: tt.year,
+				Page:        1,
+				Limit:       20,
+			}
+
+			result, err := service.ListStudents(ctx, request)
+
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.Nil(t, result)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, result)
+				assert.Len(t, result.Students, int(tt.expectedCount))
+				assert.Equal(t, tt.expectedCount, result.Pagination.Total)
+			}
+
+			mockQueries.AssertExpectations(t)
 		})
 	}
 }

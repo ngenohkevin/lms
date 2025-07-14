@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	BulkUpdateStudentStatus(ctx context.Context, arg BulkUpdateStudentStatusParams) error
 	CancelReservation(ctx context.Context, id int32) (Reservation, error)
 	CountActiveReservationsByBook(ctx context.Context, bookID int32) (int64, error)
 	CountActiveReservationsByStudent(ctx context.Context, studentID int32) (int64, error)
@@ -21,6 +22,7 @@ type Querier interface {
 	CountNotificationsByType(ctx context.Context, type_ string) (int64, error)
 	CountOverdueTransactions(ctx context.Context) (int64, error)
 	CountStudents(ctx context.Context) (int64, error)
+	CountStudentsByStatus(ctx context.Context, isActive pgtype.Bool) (int64, error)
 	CountStudentsByYear(ctx context.Context, yearOfStudy int32) (int64, error)
 	CountTransactions(ctx context.Context) (int64, error)
 	CountUnreadNotificationsByRecipient(ctx context.Context, arg CountUnreadNotificationsByRecipientParams) (int64, error)
@@ -44,6 +46,9 @@ type Querier interface {
 	GetStudentByEmail(ctx context.Context, email pgtype.Text) (Student, error)
 	GetStudentByID(ctx context.Context, id int32) (Student, error)
 	GetStudentByStudentID(ctx context.Context, studentID string) (Student, error)
+	GetStudentCountByYearAndDepartment(ctx context.Context) ([]GetStudentCountByYearAndDepartmentRow, error)
+	GetStudentEnrollmentTrends(ctx context.Context, arg GetStudentEnrollmentTrendsParams) ([]GetStudentEnrollmentTrendsRow, error)
+	GetStudentsByStatus(ctx context.Context, arg GetStudentsByStatusParams) ([]Student, error)
 	GetTransactionByID(ctx context.Context, id int32) (GetTransactionByIDRow, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id int32) (User, error)
@@ -91,6 +96,8 @@ type Querier interface {
 	UpdateReservationStatus(ctx context.Context, arg UpdateReservationStatusParams) (Reservation, error)
 	UpdateStudent(ctx context.Context, arg UpdateStudentParams) (Student, error)
 	UpdateStudentPassword(ctx context.Context, arg UpdateStudentPasswordParams) error
+	// Status Management Queries
+	UpdateStudentStatus(ctx context.Context, arg UpdateStudentStatusParams) (Student, error)
 	UpdateTransactionFine(ctx context.Context, arg UpdateTransactionFineParams) error
 	UpdateTransactionReturn(ctx context.Context, arg UpdateTransactionReturnParams) (Transaction, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)

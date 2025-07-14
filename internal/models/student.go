@@ -350,3 +350,125 @@ func (r *StudentSearchRequest) GetOffset() int32 {
 func (r *StudentSearchRequest) GetLimit() int32 {
 	return int32(r.Limit)
 }
+
+// YearDistribution represents student distribution for a specific year
+type YearDistribution struct {
+	Year       int32   `json:"year"`
+	Count      int64   `json:"count"`
+	Percentage float64 `json:"percentage"`
+}
+
+// YearDistributionResponse represents the response for year distribution analysis
+type YearDistributionResponse struct {
+	TotalStudents     int64              `json:"total_students"`
+	YearDistribution  []YearDistribution `json:"year_distribution"`
+	HighestYear       int32              `json:"highest_year"`
+	HighestCount      int64              `json:"highest_count"`
+	LowestYear        int32              `json:"lowest_year"`
+	LowestCount       int64              `json:"lowest_count"`
+	AveragePerYear    float64            `json:"average_per_year"`
+	GeneratedAt       time.Time          `json:"generated_at"`
+}
+
+// YearComparisonResponse represents the response for comparing two years
+type YearComparisonResponse struct {
+	Year1            int32     `json:"year1"`
+	Year1Count       int64     `json:"year1_count"`
+	Year2            int32     `json:"year2"`
+	Year2Count       int64     `json:"year2_count"`
+	Difference       int64     `json:"difference"`
+	PercentageChange float64   `json:"percentage_change"`
+	GeneratedAt      time.Time `json:"generated_at"`
+}
+
+// StudentActivityData represents student activity information
+type StudentActivityData struct {
+	StudentID      string    `json:"student_id"`
+	LastLogin      time.Time `json:"last_login,omitempty"`
+	TotalLogins    int64     `json:"total_logins"`
+	BooksCheckedOut int64     `json:"books_checked_out"`
+	OverdueBooks   int64     `json:"overdue_books"`
+	FinesOwed      float64   `json:"fines_owed"`
+	ActivityScore  float64   `json:"activity_score"`
+}
+
+// StudentStatusData represents student status information
+type StudentStatusData struct {
+	StudentID      string    `json:"student_id"`
+	IsActive       bool      `json:"is_active"`
+	IsEnrolled     bool      `json:"is_enrolled"`
+	IsGoodStanding bool      `json:"is_good_standing"`
+	StatusReason   string    `json:"status_reason,omitempty"`
+	LastUpdated    time.Time `json:"last_updated"`
+}
+
+// StudentExportFormat represents different export formats
+type StudentExportFormat string
+
+const (
+	ExportFormatCSV  StudentExportFormat = "csv"
+	ExportFormatJSON StudentExportFormat = "json"
+	ExportFormatXLSX StudentExportFormat = "xlsx"
+)
+
+// StudentExportRequest represents a request to export student data
+type StudentExportRequest struct {
+	Format      StudentExportFormat `json:"format" binding:"required,oneof=csv json xlsx"`
+	YearOfStudy *int32              `json:"year_of_study,omitempty" binding:"omitempty,min=1,max=8"`
+	Department  string              `json:"department,omitempty"`
+	IncludeInactive bool            `json:"include_inactive"`
+	Fields      []string            `json:"fields,omitempty"` // If empty, export all fields
+}
+
+// StudentExportResponse represents the response for export operations
+type StudentExportResponse struct {
+	FileName    string    `json:"file_name"`
+	FileSize    int64     `json:"file_size"`
+	RecordCount int64     `json:"record_count"`
+	Format      string    `json:"format"`
+	DownloadURL string    `json:"download_url"`
+	ExportedAt  time.Time `json:"exported_at"`
+	ExpiresAt   time.Time `json:"expires_at"`
+}
+
+// StatusUpdateRequest represents a request to update student status
+type StatusUpdateRequest struct {
+	StudentIDs []int32 `json:"student_ids" binding:"required"`
+	IsActive   bool    `json:"is_active"`
+	Reason     string  `json:"reason,omitempty"`
+}
+
+// StatusStatisticsResponse represents status distribution analytics
+type StatusStatisticsResponse struct {
+	TotalStudents     int64            `json:"total_students"`
+	ActiveStudents    int64            `json:"active_students"`
+	InactiveStudents  int64            `json:"inactive_students"`
+	SuspendedStudents int64            `json:"suspended_students"`
+	StatusBreakdown   map[string]int64 `json:"status_breakdown"`
+	GeneratedAt       time.Time        `json:"generated_at"`
+}
+
+// StudentDemographics represents demographic distribution
+type StudentDemographics struct {
+	TotalStudents     int64                       `json:"total_students"`
+	DepartmentBreakdown map[string]int64          `json:"department_breakdown"`
+	YearBreakdown     map[string]int64            `json:"year_breakdown"`
+	YearDepartmentMatrix map[string]map[string]int64 `json:"year_department_matrix"`
+	GeneratedAt       time.Time                   `json:"generated_at"`
+}
+
+// EnrollmentTrend represents enrollment trend data
+type EnrollmentTrend struct {
+	Month       time.Time `json:"month"`
+	Year        int32     `json:"year"`
+	Enrollments int64     `json:"enrollments"`
+}
+
+// EnrollmentTrendsResponse represents enrollment trends analysis
+type EnrollmentTrendsResponse struct {
+	Trends       []EnrollmentTrend `json:"trends"`
+	TotalPeriods int64             `json:"total_periods"`
+	StartDate    time.Time         `json:"start_date"`
+	EndDate      time.Time         `json:"end_date"`
+	GeneratedAt  time.Time         `json:"generated_at"`
+}
