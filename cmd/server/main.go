@@ -81,6 +81,7 @@ func main() {
 	userService := services.NewUserService(db.Pool, logger)
 	bookService := services.NewBookService(db.Queries)
 	studentService := services.NewStudentService(db.Queries, authService)
+	transactionService := services.NewTransactionService(db.Queries)
 	importExportService := services.NewImportExportService(bookService, "./uploads")
 
 	// Initialize Gin router
@@ -104,6 +105,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authService, userService)
 	bookHandler := handlers.NewBookHandler(bookService)
 	studentHandler := handlers.NewStudentHandler(studentService)
+	transactionHandler := handlers.NewTransactionHandler(transactionService)
 	uploadHandler := handlers.NewUploadHandler(bookService)
 	importExportHandler := handlers.NewImportExportHandler(importExportService)
 
@@ -195,6 +197,24 @@ func main() {
 			// Phase 5.6: Enhanced Analytics
 			students.GET("/analytics/demographics", studentHandler.GetStudentDemographics)
 			students.GET("/analytics/trends", studentHandler.GetEnrollmentTrends)
+		}
+
+		// Transaction management routes (librarian access required for most operations)
+		transactions := protected.Group("/transactions")
+		{
+			// Librarian-only operations
+			librarianTransactions := transactions.Group("")
+			librarianTransactions.Use(authMiddleware.RequireLibrarian())
+			{
+				librarianTransactions.POST("/borrow", transactionHandler.BorrowBook)
+				librarianTransactions.POST("/:id/return", transactionHandler.ReturnBook)
+				librarianTransactions.POST("/:id/renew", transactionHandler.RenewBook)
+				librarianTransactions.GET("/overdue", transactionHandler.GetOverdueTransactions)
+				librarianTransactions.POST("/:id/pay-fine", transactionHandler.PayFine)
+			}
+
+			// Student can view their own transaction history
+			transactions.GET("/history/:studentId", transactionHandler.GetTransactionHistory)
 		}
 
 		// Student profile management (for student self-service)
