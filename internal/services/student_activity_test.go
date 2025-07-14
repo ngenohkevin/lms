@@ -35,7 +35,7 @@ func TestStudentService_ActivityTracking(t *testing.T) {
 				// - Count of books currently checked out
 				// - Count of overdue books
 				// - Total fine amount owed
-				
+
 				// Mock data showing activity
 				// This would typically come from transactions table joins
 				mockActivity := map[string]interface{}{
@@ -44,7 +44,7 @@ func TestStudentService_ActivityTracking(t *testing.T) {
 					"total_fines":       float64(15.50),
 					"last_activity":     time.Now().Add(-2 * 24 * time.Hour), // 2 days ago
 				}
-				
+
 				// For testing purposes, we'll verify that the service
 				// would call the appropriate queries to get this data
 				_ = mockActivity
@@ -62,7 +62,7 @@ func TestStudentService_ActivityTracking(t *testing.T) {
 				inactiveStudent.ID = 2
 				inactiveStudent.StudentID = "STU2024002"
 				inactiveStudent.IsActive = pgtype.Bool{Bool: false, Valid: true}
-				
+
 				m.On("GetStudentByID", mock.Anything, int32(2)).Return(inactiveStudent, nil)
 			},
 			expectedBooksCount: 0,
@@ -99,13 +99,13 @@ func TestStudentService_ActivityTracking(t *testing.T) {
 				assert.NoError(t, err)
 				assert.NotNil(t, student)
 				assert.Equal(t, tt.studentID, student.ID)
-				
+
 				// Verify student activity tracking would work
 				// In a real implementation, we would have methods like:
 				// - GetStudentActivity(ctx, studentID)
 				// - GetStudentBorrowingHistory(ctx, studentID)
 				// - GetStudentFineHistory(ctx, studentID)
-				
+
 				// These would be tested separately with proper mocks
 				// for transaction-related queries
 			}
@@ -118,12 +118,12 @@ func TestStudentService_ActivityTracking(t *testing.T) {
 // TestStudentService_ActivityAnalytics tests activity analytics functionality
 func TestStudentService_ActivityAnalytics(t *testing.T) {
 	tests := []struct {
-		name            string
-		period          string
-		setupMocks      func(*MockQueries)
-		expectedActive  int64
-		expectedTotal   int64
-		expectError     bool
+		name           string
+		period         string
+		setupMocks     func(*MockQueries)
+		expectedActive int64
+		expectedTotal  int64
+		expectError    bool
 	}{
 		{
 			name:   "weekly activity analysis",
@@ -131,7 +131,7 @@ func TestStudentService_ActivityAnalytics(t *testing.T) {
 			setupMocks: func(m *MockQueries) {
 				// Mock total student count
 				m.On("CountStudents", mock.Anything).Return(int64(100), nil)
-				
+
 				// Mock year counts (GetStudentStatistics calls CountStudentsByYear for each year 1-8)
 				for year := 1; year <= 8; year++ {
 					m.On("CountStudentsByYear", mock.Anything, int32(year)).Return(int64(10+year), nil)
@@ -146,7 +146,7 @@ func TestStudentService_ActivityAnalytics(t *testing.T) {
 			period: "month",
 			setupMocks: func(m *MockQueries) {
 				m.On("CountStudents", mock.Anything).Return(int64(100), nil)
-				
+
 				// Mock year counts (GetStudentStatistics calls CountStudentsByYear for each year 1-8)
 				for year := 1; year <= 8; year++ {
 					m.On("CountStudentsByYear", mock.Anything, int32(year)).Return(int64(12+year), nil)
@@ -177,7 +177,7 @@ func TestStudentService_ActivityAnalytics(t *testing.T) {
 				assert.NoError(t, err)
 				assert.NotNil(t, stats)
 				assert.Equal(t, tt.expectedTotal, stats["total_students"])
-				
+
 				// In a real implementation, we would add activity-specific metrics:
 				// - stats["active_in_period"]
 				// - stats["borrowing_activity"]
@@ -193,12 +193,12 @@ func TestStudentService_ActivityAnalytics(t *testing.T) {
 // TestStudentService_ActivityScoring tests activity scoring functionality
 func TestStudentService_ActivityScoring(t *testing.T) {
 	tests := []struct {
-		name              string
-		studentID         int32
-		setupMocks        func(*MockQueries)
-		expectedScore     float64
-		expectedRanking   string
-		expectError       bool
+		name            string
+		studentID       int32
+		setupMocks      func(*MockQueries)
+		expectedScore   float64
+		expectedRanking string
+		expectError     bool
 	}{
 		{
 			name:      "highly active student",
@@ -206,7 +206,7 @@ func TestStudentService_ActivityScoring(t *testing.T) {
 			setupMocks: func(m *MockQueries) {
 				activeStudent := createMockStudent()
 				m.On("GetStudentByID", mock.Anything, int32(1)).Return(activeStudent, nil)
-				
+
 				// Mock activity data that would result in high score:
 				// - Frequent book checkouts
 				// - On-time returns
@@ -225,7 +225,7 @@ func TestStudentService_ActivityScoring(t *testing.T) {
 				moderateStudent.ID = 2
 				moderateStudent.StudentID = "STU2024002"
 				m.On("GetStudentByID", mock.Anything, int32(2)).Return(moderateStudent, nil)
-				
+
 				// Mock activity data that would result in moderate score:
 				// - Some book checkouts
 				// - Occasional late returns
@@ -243,7 +243,7 @@ func TestStudentService_ActivityScoring(t *testing.T) {
 				lowActiveStudent.ID = 3
 				lowActiveStudent.StudentID = "STU2024003"
 				m.On("GetStudentByID", mock.Anything, int32(3)).Return(lowActiveStudent, nil)
-				
+
 				// Mock activity data that would result in low score:
 				// - Very few book checkouts
 				// - Multiple overdue items
@@ -273,11 +273,11 @@ func TestStudentService_ActivityScoring(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, student)
-				
+
 				// In a real implementation, we would have:
 				// activityScore := service.CalculateActivityScore(ctx, tt.studentID)
 				// ranking := service.GetActivityRanking(activityScore)
-				
+
 				// For now, verify that we can retrieve the student
 				// which is a prerequisite for activity scoring
 				assert.Equal(t, tt.studentID, student.ID)

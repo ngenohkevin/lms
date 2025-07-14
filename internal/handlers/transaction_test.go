@@ -68,10 +68,10 @@ func (m *MockTransactionService) GetTransactionHistory(ctx context.Context, stud
 func setupTransactionRouter() (*gin.Engine, *MockTransactionService) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	
+
 	mockService := &MockTransactionService{}
 	handler := NewTransactionHandler(mockService)
-	
+
 	// Setup routes
 	v1 := router.Group("/api/v1")
 	{
@@ -82,7 +82,7 @@ func setupTransactionRouter() (*gin.Engine, *MockTransactionService) {
 		v1.POST("/transactions/:id/pay-fine", handler.PayFine)
 		v1.GET("/transactions/history/:studentId", handler.GetTransactionHistory)
 	}
-	
+
 	return router, mockService
 }
 
@@ -107,35 +107,35 @@ func createTestTransactionResponse() *services.TransactionResponse {
 
 func TestTransactionHandler_BorrowBook_Success(t *testing.T) {
 	router, mockService := setupTransactionRouter()
-	
+
 	requestBody := map[string]interface{}{
 		"student_id":   1,
 		"book_id":      1,
 		"librarian_id": 1,
 		"notes":        "Test borrow",
 	}
-	
+
 	expectedResponse := createTestTransactionResponse()
-	
+
 	// Setup mock
 	mockService.On("BorrowBook", mock.Anything, int32(1), int32(1), int32(1), "Test borrow").Return(expectedResponse, nil)
-	
+
 	// Create request
 	jsonBody, _ := json.Marshal(requestBody)
 	req, _ := http.NewRequest("POST", "/api/v1/transactions/borrow", bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	// Perform request
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-	
+
 	// Assert
 	assert.Equal(t, http.StatusCreated, w.Code)
-	
+
 	var response SuccessResponse
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	
+
 	assert.True(t, response.Success)
 	assert.NotNil(t, response.Data)
 	mockService.AssertExpectations(t)
@@ -143,28 +143,28 @@ func TestTransactionHandler_BorrowBook_Success(t *testing.T) {
 
 func TestTransactionHandler_BorrowBook_ValidationError(t *testing.T) {
 	router, mockService := setupTransactionRouter()
-	
+
 	// Missing required fields
 	requestBody := map[string]interface{}{
 		"notes": "Test borrow",
 	}
-	
+
 	// Create request
 	jsonBody, _ := json.Marshal(requestBody)
 	req, _ := http.NewRequest("POST", "/api/v1/transactions/borrow", bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	// Perform request
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-	
+
 	// Assert
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-	
+
 	var response ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	
+
 	assert.False(t, response.Success)
 	assert.Equal(t, "VALIDATION_ERROR", response.Error.Code)
 	mockService.AssertExpectations(t)
@@ -172,33 +172,33 @@ func TestTransactionHandler_BorrowBook_ValidationError(t *testing.T) {
 
 func TestTransactionHandler_BorrowBook_ServiceError(t *testing.T) {
 	router, mockService := setupTransactionRouter()
-	
+
 	requestBody := map[string]interface{}{
 		"student_id":   1,
 		"book_id":      1,
 		"librarian_id": 1,
 		"notes":        "Test borrow",
 	}
-	
+
 	// Setup mock to return error
 	mockService.On("BorrowBook", mock.Anything, int32(1), int32(1), int32(1), "Test borrow").Return(nil, errors.New("book not available"))
-	
+
 	// Create request
 	jsonBody, _ := json.Marshal(requestBody)
 	req, _ := http.NewRequest("POST", "/api/v1/transactions/borrow", bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	// Perform request
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-	
+
 	// Assert
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-	
+
 	var response ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	
+
 	assert.False(t, response.Success)
 	assert.Contains(t, response.Error.Message, "book not available")
 	mockService.AssertExpectations(t)
@@ -206,29 +206,29 @@ func TestTransactionHandler_BorrowBook_ServiceError(t *testing.T) {
 
 func TestTransactionHandler_ReturnBook_Success(t *testing.T) {
 	router, mockService := setupTransactionRouter()
-	
+
 	transactionID := "1"
 	expectedResponse := createTestTransactionResponse()
 	returnTime := time.Now()
 	expectedResponse.ReturnedDate = &returnTime
-	
+
 	// Setup mock
 	mockService.On("ReturnBook", mock.Anything, int32(1)).Return(expectedResponse, nil)
-	
+
 	// Create request
 	req, _ := http.NewRequest("POST", "/api/v1/transactions/"+transactionID+"/return", nil)
-	
+
 	// Perform request
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-	
+
 	// Assert
 	assert.Equal(t, http.StatusOK, w.Code)
-	
+
 	var response SuccessResponse
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	
+
 	assert.True(t, response.Success)
 	assert.NotNil(t, response.Data)
 	mockService.AssertExpectations(t)
@@ -236,23 +236,23 @@ func TestTransactionHandler_ReturnBook_Success(t *testing.T) {
 
 func TestTransactionHandler_ReturnBook_InvalidID(t *testing.T) {
 	router, mockService := setupTransactionRouter()
-	
+
 	transactionID := "invalid"
-	
+
 	// Create request
 	req, _ := http.NewRequest("POST", "/api/v1/transactions/"+transactionID+"/return", nil)
-	
+
 	// Perform request
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-	
+
 	// Assert
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-	
+
 	var response ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	
+
 	assert.False(t, response.Success)
 	assert.Equal(t, "VALIDATION_ERROR", response.Error.Code)
 	mockService.AssertExpectations(t)
@@ -260,35 +260,35 @@ func TestTransactionHandler_ReturnBook_InvalidID(t *testing.T) {
 
 func TestTransactionHandler_RenewBook_Success(t *testing.T) {
 	router, mockService := setupTransactionRouter()
-	
+
 	transactionID := "1"
 	requestBody := map[string]interface{}{
 		"librarian_id": 1,
 	}
-	
+
 	expectedResponse := createTestTransactionResponse()
 	expectedResponse.TransactionType = "renew"
 	expectedResponse.DueDate = time.Now().AddDate(0, 0, 28)
-	
+
 	// Setup mock
 	mockService.On("RenewBook", mock.Anything, int32(1), int32(1)).Return(expectedResponse, nil)
-	
+
 	// Create request
 	jsonBody, _ := json.Marshal(requestBody)
 	req, _ := http.NewRequest("POST", "/api/v1/transactions/"+transactionID+"/renew", bytes.NewBuffer(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	// Perform request
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-	
+
 	// Assert
 	assert.Equal(t, http.StatusOK, w.Code)
-	
+
 	var response SuccessResponse
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	
+
 	assert.True(t, response.Success)
 	assert.NotNil(t, response.Data)
 	mockService.AssertExpectations(t)
@@ -296,7 +296,7 @@ func TestTransactionHandler_RenewBook_Success(t *testing.T) {
 
 func TestTransactionHandler_GetOverdueTransactions_Success(t *testing.T) {
 	router, mockService := setupTransactionRouter()
-	
+
 	overdueTransactions := []queries.ListOverdueTransactionsRow{
 		{
 			ID:        1,
@@ -307,24 +307,24 @@ func TestTransactionHandler_GetOverdueTransactions_Success(t *testing.T) {
 			LastName:  "Doe",
 		},
 	}
-	
+
 	// Setup mock
 	mockService.On("GetOverdueTransactions", mock.Anything).Return(overdueTransactions, nil)
-	
+
 	// Create request
 	req, _ := http.NewRequest("GET", "/api/v1/transactions/overdue", nil)
-	
+
 	// Perform request
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-	
+
 	// Assert
 	assert.Equal(t, http.StatusOK, w.Code)
-	
+
 	var response SuccessResponse
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	
+
 	assert.True(t, response.Success)
 	assert.NotNil(t, response.Data)
 	mockService.AssertExpectations(t)
@@ -332,26 +332,26 @@ func TestTransactionHandler_GetOverdueTransactions_Success(t *testing.T) {
 
 func TestTransactionHandler_PayFine_Success(t *testing.T) {
 	router, mockService := setupTransactionRouter()
-	
+
 	transactionID := "1"
-	
+
 	// Setup mock
 	mockService.On("PayFine", mock.Anything, int32(1)).Return(nil)
-	
+
 	// Create request
 	req, _ := http.NewRequest("POST", "/api/v1/transactions/"+transactionID+"/pay-fine", nil)
-	
+
 	// Perform request
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-	
+
 	// Assert
 	assert.Equal(t, http.StatusOK, w.Code)
-	
+
 	var response SuccessResponse
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	
+
 	assert.True(t, response.Success)
 	assert.Equal(t, "Fine paid successfully", response.Message)
 	mockService.AssertExpectations(t)
@@ -359,7 +359,7 @@ func TestTransactionHandler_PayFine_Success(t *testing.T) {
 
 func TestTransactionHandler_GetTransactionHistory_Success(t *testing.T) {
 	router, mockService := setupTransactionRouter()
-	
+
 	studentID := "1"
 	transactions := []queries.ListTransactionsByStudentRow{
 		{
@@ -370,24 +370,24 @@ func TestTransactionHandler_GetTransactionHistory_Success(t *testing.T) {
 			Author:    "Test Author",
 		},
 	}
-	
+
 	// Setup mock
 	mockService.On("GetTransactionHistory", mock.Anything, int32(1), int32(20), int32(0)).Return(transactions, nil)
-	
+
 	// Create request
 	req, _ := http.NewRequest("GET", "/api/v1/transactions/history/"+studentID+"?limit=20&offset=0", nil)
-	
+
 	// Perform request
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-	
+
 	// Assert
 	assert.Equal(t, http.StatusOK, w.Code)
-	
+
 	var response SuccessResponse
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	
+
 	assert.True(t, response.Success)
 	assert.NotNil(t, response.Data)
 	mockService.AssertExpectations(t)
