@@ -11,6 +11,22 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const bulkUpdateStudentStatus = `-- name: BulkUpdateStudentStatus :exec
+UPDATE students 
+SET is_active = $2, updated_at = NOW() 
+WHERE id = ANY($1::int[]) AND deleted_at IS NULL
+`
+
+type BulkUpdateStudentStatusParams struct {
+	Column1  []int32     `db:"column_1" json:"column_1"`
+	IsActive pgtype.Bool `db:"is_active" json:"is_active"`
+}
+
+func (q *Queries) BulkUpdateStudentStatus(ctx context.Context, arg BulkUpdateStudentStatusParams) error {
+	_, err := q.db.Exec(ctx, bulkUpdateStudentStatus, arg.Column1, arg.IsActive)
+	return err
+}
+
 const countStudents = `-- name: CountStudents :one
 SELECT COUNT(*) FROM students
 WHERE deleted_at IS NULL
@@ -18,6 +34,18 @@ WHERE deleted_at IS NULL
 
 func (q *Queries) CountStudents(ctx context.Context) (int64, error) {
 	row := q.db.QueryRow(ctx, countStudents)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countStudentsByStatus = `-- name: CountStudentsByStatus :one
+SELECT COUNT(*) FROM students 
+WHERE is_active = $1 AND deleted_at IS NULL
+`
+
+func (q *Queries) CountStudentsByStatus(ctx context.Context, isActive pgtype.Bool) (int64, error) {
+	row := q.db.QueryRow(ctx, countStudentsByStatus, isActive)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -162,6 +190,129 @@ func (q *Queries) GetStudentByStudentID(ctx context.Context, studentID string) (
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getStudentCountByYearAndDepartment = `-- name: GetStudentCountByYearAndDepartment :many
+SELECT year_of_study, department, COUNT(*) as count
+FROM students 
+WHERE deleted_at IS NULL AND is_active = true
+GROUP BY year_of_study, department
+ORDER BY year_of_study, department
+`
+
+type GetStudentCountByYearAndDepartmentRow struct {
+	YearOfStudy int32       `db:"year_of_study" json:"year_of_study"`
+	Department  pgtype.Text `db:"department" json:"department"`
+	Count       int64       `db:"count" json:"count"`
+}
+
+func (q *Queries) GetStudentCountByYearAndDepartment(ctx context.Context) ([]GetStudentCountByYearAndDepartmentRow, error) {
+	rows, err := q.db.Query(ctx, getStudentCountByYearAndDepartment)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetStudentCountByYearAndDepartmentRow{}
+	for rows.Next() {
+		var i GetStudentCountByYearAndDepartmentRow
+		if err := rows.Scan(&i.YearOfStudy, &i.Department, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getStudentEnrollmentTrends = `-- name: GetStudentEnrollmentTrends :many
+SELECT DATE_TRUNC('month', enrollment_date) as month, 
+       year_of_study, 
+       COUNT(*) as enrollments
+FROM students 
+WHERE enrollment_date >= $1 AND enrollment_date <= $2
+GROUP BY month, year_of_study
+ORDER BY month, year_of_study
+`
+
+type GetStudentEnrollmentTrendsParams struct {
+	EnrollmentDate   pgtype.Date `db:"enrollment_date" json:"enrollment_date"`
+	EnrollmentDate_2 pgtype.Date `db:"enrollment_date_2" json:"enrollment_date_2"`
+}
+
+type GetStudentEnrollmentTrendsRow struct {
+	Month       pgtype.Interval `db:"month" json:"month"`
+	YearOfStudy int32           `db:"year_of_study" json:"year_of_study"`
+	Enrollments int64           `db:"enrollments" json:"enrollments"`
+}
+
+func (q *Queries) GetStudentEnrollmentTrends(ctx context.Context, arg GetStudentEnrollmentTrendsParams) ([]GetStudentEnrollmentTrendsRow, error) {
+	rows, err := q.db.Query(ctx, getStudentEnrollmentTrends, arg.EnrollmentDate, arg.EnrollmentDate_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetStudentEnrollmentTrendsRow{}
+	for rows.Next() {
+		var i GetStudentEnrollmentTrendsRow
+		if err := rows.Scan(&i.Month, &i.YearOfStudy, &i.Enrollments); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getStudentsByStatus = `-- name: GetStudentsByStatus :many
+SELECT id, student_id, first_name, last_name, email, phone, year_of_study, department, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at FROM students 
+WHERE is_active = $1 AND deleted_at IS NULL
+ORDER BY last_name, first_name
+LIMIT $2 OFFSET $3
+`
+
+type GetStudentsByStatusParams struct {
+	IsActive pgtype.Bool `db:"is_active" json:"is_active"`
+	Limit    int32       `db:"limit" json:"limit"`
+	Offset   int32       `db:"offset" json:"offset"`
+}
+
+func (q *Queries) GetStudentsByStatus(ctx context.Context, arg GetStudentsByStatusParams) ([]Student, error) {
+	rows, err := q.db.Query(ctx, getStudentsByStatus, arg.IsActive, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Student{}
+	for rows.Next() {
+		var i Student
+		if err := rows.Scan(
+			&i.ID,
+			&i.StudentID,
+			&i.FirstName,
+			&i.LastName,
+			&i.Email,
+			&i.Phone,
+			&i.YearOfStudy,
+			&i.Department,
+			&i.EnrollmentDate,
+			&i.PasswordHash,
+			&i.IsActive,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listStudents = `-- name: ListStudents :many
@@ -428,4 +579,40 @@ type UpdateStudentPasswordParams struct {
 func (q *Queries) UpdateStudentPassword(ctx context.Context, arg UpdateStudentPasswordParams) error {
 	_, err := q.db.Exec(ctx, updateStudentPassword, arg.ID, arg.PasswordHash)
 	return err
+}
+
+const updateStudentStatus = `-- name: UpdateStudentStatus :one
+
+UPDATE students 
+SET is_active = $2, updated_at = NOW() 
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING id, student_id, first_name, last_name, email, phone, year_of_study, department, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at
+`
+
+type UpdateStudentStatusParams struct {
+	ID       int32       `db:"id" json:"id"`
+	IsActive pgtype.Bool `db:"is_active" json:"is_active"`
+}
+
+// Status Management Queries
+func (q *Queries) UpdateStudentStatus(ctx context.Context, arg UpdateStudentStatusParams) (Student, error) {
+	row := q.db.QueryRow(ctx, updateStudentStatus, arg.ID, arg.IsActive)
+	var i Student
+	err := row.Scan(
+		&i.ID,
+		&i.StudentID,
+		&i.FirstName,
+		&i.LastName,
+		&i.Email,
+		&i.Phone,
+		&i.YearOfStudy,
+		&i.Department,
+		&i.EnrollmentDate,
+		&i.PasswordHash,
+		&i.IsActive,
+		&i.DeletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -790,5 +791,454 @@ func (h *StudentHandler) ChangeStudentPassword(c *gin.Context) {
 		Success: true,
 		Data:    nil,
 		Message: "Password updated successfully",
+	})
+}
+
+// GetYearDistribution handles GET /api/v1/students/distribution/years
+func (h *StudentHandler) GetYearDistribution(c *gin.Context) {
+	distribution, err := h.studentService.GetYearDistribution(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to get year distribution",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    distribution,
+		Message: "Year distribution retrieved successfully",
+	})
+}
+
+// GetYearComparison handles GET /api/v1/students/compare/years
+func (h *StudentHandler) GetYearComparison(c *gin.Context) {
+	year1Str := c.Query("year1")
+	year2Str := c.Query("year2")
+
+	if year1Str == "" || year2Str == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Both year1 and year2 parameters are required",
+			},
+		})
+		return
+	}
+
+	year1, err := strconv.ParseInt(year1Str, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid year1 parameter",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	year2, err := strconv.ParseInt(year2Str, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid year2 parameter",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	comparison, err := h.studentService.GetYearComparison(c.Request.Context(), int32(year1), int32(year2))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to get year comparison",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    comparison,
+		Message: "Year comparison retrieved successfully",
+	})
+}
+
+// GetStudentActivity handles GET /api/v1/students/:id/activity
+func (h *StudentHandler) GetStudentActivity(c *gin.Context) {
+	idParam := c.Param("id")
+	id, err := strconv.ParseInt(idParam, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INVALID_ID",
+				Message: "Invalid student ID format",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	activity, err := h.studentService.GetStudentActivity(c.Request.Context(), int32(id))
+	if err != nil {
+		if err == models.ErrStudentNotFound {
+			c.JSON(http.StatusNotFound, ErrorResponse{
+				Success: false,
+				Error: ErrorDetail{
+					Code:    "STUDENT_NOT_FOUND",
+					Message: "Student not found",
+				},
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to get student activity",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    activity,
+		Message: "Student activity retrieved successfully",
+	})
+}
+
+// GetMostActiveStudents handles GET /api/v1/students/activity/ranking
+func (h *StudentHandler) GetMostActiveStudents(c *gin.Context) {
+	limitStr := c.DefaultQuery("limit", "10")
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		limit = 10
+	}
+
+	activeStudents, err := h.studentService.GetMostActiveStudents(c.Request.Context(), limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to get most active students",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    activeStudents,
+		Message: "Most active students retrieved successfully",
+	})
+}
+
+// GetStudentActivityByYear handles GET /api/v1/students/activity/year/:year
+func (h *StudentHandler) GetStudentActivityByYear(c *gin.Context) {
+	yearParam := c.Param("year")
+	year, err := strconv.ParseInt(yearParam, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid year parameter",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	if year < 1 || year > 8 {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Year must be between 1 and 8",
+			},
+		})
+		return
+	}
+
+	activity, err := h.studentService.GetStudentActivityByYear(c.Request.Context(), int32(year))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to get student activity by year",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    activity,
+		Message: "Student activity by year retrieved successfully",
+	})
+}
+
+// UpdateStudentStatus handles PUT /api/v1/students/:id/status
+func (h *StudentHandler) UpdateStudentStatus(c *gin.Context) {
+	idParam := c.Param("id")
+	id, err := strconv.ParseInt(idParam, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INVALID_ID",
+				Message: "Invalid student ID format",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	var req struct {
+		IsActive bool   `json:"is_active"`
+		Reason   string `json:"reason,omitempty"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid request data",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	student, err := h.studentService.UpdateStudentStatus(c.Request.Context(), int32(id), req.IsActive, req.Reason)
+	if err != nil {
+		if err == models.ErrStudentNotFound {
+			c.JSON(http.StatusNotFound, ErrorResponse{
+				Success: false,
+				Error: ErrorDetail{
+					Code:    "STUDENT_NOT_FOUND",
+					Message: "Student not found",
+				},
+			})
+			return
+		}
+
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to update student status",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    student,
+		Message: "Student status updated successfully",
+	})
+}
+
+// BulkUpdateStatus handles PUT /api/v1/students/status/bulk
+func (h *StudentHandler) BulkUpdateStatus(c *gin.Context) {
+	var req models.StatusUpdateRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid request data",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	err := h.studentService.BulkUpdateStatus(c.Request.Context(), &req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to bulk update student status",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    map[string]interface{}{"updated": len(req.StudentIDs)},
+		Message: "Student statuses updated successfully",
+	})
+}
+
+// GetStatusStatistics handles GET /api/v1/students/status/statistics
+func (h *StudentHandler) GetStatusStatistics(c *gin.Context) {
+	stats, err := h.studentService.GetStatusStatistics(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to get status statistics",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    stats,
+		Message: "Status statistics retrieved successfully",
+	})
+}
+
+// ExportStudents handles POST /api/v1/students/export
+func (h *StudentHandler) ExportStudents(c *gin.Context) {
+	var req models.StudentExportRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid request data",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	result, err := h.studentService.ExportStudents(c.Request.Context(), &req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to export students",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    result,
+		Message: "Students exported successfully",
+	})
+}
+
+// GetStudentDemographics handles GET /api/v1/students/analytics/demographics
+func (h *StudentHandler) GetStudentDemographics(c *gin.Context) {
+	demographics, err := h.studentService.GetStudentDemographics(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to get student demographics",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    demographics,
+		Message: "Student demographics retrieved successfully",
+	})
+}
+
+// GetEnrollmentTrends handles GET /api/v1/students/analytics/trends
+func (h *StudentHandler) GetEnrollmentTrends(c *gin.Context) {
+	startDateStr := c.Query("start_date")
+	endDateStr := c.Query("end_date")
+
+	if startDateStr == "" || endDateStr == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Both start_date and end_date parameters are required (format: YYYY-MM-DD)",
+			},
+		})
+		return
+	}
+
+	// Parse date strings to time.Time
+	startDate, err := time.Parse("2006-01-02", startDateStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid start_date format (use YYYY-MM-DD)",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	endDate, err := time.Parse("2006-01-02", endDateStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid end_date format (use YYYY-MM-DD)",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	trends, err := h.studentService.GetEnrollmentTrends(c.Request.Context(), startDate, endDate)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to get enrollment trends",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    trends,
+		Message: "Enrollment trends retrieved successfully",
 	})
 }
