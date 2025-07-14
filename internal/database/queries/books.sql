@@ -26,6 +26,11 @@ UPDATE books
 SET available_copies = $2, updated_at = NOW()
 WHERE id = $1;
 
+-- name: UpdateBookCondition :exec
+UPDATE books
+SET condition = $2, updated_at = NOW()
+WHERE id = $1;
+
 -- name: SoftDeleteBook :exec
 UPDATE books
 SET deleted_at = NOW(), updated_at = NOW()

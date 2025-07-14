@@ -37,7 +37,7 @@ func (q *Queries) CountTransactions(ctx context.Context) (int64, error) {
 const createTransaction = `-- name: CreateTransaction :one
 INSERT INTO transactions (student_id, book_id, transaction_type, due_date, librarian_id, notes)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at
+RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes
 `
 
 type CreateTransactionParams struct {
@@ -73,12 +73,14 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ReturnCondition,
+		&i.ConditionNotes,
 	)
 	return i, err
 }
 
 const getTransactionByID = `-- name: GetTransactionByID :one
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
@@ -99,6 +101,8 @@ type GetTransactionByIDRow struct {
 	Notes           pgtype.Text      `db:"notes" json:"notes"`
 	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	ReturnCondition pgtype.Text      `db:"return_condition" json:"return_condition"`
+	ConditionNotes  pgtype.Text      `db:"condition_notes" json:"condition_notes"`
 	FirstName       string           `db:"first_name" json:"first_name"`
 	LastName        string           `db:"last_name" json:"last_name"`
 	StudentID_2     string           `db:"student_id_2" json:"student_id_2"`
@@ -124,6 +128,8 @@ func (q *Queries) GetTransactionByID(ctx context.Context, id int32) (GetTransact
 		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ReturnCondition,
+		&i.ConditionNotes,
 		&i.FirstName,
 		&i.LastName,
 		&i.StudentID_2,
@@ -135,7 +141,7 @@ func (q *Queries) GetTransactionByID(ctx context.Context, id int32) (GetTransact
 }
 
 const listActiveBorrowings = `-- name: ListActiveBorrowings :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
@@ -163,6 +169,8 @@ type ListActiveBorrowingsRow struct {
 	Notes           pgtype.Text      `db:"notes" json:"notes"`
 	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	ReturnCondition pgtype.Text      `db:"return_condition" json:"return_condition"`
+	ConditionNotes  pgtype.Text      `db:"condition_notes" json:"condition_notes"`
 	FirstName       string           `db:"first_name" json:"first_name"`
 	LastName        string           `db:"last_name" json:"last_name"`
 	StudentID_2     string           `db:"student_id_2" json:"student_id_2"`
@@ -194,6 +202,8 @@ func (q *Queries) ListActiveBorrowings(ctx context.Context, arg ListActiveBorrow
 			&i.Notes,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ReturnCondition,
+			&i.ConditionNotes,
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentID_2,
@@ -212,7 +222,7 @@ func (q *Queries) ListActiveBorrowings(ctx context.Context, arg ListActiveBorrow
 }
 
 const listActiveTransactionsByStudent = `-- name: ListActiveTransactionsByStudent :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, b.title, b.author, b.book_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, b.title, b.author, b.book_id
 FROM transactions t
 JOIN books b ON t.book_id = b.id
 WHERE t.student_id = $1 AND t.returned_date IS NULL
@@ -233,6 +243,8 @@ type ListActiveTransactionsByStudentRow struct {
 	Notes           pgtype.Text      `db:"notes" json:"notes"`
 	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	ReturnCondition pgtype.Text      `db:"return_condition" json:"return_condition"`
+	ConditionNotes  pgtype.Text      `db:"condition_notes" json:"condition_notes"`
 	Title           string           `db:"title" json:"title"`
 	Author          string           `db:"author" json:"author"`
 	BookID_2        string           `db:"book_id_2" json:"book_id_2"`
@@ -261,6 +273,8 @@ func (q *Queries) ListActiveTransactionsByStudent(ctx context.Context, studentID
 			&i.Notes,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ReturnCondition,
+			&i.ConditionNotes,
 			&i.Title,
 			&i.Author,
 			&i.BookID_2,
@@ -276,7 +290,7 @@ func (q *Queries) ListActiveTransactionsByStudent(ctx context.Context, studentID
 }
 
 const listOverdueTransactions = `-- name: ListOverdueTransactions :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
@@ -298,6 +312,8 @@ type ListOverdueTransactionsRow struct {
 	Notes           pgtype.Text      `db:"notes" json:"notes"`
 	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	ReturnCondition pgtype.Text      `db:"return_condition" json:"return_condition"`
+	ConditionNotes  pgtype.Text      `db:"condition_notes" json:"condition_notes"`
 	FirstName       string           `db:"first_name" json:"first_name"`
 	LastName        string           `db:"last_name" json:"last_name"`
 	StudentID_2     string           `db:"student_id_2" json:"student_id_2"`
@@ -329,6 +345,8 @@ func (q *Queries) ListOverdueTransactions(ctx context.Context) ([]ListOverdueTra
 			&i.Notes,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ReturnCondition,
+			&i.ConditionNotes,
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentID_2,
@@ -347,7 +365,7 @@ func (q *Queries) ListOverdueTransactions(ctx context.Context) ([]ListOverdueTra
 }
 
 const listTransactions = `-- name: ListTransactions :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
@@ -374,6 +392,8 @@ type ListTransactionsRow struct {
 	Notes           pgtype.Text      `db:"notes" json:"notes"`
 	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	ReturnCondition pgtype.Text      `db:"return_condition" json:"return_condition"`
+	ConditionNotes  pgtype.Text      `db:"condition_notes" json:"condition_notes"`
 	FirstName       string           `db:"first_name" json:"first_name"`
 	LastName        string           `db:"last_name" json:"last_name"`
 	StudentID_2     string           `db:"student_id_2" json:"student_id_2"`
@@ -405,6 +425,8 @@ func (q *Queries) ListTransactions(ctx context.Context, arg ListTransactionsPara
 			&i.Notes,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ReturnCondition,
+			&i.ConditionNotes,
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentID_2,
@@ -423,7 +445,7 @@ func (q *Queries) ListTransactions(ctx context.Context, arg ListTransactionsPara
 }
 
 const listTransactionsByBook = `-- name: ListTransactionsByBook :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, s.first_name, s.last_name, s.student_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, s.first_name, s.last_name, s.student_id
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 WHERE t.book_id = $1
@@ -451,6 +473,8 @@ type ListTransactionsByBookRow struct {
 	Notes           pgtype.Text      `db:"notes" json:"notes"`
 	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	ReturnCondition pgtype.Text      `db:"return_condition" json:"return_condition"`
+	ConditionNotes  pgtype.Text      `db:"condition_notes" json:"condition_notes"`
 	FirstName       string           `db:"first_name" json:"first_name"`
 	LastName        string           `db:"last_name" json:"last_name"`
 	StudentID_2     string           `db:"student_id_2" json:"student_id_2"`
@@ -479,6 +503,8 @@ func (q *Queries) ListTransactionsByBook(ctx context.Context, arg ListTransactio
 			&i.Notes,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ReturnCondition,
+			&i.ConditionNotes,
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentID_2,
@@ -494,7 +520,7 @@ func (q *Queries) ListTransactionsByBook(ctx context.Context, arg ListTransactio
 }
 
 const listTransactionsByStudent = `-- name: ListTransactionsByStudent :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, b.title, b.author, b.book_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, b.title, b.author, b.book_id
 FROM transactions t
 JOIN books b ON t.book_id = b.id
 WHERE t.student_id = $1
@@ -522,6 +548,8 @@ type ListTransactionsByStudentRow struct {
 	Notes           pgtype.Text      `db:"notes" json:"notes"`
 	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	ReturnCondition pgtype.Text      `db:"return_condition" json:"return_condition"`
+	ConditionNotes  pgtype.Text      `db:"condition_notes" json:"condition_notes"`
 	Title           string           `db:"title" json:"title"`
 	Author          string           `db:"author" json:"author"`
 	BookID_2        string           `db:"book_id_2" json:"book_id_2"`
@@ -550,6 +578,8 @@ func (q *Queries) ListTransactionsByStudent(ctx context.Context, arg ListTransac
 			&i.Notes,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ReturnCondition,
+			&i.ConditionNotes,
 			&i.Title,
 			&i.Author,
 			&i.BookID_2,
@@ -577,18 +607,25 @@ func (q *Queries) PayTransactionFine(ctx context.Context, id int32) error {
 
 const returnBook = `-- name: ReturnBook :one
 UPDATE transactions
-SET returned_date = NOW(), fine_amount = $2, updated_at = NOW()
+SET returned_date = NOW(), fine_amount = $2, return_condition = $3, condition_notes = $4, updated_at = NOW()
 WHERE id = $1
-RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at
+RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes
 `
 
 type ReturnBookParams struct {
-	ID         int32          `db:"id" json:"id"`
-	FineAmount pgtype.Numeric `db:"fine_amount" json:"fine_amount"`
+	ID              int32          `db:"id" json:"id"`
+	FineAmount      pgtype.Numeric `db:"fine_amount" json:"fine_amount"`
+	ReturnCondition pgtype.Text    `db:"return_condition" json:"return_condition"`
+	ConditionNotes  pgtype.Text    `db:"condition_notes" json:"condition_notes"`
 }
 
 func (q *Queries) ReturnBook(ctx context.Context, arg ReturnBookParams) (Transaction, error) {
-	row := q.db.QueryRow(ctx, returnBook, arg.ID, arg.FineAmount)
+	row := q.db.QueryRow(ctx, returnBook,
+		arg.ID,
+		arg.FineAmount,
+		arg.ReturnCondition,
+		arg.ConditionNotes,
+	)
 	var i Transaction
 	err := row.Scan(
 		&i.ID,
@@ -604,6 +641,8 @@ func (q *Queries) ReturnBook(ctx context.Context, arg ReturnBookParams) (Transac
 		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ReturnCondition,
+		&i.ConditionNotes,
 	)
 	return i, err
 }
@@ -628,7 +667,7 @@ const updateTransactionReturn = `-- name: UpdateTransactionReturn :one
 UPDATE transactions
 SET returned_date = NOW(), fine_amount = $2, updated_at = NOW()
 WHERE id = $1
-RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at
+RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes
 `
 
 type UpdateTransactionReturnParams struct {
@@ -653,6 +692,8 @@ func (q *Queries) UpdateTransactionReturn(ctx context.Context, arg UpdateTransac
 		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ReturnCondition,
+		&i.ConditionNotes,
 	)
 	return i, err
 }

@@ -38,7 +38,7 @@ func (q *Queries) CountBooks(ctx context.Context) (int64, error) {
 const createBook = `-- name: CreateBook :one
 INSERT INTO books (book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-RETURNING id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at
+RETURNING id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition
 `
 
 type CreateBookParams struct {
@@ -90,12 +90,13 @@ func (q *Queries) CreateBook(ctx context.Context, arg CreateBookParams) (Book, e
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Condition,
 	)
 	return i, err
 }
 
 const getBookByBookID = `-- name: GetBookByBookID :one
-SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at FROM books
+SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition FROM books
 WHERE book_id = $1 AND deleted_at IS NULL
 `
 
@@ -120,12 +121,13 @@ func (q *Queries) GetBookByBookID(ctx context.Context, bookID string) (Book, err
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Condition,
 	)
 	return i, err
 }
 
 const getBookByID = `-- name: GetBookByID :one
-SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at FROM books
+SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition FROM books
 WHERE id = $1 AND deleted_at IS NULL
 `
 
@@ -150,12 +152,13 @@ func (q *Queries) GetBookByID(ctx context.Context, id int32) (Book, error) {
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Condition,
 	)
 	return i, err
 }
 
 const getBookByISBN = `-- name: GetBookByISBN :one
-SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at FROM books
+SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition FROM books
 WHERE isbn = $1 AND deleted_at IS NULL
 `
 
@@ -180,12 +183,13 @@ func (q *Queries) GetBookByISBN(ctx context.Context, isbn pgtype.Text) (Book, er
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Condition,
 	)
 	return i, err
 }
 
 const listAvailableBooks = `-- name: ListAvailableBooks :many
-SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at FROM books
+SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition FROM books
 WHERE available_copies > 0 AND deleted_at IS NULL
 ORDER BY title
 LIMIT $1 OFFSET $2
@@ -223,6 +227,7 @@ func (q *Queries) ListAvailableBooks(ctx context.Context, arg ListAvailableBooks
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Condition,
 		); err != nil {
 			return nil, err
 		}
@@ -235,7 +240,7 @@ func (q *Queries) ListAvailableBooks(ctx context.Context, arg ListAvailableBooks
 }
 
 const listBooks = `-- name: ListBooks :many
-SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at FROM books
+SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition FROM books
 WHERE deleted_at IS NULL
 ORDER BY title
 LIMIT $1 OFFSET $2
@@ -273,6 +278,7 @@ func (q *Queries) ListBooks(ctx context.Context, arg ListBooksParams) ([]Book, e
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Condition,
 		); err != nil {
 			return nil, err
 		}
@@ -285,7 +291,7 @@ func (q *Queries) ListBooks(ctx context.Context, arg ListBooksParams) ([]Book, e
 }
 
 const searchBooks = `-- name: SearchBooks :many
-SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at FROM books
+SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition FROM books
 WHERE (title ILIKE $1 OR author ILIKE $1 OR book_id ILIKE $1 OR isbn ILIKE $1)
 AND deleted_at IS NULL
 ORDER BY title
@@ -325,6 +331,7 @@ func (q *Queries) SearchBooks(ctx context.Context, arg SearchBooksParams) ([]Boo
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Condition,
 		); err != nil {
 			return nil, err
 		}
@@ -337,7 +344,7 @@ func (q *Queries) SearchBooks(ctx context.Context, arg SearchBooksParams) ([]Boo
 }
 
 const searchBooksByGenre = `-- name: SearchBooksByGenre :many
-SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at FROM books
+SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition FROM books
 WHERE genre = $1 AND deleted_at IS NULL
 ORDER BY title
 LIMIT $2 OFFSET $3
@@ -376,6 +383,7 @@ func (q *Queries) SearchBooksByGenre(ctx context.Context, arg SearchBooksByGenre
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Condition,
 		); err != nil {
 			return nil, err
 		}
@@ -402,7 +410,7 @@ const updateBook = `-- name: UpdateBook :one
 UPDATE books
 SET book_id = $2, isbn = $3, title = $4, author = $5, publisher = $6, published_year = $7, genre = $8, description = $9, cover_image_url = $10, total_copies = $11, available_copies = $12, shelf_location = $13, updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at
+RETURNING id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition
 `
 
 type UpdateBookParams struct {
@@ -456,6 +464,7 @@ func (q *Queries) UpdateBook(ctx context.Context, arg UpdateBookParams) (Book, e
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Condition,
 	)
 	return i, err
 }
@@ -473,5 +482,21 @@ type UpdateBookAvailabilityParams struct {
 
 func (q *Queries) UpdateBookAvailability(ctx context.Context, arg UpdateBookAvailabilityParams) error {
 	_, err := q.db.Exec(ctx, updateBookAvailability, arg.ID, arg.AvailableCopies)
+	return err
+}
+
+const updateBookCondition = `-- name: UpdateBookCondition :exec
+UPDATE books
+SET condition = $2, updated_at = NOW()
+WHERE id = $1
+`
+
+type UpdateBookConditionParams struct {
+	ID        int32       `db:"id" json:"id"`
+	Condition pgtype.Text `db:"condition" json:"condition"`
+}
+
+func (q *Queries) UpdateBookCondition(ctx context.Context, arg UpdateBookConditionParams) error {
+	_, err := q.db.Exec(ctx, updateBookCondition, arg.ID, arg.Condition)
 	return err
 }

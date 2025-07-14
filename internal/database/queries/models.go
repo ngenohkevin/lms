@@ -42,6 +42,7 @@ type Book struct {
 	DeletedAt       pgtype.Timestamp `db:"deleted_at" json:"deleted_at"`
 	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	Condition       pgtype.Text      `db:"condition" json:"condition"`
 }
 
 type Notification struct {
@@ -99,6 +100,8 @@ type Transaction struct {
 	Notes           pgtype.Text      `db:"notes" json:"notes"`
 	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	ReturnCondition pgtype.Text      `db:"return_condition" json:"return_condition"`
+	ConditionNotes  pgtype.Text      `db:"condition_notes" json:"condition_notes"`
 }
 
 type User struct {

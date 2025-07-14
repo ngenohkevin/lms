@@ -93,6 +93,7 @@ type Querier interface {
 	SoftDeleteUser(ctx context.Context, id int32) error
 	UpdateBook(ctx context.Context, arg UpdateBookParams) (Book, error)
 	UpdateBookAvailability(ctx context.Context, arg UpdateBookAvailabilityParams) error
+	UpdateBookCondition(ctx context.Context, arg UpdateBookConditionParams) error
 	UpdateReservationStatus(ctx context.Context, arg UpdateReservationStatusParams) (Reservation, error)
 	UpdateStudent(ctx context.Context, arg UpdateStudentParams) (Student, error)
 	UpdateStudentPassword(ctx context.Context, arg UpdateStudentPasswordParams) error

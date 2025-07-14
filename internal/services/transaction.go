@@ -27,6 +27,7 @@ type TransactionQuerier interface {
 	GetBookByID(ctx context.Context, id int32) (queries.Book, error)
 	GetStudentByID(ctx context.Context, id int32) (queries.Student, error)
 	UpdateBookAvailability(ctx context.Context, arg queries.UpdateBookAvailabilityParams) error
+	UpdateBookCondition(ctx context.Context, arg queries.UpdateBookConditionParams) error
 }
 
 // TransactionService handles all business logic related to book transactions
@@ -73,6 +74,13 @@ type BorrowBookRequest struct {
 	Notes       string `json:"notes"`
 }
 
+// ReturnBookRequest represents a book return request with condition assessment
+type ReturnBookRequest struct {
+	TransactionID   int32  `json:"transaction_id" validate:"required"`
+	ReturnCondition string `json:"return_condition" validate:"required,oneof=excellent good fair poor damaged"`
+	ConditionNotes  string `json:"condition_notes"`
+}
+
 // TransactionResponse represents a transaction response
 type TransactionResponse struct {
 	ID              int32           `json:"id"`
@@ -86,6 +94,8 @@ type TransactionResponse struct {
 	FineAmount      decimal.Decimal `json:"fine_amount"`
 	FinePaid        bool            `json:"fine_paid"`
 	Notes           string          `json:"notes"`
+	ReturnCondition string          `json:"return_condition,omitempty"`
+	ConditionNotes  string          `json:"condition_notes,omitempty"`
 	CreatedAt       time.Time       `json:"created_at"`
 	UpdatedAt       time.Time       `json:"updated_at"`
 }
@@ -143,8 +153,13 @@ func (s *TransactionService) BorrowBook(ctx context.Context, studentID, bookID, 
 	return s.convertToTransactionResponse(transaction), nil
 }
 
-// ReturnBook processes a book return
+// ReturnBook processes a book return with enhanced validation (backward compatibility)
 func (s *TransactionService) ReturnBook(ctx context.Context, transactionID int32) (*TransactionResponse, error) {
+	return s.ReturnBookWithCondition(ctx, transactionID, "good", "")
+}
+
+// ReturnBookWithCondition processes a book return with condition assessment
+func (s *TransactionService) ReturnBookWithCondition(ctx context.Context, transactionID int32, returnCondition, conditionNotes string) (*TransactionResponse, error) {
 	// Get transaction
 	transactionRow, err := s.queries.GetTransactionByID(ctx, transactionID)
 	if err != nil {
@@ -154,9 +169,14 @@ func (s *TransactionService) ReturnBook(ctx context.Context, transactionID int32
 		return nil, fmt.Errorf("failed to get transaction: %w", err)
 	}
 
-	// Check if already returned
-	if transactionRow.ReturnedDate.Valid {
-		return nil, fmt.Errorf("book already returned")
+	// Enhanced validation for return processing
+	if err := s.validateReturnTransaction(transactionRow); err != nil {
+		return nil, err
+	}
+
+	// Validate return condition
+	if err := s.validateReturnCondition(returnCondition); err != nil {
+		return nil, err
 	}
 
 	// Calculate fine if overdue
@@ -175,10 +195,12 @@ func (s *TransactionService) ReturnBook(ctx context.Context, transactionID int32
 		fineNumeric.Valid = true
 	}
 
-	// Return book
+	// Return book with condition assessment
 	transaction, err := s.queries.ReturnBook(ctx, queries.ReturnBookParams{
-		ID:         transactionID,
-		FineAmount: fineNumeric,
+		ID:              transactionID,
+		FineAmount:      fineNumeric,
+		ReturnCondition: pgtype.Text{String: returnCondition, Valid: true},
+		ConditionNotes:  pgtype.Text{String: conditionNotes, Valid: conditionNotes != ""},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to return book: %w", err)
@@ -196,6 +218,11 @@ func (s *TransactionService) ReturnBook(ctx context.Context, transactionID int32
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to update book availability: %w", err)
+	}
+
+	// Update book condition if it's deteriorated
+	if err := s.updateBookConditionIfNeeded(ctx, transactionRow.BookID, book, returnCondition); err != nil {
+		return nil, fmt.Errorf("failed to update book condition: %w", err)
 	}
 
 	return s.convertToTransactionResponse(transaction), nil
@@ -378,6 +405,73 @@ func (s *TransactionService) calculateDueDate(student queries.Student) time.Time
 	return time.Now().AddDate(0, 0, loanPeriod)
 }
 
+// validateReturnTransaction validates a transaction for return processing
+func (s *TransactionService) validateReturnTransaction(tx queries.GetTransactionByIDRow) error {
+	// Check if already returned
+	if tx.ReturnedDate.Valid {
+		return fmt.Errorf("book already returned")
+	}
+
+	// Validate transaction type - should be "borrow" or "renew"
+	if tx.TransactionType != "borrow" && tx.TransactionType != "renew" {
+		return fmt.Errorf("invalid transaction type for return: %s", tx.TransactionType)
+	}
+
+	return nil
+}
+
+// detectOverdueTransaction checks if a transaction is overdue
+func (s *TransactionService) detectOverdueTransaction(tx queries.GetTransactionByIDRow) bool {
+	if !tx.DueDate.Valid {
+		return false
+	}
+	return time.Now().After(tx.DueDate.Time)
+}
+
+// validateReturnCondition validates the return condition value
+func (s *TransactionService) validateReturnCondition(condition string) error {
+	validConditions := []string{"excellent", "good", "fair", "poor", "damaged"}
+	for _, valid := range validConditions {
+		if condition == valid {
+			return nil
+		}
+	}
+	return fmt.Errorf("invalid return condition: %s. Valid conditions are: %v", condition, validConditions)
+}
+
+// updateBookConditionIfNeeded updates the book's condition if it has deteriorated
+func (s *TransactionService) updateBookConditionIfNeeded(ctx context.Context, bookID int32, book queries.Book, returnCondition string) error {
+	currentCondition := "good" // Default condition
+	if book.Condition.Valid {
+		currentCondition = book.Condition.String
+	}
+
+	// Condition hierarchy: excellent > good > fair > poor > damaged
+	conditionRank := map[string]int{
+		"excellent": 5,
+		"good":      4,
+		"fair":      3,
+		"poor":      2,
+		"damaged":   1,
+	}
+
+	currentRank := conditionRank[currentCondition]
+	returnRank := conditionRank[returnCondition]
+
+	// Only update if condition has deteriorated
+	if returnRank < currentRank {
+		err := s.queries.UpdateBookCondition(ctx, queries.UpdateBookConditionParams{
+			ID:        bookID,
+			Condition: pgtype.Text{String: returnCondition, Valid: true},
+		})
+		if err != nil {
+			return fmt.Errorf("failed to update book condition from %s to %s: %w", currentCondition, returnCondition, err)
+		}
+	}
+
+	return nil
+}
+
 // convertToTransactionResponse converts a queries.Transaction to TransactionResponse
 func (s *TransactionService) convertToTransactionResponse(tx queries.Transaction) *TransactionResponse {
 	response := &TransactionResponse{
@@ -411,6 +505,14 @@ func (s *TransactionService) convertToTransactionResponse(tx queries.Transaction
 			// Use the stored scale
 			response.FineAmount = decimal.NewFromBigInt(tx.FineAmount.Int, tx.FineAmount.Exp)
 		}
+	}
+
+	if tx.ReturnCondition.Valid {
+		response.ReturnCondition = tx.ReturnCondition.String
+	}
+
+	if tx.ConditionNotes.Valid {
+		response.ConditionNotes = tx.ConditionNotes.String
 	}
 
 	return response

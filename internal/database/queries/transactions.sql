@@ -83,6 +83,6 @@ LIMIT $1 OFFSET $2;
 
 -- name: ReturnBook :one
 UPDATE transactions
-SET returned_date = NOW(), fine_amount = $2, updated_at = NOW()
+SET returned_date = NOW(), fine_amount = $2, return_condition = $3, condition_notes = $4, updated_at = NOW()
 WHERE id = $1
 RETURNING *;

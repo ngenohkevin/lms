@@ -86,6 +86,11 @@ func (m *MockTransactionQueries) UpdateBookAvailability(ctx context.Context, arg
 	return args.Error(0)
 }
 
+func (m *MockTransactionQueries) UpdateBookCondition(ctx context.Context, arg queries.UpdateBookConditionParams) error {
+	args := m.Called(ctx, arg)
+	return args.Error(0)
+}
+
 // Test helper functions
 func createTestTransaction() queries.Transaction {
 	now := time.Now()
@@ -743,4 +748,585 @@ func TestTransactionService_WithFinePerDay(t *testing.T) {
 	newFine := decimal.NewFromFloat(1.00)
 	service = service.WithFinePerDay(newFine)
 	assert.True(t, newFine.Equal(service.finePerDay))
+}
+
+// Phase 6.3: Enhanced Return Processing Tests
+
+func TestTransactionService_ReturnBook_WithOverdueFine(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	transactionID := int32(1)
+
+	// Create a transaction that's overdue by 5 days
+	now := time.Now()
+	dueDate := now.AddDate(0, 0, -5) // 5 days overdue
+	transaction := queries.GetTransactionByIDRow{
+		ID:              transactionID,
+		StudentID:       1,
+		BookID:          1,
+		TransactionType: "borrow",
+		DueDate:         pgtype.Timestamp{Time: dueDate, Valid: true},
+		ReturnedDate:    pgtype.Timestamp{Valid: false},
+	}
+
+	returnedTransaction := createTestTransaction()
+	returnedTransaction.ReturnedDate = pgtype.Timestamp{Time: now, Valid: true}
+	// Set up the fine amount (5 days * $0.50 = $2.50)
+	fineAmount := decimal.NewFromFloat(2.50)
+	returnedTransaction.FineAmount = pgtype.Numeric{
+		Int:   fineAmount.Shift(2).BigInt(), // Convert to cents
+		Exp:   -2,                           // 2 decimal places
+		Valid: true,
+	}
+
+	book := createTestBook()
+
+	// Setup mocks
+	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+	mockQueries.On("ReturnBook", ctx, mock.AnythingOfType("queries.ReturnBookParams")).Return(returnedTransaction, nil)
+	mockQueries.On("GetBookByID", ctx, int32(1)).Return(book, nil)
+	mockQueries.On("UpdateBookAvailability", ctx, mock.AnythingOfType("queries.UpdateBookAvailabilityParams")).Return(nil)
+
+	// Execute
+	result, err := service.ReturnBook(ctx, transactionID)
+
+	// Assert
+	require.NoError(t, err)
+	assert.Equal(t, transactionID, result.ID)
+	assert.NotNil(t, result.ReturnedDate)
+	assert.True(t, result.FineAmount.Equal(fineAmount))
+	mockQueries.AssertExpectations(t)
+}
+
+func TestTransactionService_ReturnBook_ValidationFailure(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	transactionID := int32(1)
+
+	// Create a transaction that's of type "return" (should fail validation)
+	now := time.Now()
+	transaction := queries.GetTransactionByIDRow{
+		ID:              transactionID,
+		StudentID:       1,
+		BookID:          1,
+		TransactionType: "return",
+		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, 1), Valid: true},
+		ReturnedDate:    pgtype.Timestamp{Valid: false},
+	}
+
+	// Setup mock - only need to mock GetTransactionByID since validation will fail
+	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+
+	// Execute
+	_, err := service.ReturnBook(ctx, transactionID)
+
+	// Assert - should fail with validation error
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid transaction type for return")
+	mockQueries.AssertExpectations(t)
+}
+
+func TestTransactionService_ReturnBook_BookAvailabilityUpdateFailure(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	transactionID := int32(1)
+
+	// Create a valid transaction
+	now := time.Now()
+	transaction := queries.GetTransactionByIDRow{
+		ID:              transactionID,
+		StudentID:       1,
+		BookID:          1,
+		TransactionType: "borrow",
+		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, 1), Valid: true},
+		ReturnedDate:    pgtype.Timestamp{Valid: false},
+	}
+
+	returnedTransaction := createTestTransaction()
+	returnedTransaction.ReturnedDate = pgtype.Timestamp{Time: now, Valid: true}
+	book := createTestBook()
+
+	// Setup mocks - book availability update will fail
+	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+	mockQueries.On("ReturnBook", ctx, mock.AnythingOfType("queries.ReturnBookParams")).Return(returnedTransaction, nil)
+	mockQueries.On("GetBookByID", ctx, int32(1)).Return(book, nil)
+	mockQueries.On("UpdateBookAvailability", ctx, mock.AnythingOfType("queries.UpdateBookAvailabilityParams")).Return(assert.AnError)
+
+	// Execute
+	_, err := service.ReturnBook(ctx, transactionID)
+
+	// Assert
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to update book availability")
+	mockQueries.AssertExpectations(t)
+}
+
+func TestTransactionService_ReturnBook_GetBookFailure(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	transactionID := int32(1)
+
+	// Create a valid transaction
+	now := time.Now()
+	transaction := queries.GetTransactionByIDRow{
+		ID:              transactionID,
+		StudentID:       1,
+		BookID:          1,
+		TransactionType: "borrow",
+		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, 1), Valid: true},
+		ReturnedDate:    pgtype.Timestamp{Valid: false},
+	}
+
+	returnedTransaction := createTestTransaction()
+	returnedTransaction.ReturnedDate = pgtype.Timestamp{Time: now, Valid: true}
+
+	// Setup mocks - GetBookByID will fail
+	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+	mockQueries.On("ReturnBook", ctx, mock.AnythingOfType("queries.ReturnBookParams")).Return(returnedTransaction, nil)
+	mockQueries.On("GetBookByID", ctx, int32(1)).Return(queries.Book{}, assert.AnError)
+
+	// Execute
+	_, err := service.ReturnBook(ctx, transactionID)
+
+	// Assert
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to get book for availability update")
+	mockQueries.AssertExpectations(t)
+}
+
+func TestTransactionService_ReturnBook_ReturnOperationFailure(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	transactionID := int32(1)
+
+	// Create a valid transaction
+	now := time.Now()
+	transaction := queries.GetTransactionByIDRow{
+		ID:              transactionID,
+		StudentID:       1,
+		BookID:          1,
+		TransactionType: "borrow",
+		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, 1), Valid: true},
+		ReturnedDate:    pgtype.Timestamp{Valid: false},
+	}
+
+	// Setup mocks - ReturnBook operation will fail
+	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+	mockQueries.On("ReturnBook", ctx, mock.AnythingOfType("queries.ReturnBookParams")).Return(queries.Transaction{}, assert.AnError)
+
+	// Execute
+	_, err := service.ReturnBook(ctx, transactionID)
+
+	// Assert
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to return book")
+	mockQueries.AssertExpectations(t)
+}
+
+// Phase 6.3: Overdue Detection Tests
+
+func TestTransactionService_DetectOverdueTransaction_NotOverdue(t *testing.T) {
+	service := NewTransactionService(&MockTransactionQueries{})
+
+	transaction := queries.GetTransactionByIDRow{
+		ID:              1,
+		StudentID:       1,
+		BookID:          1,
+		TransactionType: "borrow",
+		DueDate:         pgtype.Timestamp{Time: time.Now().AddDate(0, 0, 1), Valid: true},
+		ReturnedDate:    pgtype.Timestamp{Valid: false},
+	}
+
+	isOverdue := service.detectOverdueTransaction(transaction)
+	assert.False(t, isOverdue)
+}
+
+func TestTransactionService_DetectOverdueTransaction_Overdue(t *testing.T) {
+	service := NewTransactionService(&MockTransactionQueries{})
+
+	transaction := queries.GetTransactionByIDRow{
+		ID:              1,
+		StudentID:       1,
+		BookID:          1,
+		TransactionType: "borrow",
+		DueDate:         pgtype.Timestamp{Time: time.Now().AddDate(0, 0, -1), Valid: true},
+		ReturnedDate:    pgtype.Timestamp{Valid: false},
+	}
+
+	isOverdue := service.detectOverdueTransaction(transaction)
+	assert.True(t, isOverdue)
+}
+
+func TestTransactionService_DetectOverdueTransaction_NoDueDate(t *testing.T) {
+	service := NewTransactionService(&MockTransactionQueries{})
+
+	transaction := queries.GetTransactionByIDRow{
+		ID:              1,
+		StudentID:       1,
+		BookID:          1,
+		TransactionType: "borrow",
+		DueDate:         pgtype.Timestamp{Valid: false},
+		ReturnedDate:    pgtype.Timestamp{Valid: false},
+	}
+
+	isOverdue := service.detectOverdueTransaction(transaction)
+	assert.False(t, isOverdue)
+}
+
+// Phase 6.3: Return Validation Tests
+
+func TestTransactionService_ValidateReturnTransaction_ValidBorrowTransaction(t *testing.T) {
+	service := NewTransactionService(&MockTransactionQueries{})
+
+	transaction := queries.GetTransactionByIDRow{
+		ID:              1,
+		StudentID:       1,
+		BookID:          1,
+		TransactionType: "borrow",
+		DueDate:         pgtype.Timestamp{Time: time.Now().AddDate(0, 0, 1), Valid: true},
+		ReturnedDate:    pgtype.Timestamp{Valid: false},
+	}
+
+	err := service.validateReturnTransaction(transaction)
+	assert.NoError(t, err)
+}
+
+func TestTransactionService_ValidateReturnTransaction_ValidRenewTransaction(t *testing.T) {
+	service := NewTransactionService(&MockTransactionQueries{})
+
+	transaction := queries.GetTransactionByIDRow{
+		ID:              1,
+		StudentID:       1,
+		BookID:          1,
+		TransactionType: "renew",
+		DueDate:         pgtype.Timestamp{Time: time.Now().AddDate(0, 0, 1), Valid: true},
+		ReturnedDate:    pgtype.Timestamp{Valid: false},
+	}
+
+	err := service.validateReturnTransaction(transaction)
+	assert.NoError(t, err)
+}
+
+func TestTransactionService_ValidateReturnTransaction_InvalidTransactionType(t *testing.T) {
+	service := NewTransactionService(&MockTransactionQueries{})
+
+	transaction := queries.GetTransactionByIDRow{
+		ID:              1,
+		StudentID:       1,
+		BookID:          1,
+		TransactionType: "return",
+		DueDate:         pgtype.Timestamp{Time: time.Now().AddDate(0, 0, 1), Valid: true},
+		ReturnedDate:    pgtype.Timestamp{Valid: false},
+	}
+
+	err := service.validateReturnTransaction(transaction)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid transaction type for return")
+}
+
+func TestTransactionService_ValidateReturnTransaction_AlreadyReturned(t *testing.T) {
+	service := NewTransactionService(&MockTransactionQueries{})
+
+	transaction := queries.GetTransactionByIDRow{
+		ID:              1,
+		StudentID:       1,
+		BookID:          1,
+		TransactionType: "borrow",
+		DueDate:         pgtype.Timestamp{Time: time.Now().AddDate(0, 0, 1), Valid: true},
+		ReturnedDate:    pgtype.Timestamp{Time: time.Now(), Valid: true},
+	}
+
+	err := service.validateReturnTransaction(transaction)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "book already returned")
+}
+
+// Phase 6.3: Book Condition Assessment Tests
+
+func TestTransactionService_ValidateReturnCondition_ValidConditions(t *testing.T) {
+	service := NewTransactionService(&MockTransactionQueries{})
+
+	validConditions := []string{"excellent", "good", "fair", "poor", "damaged"}
+	for _, condition := range validConditions {
+		err := service.validateReturnCondition(condition)
+		assert.NoError(t, err, "Condition %s should be valid", condition)
+	}
+}
+
+func TestTransactionService_ValidateReturnCondition_InvalidCondition(t *testing.T) {
+	service := NewTransactionService(&MockTransactionQueries{})
+
+	err := service.validateReturnCondition("invalid")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid return condition")
+}
+
+func TestTransactionService_UpdateBookConditionIfNeeded_NoChange(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	bookID := int32(1)
+	book := createTestBook()
+	book.Condition = pgtype.Text{String: "good", Valid: true}
+
+	// Return condition is also good - no change needed
+	err := service.updateBookConditionIfNeeded(ctx, bookID, book, "good")
+	assert.NoError(t, err)
+	mockQueries.AssertExpectations(t)
+}
+
+func TestTransactionService_UpdateBookConditionIfNeeded_ConditionDeteriorated(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	bookID := int32(1)
+	book := createTestBook()
+	book.Condition = pgtype.Text{String: "good", Valid: true}
+
+	// Mock the condition update
+	mockQueries.On("UpdateBookCondition", ctx, queries.UpdateBookConditionParams{
+		ID:        bookID,
+		Condition: pgtype.Text{String: "fair", Valid: true},
+	}).Return(nil)
+
+	// Return condition is fair - should update
+	err := service.updateBookConditionIfNeeded(ctx, bookID, book, "fair")
+	assert.NoError(t, err)
+	mockQueries.AssertExpectations(t)
+}
+
+func TestTransactionService_UpdateBookConditionIfNeeded_ConditionImproved(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	bookID := int32(1)
+	book := createTestBook()
+	book.Condition = pgtype.Text{String: "fair", Valid: true}
+
+	// Return condition is good - should not update (book condition doesn't improve)
+	err := service.updateBookConditionIfNeeded(ctx, bookID, book, "good")
+	assert.NoError(t, err)
+	mockQueries.AssertExpectations(t)
+}
+
+func TestTransactionService_ReturnBookWithCondition_Success(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	transactionID := int32(1)
+	returnCondition := "fair"
+	conditionNotes := "Minor wear on cover"
+
+	// Create a transaction that's not overdue
+	now := time.Now()
+	transaction := queries.GetTransactionByIDRow{
+		ID:              transactionID,
+		StudentID:       1,
+		BookID:          1,
+		TransactionType: "borrow",
+		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, 1), Valid: true},
+		ReturnedDate:    pgtype.Timestamp{Valid: false},
+	}
+
+	returnedTransaction := createTestTransaction()
+	returnedTransaction.ReturnedDate = pgtype.Timestamp{Time: now, Valid: true}
+	returnedTransaction.ReturnCondition = pgtype.Text{String: returnCondition, Valid: true}
+	returnedTransaction.ConditionNotes = pgtype.Text{String: conditionNotes, Valid: true}
+
+	book := createTestBook()
+	book.Condition = pgtype.Text{String: "good", Valid: true}
+
+	// Setup mocks
+	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+	mockQueries.On("ReturnBook", ctx, mock.AnythingOfType("queries.ReturnBookParams")).Return(returnedTransaction, nil)
+	mockQueries.On("GetBookByID", ctx, int32(1)).Return(book, nil)
+	mockQueries.On("UpdateBookAvailability", ctx, mock.AnythingOfType("queries.UpdateBookAvailabilityParams")).Return(nil)
+	mockQueries.On("UpdateBookCondition", ctx, mock.AnythingOfType("queries.UpdateBookConditionParams")).Return(nil)
+
+	// Execute
+	result, err := service.ReturnBookWithCondition(ctx, transactionID, returnCondition, conditionNotes)
+
+	// Assert
+	require.NoError(t, err)
+	assert.Equal(t, transactionID, result.ID)
+	assert.NotNil(t, result.ReturnedDate)
+	assert.Equal(t, returnCondition, result.ReturnCondition)
+	assert.Equal(t, conditionNotes, result.ConditionNotes)
+	mockQueries.AssertExpectations(t)
+}
+
+func TestTransactionService_ReturnBookWithCondition_InvalidCondition(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	transactionID := int32(1)
+
+	// Create a valid transaction
+	now := time.Now()
+	transaction := queries.GetTransactionByIDRow{
+		ID:              transactionID,
+		StudentID:       1,
+		BookID:          1,
+		TransactionType: "borrow",
+		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, 1), Valid: true},
+		ReturnedDate:    pgtype.Timestamp{Valid: false},
+	}
+
+	// Setup mock - only need to mock GetTransactionByID since validation will fail
+	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+
+	// Execute with invalid condition
+	_, err := service.ReturnBookWithCondition(ctx, transactionID, "invalid", "")
+
+	// Assert
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid return condition")
+	mockQueries.AssertExpectations(t)
+}
+
+// Phase 6.3: Availability Update Tests
+
+func TestTransactionService_ReturnBook_AvailabilityUpdate_Success(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	transactionID := int32(1)
+
+	// Create a valid transaction
+	now := time.Now()
+	transaction := queries.GetTransactionByIDRow{
+		ID:              transactionID,
+		StudentID:       1,
+		BookID:          1,
+		TransactionType: "borrow",
+		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, 1), Valid: true},
+		ReturnedDate:    pgtype.Timestamp{Valid: false},
+	}
+
+	returnedTransaction := createTestTransaction()
+	returnedTransaction.ReturnedDate = pgtype.Timestamp{Time: now, Valid: true}
+
+	book := createTestBook()
+	book.AvailableCopies = pgtype.Int4{Int32: 2, Valid: true}
+
+	// Setup mocks
+	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+	mockQueries.On("ReturnBook", ctx, mock.AnythingOfType("queries.ReturnBookParams")).Return(returnedTransaction, nil)
+	mockQueries.On("GetBookByID", ctx, int32(1)).Return(book, nil)
+
+	// Verify that availability is increased by 1
+	expectedAvailability := int32(3)
+	mockQueries.On("UpdateBookAvailability", ctx, queries.UpdateBookAvailabilityParams{
+		ID:              int32(1),
+		AvailableCopies: pgtype.Int4{Int32: expectedAvailability, Valid: true},
+	}).Return(nil)
+
+	// Execute
+	result, err := service.ReturnBook(ctx, transactionID)
+
+	// Assert
+	require.NoError(t, err)
+	assert.Equal(t, transactionID, result.ID)
+	assert.NotNil(t, result.ReturnedDate)
+	mockQueries.AssertExpectations(t)
+}
+
+func TestTransactionService_BorrowBook_AvailabilityUpdate_Success(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	studentID := int32(1)
+	bookID := int32(1)
+	librarianID := int32(1)
+
+	// Setup mocks
+	book := createTestBook()
+	book.AvailableCopies = pgtype.Int4{Int32: 3, Valid: true}
+	student := createTestStudent()
+	transaction := createTestTransaction()
+
+	mockQueries.On("GetBookByID", ctx, bookID).Return(book, nil)
+	mockQueries.On("GetStudentByID", ctx, studentID).Return(student, nil)
+	mockQueries.On("ListActiveTransactionsByStudent", ctx, studentID).Return([]queries.ListActiveTransactionsByStudentRow{}, nil)
+	mockQueries.On("CreateTransaction", ctx, mock.AnythingOfType("queries.CreateTransactionParams")).Return(transaction, nil)
+
+	// Verify that availability is decreased by 1
+	expectedAvailability := int32(2)
+	mockQueries.On("UpdateBookAvailability", ctx, queries.UpdateBookAvailabilityParams{
+		ID:              bookID,
+		AvailableCopies: pgtype.Int4{Int32: expectedAvailability, Valid: true},
+	}).Return(nil)
+
+	// Execute
+	result, err := service.BorrowBook(ctx, studentID, bookID, librarianID, "")
+
+	// Assert
+	require.NoError(t, err)
+	assert.Equal(t, transaction.ID, result.ID)
+	assert.Equal(t, "borrow", result.TransactionType)
+	mockQueries.AssertExpectations(t)
+}
+
+func TestTransactionService_ReturnBook_AvailabilityUpdate_BoundaryConditions(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	transactionID := int32(1)
+
+	// Create a valid transaction
+	now := time.Now()
+	transaction := queries.GetTransactionByIDRow{
+		ID:              transactionID,
+		StudentID:       1,
+		BookID:          1,
+		TransactionType: "borrow",
+		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, 1), Valid: true},
+		ReturnedDate:    pgtype.Timestamp{Valid: false},
+	}
+
+	returnedTransaction := createTestTransaction()
+	returnedTransaction.ReturnedDate = pgtype.Timestamp{Time: now, Valid: true}
+
+	// Test with zero available copies (should become 1)
+	book := createTestBook()
+	book.AvailableCopies = pgtype.Int4{Int32: 0, Valid: true}
+
+	// Setup mocks
+	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+	mockQueries.On("ReturnBook", ctx, mock.AnythingOfType("queries.ReturnBookParams")).Return(returnedTransaction, nil)
+	mockQueries.On("GetBookByID", ctx, int32(1)).Return(book, nil)
+
+	// Verify that availability is increased to 1 from 0
+	expectedAvailability := int32(1)
+	mockQueries.On("UpdateBookAvailability", ctx, queries.UpdateBookAvailabilityParams{
+		ID:              int32(1),
+		AvailableCopies: pgtype.Int4{Int32: expectedAvailability, Valid: true},
+	}).Return(nil)
+
+	// Execute
+	result, err := service.ReturnBook(ctx, transactionID)
+
+	// Assert
+	require.NoError(t, err)
+	assert.Equal(t, transactionID, result.ID)
+	assert.NotNil(t, result.ReturnedDate)
+	mockQueries.AssertExpectations(t)
 }
