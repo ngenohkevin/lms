@@ -382,10 +382,10 @@ func TestStudentService_ExportValidation(t *testing.T) {
 // TestStudentService_ExportByYear tests year-specific export functionality
 func TestStudentService_ExportByYear(t *testing.T) {
 	tests := []struct {
-		name       string
-		year       int32
-		format     models.StudentExportFormat
-		setupMocks func(*MockQueries)
+		name        string
+		year        int32
+		format      models.StudentExportFormat
+		setupMocks  func(*MockQueries)
 		expectError bool
 	}{
 		{
@@ -479,10 +479,10 @@ func TestStudentService_ExportByYear(t *testing.T) {
 // TestStudentService_ExportByDepartment tests department-specific export functionality
 func TestStudentService_ExportByDepartment(t *testing.T) {
 	tests := []struct {
-		name       string
-		department string
-		format     models.StudentExportFormat
-		setupMocks func(*MockQueries)
+		name        string
+		department  string
+		format      models.StudentExportFormat
+		setupMocks  func(*MockQueries)
 		expectError bool
 	}{
 		{

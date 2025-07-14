@@ -41,9 +41,9 @@ type TransactionService struct {
 func NewTransactionService(queries TransactionQuerier) *TransactionService {
 	return &TransactionService{
 		queries:         queries,
-		defaultLoanDays: 14,                               // 2 weeks default loan period
-		finePerDay:      decimal.NewFromFloat(0.50),       // $0.50 per day fine
-		maxBooksPerUser: 5,                                // Max 5 books per student
+		defaultLoanDays: 14,                         // 2 weeks default loan period
+		finePerDay:      decimal.NewFromFloat(0.50), // $0.50 per day fine
+		maxBooksPerUser: 5,                          // Max 5 books per student
 	}
 }
 
@@ -57,19 +57,19 @@ type BorrowBookRequest struct {
 
 // TransactionResponse represents a transaction response
 type TransactionResponse struct {
-	ID              int32     `json:"id"`
-	StudentID       int32     `json:"student_id"`
-	BookID          int32     `json:"book_id"`
-	TransactionType string    `json:"transaction_type"`
-	TransactionDate time.Time `json:"transaction_date"`
-	DueDate         time.Time `json:"due_date"`
-	ReturnedDate    *time.Time `json:"returned_date,omitempty"`
-	LibrarianID     *int32    `json:"librarian_id,omitempty"`
+	ID              int32           `json:"id"`
+	StudentID       int32           `json:"student_id"`
+	BookID          int32           `json:"book_id"`
+	TransactionType string          `json:"transaction_type"`
+	TransactionDate time.Time       `json:"transaction_date"`
+	DueDate         time.Time       `json:"due_date"`
+	ReturnedDate    *time.Time      `json:"returned_date,omitempty"`
+	LibrarianID     *int32          `json:"librarian_id,omitempty"`
 	FineAmount      decimal.Decimal `json:"fine_amount"`
-	FinePaid        bool      `json:"fine_paid"`
-	Notes           string    `json:"notes"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	FinePaid        bool            `json:"fine_paid"`
+	Notes           string          `json:"notes"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
 }
 
 // BorrowBook processes a book borrowing request
@@ -281,19 +281,19 @@ func (s *TransactionService) calculateFine(dueDate, returnDate time.Time) decima
 	if returnDate.Before(dueDate) || returnDate.Equal(dueDate) {
 		return decimal.Zero
 	}
-	
+
 	// Calculate calendar days difference for overdue period
 	// Fine calculation: count each day the book is overdue, starting from the day after due date
 	// Truncate to midnight for consistent calculation
 	dueDateMidnight := time.Date(dueDate.Year(), dueDate.Month(), dueDate.Day(), 0, 0, 0, 0, dueDate.Location())
 	returnDateMidnight := time.Date(returnDate.Year(), returnDate.Month(), returnDate.Day(), 0, 0, 0, 0, returnDate.Location())
-	
+
 	// Add 1 day to include the current day in overdue calculation
 	daysDiff := int(returnDateMidnight.Sub(dueDateMidnight).Hours()/24) + 1
 	if daysDiff <= 0 {
 		return decimal.Zero
 	}
-	
+
 	return s.finePerDay.Mul(decimal.NewFromInt(int64(daysDiff)))
 }
 

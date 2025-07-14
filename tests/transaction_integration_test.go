@@ -34,9 +34,9 @@ type TransactionIntegrationTestSuite struct {
 	ctx     context.Context
 
 	// Test data
-	testBook     queries.Book
-	testStudent  queries.Student
-	testUser     queries.User
+	testBook        queries.Book
+	testStudent     queries.Student
+	testUser        queries.User
 	testTransaction queries.Transaction
 }
 
@@ -141,7 +141,7 @@ func (suite *TransactionIntegrationTestSuite) TearDownTest() {
 func (suite *TransactionIntegrationTestSuite) cleanupTestData() {
 	// Clean up transactions
 	_, _ = suite.db.Pool.Exec(suite.ctx, "DELETE FROM transactions WHERE student_id = $1 OR librarian_id = $2", suite.testStudent.ID, suite.testUser.ID)
-	
+
 	// Clean up test records
 	if suite.testBook.ID != 0 {
 		_, _ = suite.db.Pool.Exec(suite.ctx, "DELETE FROM books WHERE id = $1", suite.testBook.ID)
@@ -324,7 +324,7 @@ func (suite *TransactionIntegrationTestSuite) TestReturnBook_WithFine() {
 	} else {
 		actualFine = decimal.NewFromBigInt(returnedTransaction.FineAmount.Int, returnedTransaction.FineAmount.Exp)
 	}
-	
+
 	assert.True(suite.T(), expectedFine.Equal(actualFine))
 }
 
