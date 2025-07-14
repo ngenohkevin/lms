@@ -658,7 +658,7 @@ func TestTransactionService_CalculateDueDate_DifferentYears(t *testing.T) {
 
 		dueDate := service.calculateDueDate(student)
 		expectedDate := time.Now().AddDate(0, 0, tc.expected)
-		
+
 		// Allow for slight time differences during test execution
 		assert.WithinDuration(t, expectedDate, dueDate, time.Second)
 	}
@@ -724,21 +724,21 @@ func TestTransactionService_HasOverdueBooks_WithOverdue(t *testing.T) {
 
 func TestTransactionService_WithBorrowingPeriod(t *testing.T) {
 	service := NewTransactionService(&MockTransactionQueries{})
-	
+
 	service = service.WithBorrowingPeriod(21)
 	assert.Equal(t, 21, service.defaultLoanDays)
 }
 
 func TestTransactionService_WithMaxBooksPerUser(t *testing.T) {
 	service := NewTransactionService(&MockTransactionQueries{})
-	
+
 	service = service.WithMaxBooksPerUser(3)
 	assert.Equal(t, 3, service.maxBooksPerUser)
 }
 
 func TestTransactionService_WithFinePerDay(t *testing.T) {
 	service := NewTransactionService(&MockTransactionQueries{})
-	
+
 	newFine := decimal.NewFromFloat(1.00)
 	service = service.WithFinePerDay(newFine)
 	assert.True(t, newFine.Equal(service.finePerDay))
