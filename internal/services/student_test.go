@@ -1138,7 +1138,7 @@ func TestStudentService_StudentIDAsDefaultPassword(t *testing.T) {
 				assert.NoError(t, err)
 				assert.NotNil(t, student)
 				assert.Equal(t, tt.studentID, student.StudentID)
-				
+
 				// Verify that the auth service was called with the student ID as password
 				mockAuth.AssertCalled(t, "HashPassword", tt.passwordUsed)
 			}
@@ -1152,11 +1152,11 @@ func TestStudentService_StudentIDAsDefaultPassword(t *testing.T) {
 // TestStudentService_QuickAccountCreation tests the quick account creation workflow
 func TestStudentService_QuickAccountCreation(t *testing.T) {
 	tests := []struct {
-		name             string
-		studentData      *models.CreateStudentRequest
-		setupMocks       func(*MockQueries, *MockAuthService)
-		expectError      bool
-		expectedStudentID string
+		name                string
+		studentData         *models.CreateStudentRequest
+		setupMocks          func(*MockQueries, *MockAuthService)
+		expectError         bool
+		expectedStudentID   string
 		expectedPasswordSet bool
 	}{
 		{
@@ -1288,7 +1288,7 @@ func TestStudentService_QuickAccountCreation(t *testing.T) {
 					// Verify password hash is set
 					assert.True(t, student.PasswordHash.Valid)
 					assert.NotEmpty(t, student.PasswordHash.String)
-					
+
 					// Verify that the auth service was called with the student ID as password
 					mockAuth.AssertCalled(t, "HashPassword", tt.expectedStudentID)
 				}
@@ -1303,11 +1303,11 @@ func TestStudentService_QuickAccountCreation(t *testing.T) {
 // TestStudentService_YearOrganization tests year-based organization functionality
 func TestStudentService_YearOrganization(t *testing.T) {
 	tests := []struct {
-		name           string
-		year           int32
-		setupMocks     func(*MockQueries)
-		expectedCount  int64
-		expectError    bool
+		name          string
+		year          int32
+		setupMocks    func(*MockQueries)
+		expectedCount int64
+		expectError   bool
 	}{
 		{
 			name: "get students by year 1",

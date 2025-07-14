@@ -33,13 +33,13 @@ type StudentQuerier interface {
 	CountStudentsByYear(ctx context.Context, yearOfStudy int32) (int64, error)
 	SearchStudents(ctx context.Context, params queries.SearchStudentsParams) ([]queries.Student, error)
 	SearchStudentsIncludingDeleted(ctx context.Context, params queries.SearchStudentsIncludingDeletedParams) ([]queries.Student, error)
-	
+
 	// Status Management
 	UpdateStudentStatus(ctx context.Context, params queries.UpdateStudentStatusParams) (queries.Student, error)
 	GetStudentsByStatus(ctx context.Context, params queries.GetStudentsByStatusParams) ([]queries.Student, error)
 	CountStudentsByStatus(ctx context.Context, isActive pgtype.Bool) (int64, error)
 	BulkUpdateStudentStatus(ctx context.Context, params queries.BulkUpdateStudentStatusParams) error
-	
+
 	// Enhanced Statistics
 	GetStudentCountByYearAndDepartment(ctx context.Context) ([]queries.GetStudentCountByYearAndDepartmentRow, error)
 	GetStudentEnrollmentTrends(ctx context.Context, params queries.GetStudentEnrollmentTrendsParams) ([]queries.GetStudentEnrollmentTrendsRow, error)
@@ -594,12 +594,12 @@ func (s *StudentService) GenerateNextStudentID(ctx context.Context, year int) (s
 
 	// Generate next ID
 	nextSequence := maxSequence + 1
-	
+
 	// Check if we've exceeded the 3-digit limit (001-999)
 	if nextSequence > 999 {
 		return "", fmt.Errorf("maximum number of students for year %d exceeded (999)", year)
 	}
-	
+
 	return models.GenerateStudentID(year, nextSequence), nil
 }
 
@@ -708,14 +708,14 @@ func (s *StudentService) GetYearDistribution(ctx context.Context) (*models.YearD
 	}
 
 	return &models.YearDistributionResponse{
-		TotalStudents:     totalStudents,
-		YearDistribution:  yearDistribution,
-		HighestYear:       highestYear,
-		HighestCount:      highestCount,
-		LowestYear:        lowestYear,
-		LowestCount:       lowestCount,
-		AveragePerYear:    averagePerYear,
-		GeneratedAt:       time.Now(),
+		TotalStudents:    totalStudents,
+		YearDistribution: yearDistribution,
+		HighestYear:      highestYear,
+		HighestCount:     highestCount,
+		LowestYear:       lowestYear,
+		LowestCount:      lowestCount,
+		AveragePerYear:   averagePerYear,
+		GeneratedAt:      time.Now(),
 	}, nil
 }
 
@@ -827,12 +827,12 @@ func (s *StudentService) GetStudentActivity(ctx context.Context, studentID int32
 
 	// Initialize activity data
 	activityData := &models.StudentActivityData{
-		StudentID:      student.StudentID,
-		TotalLogins:    0, // Would come from auth logs in real implementation
+		StudentID:       student.StudentID,
+		TotalLogins:     0, // Would come from auth logs in real implementation
 		BooksCheckedOut: 0,
-		OverdueBooks:   0,
-		FinesOwed:      0.0,
-		ActivityScore:  0.0,
+		OverdueBooks:    0,
+		FinesOwed:       0.0,
+		ActivityScore:   0.0,
 	}
 
 	// Note: In a real implementation, these would be actual database queries.
@@ -989,16 +989,16 @@ func (s *StudentService) GetStudentActivityByYear(ctx context.Context, year int3
 	}
 
 	return map[string]interface{}{
-		"year":                     year,
-		"total_students":           totalStudents,
-		"active_students":          activeStudents,
-		"activity_rate":            activityRate,
-		"total_books_checked_out":  totalBooksCheckedOut,
-		"total_overdue_books":      totalOverdueBooks,
-		"total_fines":              totalFines,
-		"average_activity_score":   averageActivityScore,
+		"year":                      year,
+		"total_students":            totalStudents,
+		"active_students":           activeStudents,
+		"activity_rate":             activityRate,
+		"total_books_checked_out":   totalBooksCheckedOut,
+		"total_overdue_books":       totalOverdueBooks,
+		"total_fines":               totalFines,
+		"average_activity_score":    averageActivityScore,
 		"average_books_per_student": averageBooksPerStudent,
-		"generated_at":             time.Now().Format(time.RFC3339),
+		"generated_at":              time.Now().Format(time.RFC3339),
 	}, nil
 }
 
@@ -1025,14 +1025,14 @@ func (s *StudentService) GetMostActiveStudents(ctx context.Context, limit int) (
 			// In a real implementation, get actual activity data
 			activityData := models.StudentActivityData{
 				StudentID:       student.StudentID,
-				BooksCheckedOut: 3, // Simulated - would come from database
-				OverdueBooks:    0, // Simulated
-				FinesOwed:       0, // Simulated
+				BooksCheckedOut: 3,                                   // Simulated - would come from database
+				OverdueBooks:    0,                                   // Simulated
+				FinesOwed:       0,                                   // Simulated
 				LastLogin:       time.Now().Add(-1 * 24 * time.Hour), // Simulated
 			}
 
 			activityData.ActivityScore = s.calculateActivityScore(&activityData)
-			
+
 			// Only include students with meaningful activity
 			if activityData.ActivityScore > 0 {
 				activeStudents = append(activeStudents, activityData)
@@ -1241,13 +1241,13 @@ func (s *StudentService) GetStudentDemographics(ctx context.Context) (*models.St
 		}
 
 		yearKey := fmt.Sprintf("year_%d", row.YearOfStudy)
-		
+
 		// Department breakdown
 		departmentBreakdown[department] += row.Count
-		
+
 		// Year breakdown
 		yearBreakdown[yearKey] += row.Count
-		
+
 		// Year-Department matrix
 		if yearDepartmentMatrix[yearKey] == nil {
 			yearDepartmentMatrix[yearKey] = make(map[string]int64)
@@ -1280,7 +1280,7 @@ func (s *StudentService) GetEnrollmentTrends(ctx context.Context, startDate, end
 		// Handle the interval type - for monthly truncation, we need to calculate the actual date
 		// Since DATE_TRUNC('month', date) returns an interval, we'll use the start date as base
 		monthDate := startDate.AddDate(0, i, 0) // Simple approximation for month calculation
-		
+
 		enrollmentTrends[i] = models.EnrollmentTrend{
 			Month:       monthDate,
 			Year:        trend.YearOfStudy,
@@ -1343,7 +1343,7 @@ func (s *StudentService) ExportStudents(ctx context.Context, req *models.Student
 
 	// Generate filename
 	filename := s.GenerateExportFilename(req.Format, req.YearOfStudy, req.Department)
-	
+
 	// Create export directory if it doesn't exist
 	exportDir := "./exports"
 	if err := os.MkdirAll(exportDir, 0755); err != nil {
@@ -1491,9 +1491,9 @@ func (s *StudentService) exportToJSON(students []models.StudentResponse, filePat
 
 	// Create wrapper with metadata
 	wrapper := map[string]interface{}{
-		"exported_at":    time.Now().Format(time.RFC3339),
-		"record_count":   len(students),
-		"students":       exportData,
+		"exported_at":  time.Now().Format(time.RFC3339),
+		"record_count": len(students),
+		"students":     exportData,
 	}
 
 	file, err := os.Create(filePath)
@@ -1620,7 +1620,7 @@ func (s *StudentService) ExportStudentsByDepartment(ctx context.Context, departm
 // CleanupExpiredExports removes old export files (background cleanup)
 func (s *StudentService) CleanupExpiredExports() error {
 	exportDir := "./exports"
-	
+
 	// Check if export directory exists
 	if _, err := os.Stat(exportDir); os.IsNotExist(err) {
 		return nil // No directory to clean
