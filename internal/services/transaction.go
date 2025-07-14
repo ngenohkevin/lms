@@ -47,6 +47,24 @@ func NewTransactionService(queries TransactionQuerier) *TransactionService {
 	}
 }
 
+// WithBorrowingPeriod allows customizing the borrowing period
+func (s *TransactionService) WithBorrowingPeriod(days int) *TransactionService {
+	s.defaultLoanDays = days
+	return s
+}
+
+// WithMaxBooksPerUser allows customizing the maximum books per user
+func (s *TransactionService) WithMaxBooksPerUser(maxBooks int) *TransactionService {
+	s.maxBooksPerUser = maxBooks
+	return s
+}
+
+// WithFinePerDay allows customizing the fine per day
+func (s *TransactionService) WithFinePerDay(fine decimal.Decimal) *TransactionService {
+	s.finePerDay = fine
+	return s
+}
+
 // BorrowBookRequest represents a book borrowing request
 type BorrowBookRequest struct {
 	StudentID   int32  `json:"student_id" validate:"required"`
@@ -92,35 +110,13 @@ func (s *TransactionService) BorrowBook(ctx context.Context, studentID, bookID, 
 		return nil, fmt.Errorf("failed to get student: %w", err)
 	}
 
-	// Check if student is active
-	if !student.IsActive.Bool {
-		return nil, fmt.Errorf("student account is not active")
+	// Enhanced validation with comprehensive business rules
+	if err := s.validateBorrowingEligibility(ctx, student, book, studentID, bookID); err != nil {
+		return nil, err
 	}
 
-	// Check if book is available
-	if book.AvailableCopies.Int32 <= 0 {
-		return nil, fmt.Errorf("book not available")
-	}
-
-	// Check student's current borrowing count
-	activeTransactions, err := s.queries.ListActiveTransactionsByStudent(ctx, studentID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check active transactions: %w", err)
-	}
-
-	if len(activeTransactions) >= s.maxBooksPerUser {
-		return nil, fmt.Errorf("student has reached the maximum number of books (%d)", s.maxBooksPerUser)
-	}
-
-	// Check if student already has this book
-	for _, tx := range activeTransactions {
-		if tx.BookID == bookID {
-			return nil, fmt.Errorf("student already has this book borrowed")
-		}
-	}
-
-	// Calculate due date
-	dueDate := time.Now().AddDate(0, 0, s.defaultLoanDays)
+	// Calculate due date based on student year and borrowing rules
+	dueDate := s.calculateDueDate(student)
 
 	// Create transaction
 	transaction, err := s.queries.CreateTransaction(ctx, queries.CreateTransactionParams{
@@ -295,6 +291,89 @@ func (s *TransactionService) calculateFine(dueDate, returnDate time.Time) decima
 	}
 
 	return s.finePerDay.Mul(decimal.NewFromInt(int64(daysDiff)))
+}
+
+// validateBorrowingEligibility performs comprehensive validation for borrowing eligibility
+func (s *TransactionService) validateBorrowingEligibility(ctx context.Context, student queries.Student, book queries.Book, studentID, bookID int32) error {
+	// Check if student is active
+	if !student.IsActive.Bool {
+		return fmt.Errorf("student account is not active")
+	}
+
+	// Check if book is available
+	if book.AvailableCopies.Int32 <= 0 {
+		return fmt.Errorf("book not available")
+	}
+
+	// Check if book is active
+	if !book.IsActive.Bool {
+		return fmt.Errorf("book is not active")
+	}
+
+	// Check student's current borrowing count
+	activeTransactions, err := s.queries.ListActiveTransactionsByStudent(ctx, studentID)
+	if err != nil {
+		return fmt.Errorf("failed to check active transactions: %w", err)
+	}
+
+	if len(activeTransactions) >= s.maxBooksPerUser {
+		return fmt.Errorf("student has reached the maximum number of books (%d)", s.maxBooksPerUser)
+	}
+
+	// Check if student already has this book
+	for _, tx := range activeTransactions {
+		if tx.BookID == bookID {
+			return fmt.Errorf("student already has this book borrowed")
+		}
+	}
+
+	// Check for overdue books - prevent borrowing if student has overdue books
+	hasOverdueBooks, err := s.hasOverdueBooks(ctx, studentID)
+	if err != nil {
+		return fmt.Errorf("failed to check for overdue books: %w", err)
+	}
+
+	if hasOverdueBooks {
+		return fmt.Errorf("student has overdue books and cannot borrow until they are returned")
+	}
+
+	return nil
+}
+
+// hasOverdueBooks checks if a student has any overdue books
+func (s *TransactionService) hasOverdueBooks(ctx context.Context, studentID int32) (bool, error) {
+	activeTransactions, err := s.queries.ListActiveTransactionsByStudent(ctx, studentID)
+	if err != nil {
+		return false, err
+	}
+
+	now := time.Now()
+	for _, tx := range activeTransactions {
+		if tx.DueDate.Valid && now.After(tx.DueDate.Time) {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// validateBorrowingPeriod validates the borrowing period based on student year
+func (s *TransactionService) validateBorrowingPeriod(student queries.Student) int {
+	// Different loan periods based on student year
+	switch student.YearOfStudy {
+	case 1, 2:
+		return 14 // 2 weeks for junior students
+	case 3, 4:
+		return 21 // 3 weeks for senior students
+	default:
+		return 28 // 4 weeks for graduate students
+	}
+}
+
+// calculateDueDate calculates the due date based on student type and borrowing rules
+func (s *TransactionService) calculateDueDate(student queries.Student) time.Time {
+	loanPeriod := s.validateBorrowingPeriod(student)
+	return time.Now().AddDate(0, 0, loanPeriod)
 }
 
 // convertToTransactionResponse converts a queries.Transaction to TransactionResponse

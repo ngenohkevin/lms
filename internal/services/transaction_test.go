@@ -543,3 +543,203 @@ func TestTransactionService_GetTransactionHistory_Success(t *testing.T) {
 	assert.Equal(t, studentID, result[0].StudentID)
 	mockQueries.AssertExpectations(t)
 }
+
+// Tests for Phase 6.2: Book Borrowing Logic
+
+func TestTransactionService_BorrowBook_BookInactive(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	studentID := int32(1)
+	bookID := int32(1)
+	librarianID := int32(1)
+
+	book := createTestBook()
+	book.IsActive = pgtype.Bool{Bool: false, Valid: true}
+	student := createTestStudent()
+
+	// Setup mocks
+	mockQueries.On("GetBookByID", ctx, bookID).Return(book, nil)
+	mockQueries.On("GetStudentByID", ctx, studentID).Return(student, nil)
+
+	// Execute
+	_, err := service.BorrowBook(ctx, studentID, bookID, librarianID, "")
+
+	// Assert
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "book is not active")
+	mockQueries.AssertExpectations(t)
+}
+
+func TestTransactionService_BorrowBook_StudentHasOverdueBooks(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	studentID := int32(1)
+	bookID := int32(1)
+	librarianID := int32(1)
+
+	book := createTestBook()
+	student := createTestStudent()
+
+	// Create overdue transaction
+	overdueTransaction := queries.ListActiveTransactionsByStudentRow{
+		ID:              1,
+		StudentID:       studentID,
+		BookID:          2,
+		TransactionType: "borrow",
+		DueDate:         pgtype.Timestamp{Time: time.Now().AddDate(0, 0, -5), Valid: true},
+	}
+
+	// Setup mocks
+	mockQueries.On("GetBookByID", ctx, bookID).Return(book, nil)
+	mockQueries.On("GetStudentByID", ctx, studentID).Return(student, nil)
+	mockQueries.On("ListActiveTransactionsByStudent", ctx, studentID).Return([]queries.ListActiveTransactionsByStudentRow{overdueTransaction}, nil)
+
+	// Execute
+	_, err := service.BorrowBook(ctx, studentID, bookID, librarianID, "")
+
+	// Assert
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "student has overdue books")
+	mockQueries.AssertExpectations(t)
+}
+
+func TestTransactionService_ValidateBorrowingPeriod_JuniorStudent(t *testing.T) {
+	service := NewTransactionService(&MockTransactionQueries{})
+
+	student := createTestStudent()
+	student.YearOfStudy = 1
+
+	period := service.validateBorrowingPeriod(student)
+	assert.Equal(t, 14, period)
+}
+
+func TestTransactionService_ValidateBorrowingPeriod_SeniorStudent(t *testing.T) {
+	service := NewTransactionService(&MockTransactionQueries{})
+
+	student := createTestStudent()
+	student.YearOfStudy = 3
+
+	period := service.validateBorrowingPeriod(student)
+	assert.Equal(t, 21, period)
+}
+
+func TestTransactionService_ValidateBorrowingPeriod_GraduateStudent(t *testing.T) {
+	service := NewTransactionService(&MockTransactionQueries{})
+
+	student := createTestStudent()
+	student.YearOfStudy = 5
+
+	period := service.validateBorrowingPeriod(student)
+	assert.Equal(t, 28, period)
+}
+
+func TestTransactionService_CalculateDueDate_DifferentYears(t *testing.T) {
+	service := NewTransactionService(&MockTransactionQueries{})
+
+	testCases := []struct {
+		year     int32
+		expected int
+	}{
+		{1, 14},
+		{2, 14},
+		{3, 21},
+		{4, 21},
+		{5, 28},
+		{6, 28},
+	}
+
+	for _, tc := range testCases {
+		student := createTestStudent()
+		student.YearOfStudy = tc.year
+
+		dueDate := service.calculateDueDate(student)
+		expectedDate := time.Now().AddDate(0, 0, tc.expected)
+		
+		// Allow for slight time differences during test execution
+		assert.WithinDuration(t, expectedDate, dueDate, time.Second)
+	}
+}
+
+func TestTransactionService_HasOverdueBooks_NoOverdue(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	studentID := int32(1)
+
+	activeTransactions := []queries.ListActiveTransactionsByStudentRow{
+		{
+			ID:              1,
+			StudentID:       studentID,
+			BookID:          1,
+			TransactionType: "borrow",
+			DueDate:         pgtype.Timestamp{Time: time.Now().AddDate(0, 0, 5), Valid: true},
+		},
+	}
+
+	// Setup mock
+	mockQueries.On("ListActiveTransactionsByStudent", ctx, studentID).Return(activeTransactions, nil)
+
+	// Execute
+	hasOverdue, err := service.hasOverdueBooks(ctx, studentID)
+
+	// Assert
+	require.NoError(t, err)
+	assert.False(t, hasOverdue)
+	mockQueries.AssertExpectations(t)
+}
+
+func TestTransactionService_HasOverdueBooks_WithOverdue(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	studentID := int32(1)
+
+	activeTransactions := []queries.ListActiveTransactionsByStudentRow{
+		{
+			ID:              1,
+			StudentID:       studentID,
+			BookID:          1,
+			TransactionType: "borrow",
+			DueDate:         pgtype.Timestamp{Time: time.Now().AddDate(0, 0, -5), Valid: true},
+		},
+	}
+
+	// Setup mock
+	mockQueries.On("ListActiveTransactionsByStudent", ctx, studentID).Return(activeTransactions, nil)
+
+	// Execute
+	hasOverdue, err := service.hasOverdueBooks(ctx, studentID)
+
+	// Assert
+	require.NoError(t, err)
+	assert.True(t, hasOverdue)
+	mockQueries.AssertExpectations(t)
+}
+
+func TestTransactionService_WithBorrowingPeriod(t *testing.T) {
+	service := NewTransactionService(&MockTransactionQueries{})
+	
+	service = service.WithBorrowingPeriod(21)
+	assert.Equal(t, 21, service.defaultLoanDays)
+}
+
+func TestTransactionService_WithMaxBooksPerUser(t *testing.T) {
+	service := NewTransactionService(&MockTransactionQueries{})
+	
+	service = service.WithMaxBooksPerUser(3)
+	assert.Equal(t, 3, service.maxBooksPerUser)
+}
+
+func TestTransactionService_WithFinePerDay(t *testing.T) {
+	service := NewTransactionService(&MockTransactionQueries{})
+	
+	newFine := decimal.NewFromFloat(1.00)
+	service = service.WithFinePerDay(newFine)
+	assert.True(t, newFine.Equal(service.finePerDay))
+}
