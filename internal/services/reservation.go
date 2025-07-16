@@ -25,6 +25,7 @@ type ReservationQuerier interface {
 	CountActiveReservationsByBook(ctx context.Context, bookID int32) (int64, error)
 	GetNextReservationForBook(ctx context.Context, bookID int32) (queries.GetNextReservationForBookRow, error)
 	CancelReservation(ctx context.Context, id int32) (queries.Reservation, error)
+	GetStudentReservationForBook(ctx context.Context, arg queries.GetStudentReservationForBookParams) (queries.GetStudentReservationForBookRow, error)
 	GetBookByID(ctx context.Context, id int32) (queries.Book, error)
 	GetStudentByID(ctx context.Context, id int32) (queries.Student, error)
 }
@@ -109,7 +110,7 @@ func (s *ReservationService) ReserveBook(ctx context.Context, studentID, bookID 
 	}
 
 	// Calculate expiration date
-	expiresAt := time.Now().AddDate(0, 0, s.defaultReservationDays)
+	expiresAt := time.Now().UTC().AddDate(0, 0, s.defaultReservationDays)
 
 	// Create reservation
 	reservation, err := s.queries.CreateReservation(ctx, queries.CreateReservationParams{
@@ -140,10 +141,14 @@ func (s *ReservationService) GetReservationByID(ctx context.Context, id int32) (
 		return nil, fmt.Errorf("failed to get reservation: %w", err)
 	}
 
-	// Get queue position
-	queuePosition, err := s.getQueuePosition(ctx, reservationRow.BookID, reservationRow.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to calculate queue position: %w", err)
+	// Get queue position (only for active reservations)
+	queuePosition := 0
+	if reservationRow.Status.String == "active" {
+		var err error
+		queuePosition, err = s.getQueuePosition(ctx, reservationRow.BookID, reservationRow.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to calculate queue position: %w", err)
+		}
 	}
 
 	response := s.convertToExtendedReservationResponse(reservationRow, queuePosition)
@@ -165,7 +170,7 @@ func (s *ReservationService) CancelReservation(ctx context.Context, id int32) (*
 
 // FulfillReservation fulfills a reservation when a book becomes available
 func (s *ReservationService) FulfillReservation(ctx context.Context, reservationID int32) (*ReservationResponse, error) {
-	now := time.Now()
+	now := time.Now().UTC()
 	reservation, err := s.queries.UpdateReservationStatus(ctx, queries.UpdateReservationStatusParams{
 		ID:          reservationID,
 		Status:      pgtype.Text{String: "fulfilled", Valid: true},
@@ -274,6 +279,41 @@ func (s *ReservationService) GetAllReservations(ctx context.Context, limit, offs
 	return responses, nil
 }
 
+// HasStudentFulfilledReservation checks if a student has a fulfilled reservation for a book
+func (s *ReservationService) HasStudentFulfilledReservation(ctx context.Context, studentID, bookID int32) (*ReservationResponse, error) {
+	reservationRow, err := s.queries.GetStudentReservationForBook(ctx, queries.GetStudentReservationForBookParams{
+		StudentID: studentID,
+		BookID:    bookID,
+		Status:    pgtype.Text{String: "fulfilled", Valid: true},
+	})
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // No fulfilled reservation found
+		}
+		return nil, fmt.Errorf("failed to get student reservation: %w", err)
+	}
+
+	// Convert to response
+	response := ReservationResponse{
+		ID:            reservationRow.ID,
+		StudentID:     reservationRow.StudentID,
+		BookID:        reservationRow.BookID,
+		ReservedAt:    reservationRow.ReservedAt.Time,
+		ExpiresAt:     reservationRow.ExpiresAt.Time,
+		Status:        reservationRow.Status.String,
+		CreatedAt:     reservationRow.CreatedAt.Time,
+		UpdatedAt:     reservationRow.UpdatedAt.Time,
+		StudentName:   reservationRow.FirstName + " " + reservationRow.LastName,
+		StudentIDCode: reservationRow.StudentCode,
+	}
+
+	if reservationRow.FulfilledAt.Valid {
+		response.FulfilledAt = &reservationRow.FulfilledAt.Time
+	}
+
+	return &response, nil
+}
+
 // validateReservationEligibility performs comprehensive validation for reservation eligibility
 func (s *ReservationService) validateReservationEligibility(ctx context.Context, student queries.Student, book queries.Book, studentID, bookID int32) error {
 	// Check if student is active
@@ -369,10 +409,10 @@ func (s *ReservationService) convertToExtendedReservationResponse(reservation qu
 		CreatedAt:     reservation.CreatedAt.Time,
 		UpdatedAt:     reservation.UpdatedAt.Time,
 		StudentName:   reservation.FirstName + " " + reservation.LastName,
-		StudentIDCode: reservation.StudentID_2,
+		StudentIDCode: reservation.StudentCode,
 		BookTitle:     reservation.Title,
 		BookAuthor:    reservation.Author,
-		BookIDCode:    reservation.BookID_2,
+		BookIDCode:    reservation.BookCode,
 		QueuePosition: queuePosition,
 	}
 
@@ -396,7 +436,7 @@ func (s *ReservationService) convertToStudentReservationResponse(reservation que
 		UpdatedAt:  reservation.UpdatedAt.Time,
 		BookTitle:  reservation.Title,
 		BookAuthor: reservation.Author,
-		BookIDCode: reservation.BookID_2,
+		BookIDCode: reservation.BookCode,
 	}
 
 	if reservation.FulfilledAt.Valid {
@@ -418,7 +458,7 @@ func (s *ReservationService) convertToBookReservationResponse(reservation querie
 		CreatedAt:     reservation.CreatedAt.Time,
 		UpdatedAt:     reservation.UpdatedAt.Time,
 		StudentName:   reservation.FirstName + " " + reservation.LastName,
-		StudentIDCode: reservation.StudentID_2,
+		StudentIDCode: reservation.StudentCode,
 	}
 
 	if reservation.FulfilledAt.Valid {
@@ -440,7 +480,7 @@ func (s *ReservationService) convertToNextReservationResponse(reservation querie
 		CreatedAt:     reservation.CreatedAt.Time,
 		UpdatedAt:     reservation.UpdatedAt.Time,
 		StudentName:   reservation.FirstName + " " + reservation.LastName,
-		StudentIDCode: reservation.StudentID_2,
+		StudentIDCode: reservation.StudentCode,
 	}
 
 	if reservation.FulfilledAt.Valid {
@@ -462,10 +502,10 @@ func (s *ReservationService) convertToListReservationResponse(reservation querie
 		CreatedAt:     reservation.CreatedAt.Time,
 		UpdatedAt:     reservation.UpdatedAt.Time,
 		StudentName:   reservation.FirstName + " " + reservation.LastName,
-		StudentIDCode: reservation.StudentID_2,
+		StudentIDCode: reservation.StudentCode,
 		BookTitle:     reservation.Title,
 		BookAuthor:    reservation.Author,
-		BookIDCode:    reservation.BookID_2,
+		BookIDCode:    reservation.BookCode,
 	}
 
 	if reservation.FulfilledAt.Valid {

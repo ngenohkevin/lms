@@ -81,7 +81,8 @@ func main() {
 	userService := services.NewUserService(db.Pool, logger)
 	bookService := services.NewBookService(db.Queries)
 	studentService := services.NewStudentService(db.Queries, authService)
-	transactionService := services.NewTransactionService(db.Queries)
+	reservationService := services.NewReservationService(db.Queries)
+	enhancedTransactionService := services.NewEnhancedTransactionService(db.Queries, reservationService)
 	importExportService := services.NewImportExportService(bookService, "./uploads")
 
 	// Initialize Gin router
@@ -105,7 +106,8 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authService, userService)
 	bookHandler := handlers.NewBookHandler(bookService)
 	studentHandler := handlers.NewStudentHandler(studentService)
-	transactionHandler := handlers.NewTransactionHandler(transactionService)
+	reservationHandler := handlers.NewReservationHandler(reservationService)
+	transactionHandler := handlers.NewTransactionHandler(enhancedTransactionService)
 	uploadHandler := handlers.NewUploadHandler(bookService)
 	importExportHandler := handlers.NewImportExportHandler(importExportService)
 
@@ -197,6 +199,28 @@ func main() {
 			// Phase 5.6: Enhanced Analytics
 			students.GET("/analytics/demographics", studentHandler.GetStudentDemographics)
 			students.GET("/analytics/trends", studentHandler.GetEnrollmentTrends)
+		}
+
+		// Reservation management routes
+		reservations := protected.Group("/reservations")
+		{
+			// Student routes - students can manage their own reservations
+			reservations.POST("", reservationHandler.ReserveBook)
+			reservations.GET("/my-reservations", reservationHandler.GetStudentReservations)
+			reservations.POST("/:id/cancel", reservationHandler.CancelReservation)
+
+			// Librarian routes - librarians can manage all reservations
+			librarianReservations := reservations.Group("")
+			librarianReservations.Use(authMiddleware.RequireLibrarian())
+			{
+				librarianReservations.GET("", reservationHandler.GetAllReservations)
+				librarianReservations.GET("/:id", reservationHandler.GetReservation)
+				librarianReservations.POST("/:id/fulfill", reservationHandler.FulfillReservation)
+				librarianReservations.GET("/student/:studentId", reservationHandler.GetStudentReservations)
+				librarianReservations.GET("/book/:bookId", reservationHandler.GetBookReservations)
+				librarianReservations.GET("/book/:bookId/next", reservationHandler.GetNextReservation)
+				librarianReservations.POST("/expire", reservationHandler.ExpireReservations)
+			}
 		}
 
 		// Transaction management routes (librarian access required for most operations)

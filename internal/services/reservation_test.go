@@ -74,6 +74,11 @@ func (m *MockReservationQuerier) GetNextReservationForBook(ctx context.Context, 
 	return args.Get(0).(queries.GetNextReservationForBookRow), args.Error(1)
 }
 
+func (m *MockReservationQuerier) GetStudentReservationForBook(ctx context.Context, arg queries.GetStudentReservationForBookParams) (queries.GetStudentReservationForBookRow, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(queries.GetStudentReservationForBookRow), args.Error(1)
+}
+
 func (m *MockReservationQuerier) CancelReservation(ctx context.Context, id int32) (queries.Reservation, error) {
 	args := m.Called(ctx, id)
 	return args.Get(0).(queries.Reservation), args.Error(1)
@@ -396,10 +401,10 @@ func TestReservationService_GetReservationByID_Success(t *testing.T) {
 		UpdatedAt:     pgtype.Timestamp{Time: time.Now(), Valid: true},
 		FirstName:     "John",
 		LastName:      "Doe",
-		StudentID_2:   "STU001",
+		StudentCode:   "STU001",
 		Title:         "Test Book",
 		Author:        "Test Author",
-		BookID_2:      "BK001",
+		BookCode:      "BK001",
 	}
 
 	bookReservations := []queries.ListReservationsByBookRow{
@@ -541,7 +546,7 @@ func TestReservationService_GetNextReservationForBook_Success(t *testing.T) {
 		UpdatedAt:     pgtype.Timestamp{Time: time.Now(), Valid: true},
 		FirstName:     "John",
 		LastName:      "Doe",
-		StudentID_2:   "STU001",
+		StudentCode:   "STU001",
 	}
 
 	mockQuerier.On("GetNextReservationForBook", ctx, bookID).Return(reservationRow, nil)
@@ -644,7 +649,7 @@ func TestReservationService_GetStudentReservations_Success(t *testing.T) {
 			UpdatedAt:  pgtype.Timestamp{Time: time.Now(), Valid: true},
 			Title:      "Test Book",
 			Author:     "Test Author",
-			BookID_2:   "BK001",
+			BookCode:   "BK001",
 		},
 	}
 
@@ -678,7 +683,7 @@ func TestReservationService_GetBookReservations_Success(t *testing.T) {
 			UpdatedAt:     pgtype.Timestamp{Time: time.Now(), Valid: true},
 			FirstName:     "John",
 			LastName:      "Doe",
-			StudentID_2:   "STU001",
+			StudentCode:   "STU001",
 		},
 		{
 			ID:            2,
@@ -691,7 +696,7 @@ func TestReservationService_GetBookReservations_Success(t *testing.T) {
 			UpdatedAt:     pgtype.Timestamp{Time: time.Now(), Valid: true},
 			FirstName:     "Jane",
 			LastName:      "Smith",
-			StudentID_2:   "STU002",
+			StudentCode:   "STU002",
 		},
 	}
 
@@ -728,10 +733,10 @@ func TestReservationService_GetAllReservations_Success(t *testing.T) {
 			UpdatedAt:     pgtype.Timestamp{Time: time.Now(), Valid: true},
 			FirstName:     "John",
 			LastName:      "Doe",
-			StudentID_2:   "STU001",
+			StudentCode:   "STU001",
 			Title:         "Test Book",
 			Author:        "Test Author",
-			BookID_2:      "BK001",
+			BookCode:      "BK001",
 		},
 	}
 

@@ -48,6 +48,7 @@ type Querier interface {
 	GetStudentByStudentID(ctx context.Context, studentID string) (Student, error)
 	GetStudentCountByYearAndDepartment(ctx context.Context) ([]GetStudentCountByYearAndDepartmentRow, error)
 	GetStudentEnrollmentTrends(ctx context.Context, arg GetStudentEnrollmentTrendsParams) ([]GetStudentEnrollmentTrendsRow, error)
+	GetStudentReservationForBook(ctx context.Context, arg GetStudentReservationForBookParams) (GetStudentReservationForBookRow, error)
 	GetStudentsByStatus(ctx context.Context, arg GetStudentsByStatusParams) ([]Student, error)
 	GetTransactionByID(ctx context.Context, id int32) (GetTransactionByIDRow, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)

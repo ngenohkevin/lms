@@ -10,6 +10,7 @@ import (
 type ReservationServiceInterface interface {
 	GetNextReservationForBook(ctx context.Context, bookID int32) (*ReservationResponse, error)
 	FulfillReservation(ctx context.Context, reservationID int32) (*ReservationResponse, error)
+	HasStudentFulfilledReservation(ctx context.Context, studentID, bookID int32) (*ReservationResponse, error)
 }
 
 // EnhancedTransactionService extends the basic transaction service with reservation integration
@@ -71,7 +72,18 @@ func (s *EnhancedTransactionService) handleReservationFulfillment(ctx context.Co
 
 // BorrowBookWithReservationCheck processes a book borrowing request with reservation priority check
 func (s *EnhancedTransactionService) BorrowBookWithReservationCheck(ctx context.Context, studentID, bookID, librarianID int32, notes string) (*TransactionResponse, error) {
-	// First check if there are any active reservations for this book
+	// First check if the student has a fulfilled reservation for this book
+	fulfilledReservation, err := s.reservationService.HasStudentFulfilledReservation(ctx, studentID, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check fulfilled reservation: %w", err)
+	}
+
+	// If student has a fulfilled reservation, they can borrow directly
+	if fulfilledReservation != nil {
+		return s.TransactionService.BorrowBook(ctx, studentID, bookID, librarianID, notes)
+	}
+
+	// Check if there are any active reservations for this book
 	nextReservation, err := s.reservationService.GetNextReservationForBook(ctx, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check reservations: %w", err)
@@ -172,6 +184,20 @@ func (s *EnhancedTransactionService) CanStudentBorrowBook(ctx context.Context, s
 	// Check basic validation
 	if err := s.validateBorrowingEligibility(ctx, student, book, studentID, bookID); err != nil {
 		eligibility.Reasons = append(eligibility.Reasons, err.Error())
+		return eligibility, nil
+	}
+
+	// First check if the student has a fulfilled reservation for this book
+	fulfilledReservation, err := s.reservationService.HasStudentFulfilledReservation(ctx, studentID, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check fulfilled reservation: %w", err)
+	}
+
+	// If student has a fulfilled reservation, they can borrow directly
+	if fulfilledReservation != nil {
+		eligibility.HasReservationForStudent = true
+		eligibility.ReservationID = &fulfilledReservation.ID
+		eligibility.CanBorrow = true
 		return eligibility, nil
 	}
 
