@@ -199,6 +199,9 @@ func main() {
 			// Phase 5.6: Enhanced Analytics
 			students.GET("/analytics/demographics", studentHandler.GetStudentDemographics)
 			students.GET("/analytics/trends", studentHandler.GetEnrollmentTrends)
+
+			// Phase 6.7: Renewal statistics for students (accessible by librarians)
+			students.GET("/:student_id/renewal-statistics", transactionHandler.GetRenewalStatistics)
 		}
 
 		// Reservation management routes
@@ -235,6 +238,9 @@ func main() {
 				librarianTransactions.POST("/:id/renew", transactionHandler.RenewBook)
 				librarianTransactions.GET("/overdue", transactionHandler.GetOverdueTransactions)
 				librarianTransactions.POST("/:id/pay-fine", transactionHandler.PayFine)
+				// Phase 6.7: Enhanced Renewal System endpoints
+				librarianTransactions.GET("/:id/can-renew", transactionHandler.CanBookBeRenewed)
+				librarianTransactions.GET("/renewal-history", transactionHandler.GetRenewalHistory)
 			}
 
 			// Student can view their own transaction history
@@ -247,6 +253,7 @@ func main() {
 			profile.GET("", studentHandler.GetStudentProfile)
 			profile.PUT("", studentHandler.UpdateStudentProfile)
 		}
+
 	}
 
 	// Static file serving for uploaded images

@@ -28,6 +28,11 @@ type TransactionQuerier interface {
 	GetStudentByID(ctx context.Context, id int32) (queries.Student, error)
 	UpdateBookAvailability(ctx context.Context, arg queries.UpdateBookAvailabilityParams) error
 	UpdateBookCondition(ctx context.Context, arg queries.UpdateBookConditionParams) error
+	// Renewal-related queries
+	CountRenewalsByStudentAndBook(ctx context.Context, arg queries.CountRenewalsByStudentAndBookParams) (int64, error)
+	HasActiveReservationsByOtherStudents(ctx context.Context, arg queries.HasActiveReservationsByOtherStudentsParams) (bool, error)
+	ListRenewalsByStudentAndBook(ctx context.Context, arg queries.ListRenewalsByStudentAndBookParams) ([]queries.ListRenewalsByStudentAndBookRow, error)
+	GetRenewalStatisticsByStudent(ctx context.Context, studentID int32) (queries.GetRenewalStatisticsByStudentRow, error)
 }
 
 // TransactionService handles all business logic related to book transactions
@@ -36,6 +41,7 @@ type TransactionService struct {
 	defaultLoanDays int
 	finePerDay      decimal.Decimal
 	maxBooksPerUser int
+	maxRenewals     int // Maximum number of renewals per book per student
 }
 
 // NewTransactionService creates a new transaction service with default settings
@@ -45,6 +51,7 @@ func NewTransactionService(queries TransactionQuerier) *TransactionService {
 		defaultLoanDays: 14,                         // 2 weeks default loan period
 		finePerDay:      decimal.NewFromFloat(0.50), // $0.50 per day fine
 		maxBooksPerUser: 5,                          // Max 5 books per student
+		maxRenewals:     2,                          // Max 2 renewals per book per student
 	}
 }
 
@@ -63,6 +70,12 @@ func (s *TransactionService) WithMaxBooksPerUser(maxBooks int) *TransactionServi
 // WithFinePerDay allows customizing the fine per day
 func (s *TransactionService) WithFinePerDay(fine decimal.Decimal) *TransactionService {
 	s.finePerDay = fine
+	return s
+}
+
+// WithMaxRenewals allows customizing the maximum renewals per book per student
+func (s *TransactionService) WithMaxRenewals(maxRenewals int) *TransactionService {
+	s.maxRenewals = maxRenewals
 	return s
 }
 
@@ -228,7 +241,7 @@ func (s *TransactionService) ReturnBookWithCondition(ctx context.Context, transa
 	return s.convertToTransactionResponse(transaction), nil
 }
 
-// RenewBook renews a borrowed book
+// RenewBook renews a borrowed book with comprehensive validation
 func (s *TransactionService) RenewBook(ctx context.Context, transactionID, librarianID int32) (*TransactionResponse, error) {
 	// Get original transaction
 	transactionRow, err := s.queries.GetTransactionByID(ctx, transactionID)
@@ -239,18 +252,18 @@ func (s *TransactionService) RenewBook(ctx context.Context, transactionID, libra
 		return nil, fmt.Errorf("failed to get transaction: %w", err)
 	}
 
-	// Check if already returned
-	if transactionRow.ReturnedDate.Valid {
-		return nil, fmt.Errorf("cannot renew returned book")
+	// Comprehensive renewal validation
+	if err := s.validateRenewalEligibility(ctx, transactionRow); err != nil {
+		return nil, err
 	}
 
-	// Check if book is overdue
-	if transactionRow.DueDate.Valid && time.Now().After(transactionRow.DueDate.Time) {
-		return nil, fmt.Errorf("cannot renew overdue book")
+	// Calculate new due date based on student year
+	student, err := s.queries.GetStudentByID(ctx, transactionRow.StudentID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get student: %w", err)
 	}
 
-	// Calculate new due date
-	newDueDate := time.Now().AddDate(0, 0, s.defaultLoanDays)
+	newDueDate := s.calculateDueDate(student)
 
 	// Create renewal transaction
 	transaction, err := s.queries.CreateTransaction(ctx, queries.CreateTransactionParams{
@@ -516,4 +529,126 @@ func (s *TransactionService) convertToTransactionResponse(tx queries.Transaction
 	}
 
 	return response
+}
+
+// Phase 6.7: Enhanced Renewal System Functions
+
+// validateRenewalEligibility performs comprehensive validation for renewal eligibility
+func (s *TransactionService) validateRenewalEligibility(ctx context.Context, tx queries.GetTransactionByIDRow) error {
+	// Check if already returned
+	if tx.ReturnedDate.Valid {
+		return fmt.Errorf("cannot renew returned book")
+	}
+
+	// Check if book is overdue
+	if tx.DueDate.Valid && time.Now().After(tx.DueDate.Time) {
+		return fmt.Errorf("cannot renew overdue book")
+	}
+
+	// Check maximum renewals limit
+	renewalCount, err := s.queries.CountRenewalsByStudentAndBook(ctx, queries.CountRenewalsByStudentAndBookParams{
+		StudentID: tx.StudentID,
+		BookID:    tx.BookID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to check renewal count: %w", err)
+	}
+
+	if renewalCount >= int64(s.maxRenewals) {
+		return fmt.Errorf("maximum number of renewals (%d) reached for this book", s.maxRenewals)
+	}
+
+	// Check if book is reserved by another student
+	hasReservations, err := s.queries.HasActiveReservationsByOtherStudents(ctx, queries.HasActiveReservationsByOtherStudentsParams{
+		BookID:    tx.BookID,
+		StudentID: tx.StudentID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to check reservations: %w", err)
+	}
+
+	if hasReservations {
+		return fmt.Errorf("cannot renew: book is reserved by another student")
+	}
+
+	return nil
+}
+
+// CanBookBeRenewed checks if a book can be renewed and returns the reason if not
+func (s *TransactionService) CanBookBeRenewed(ctx context.Context, transactionID int32) (bool, string, error) {
+	// Get transaction
+	transactionRow, err := s.queries.GetTransactionByID(ctx, transactionID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false, "Transaction not found", nil
+		}
+		return false, "", fmt.Errorf("failed to get transaction: %w", err)
+	}
+
+	// Check if already returned
+	if transactionRow.ReturnedDate.Valid {
+		return false, "Book has already been returned", nil
+	}
+
+	// Check if book is overdue
+	if transactionRow.DueDate.Valid && time.Now().After(transactionRow.DueDate.Time) {
+		return false, "Book is overdue and must be returned first", nil
+	}
+
+	// Check maximum renewals limit
+	renewalCount, err := s.queries.CountRenewalsByStudentAndBook(ctx, queries.CountRenewalsByStudentAndBookParams{
+		StudentID: transactionRow.StudentID,
+		BookID:    transactionRow.BookID,
+	})
+	if err != nil {
+		return false, "", fmt.Errorf("failed to check renewal count: %w", err)
+	}
+
+	if renewalCount >= int64(s.maxRenewals) {
+		return false, fmt.Sprintf("Maximum number of renewals (%d) reached", s.maxRenewals), nil
+	}
+
+	// Check if book is reserved by another student
+	hasReservations, err := s.queries.HasActiveReservationsByOtherStudents(ctx, queries.HasActiveReservationsByOtherStudentsParams{
+		BookID:    transactionRow.BookID,
+		StudentID: transactionRow.StudentID,
+	})
+	if err != nil {
+		return false, "", fmt.Errorf("failed to check reservations: %w", err)
+	}
+
+	if hasReservations {
+		return false, "Book is reserved by another student", nil
+	}
+
+	return true, "", nil
+}
+
+// GetRenewalHistory returns the renewal history for a specific student and book
+func (s *TransactionService) GetRenewalHistory(ctx context.Context, studentID, bookID int32) ([]queries.ListRenewalsByStudentAndBookRow, error) {
+	renewals, err := s.queries.ListRenewalsByStudentAndBook(ctx, queries.ListRenewalsByStudentAndBookParams{
+		StudentID: studentID,
+		BookID:    bookID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get renewal history: %w", err)
+	}
+	return renewals, nil
+}
+
+// GetRenewalStatistics returns renewal statistics for a student
+func (s *TransactionService) GetRenewalStatistics(ctx context.Context, studentID int32) (*queries.GetRenewalStatisticsByStudentRow, error) {
+	stats, err := s.queries.GetRenewalStatisticsByStudent(ctx, studentID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// Return zero stats if no renewals found
+			return &queries.GetRenewalStatisticsByStudentRow{
+				StudentID:     studentID,
+				TotalRenewals: 0,
+				BooksRenewed:  0,
+			}, nil
+		}
+		return nil, fmt.Errorf("failed to get renewal statistics: %w", err)
+	}
+	return &stats, nil
 }

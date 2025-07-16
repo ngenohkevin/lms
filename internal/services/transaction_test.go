@@ -91,6 +91,26 @@ func (m *MockTransactionQueries) UpdateBookCondition(ctx context.Context, arg qu
 	return args.Error(0)
 }
 
+func (m *MockTransactionQueries) CountRenewalsByStudentAndBook(ctx context.Context, arg queries.CountRenewalsByStudentAndBookParams) (int64, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockTransactionQueries) HasActiveReservationsByOtherStudents(ctx context.Context, arg queries.HasActiveReservationsByOtherStudentsParams) (bool, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(bool), args.Error(1)
+}
+
+func (m *MockTransactionQueries) ListRenewalsByStudentAndBook(ctx context.Context, arg queries.ListRenewalsByStudentAndBookParams) ([]queries.ListRenewalsByStudentAndBookRow, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).([]queries.ListRenewalsByStudentAndBookRow), args.Error(1)
+}
+
+func (m *MockTransactionQueries) GetRenewalStatisticsByStudent(ctx context.Context, studentID int32) (queries.GetRenewalStatisticsByStudentRow, error) {
+	args := m.Called(ctx, studentID)
+	return args.Get(0).(queries.GetRenewalStatisticsByStudentRow), args.Error(1)
+}
+
 // Test helper functions
 func createTestTransaction() queries.Transaction {
 	now := time.Now()
@@ -433,13 +453,15 @@ func TestTransactionService_RenewBook_Success(t *testing.T) {
 
 	ctx := context.Background()
 	transactionID := int32(1)
+	studentID := int32(1)
+	bookID := int32(1)
 
 	// Create a transaction that can be renewed
 	now := time.Now()
 	transaction := queries.GetTransactionByIDRow{
 		ID:              transactionID,
-		StudentID:       1,
-		BookID:          1,
+		StudentID:       studentID,
+		BookID:          bookID,
 		TransactionType: "borrow",
 		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, 1), Valid: true},
 		ReturnedDate:    pgtype.Timestamp{Valid: false},
@@ -449,8 +471,19 @@ func TestTransactionService_RenewBook_Success(t *testing.T) {
 	renewedTransaction.DueDate = pgtype.Timestamp{Time: now.AddDate(0, 0, 28), Valid: true}
 	renewedTransaction.TransactionType = "renew"
 
-	// Setup mocks
+	student := createTestStudent()
+
+	// Setup mocks for comprehensive renewal validation
 	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+	mockQueries.On("CountRenewalsByStudentAndBook", ctx, queries.CountRenewalsByStudentAndBookParams{
+		StudentID: studentID,
+		BookID:    bookID,
+	}).Return(int64(0), nil)
+	mockQueries.On("HasActiveReservationsByOtherStudents", ctx, queries.HasActiveReservationsByOtherStudentsParams{
+		BookID:    bookID,
+		StudentID: studentID,
+	}).Return(false, nil)
+	mockQueries.On("GetStudentByID", ctx, studentID).Return(student, nil)
 	mockQueries.On("CreateTransaction", ctx, mock.AnythingOfType("queries.CreateTransactionParams")).Return(renewedTransaction, nil)
 
 	// Execute
@@ -748,6 +781,13 @@ func TestTransactionService_WithFinePerDay(t *testing.T) {
 	newFine := decimal.NewFromFloat(1.00)
 	service = service.WithFinePerDay(newFine)
 	assert.True(t, newFine.Equal(service.finePerDay))
+}
+
+func TestTransactionService_WithMaxRenewals(t *testing.T) {
+	service := NewTransactionService(&MockTransactionQueries{})
+
+	service = service.WithMaxRenewals(3)
+	assert.Equal(t, 3, service.maxRenewals)
 }
 
 // Phase 6.3: Enhanced Return Processing Tests
@@ -1328,5 +1368,323 @@ func TestTransactionService_ReturnBook_AvailabilityUpdate_BoundaryConditions(t *
 	require.NoError(t, err)
 	assert.Equal(t, transactionID, result.ID)
 	assert.NotNil(t, result.ReturnedDate)
+	mockQueries.AssertExpectations(t)
+}
+
+// Phase 6.7: Comprehensive Renewal System Tests
+
+func TestTransactionService_RenewBook_TransactionNotFound(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	transactionID := int32(999)
+
+	// Setup mock to return transaction not found
+	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(queries.GetTransactionByIDRow{}, sql.ErrNoRows)
+
+	// Execute
+	_, err := service.RenewBook(ctx, transactionID, int32(1))
+
+	// Assert
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "transaction not found")
+	mockQueries.AssertExpectations(t)
+}
+
+func TestTransactionService_RenewBook_AlreadyReturned(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	transactionID := int32(1)
+
+	// Create a transaction that's already returned
+	now := time.Now()
+	transaction := queries.GetTransactionByIDRow{
+		ID:              transactionID,
+		StudentID:       1,
+		BookID:          1,
+		TransactionType: "borrow",
+		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, 1), Valid: true},
+		ReturnedDate:    pgtype.Timestamp{Time: now, Valid: true},
+	}
+
+	// Setup mock
+	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+
+	// Execute
+	_, err := service.RenewBook(ctx, transactionID, int32(1))
+
+	// Assert
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot renew returned book")
+	mockQueries.AssertExpectations(t)
+}
+
+func TestTransactionService_RenewBook_OverdueBook(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	transactionID := int32(1)
+
+	// Create a transaction that's overdue
+	now := time.Now()
+	transaction := queries.GetTransactionByIDRow{
+		ID:              transactionID,
+		StudentID:       1,
+		BookID:          1,
+		TransactionType: "borrow",
+		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, -1), Valid: true},
+		ReturnedDate:    pgtype.Timestamp{Valid: false},
+	}
+
+	// Setup mock
+	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+
+	// Execute
+	_, err := service.RenewBook(ctx, transactionID, int32(1))
+
+	// Assert
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot renew overdue book")
+	mockQueries.AssertExpectations(t)
+}
+
+func TestTransactionService_RenewBook_MaxRenewalsReached(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	transactionID := int32(1)
+	studentID := int32(1)
+	bookID := int32(1)
+
+	// Create a transaction that can be renewed
+	now := time.Now()
+	transaction := queries.GetTransactionByIDRow{
+		ID:              transactionID,
+		StudentID:       studentID,
+		BookID:          bookID,
+		TransactionType: "borrow",
+		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, 1), Valid: true},
+		ReturnedDate:    pgtype.Timestamp{Valid: false},
+	}
+
+	// Setup mocks
+	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+	mockQueries.On("CountRenewalsByStudentAndBook", ctx, queries.CountRenewalsByStudentAndBookParams{
+		StudentID: studentID,
+		BookID:    bookID,
+	}).Return(int64(2), nil)
+
+	// Execute
+	_, err := service.RenewBook(ctx, transactionID, int32(1))
+
+	// Assert
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "maximum number of renewals")
+	mockQueries.AssertExpectations(t)
+}
+
+func TestTransactionService_RenewBook_BookReservedByOther(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	transactionID := int32(1)
+	studentID := int32(1)
+	bookID := int32(1)
+
+	// Create a transaction that can be renewed
+	now := time.Now()
+	transaction := queries.GetTransactionByIDRow{
+		ID:              transactionID,
+		StudentID:       studentID,
+		BookID:          bookID,
+		TransactionType: "borrow",
+		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, 1), Valid: true},
+		ReturnedDate:    pgtype.Timestamp{Valid: false},
+	}
+
+	// Setup mocks
+	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+	mockQueries.On("CountRenewalsByStudentAndBook", ctx, mock.AnythingOfType("queries.CountRenewalsByStudentAndBookParams")).Return(int64(0), nil)
+	mockQueries.On("HasActiveReservationsByOtherStudents", ctx, queries.HasActiveReservationsByOtherStudentsParams{
+		BookID:    bookID,
+		StudentID: studentID,
+	}).Return(true, nil)
+
+	// Execute
+	_, err := service.RenewBook(ctx, transactionID, int32(1))
+
+	// Assert
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot renew: book is reserved by another student")
+	mockQueries.AssertExpectations(t)
+}
+
+func TestTransactionService_RenewBook_CreateTransactionFailure(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	transactionID := int32(1)
+	studentID := int32(1)
+	bookID := int32(1)
+
+	// Create a transaction that can be renewed
+	now := time.Now()
+	transaction := queries.GetTransactionByIDRow{
+		ID:              transactionID,
+		StudentID:       studentID,
+		BookID:          bookID,
+		TransactionType: "borrow",
+		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, 1), Valid: true},
+		ReturnedDate:    pgtype.Timestamp{Valid: false},
+	}
+
+	// Setup mocks
+	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+	mockQueries.On("CountRenewalsByStudentAndBook", ctx, mock.AnythingOfType("queries.CountRenewalsByStudentAndBookParams")).Return(int64(0), nil)
+	mockQueries.On("HasActiveReservationsByOtherStudents", ctx, mock.AnythingOfType("queries.HasActiveReservationsByOtherStudentsParams")).Return(false, nil)
+	mockQueries.On("GetStudentByID", ctx, studentID).Return(createTestStudent(), nil)
+	mockQueries.On("CreateTransaction", ctx, mock.AnythingOfType("queries.CreateTransactionParams")).Return(queries.Transaction{}, assert.AnError)
+
+	// Execute
+	_, err := service.RenewBook(ctx, transactionID, int32(1))
+
+	// Assert
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to create renewal transaction")
+	mockQueries.AssertExpectations(t)
+}
+
+func TestTransactionService_GetRenewalHistory_Success(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	studentID := int32(1)
+	bookID := int32(1)
+
+	renewalHistory := []queries.ListRenewalsByStudentAndBookRow{
+		{
+			ID:              1,
+			StudentID:       studentID,
+			BookID:          bookID,
+			TransactionType: "renew",
+			TransactionDate: pgtype.Timestamp{Time: time.Now().AddDate(0, 0, -10), Valid: true},
+			DueDate:         pgtype.Timestamp{Time: time.Now().AddDate(0, 0, 4), Valid: true},
+		},
+	}
+
+	// Setup mock
+	mockQueries.On("ListRenewalsByStudentAndBook", ctx, queries.ListRenewalsByStudentAndBookParams{
+		StudentID: studentID,
+		BookID:    bookID,
+	}).Return(renewalHistory, nil)
+
+	// Execute
+	result, err := service.GetRenewalHistory(ctx, studentID, bookID)
+
+	// Assert
+	require.NoError(t, err)
+	assert.Len(t, result, 1)
+	assert.Equal(t, "renew", result[0].TransactionType)
+	mockQueries.AssertExpectations(t)
+}
+
+func TestTransactionService_CanBookBeRenewed_Success(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	transactionID := int32(1)
+	studentID := int32(1)
+	bookID := int32(1)
+
+	// Create a transaction that can be renewed
+	now := time.Now()
+	transaction := queries.GetTransactionByIDRow{
+		ID:              transactionID,
+		StudentID:       studentID,
+		BookID:          bookID,
+		TransactionType: "borrow",
+		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, 1), Valid: true},
+		ReturnedDate:    pgtype.Timestamp{Valid: false},
+	}
+
+	// Setup mocks
+	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+	mockQueries.On("CountRenewalsByStudentAndBook", ctx, mock.AnythingOfType("queries.CountRenewalsByStudentAndBookParams")).Return(int64(0), nil)
+	mockQueries.On("HasActiveReservationsByOtherStudents", ctx, mock.AnythingOfType("queries.HasActiveReservationsByOtherStudentsParams")).Return(false, nil)
+
+	// Execute
+	canRenew, reason, err := service.CanBookBeRenewed(ctx, transactionID)
+
+	// Assert
+	require.NoError(t, err)
+	assert.True(t, canRenew)
+	assert.Empty(t, reason)
+	mockQueries.AssertExpectations(t)
+}
+
+func TestTransactionService_CanBookBeRenewed_CannotRenew(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	transactionID := int32(1)
+	studentID := int32(1)
+	bookID := int32(1)
+
+	// Create a transaction that's overdue
+	now := time.Now()
+	transaction := queries.GetTransactionByIDRow{
+		ID:              transactionID,
+		StudentID:       studentID,
+		BookID:          bookID,
+		TransactionType: "borrow",
+		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, -1), Valid: true},
+		ReturnedDate:    pgtype.Timestamp{Valid: false},
+	}
+
+	// Setup mock
+	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+
+	// Execute
+	canRenew, reason, err := service.CanBookBeRenewed(ctx, transactionID)
+
+	// Assert
+	require.NoError(t, err)
+	assert.False(t, canRenew)
+	assert.Contains(t, reason, "Book is overdue")
+	mockQueries.AssertExpectations(t)
+}
+
+func TestTransactionService_GetRenewalStatistics_Success(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	studentID := int32(1)
+
+	// Setup mock
+	mockQueries.On("GetRenewalStatisticsByStudent", ctx, studentID).Return(queries.GetRenewalStatisticsByStudentRow{
+		StudentID:     studentID,
+		TotalRenewals: 5,
+		BooksRenewed:  3,
+	}, nil)
+
+	// Execute
+	stats, err := service.GetRenewalStatistics(ctx, studentID)
+
+	// Assert
+	require.NoError(t, err)
+	assert.Equal(t, studentID, stats.StudentID)
+	assert.Equal(t, int64(5), stats.TotalRenewals)
+	assert.Equal(t, int64(3), stats.BooksRenewed)
 	mockQueries.AssertExpectations(t)
 }

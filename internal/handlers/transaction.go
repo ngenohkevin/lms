@@ -22,6 +22,10 @@ type TransactionServiceInterface interface {
 	GetOverdueTransactions(ctx context.Context) ([]queries.ListOverdueTransactionsRow, error)
 	PayFine(ctx context.Context, transactionID int32) error
 	GetTransactionHistory(ctx context.Context, studentID int32, limit, offset int32) ([]queries.ListTransactionsByStudentRow, error)
+	// Phase 6.7: Enhanced Renewal System methods
+	CanBookBeRenewed(ctx context.Context, transactionID int32) (bool, string, error)
+	GetRenewalHistory(ctx context.Context, studentID, bookID int32) ([]queries.ListRenewalsByStudentAndBookRow, error)
+	GetRenewalStatistics(ctx context.Context, studentID int32) (*queries.GetRenewalStatisticsByStudentRow, error)
 }
 
 // TransactionHandler handles transaction-related HTTP requests
@@ -436,4 +440,172 @@ func convertToTransactionHistoryResponse(tx queries.ListTransactionsByStudentRow
 	}
 
 	return response
+}
+
+// Phase 6.7: Enhanced Renewal System Handlers
+
+// CanBookBeRenewed checks if a book can be renewed
+// @Summary Check if book can be renewed
+// @Description Check if a book can be renewed and get the reason if not
+// @Tags transactions
+// @Produce json
+// @Param id path int true "Transaction ID"
+// @Success 200 {object} SuccessResponse{data=map[string]interface{}}
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/transactions/{id}/can-renew [get]
+func (h *TransactionHandler) CanBookBeRenewed(c *gin.Context) {
+	idStr := c.Param("id")
+	transactionID, err := strconv.ParseInt(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid transaction ID",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	canRenew, reason, err := h.transactionService.CanBookBeRenewed(c.Request.Context(), int32(transactionID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to check renewal eligibility",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data: map[string]interface{}{
+			"can_renew": canRenew,
+			"reason":    reason,
+		},
+		Message: "Renewal eligibility checked successfully",
+	})
+}
+
+// GetRenewalHistory gets renewal history for a student and book
+// @Summary Get renewal history
+// @Description Get renewal history for a specific student and book
+// @Tags transactions
+// @Produce json
+// @Param student_id query int true "Student ID"
+// @Param book_id query int true "Book ID"
+// @Success 200 {object} SuccessResponse{data=[]queries.ListRenewalsByStudentAndBookRow}
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/transactions/renewal-history [get]
+func (h *TransactionHandler) GetRenewalHistory(c *gin.Context) {
+	studentIDStr := c.Query("student_id")
+	bookIDStr := c.Query("book_id")
+
+	if studentIDStr == "" || bookIDStr == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Student ID and Book ID are required",
+			},
+		})
+		return
+	}
+
+	studentID, err := strconv.ParseInt(studentIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid student ID",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	bookID, err := strconv.ParseInt(bookIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid book ID",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	renewals, err := h.transactionService.GetRenewalHistory(c.Request.Context(), int32(studentID), int32(bookID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to get renewal history",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    renewals,
+		Message: "Renewal history retrieved successfully",
+	})
+}
+
+// GetRenewalStatistics gets renewal statistics for a student
+// @Summary Get renewal statistics
+// @Description Get renewal statistics for a specific student
+// @Tags transactions
+// @Produce json
+// @Param student_id path int true "Student ID"
+// @Success 200 {object} SuccessResponse{data=queries.GetRenewalStatisticsByStudentRow}
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/students/{student_id}/renewal-statistics [get]
+func (h *TransactionHandler) GetRenewalStatistics(c *gin.Context) {
+	studentIDStr := c.Param("student_id")
+	studentID, err := strconv.ParseInt(studentIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid student ID",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	stats, err := h.transactionService.GetRenewalStatistics(c.Request.Context(), int32(studentID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to get renewal statistics",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    stats,
+		Message: "Renewal statistics retrieved successfully",
+	})
 }

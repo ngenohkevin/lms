@@ -23,6 +23,25 @@ func (q *Queries) CountOverdueTransactions(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countRenewalsByStudentAndBook = `-- name: CountRenewalsByStudentAndBook :one
+
+SELECT COUNT(*) FROM transactions
+WHERE student_id = $1 AND book_id = $2 AND transaction_type = 'renew'
+`
+
+type CountRenewalsByStudentAndBookParams struct {
+	StudentID int32 `db:"student_id" json:"student_id"`
+	BookID    int32 `db:"book_id" json:"book_id"`
+}
+
+// Renewal-related queries for Phase 6.7
+func (q *Queries) CountRenewalsByStudentAndBook(ctx context.Context, arg CountRenewalsByStudentAndBookParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countRenewalsByStudentAndBook, arg.StudentID, arg.BookID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countTransactions = `-- name: CountTransactions :one
 SELECT COUNT(*) FROM transactions
 `
@@ -76,6 +95,29 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 		&i.ReturnCondition,
 		&i.ConditionNotes,
 	)
+	return i, err
+}
+
+const getRenewalStatisticsByStudent = `-- name: GetRenewalStatisticsByStudent :one
+SELECT 
+    student_id,
+    COUNT(*) as total_renewals,
+    COUNT(DISTINCT book_id) as books_renewed
+FROM transactions
+WHERE student_id = $1 AND transaction_type = 'renew'
+GROUP BY student_id
+`
+
+type GetRenewalStatisticsByStudentRow struct {
+	StudentID     int32 `db:"student_id" json:"student_id"`
+	TotalRenewals int64 `db:"total_renewals" json:"total_renewals"`
+	BooksRenewed  int64 `db:"books_renewed" json:"books_renewed"`
+}
+
+func (q *Queries) GetRenewalStatisticsByStudent(ctx context.Context, studentID int32) (GetRenewalStatisticsByStudentRow, error) {
+	row := q.db.QueryRow(ctx, getRenewalStatisticsByStudent, studentID)
+	var i GetRenewalStatisticsByStudentRow
+	err := row.Scan(&i.StudentID, &i.TotalRenewals, &i.BooksRenewed)
 	return i, err
 }
 
@@ -138,6 +180,25 @@ func (q *Queries) GetTransactionByID(ctx context.Context, id int32) (GetTransact
 		&i.BookID_2,
 	)
 	return i, err
+}
+
+const hasActiveReservationsByOtherStudents = `-- name: HasActiveReservationsByOtherStudents :one
+SELECT EXISTS(
+    SELECT 1 FROM reservations
+    WHERE book_id = $1 AND student_id != $2 AND status = 'active'
+)
+`
+
+type HasActiveReservationsByOtherStudentsParams struct {
+	BookID    int32 `db:"book_id" json:"book_id"`
+	StudentID int32 `db:"student_id" json:"student_id"`
+}
+
+func (q *Queries) HasActiveReservationsByOtherStudents(ctx context.Context, arg HasActiveReservationsByOtherStudentsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasActiveReservationsByOtherStudents, arg.BookID, arg.StudentID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const listActiveBorrowings = `-- name: ListActiveBorrowings :many
@@ -350,6 +411,79 @@ func (q *Queries) ListOverdueTransactions(ctx context.Context) ([]ListOverdueTra
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentID_2,
+			&i.Title,
+			&i.Author,
+			&i.BookID_2,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRenewalsByStudentAndBook = `-- name: ListRenewalsByStudentAndBook :many
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, b.title, b.author, b.book_id
+FROM transactions t
+JOIN books b ON t.book_id = b.id
+WHERE t.student_id = $1 AND t.book_id = $2 AND t.transaction_type = 'renew'
+ORDER BY t.transaction_date DESC
+`
+
+type ListRenewalsByStudentAndBookParams struct {
+	StudentID int32 `db:"student_id" json:"student_id"`
+	BookID    int32 `db:"book_id" json:"book_id"`
+}
+
+type ListRenewalsByStudentAndBookRow struct {
+	ID              int32            `db:"id" json:"id"`
+	StudentID       int32            `db:"student_id" json:"student_id"`
+	BookID          int32            `db:"book_id" json:"book_id"`
+	TransactionType string           `db:"transaction_type" json:"transaction_type"`
+	TransactionDate pgtype.Timestamp `db:"transaction_date" json:"transaction_date"`
+	DueDate         pgtype.Timestamp `db:"due_date" json:"due_date"`
+	ReturnedDate    pgtype.Timestamp `db:"returned_date" json:"returned_date"`
+	LibrarianID     pgtype.Int4      `db:"librarian_id" json:"librarian_id"`
+	FineAmount      pgtype.Numeric   `db:"fine_amount" json:"fine_amount"`
+	FinePaid        pgtype.Bool      `db:"fine_paid" json:"fine_paid"`
+	Notes           pgtype.Text      `db:"notes" json:"notes"`
+	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	ReturnCondition pgtype.Text      `db:"return_condition" json:"return_condition"`
+	ConditionNotes  pgtype.Text      `db:"condition_notes" json:"condition_notes"`
+	Title           string           `db:"title" json:"title"`
+	Author          string           `db:"author" json:"author"`
+	BookID_2        string           `db:"book_id_2" json:"book_id_2"`
+}
+
+func (q *Queries) ListRenewalsByStudentAndBook(ctx context.Context, arg ListRenewalsByStudentAndBookParams) ([]ListRenewalsByStudentAndBookRow, error) {
+	rows, err := q.db.Query(ctx, listRenewalsByStudentAndBook, arg.StudentID, arg.BookID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRenewalsByStudentAndBookRow{}
+	for rows.Next() {
+		var i ListRenewalsByStudentAndBookRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.StudentID,
+			&i.BookID,
+			&i.TransactionType,
+			&i.TransactionDate,
+			&i.DueDate,
+			&i.ReturnedDate,
+			&i.LibrarianID,
+			&i.FineAmount,
+			&i.FinePaid,
+			&i.Notes,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ReturnCondition,
+			&i.ConditionNotes,
 			&i.Title,
 			&i.Author,
 			&i.BookID_2,

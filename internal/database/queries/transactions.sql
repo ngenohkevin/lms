@@ -86,3 +86,31 @@ UPDATE transactions
 SET returned_date = NOW(), fine_amount = $2, return_condition = $3, condition_notes = $4, updated_at = NOW()
 WHERE id = $1
 RETURNING *;
+
+-- Renewal-related queries for Phase 6.7
+
+-- name: CountRenewalsByStudentAndBook :one
+SELECT COUNT(*) FROM transactions
+WHERE student_id = $1 AND book_id = $2 AND transaction_type = 'renew';
+
+-- name: HasActiveReservationsByOtherStudents :one
+SELECT EXISTS(
+    SELECT 1 FROM reservations
+    WHERE book_id = $1 AND student_id != $2 AND status = 'active'
+);
+
+-- name: ListRenewalsByStudentAndBook :many
+SELECT t.*, b.title, b.author, b.book_id
+FROM transactions t
+JOIN books b ON t.book_id = b.id
+WHERE t.student_id = $1 AND t.book_id = $2 AND t.transaction_type = 'renew'
+ORDER BY t.transaction_date DESC;
+
+-- name: GetRenewalStatisticsByStudent :one
+SELECT 
+    student_id,
+    COUNT(*) as total_renewals,
+    COUNT(DISTINCT book_id) as books_renewed
+FROM transactions
+WHERE student_id = $1 AND transaction_type = 'renew'
+GROUP BY student_id;

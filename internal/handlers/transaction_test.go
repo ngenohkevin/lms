@@ -64,6 +64,25 @@ func (m *MockTransactionService) GetTransactionHistory(ctx context.Context, stud
 	return args.Get(0).([]queries.ListTransactionsByStudentRow), args.Error(1)
 }
 
+// Phase 6.7: Enhanced Renewal System mock methods
+func (m *MockTransactionService) CanBookBeRenewed(ctx context.Context, transactionID int32) (bool, string, error) {
+	args := m.Called(ctx, transactionID)
+	return args.Get(0).(bool), args.Get(1).(string), args.Error(2)
+}
+
+func (m *MockTransactionService) GetRenewalHistory(ctx context.Context, studentID, bookID int32) ([]queries.ListRenewalsByStudentAndBookRow, error) {
+	args := m.Called(ctx, studentID, bookID)
+	return args.Get(0).([]queries.ListRenewalsByStudentAndBookRow), args.Error(1)
+}
+
+func (m *MockTransactionService) GetRenewalStatistics(ctx context.Context, studentID int32) (*queries.GetRenewalStatisticsByStudentRow, error) {
+	args := m.Called(ctx, studentID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*queries.GetRenewalStatisticsByStudentRow), args.Error(1)
+}
+
 // Test helper functions
 func setupTransactionRouter() (*gin.Engine, *MockTransactionService) {
 	gin.SetMode(gin.TestMode)
@@ -81,6 +100,10 @@ func setupTransactionRouter() (*gin.Engine, *MockTransactionService) {
 		v1.GET("/transactions/overdue", handler.GetOverdueTransactions)
 		v1.POST("/transactions/:id/pay-fine", handler.PayFine)
 		v1.GET("/transactions/history/:studentId", handler.GetTransactionHistory)
+		// Phase 6.7: Enhanced Renewal System routes
+		v1.GET("/transactions/:id/can-renew", handler.CanBookBeRenewed)
+		v1.GET("/transactions/renewal-history", handler.GetRenewalHistory)
+		v1.GET("/students/:student_id/renewal-statistics", handler.GetRenewalStatistics)
 	}
 
 	return router, mockService
@@ -390,5 +413,313 @@ func TestTransactionHandler_GetTransactionHistory_Success(t *testing.T) {
 
 	assert.True(t, response.Success)
 	assert.NotNil(t, response.Data)
+	mockService.AssertExpectations(t)
+}
+
+// Phase 6.7: Enhanced Renewal System Handler Tests
+
+func TestTransactionHandler_CanBookBeRenewed_Success(t *testing.T) {
+	router, mockService := setupTransactionRouter()
+
+	transactionID := "1"
+
+	// Setup mock
+	mockService.On("CanBookBeRenewed", mock.Anything, int32(1)).Return(true, "", nil)
+
+	// Create request
+	req, _ := http.NewRequest("GET", "/api/v1/transactions/"+transactionID+"/can-renew", nil)
+
+	// Perform request
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response SuccessResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.True(t, response.Success)
+	assert.NotNil(t, response.Data)
+
+	data, ok := response.Data.(map[string]interface{})
+	require.True(t, ok)
+	assert.True(t, data["can_renew"].(bool))
+	assert.Empty(t, data["reason"].(string))
+
+	mockService.AssertExpectations(t)
+}
+
+func TestTransactionHandler_CanBookBeRenewed_CannotRenew(t *testing.T) {
+	router, mockService := setupTransactionRouter()
+
+	transactionID := "1"
+
+	// Setup mock
+	mockService.On("CanBookBeRenewed", mock.Anything, int32(1)).Return(false, "Book is overdue", nil)
+
+	// Create request
+	req, _ := http.NewRequest("GET", "/api/v1/transactions/"+transactionID+"/can-renew", nil)
+
+	// Perform request
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response SuccessResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.True(t, response.Success)
+
+	data, ok := response.Data.(map[string]interface{})
+	require.True(t, ok)
+	assert.False(t, data["can_renew"].(bool))
+	assert.Equal(t, "Book is overdue", data["reason"].(string))
+
+	mockService.AssertExpectations(t)
+}
+
+func TestTransactionHandler_CanBookBeRenewed_InvalidID(t *testing.T) {
+	router, mockService := setupTransactionRouter()
+
+	transactionID := "invalid"
+
+	// Create request
+	req, _ := http.NewRequest("GET", "/api/v1/transactions/"+transactionID+"/can-renew", nil)
+
+	// Perform request
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response ErrorResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response.Success)
+	assert.Equal(t, "VALIDATION_ERROR", response.Error.Code)
+	mockService.AssertExpectations(t)
+}
+
+func TestTransactionHandler_CanBookBeRenewed_ServiceError(t *testing.T) {
+	router, mockService := setupTransactionRouter()
+
+	transactionID := "1"
+
+	// Setup mock to return error
+	mockService.On("CanBookBeRenewed", mock.Anything, int32(1)).Return(false, "", errors.New("database error"))
+
+	// Create request
+	req, _ := http.NewRequest("GET", "/api/v1/transactions/"+transactionID+"/can-renew", nil)
+
+	// Perform request
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var response ErrorResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response.Success)
+	assert.Equal(t, "INTERNAL_ERROR", response.Error.Code)
+	mockService.AssertExpectations(t)
+}
+
+func TestTransactionHandler_GetRenewalHistory_Success(t *testing.T) {
+	router, mockService := setupTransactionRouter()
+
+	renewalHistory := []queries.ListRenewalsByStudentAndBookRow{
+		{
+			ID:              1,
+			StudentID:       1,
+			BookID:          1,
+			TransactionType: "renew",
+			Title:           "Test Book",
+			Author:          "Test Author",
+		},
+	}
+
+	// Setup mock
+	mockService.On("GetRenewalHistory", mock.Anything, int32(1), int32(1)).Return(renewalHistory, nil)
+
+	// Create request
+	req, _ := http.NewRequest("GET", "/api/v1/transactions/renewal-history?student_id=1&book_id=1", nil)
+
+	// Perform request
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response SuccessResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.True(t, response.Success)
+	assert.NotNil(t, response.Data)
+	mockService.AssertExpectations(t)
+}
+
+func TestTransactionHandler_GetRenewalHistory_MissingParams(t *testing.T) {
+	router, mockService := setupTransactionRouter()
+
+	// Create request without required parameters
+	req, _ := http.NewRequest("GET", "/api/v1/transactions/renewal-history", nil)
+
+	// Perform request
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response ErrorResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response.Success)
+	assert.Equal(t, "VALIDATION_ERROR", response.Error.Code)
+	assert.Contains(t, response.Error.Message, "Student ID and Book ID are required")
+	mockService.AssertExpectations(t)
+}
+
+func TestTransactionHandler_GetRenewalHistory_InvalidStudentID(t *testing.T) {
+	router, mockService := setupTransactionRouter()
+
+	// Create request with invalid student ID
+	req, _ := http.NewRequest("GET", "/api/v1/transactions/renewal-history?student_id=invalid&book_id=1", nil)
+
+	// Perform request
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response ErrorResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response.Success)
+	assert.Equal(t, "VALIDATION_ERROR", response.Error.Code)
+	assert.Contains(t, response.Error.Message, "Invalid student ID")
+	mockService.AssertExpectations(t)
+}
+
+func TestTransactionHandler_GetRenewalHistory_ServiceError(t *testing.T) {
+	router, mockService := setupTransactionRouter()
+
+	// Setup mock to return error
+	mockService.On("GetRenewalHistory", mock.Anything, int32(1), int32(1)).Return([]queries.ListRenewalsByStudentAndBookRow{}, errors.New("database error"))
+
+	// Create request
+	req, _ := http.NewRequest("GET", "/api/v1/transactions/renewal-history?student_id=1&book_id=1", nil)
+
+	// Perform request
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var response ErrorResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response.Success)
+	assert.Equal(t, "INTERNAL_ERROR", response.Error.Code)
+	mockService.AssertExpectations(t)
+}
+
+func TestTransactionHandler_GetRenewalStatistics_Success(t *testing.T) {
+	router, mockService := setupTransactionRouter()
+
+	studentID := "1"
+	stats := &queries.GetRenewalStatisticsByStudentRow{
+		StudentID:     1,
+		TotalRenewals: 5,
+		BooksRenewed:  3,
+	}
+
+	// Setup mock
+	mockService.On("GetRenewalStatistics", mock.Anything, int32(1)).Return(stats, nil)
+
+	// Create request
+	req, _ := http.NewRequest("GET", "/api/v1/students/"+studentID+"/renewal-statistics", nil)
+
+	// Perform request
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response SuccessResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.True(t, response.Success)
+	assert.NotNil(t, response.Data)
+	mockService.AssertExpectations(t)
+}
+
+func TestTransactionHandler_GetRenewalStatistics_InvalidStudentID(t *testing.T) {
+	router, mockService := setupTransactionRouter()
+
+	studentID := "invalid"
+
+	// Create request
+	req, _ := http.NewRequest("GET", "/api/v1/students/"+studentID+"/renewal-statistics", nil)
+
+	// Perform request
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response ErrorResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response.Success)
+	assert.Equal(t, "VALIDATION_ERROR", response.Error.Code)
+	mockService.AssertExpectations(t)
+}
+
+func TestTransactionHandler_GetRenewalStatistics_ServiceError(t *testing.T) {
+	router, mockService := setupTransactionRouter()
+
+	studentID := "1"
+
+	// Setup mock to return error
+	mockService.On("GetRenewalStatistics", mock.Anything, int32(1)).Return(nil, errors.New("database error"))
+
+	// Create request
+	req, _ := http.NewRequest("GET", "/api/v1/students/"+studentID+"/renewal-statistics", nil)
+
+	// Perform request
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var response ErrorResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+
+	assert.False(t, response.Success)
+	assert.Equal(t, "INTERNAL_ERROR", response.Error.Code)
 	mockService.AssertExpectations(t)
 }
