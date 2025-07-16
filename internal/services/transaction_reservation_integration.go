@@ -66,7 +66,7 @@ func (s *EnhancedTransactionService) handleReservationFulfillment(ctx context.Co
 		return
 	}
 
-	log.Printf("Successfully fulfilled reservation %d for book %d (student: %s)", 
+	log.Printf("Successfully fulfilled reservation %d for book %d (student: %s)",
 		nextReservation.ID, bookID, nextReservation.StudentName)
 }
 
@@ -150,15 +150,15 @@ func (s *EnhancedTransactionService) GetBookAvailabilityStatus(ctx context.Conte
 
 // BookAvailabilityStatus represents the detailed availability status of a book
 type BookAvailabilityStatus struct {
-	BookID                      int32   `json:"book_id"`
-	TotalCopies                 int32   `json:"total_copies"`
-	AvailableCopies             int32   `json:"available_copies"`
-	IsAvailable                 bool    `json:"is_available"`
-	HasReservations             bool    `json:"has_reservations"`
-	NextReservationID           *int32  `json:"next_reservation_id,omitempty"`
-	NextReservationStudentID    *int32  `json:"next_reservation_student_id,omitempty"`
-	NextReservationStudentName  *string `json:"next_reservation_student_name,omitempty"`
-	ReservationQueuePosition    int     `json:"reservation_queue_position,omitempty"`
+	BookID                     int32   `json:"book_id"`
+	TotalCopies                int32   `json:"total_copies"`
+	AvailableCopies            int32   `json:"available_copies"`
+	IsAvailable                bool    `json:"is_available"`
+	HasReservations            bool    `json:"has_reservations"`
+	NextReservationID          *int32  `json:"next_reservation_id,omitempty"`
+	NextReservationStudentID   *int32  `json:"next_reservation_student_id,omitempty"`
+	NextReservationStudentName *string `json:"next_reservation_student_name,omitempty"`
+	ReservationQueuePosition   int     `json:"reservation_queue_position,omitempty"`
 }
 
 // CanStudentBorrowBook checks if a student can borrow a book considering reservations
@@ -209,7 +209,7 @@ func (s *EnhancedTransactionService) CanStudentBorrowBook(ctx context.Context, s
 
 	// If there's a reservation and it's not for this student
 	if nextReservation != nil && nextReservation.StudentID != studentID {
-		eligibility.Reasons = append(eligibility.Reasons, 
+		eligibility.Reasons = append(eligibility.Reasons,
 			fmt.Sprintf("Book is reserved for another student (reservation #%d)", nextReservation.ID))
 		eligibility.HasReservationConflict = true
 		eligibility.NextReservationID = &nextReservation.ID
@@ -249,10 +249,10 @@ func (s *EnhancedTransactionService) GetReservationIntegratedBorrowingOptions(ct
 	}
 
 	options := &BorrowingOptions{
-		StudentID:   studentID,
-		BookID:      bookID,
-		CanBorrow:   eligibility.CanBorrow,
-		Reasons:     eligibility.Reasons,
+		StudentID:     studentID,
+		BookID:        bookID,
+		CanBorrow:     eligibility.CanBorrow,
+		Reasons:       eligibility.Reasons,
 		ShouldReserve: false,
 	}
 
@@ -283,7 +283,7 @@ type BorrowingOptions struct {
 // TransactionWithReservationInfo represents a transaction with reservation context
 type TransactionWithReservationInfo struct {
 	*TransactionResponse
-	FulfilledReservationID   *int32 `json:"fulfilled_reservation_id,omitempty"`
-	TriggeredReservationID   *int32 `json:"triggered_reservation_id,omitempty"`
-	ReservationMessage       string `json:"reservation_message,omitempty"`
+	FulfilledReservationID *int32 `json:"fulfilled_reservation_id,omitempty"`
+	TriggeredReservationID *int32 `json:"triggered_reservation_id,omitempty"`
+	ReservationMessage     string `json:"reservation_message,omitempty"`
 }

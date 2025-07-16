@@ -710,7 +710,7 @@ func TestReservationHandler_ErrorCodeMapping(t *testing.T) {
 
 func TestReservationHandler_ConversionFunctions(t *testing.T) {
 	now := time.Now()
-	
+
 	serviceReservation := &services.ReservationResponse{
 		ID:            1,
 		StudentID:     1,
@@ -755,7 +755,7 @@ func TestReservationHandler_ConversionFunctions(t *testing.T) {
 
 func TestReservationHandler_ConvertToReservationQueueResponse(t *testing.T) {
 	now := time.Now()
-	
+
 	reservations := []services.ReservationResponse{
 		{
 			ID:            1,
@@ -792,7 +792,7 @@ func TestReservationHandler_ConvertToReservationQueueResponse(t *testing.T) {
 	}
 
 	queueResponse := convertToReservationQueueResponse(reservations, 2)
-	
+
 	assert.Equal(t, int32(2), queueResponse.BookID)
 	assert.Equal(t, 2, queueResponse.QueueLength)
 	assert.Equal(t, "Test Book", queueResponse.BookTitle)
@@ -806,7 +806,7 @@ func TestReservationHandler_ConvertToReservationQueueResponse(t *testing.T) {
 func TestReservationHandler_ConvertToReservationQueueResponse_EmptyQueue(t *testing.T) {
 	reservations := []services.ReservationResponse{}
 	queueResponse := convertToReservationQueueResponse(reservations, 2)
-	
+
 	assert.Equal(t, int32(2), queueResponse.BookID)
 	assert.Equal(t, 0, queueResponse.QueueLength)
 	assert.Equal(t, "", queueResponse.BookTitle)

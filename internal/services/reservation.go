@@ -41,8 +41,8 @@ type ReservationService struct {
 func NewReservationService(queries ReservationQuerier) *ReservationService {
 	return &ReservationService{
 		queries:                   queries,
-		maxReservationsPerStudent: 5,  // Max 5 reservations per student
-		defaultReservationDays:    7,  // Reservations expire after 7 days
+		maxReservationsPerStudent: 5, // Max 5 reservations per student
+		defaultReservationDays:    7, // Reservations expire after 7 days
 	}
 }
 
@@ -66,15 +66,15 @@ type ReserveBookRequest struct {
 
 // ReservationResponse represents a reservation response
 type ReservationResponse struct {
-	ID          int32     `json:"id"`
-	StudentID   int32     `json:"student_id"`
-	BookID      int32     `json:"book_id"`
-	ReservedAt  time.Time `json:"reserved_at"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	Status      string    `json:"status"`
+	ID          int32      `json:"id"`
+	StudentID   int32      `json:"student_id"`
+	BookID      int32      `json:"book_id"`
+	ReservedAt  time.Time  `json:"reserved_at"`
+	ExpiresAt   time.Time  `json:"expires_at"`
+	Status      string     `json:"status"`
 	FulfilledAt *time.Time `json:"fulfilled_at,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
 	// Additional fields for extended responses
 	StudentName   string `json:"student_name,omitempty"`
 	StudentIDCode string `json:"student_id_code,omitempty"`

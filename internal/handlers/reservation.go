@@ -485,7 +485,7 @@ func (h *ReservationHandler) parsePaginationParams(c *gin.Context) (int32, int32
 
 func (h *ReservationHandler) getErrorCodeAndStatus(err error) (int, string) {
 	errorMessage := err.Error()
-	
+
 	switch {
 	case contains(errorMessage, "book not found"):
 		return http.StatusNotFound, models.ReservationErrorCodeBookNotFound
@@ -513,9 +513,9 @@ func (h *ReservationHandler) getErrorCodeAndStatus(err error) (int, string) {
 }
 
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || (len(s) > len(substr) && 
-		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || 
-		 indexOf(s, substr) >= 0)))
+	return len(s) >= len(substr) && (s == substr || (len(s) > len(substr) &&
+		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
+			indexOf(s, substr) >= 0)))
 }
 
 func indexOf(s, substr string) int {
@@ -600,8 +600,8 @@ func convertToBookReservationResponse(r *services.ReservationResponse) models.Bo
 
 func convertToReservationQueueResponse(reservations []services.ReservationResponse, bookID int32) models.ReservationQueueResponse {
 	response := models.ReservationQueueResponse{
-		BookID:      bookID,
-		QueueLength: len(reservations),
+		BookID:       bookID,
+		QueueLength:  len(reservations),
 		Reservations: make([]models.BookReservationResponse, len(reservations)),
 	}
 
