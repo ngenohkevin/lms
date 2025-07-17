@@ -84,3 +84,15 @@ UPDATE reservations
 SET status = 'cancelled', updated_at = NOW()
 WHERE id = $1 AND status IN ('active', 'fulfilled')
 RETURNING *;
+
+-- Notification-related queries for Phase 7.2
+
+-- name: ListActiveReservationsForAvailableBook :many
+SELECT r.*, s.first_name, s.last_name, s.student_id as student_code, s.email, b.title, b.author, b.book_id as book_code
+FROM reservations r
+JOIN students s ON r.student_id = s.id
+JOIN books b ON r.book_id = b.id
+WHERE r.book_id = $1 AND r.status = 'active'
+  AND s.is_active = true
+  AND s.deleted_at IS NULL
+ORDER BY r.reserved_at ASC;

@@ -114,3 +114,36 @@ SELECT
 FROM transactions
 WHERE student_id = $1 AND transaction_type = 'renew'
 GROUP BY student_id;
+
+-- Notification-related queries for Phase 7.2
+
+-- name: ListTransactionsDueSoon :many
+SELECT t.*, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id
+FROM transactions t
+JOIN students s ON t.student_id = s.id
+JOIN books b ON t.book_id = b.id
+WHERE t.due_date >= NOW() AND t.due_date <= NOW() + INTERVAL '3 days'
+  AND t.returned_date IS NULL
+  AND s.is_active = true
+  AND s.deleted_at IS NULL
+ORDER BY t.due_date ASC;
+
+-- name: ListTransactionsOverdue :many
+SELECT t.*, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id
+FROM transactions t
+JOIN students s ON t.student_id = s.id
+JOIN books b ON t.book_id = b.id
+WHERE t.due_date < NOW() AND t.returned_date IS NULL
+  AND s.is_active = true
+  AND s.deleted_at IS NULL
+ORDER BY t.due_date ASC;
+
+-- name: ListTransactionsWithUnpaidFines :many
+SELECT t.*, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id
+FROM transactions t
+JOIN students s ON t.student_id = s.id
+JOIN books b ON t.book_id = b.id
+WHERE t.fine_amount > 0 AND t.fine_paid = false
+  AND s.is_active = true
+  AND s.deleted_at IS NULL
+ORDER BY t.fine_amount DESC;
