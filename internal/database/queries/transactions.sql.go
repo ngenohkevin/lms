@@ -728,6 +728,246 @@ func (q *Queries) ListTransactionsByStudent(ctx context.Context, arg ListTransac
 	return items, nil
 }
 
+const listTransactionsDueSoon = `-- name: ListTransactionsDueSoon :many
+
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id
+FROM transactions t
+JOIN students s ON t.student_id = s.id
+JOIN books b ON t.book_id = b.id
+WHERE t.due_date >= NOW() AND t.due_date <= NOW() + INTERVAL '3 days'
+  AND t.returned_date IS NULL
+  AND s.is_active = true
+  AND s.deleted_at IS NULL
+ORDER BY t.due_date ASC
+`
+
+type ListTransactionsDueSoonRow struct {
+	ID              int32            `db:"id" json:"id"`
+	StudentID       int32            `db:"student_id" json:"student_id"`
+	BookID          int32            `db:"book_id" json:"book_id"`
+	TransactionType string           `db:"transaction_type" json:"transaction_type"`
+	TransactionDate pgtype.Timestamp `db:"transaction_date" json:"transaction_date"`
+	DueDate         pgtype.Timestamp `db:"due_date" json:"due_date"`
+	ReturnedDate    pgtype.Timestamp `db:"returned_date" json:"returned_date"`
+	LibrarianID     pgtype.Int4      `db:"librarian_id" json:"librarian_id"`
+	FineAmount      pgtype.Numeric   `db:"fine_amount" json:"fine_amount"`
+	FinePaid        pgtype.Bool      `db:"fine_paid" json:"fine_paid"`
+	Notes           pgtype.Text      `db:"notes" json:"notes"`
+	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	ReturnCondition pgtype.Text      `db:"return_condition" json:"return_condition"`
+	ConditionNotes  pgtype.Text      `db:"condition_notes" json:"condition_notes"`
+	FirstName       string           `db:"first_name" json:"first_name"`
+	LastName        string           `db:"last_name" json:"last_name"`
+	StudentID_2     string           `db:"student_id_2" json:"student_id_2"`
+	Email           pgtype.Text      `db:"email" json:"email"`
+	Title           string           `db:"title" json:"title"`
+	Author          string           `db:"author" json:"author"`
+	BookID_2        string           `db:"book_id_2" json:"book_id_2"`
+}
+
+// Notification-related queries for Phase 7.2
+func (q *Queries) ListTransactionsDueSoon(ctx context.Context) ([]ListTransactionsDueSoonRow, error) {
+	rows, err := q.db.Query(ctx, listTransactionsDueSoon)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTransactionsDueSoonRow{}
+	for rows.Next() {
+		var i ListTransactionsDueSoonRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.StudentID,
+			&i.BookID,
+			&i.TransactionType,
+			&i.TransactionDate,
+			&i.DueDate,
+			&i.ReturnedDate,
+			&i.LibrarianID,
+			&i.FineAmount,
+			&i.FinePaid,
+			&i.Notes,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ReturnCondition,
+			&i.ConditionNotes,
+			&i.FirstName,
+			&i.LastName,
+			&i.StudentID_2,
+			&i.Email,
+			&i.Title,
+			&i.Author,
+			&i.BookID_2,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTransactionsOverdue = `-- name: ListTransactionsOverdue :many
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id
+FROM transactions t
+JOIN students s ON t.student_id = s.id
+JOIN books b ON t.book_id = b.id
+WHERE t.due_date < NOW() AND t.returned_date IS NULL
+  AND s.is_active = true
+  AND s.deleted_at IS NULL
+ORDER BY t.due_date ASC
+`
+
+type ListTransactionsOverdueRow struct {
+	ID              int32            `db:"id" json:"id"`
+	StudentID       int32            `db:"student_id" json:"student_id"`
+	BookID          int32            `db:"book_id" json:"book_id"`
+	TransactionType string           `db:"transaction_type" json:"transaction_type"`
+	TransactionDate pgtype.Timestamp `db:"transaction_date" json:"transaction_date"`
+	DueDate         pgtype.Timestamp `db:"due_date" json:"due_date"`
+	ReturnedDate    pgtype.Timestamp `db:"returned_date" json:"returned_date"`
+	LibrarianID     pgtype.Int4      `db:"librarian_id" json:"librarian_id"`
+	FineAmount      pgtype.Numeric   `db:"fine_amount" json:"fine_amount"`
+	FinePaid        pgtype.Bool      `db:"fine_paid" json:"fine_paid"`
+	Notes           pgtype.Text      `db:"notes" json:"notes"`
+	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	ReturnCondition pgtype.Text      `db:"return_condition" json:"return_condition"`
+	ConditionNotes  pgtype.Text      `db:"condition_notes" json:"condition_notes"`
+	FirstName       string           `db:"first_name" json:"first_name"`
+	LastName        string           `db:"last_name" json:"last_name"`
+	StudentID_2     string           `db:"student_id_2" json:"student_id_2"`
+	Email           pgtype.Text      `db:"email" json:"email"`
+	Title           string           `db:"title" json:"title"`
+	Author          string           `db:"author" json:"author"`
+	BookID_2        string           `db:"book_id_2" json:"book_id_2"`
+}
+
+func (q *Queries) ListTransactionsOverdue(ctx context.Context) ([]ListTransactionsOverdueRow, error) {
+	rows, err := q.db.Query(ctx, listTransactionsOverdue)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTransactionsOverdueRow{}
+	for rows.Next() {
+		var i ListTransactionsOverdueRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.StudentID,
+			&i.BookID,
+			&i.TransactionType,
+			&i.TransactionDate,
+			&i.DueDate,
+			&i.ReturnedDate,
+			&i.LibrarianID,
+			&i.FineAmount,
+			&i.FinePaid,
+			&i.Notes,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ReturnCondition,
+			&i.ConditionNotes,
+			&i.FirstName,
+			&i.LastName,
+			&i.StudentID_2,
+			&i.Email,
+			&i.Title,
+			&i.Author,
+			&i.BookID_2,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTransactionsWithUnpaidFines = `-- name: ListTransactionsWithUnpaidFines :many
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id
+FROM transactions t
+JOIN students s ON t.student_id = s.id
+JOIN books b ON t.book_id = b.id
+WHERE t.fine_amount > 0 AND t.fine_paid = false
+  AND s.is_active = true
+  AND s.deleted_at IS NULL
+ORDER BY t.fine_amount DESC
+`
+
+type ListTransactionsWithUnpaidFinesRow struct {
+	ID              int32            `db:"id" json:"id"`
+	StudentID       int32            `db:"student_id" json:"student_id"`
+	BookID          int32            `db:"book_id" json:"book_id"`
+	TransactionType string           `db:"transaction_type" json:"transaction_type"`
+	TransactionDate pgtype.Timestamp `db:"transaction_date" json:"transaction_date"`
+	DueDate         pgtype.Timestamp `db:"due_date" json:"due_date"`
+	ReturnedDate    pgtype.Timestamp `db:"returned_date" json:"returned_date"`
+	LibrarianID     pgtype.Int4      `db:"librarian_id" json:"librarian_id"`
+	FineAmount      pgtype.Numeric   `db:"fine_amount" json:"fine_amount"`
+	FinePaid        pgtype.Bool      `db:"fine_paid" json:"fine_paid"`
+	Notes           pgtype.Text      `db:"notes" json:"notes"`
+	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	ReturnCondition pgtype.Text      `db:"return_condition" json:"return_condition"`
+	ConditionNotes  pgtype.Text      `db:"condition_notes" json:"condition_notes"`
+	FirstName       string           `db:"first_name" json:"first_name"`
+	LastName        string           `db:"last_name" json:"last_name"`
+	StudentID_2     string           `db:"student_id_2" json:"student_id_2"`
+	Email           pgtype.Text      `db:"email" json:"email"`
+	Title           string           `db:"title" json:"title"`
+	Author          string           `db:"author" json:"author"`
+	BookID_2        string           `db:"book_id_2" json:"book_id_2"`
+}
+
+func (q *Queries) ListTransactionsWithUnpaidFines(ctx context.Context) ([]ListTransactionsWithUnpaidFinesRow, error) {
+	rows, err := q.db.Query(ctx, listTransactionsWithUnpaidFines)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTransactionsWithUnpaidFinesRow{}
+	for rows.Next() {
+		var i ListTransactionsWithUnpaidFinesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.StudentID,
+			&i.BookID,
+			&i.TransactionType,
+			&i.TransactionDate,
+			&i.DueDate,
+			&i.ReturnedDate,
+			&i.LibrarianID,
+			&i.FineAmount,
+			&i.FinePaid,
+			&i.Notes,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ReturnCondition,
+			&i.ConditionNotes,
+			&i.FirstName,
+			&i.LastName,
+			&i.StudentID_2,
+			&i.Email,
+			&i.Title,
+			&i.Author,
+			&i.BookID_2,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const payTransactionFine = `-- name: PayTransactionFine :exec
 UPDATE transactions
 SET fine_paid = true, updated_at = NOW()

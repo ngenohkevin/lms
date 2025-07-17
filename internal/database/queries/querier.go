@@ -60,6 +60,8 @@ type Querier interface {
 	HasActiveReservationsByOtherStudents(ctx context.Context, arg HasActiveReservationsByOtherStudentsParams) (bool, error)
 	ListActiveBorrowings(ctx context.Context, arg ListActiveBorrowingsParams) ([]ListActiveBorrowingsRow, error)
 	ListActiveReservations(ctx context.Context) ([]ListActiveReservationsRow, error)
+	// Notification-related queries for Phase 7.2
+	ListActiveReservationsForAvailableBook(ctx context.Context, bookID int32) ([]ListActiveReservationsForAvailableBookRow, error)
 	ListActiveTransactionsByStudent(ctx context.Context, studentID int32) ([]ListActiveTransactionsByStudentRow, error)
 	ListAuditLogs(ctx context.Context, arg ListAuditLogsParams) ([]AuditLog, error)
 	ListAuditLogsByAction(ctx context.Context, arg ListAuditLogsByActionParams) ([]AuditLog, error)
@@ -83,6 +85,10 @@ type Querier interface {
 	ListTransactions(ctx context.Context, arg ListTransactionsParams) ([]ListTransactionsRow, error)
 	ListTransactionsByBook(ctx context.Context, arg ListTransactionsByBookParams) ([]ListTransactionsByBookRow, error)
 	ListTransactionsByStudent(ctx context.Context, arg ListTransactionsByStudentParams) ([]ListTransactionsByStudentRow, error)
+	// Notification-related queries for Phase 7.2
+	ListTransactionsDueSoon(ctx context.Context) ([]ListTransactionsDueSoonRow, error)
+	ListTransactionsOverdue(ctx context.Context) ([]ListTransactionsOverdueRow, error)
+	ListTransactionsWithUnpaidFines(ctx context.Context) ([]ListTransactionsWithUnpaidFinesRow, error)
 	ListUnreadNotificationsByRecipient(ctx context.Context, arg ListUnreadNotificationsByRecipientParams) ([]Notification, error)
 	ListUnsentNotifications(ctx context.Context, limit int32) ([]Notification, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)

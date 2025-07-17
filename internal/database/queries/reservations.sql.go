@@ -294,6 +294,75 @@ func (q *Queries) ListActiveReservations(ctx context.Context) ([]ListActiveReser
 	return items, nil
 }
 
+const listActiveReservationsForAvailableBook = `-- name: ListActiveReservationsForAvailableBook :many
+
+SELECT r.id, r.student_id, r.book_id, r.reserved_at, r.expires_at, r.status, r.fulfilled_at, r.created_at, r.updated_at, s.first_name, s.last_name, s.student_id as student_code, s.email, b.title, b.author, b.book_id as book_code
+FROM reservations r
+JOIN students s ON r.student_id = s.id
+JOIN books b ON r.book_id = b.id
+WHERE r.book_id = $1 AND r.status = 'active'
+  AND s.is_active = true
+  AND s.deleted_at IS NULL
+ORDER BY r.reserved_at ASC
+`
+
+type ListActiveReservationsForAvailableBookRow struct {
+	ID          int32            `db:"id" json:"id"`
+	StudentID   int32            `db:"student_id" json:"student_id"`
+	BookID      int32            `db:"book_id" json:"book_id"`
+	ReservedAt  pgtype.Timestamp `db:"reserved_at" json:"reserved_at"`
+	ExpiresAt   pgtype.Timestamp `db:"expires_at" json:"expires_at"`
+	Status      pgtype.Text      `db:"status" json:"status"`
+	FulfilledAt pgtype.Timestamp `db:"fulfilled_at" json:"fulfilled_at"`
+	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt   pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	FirstName   string           `db:"first_name" json:"first_name"`
+	LastName    string           `db:"last_name" json:"last_name"`
+	StudentCode string           `db:"student_code" json:"student_code"`
+	Email       pgtype.Text      `db:"email" json:"email"`
+	Title       string           `db:"title" json:"title"`
+	Author      string           `db:"author" json:"author"`
+	BookCode    string           `db:"book_code" json:"book_code"`
+}
+
+// Notification-related queries for Phase 7.2
+func (q *Queries) ListActiveReservationsForAvailableBook(ctx context.Context, bookID int32) ([]ListActiveReservationsForAvailableBookRow, error) {
+	rows, err := q.db.Query(ctx, listActiveReservationsForAvailableBook, bookID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListActiveReservationsForAvailableBookRow{}
+	for rows.Next() {
+		var i ListActiveReservationsForAvailableBookRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.StudentID,
+			&i.BookID,
+			&i.ReservedAt,
+			&i.ExpiresAt,
+			&i.Status,
+			&i.FulfilledAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.FirstName,
+			&i.LastName,
+			&i.StudentCode,
+			&i.Email,
+			&i.Title,
+			&i.Author,
+			&i.BookCode,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listExpiredReservations = `-- name: ListExpiredReservations :many
 SELECT r.id, r.student_id, r.book_id, r.reserved_at, r.expires_at, r.status, r.fulfilled_at, r.created_at, r.updated_at, s.first_name, s.last_name, s.student_id as student_code, b.title, b.author, b.book_id as book_code
 FROM reservations r

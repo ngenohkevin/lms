@@ -27,6 +27,12 @@ type NotificationQuerier interface {
 	CountNotificationsByType(ctx context.Context, type_ string) (int64, error)
 	DeleteNotification(ctx context.Context, id int32) error
 	DeleteOldNotifications(ctx context.Context, createdAt pgtype.Timestamp) error
+
+	// Phase 7.2 - Automated notification methods
+	ListTransactionsDueSoon(ctx context.Context) ([]queries.ListTransactionsDueSoonRow, error)
+	ListTransactionsOverdue(ctx context.Context) ([]queries.ListTransactionsOverdueRow, error)
+	ListTransactionsWithUnpaidFines(ctx context.Context) ([]queries.ListTransactionsWithUnpaidFinesRow, error)
+	ListActiveReservationsForAvailableBook(ctx context.Context, bookID int32) ([]queries.ListActiveReservationsForAvailableBookRow, error)
 }
 
 // NotificationServiceInterface defines the interface for notification service operations
@@ -458,44 +464,458 @@ func (s *NotificationService) processNotification(ctx context.Context, notificat
 
 // sendEmailNotification sends an email notification
 func (s *NotificationService) sendEmailNotification(ctx context.Context, notification queries.Notification) error {
-	// This would integrate with the email service
-	// For now, just log the action
-	s.logger.Info("Sending email notification",
+	// Get recipient email based on type
+	recipientEmail, err := s.getRecipientEmail(ctx, notification.RecipientID, models.RecipientType(notification.RecipientType))
+	if err != nil {
+		return fmt.Errorf("failed to get recipient email: %w", err)
+	}
+
+	// Get default template for this notification type
+	template := GetDefaultTemplate(notification.Type)
+	if template == nil {
+		// Fall back to simple email if no template found
+		return s.emailService.SendEmail(ctx, recipientEmail, notification.Title, notification.Message, false)
+	}
+
+	// Extract data from notification message for template
+	templateData := s.extractTemplateData(notification)
+
+	// Send templated email
+	err = s.emailService.SendTemplatedEmail(ctx, recipientEmail, template, templateData)
+	if err != nil {
+		s.logger.Error("Failed to send email notification",
+			"notification_id", notification.ID,
+			"recipient_email", recipientEmail,
+			"error", err)
+		return fmt.Errorf("failed to send email: %w", err)
+	}
+
+	s.logger.Info("Email notification sent successfully",
 		"notification_id", notification.ID,
 		"recipient_id", notification.RecipientID,
-		"type", notification.Type,
-		"title", notification.Title)
+		"recipient_email", recipientEmail,
+		"type", notification.Type)
 
-	// In a real implementation, this would call s.emailService.SendEmail()
 	return nil
 }
 
 // Automated notification methods (to be implemented in Phase 7.2)
 
-// SendDueSoonReminders sends reminders for books due soon
+// SendDueSoonReminders sends reminders for books due soon (within 3 days)
 func (s *NotificationService) SendDueSoonReminders(ctx context.Context) error {
-	// TODO: Implement in Phase 7.2
-	s.logger.Info("SendDueSoonReminders called - implementation pending")
+	s.logger.Info("Starting due soon reminders process")
+
+	// Get all transactions due in the next 3 days
+	dueSoonTransactions, err := s.querier.ListTransactionsDueSoon(ctx)
+	if err != nil {
+		s.logger.Error("Failed to get due soon transactions", "error", err)
+		return fmt.Errorf("failed to get due soon transactions: %w", err)
+	}
+
+	if len(dueSoonTransactions) == 0 {
+		s.logger.Info("No books due soon - no reminders to send")
+		return nil
+	}
+
+	var successCount, failureCount int
+	for _, transaction := range dueSoonTransactions {
+		// Calculate days until due
+		daysUntilDue := int(transaction.DueDate.Time.Sub(time.Now()).Hours() / 24)
+
+		// Create personalized notification
+		title := fmt.Sprintf("Book Due Soon: %s", transaction.Title)
+		message := fmt.Sprintf("Dear %s %s,\n\n"+
+			"This is a reminder that the book \"%s\" by %s is due for return "+
+			"in %d day(s) on %s.\n\n"+
+			"Please return the book to avoid late fees.\n\n"+
+			"Book ID: %s\n"+
+			"Student ID: %s\n\n"+
+			"Thank you,\nLibrary Management System",
+			transaction.FirstName, transaction.LastName,
+			transaction.Title, transaction.Author,
+			daysUntilDue,
+			transaction.DueDate.Time.Format("January 2, 2006"),
+			transaction.BookID_2, transaction.StudentID_2)
+
+		// Create notification request
+		req := &models.NotificationRequest{
+			RecipientID:   transaction.StudentID,
+			RecipientType: models.RecipientTypeStudent,
+			Type:          models.NotificationTypeDueSoon,
+			Title:         title,
+			Message:       message,
+			Priority:      models.NotificationPriorityMedium,
+			Metadata: map[string]interface{}{
+				"transaction_id": transaction.ID,
+				"book_id":        transaction.BookID,
+				"due_date":       transaction.DueDate.Time.Format("2006-01-02"),
+				"days_until_due": daysUntilDue,
+			},
+		}
+
+		// Create the notification
+		notification, err := s.CreateNotification(ctx, req)
+		if err != nil {
+			s.logger.Warn("Failed to create due soon notification",
+				"student_id", transaction.StudentID,
+				"book_id", transaction.BookID,
+				"error", err)
+			failureCount++
+			continue
+		}
+
+		s.logger.Info("Due soon notification created",
+			"notification_id", notification.ID,
+			"student_id", transaction.StudentID,
+			"student_code", transaction.StudentID_2,
+			"book_title", transaction.Title,
+			"due_date", transaction.DueDate.Time.Format("2006-01-02"))
+
+		successCount++
+	}
+
+	s.logger.Info("Due soon reminders process completed",
+		"total_books", len(dueSoonTransactions),
+		"successful_notifications", successCount,
+		"failed_notifications", failureCount)
+
 	return nil
 }
 
 // SendOverdueReminders sends reminders for overdue books
 func (s *NotificationService) SendOverdueReminders(ctx context.Context) error {
-	// TODO: Implement in Phase 7.2
-	s.logger.Info("SendOverdueReminders called - implementation pending")
+	s.logger.Info("Starting overdue reminders process")
+
+	// Get all overdue transactions
+	overdueTransactions, err := s.querier.ListTransactionsOverdue(ctx)
+	if err != nil {
+		s.logger.Error("Failed to get overdue transactions", "error", err)
+		return fmt.Errorf("failed to get overdue transactions: %w", err)
+	}
+
+	if len(overdueTransactions) == 0 {
+		s.logger.Info("No overdue books - no reminders to send")
+		return nil
+	}
+
+	var successCount, failureCount int
+	for _, transaction := range overdueTransactions {
+		// Calculate days overdue
+		daysOverdue := int(time.Since(transaction.DueDate.Time).Hours() / 24)
+
+		// Format fine amount
+		fineAmount := "0.00"
+		if transaction.FineAmount.Valid {
+			if jsonBytes, err := transaction.FineAmount.MarshalJSON(); err == nil {
+				fineAmount = string(jsonBytes)
+				// Remove quotes if present
+				if len(fineAmount) >= 2 && fineAmount[0] == '"' && fineAmount[len(fineAmount)-1] == '"' {
+					fineAmount = fineAmount[1 : len(fineAmount)-1]
+				}
+			}
+		}
+
+		// Create personalized notification
+		title := fmt.Sprintf("Overdue Book: %s", transaction.Title)
+		message := fmt.Sprintf("Dear %s %s,\n\n"+
+			"This is an urgent reminder that the book \"%s\" by %s is overdue.\n\n"+
+			"Due Date: %s\n"+
+			"Days Overdue: %d\n"+
+			"Fine Amount: $%s\n\n"+
+			"Please return the book immediately to avoid additional fees.\n\n"+
+			"Book ID: %s\n"+
+			"Student ID: %s\n\n"+
+			"Contact the library for assistance.\n\n"+
+			"Thank you,\nLibrary Management System",
+			transaction.FirstName, transaction.LastName,
+			transaction.Title, transaction.Author,
+			transaction.DueDate.Time.Format("January 2, 2006"),
+			daysOverdue,
+			fineAmount,
+			transaction.BookID_2, transaction.StudentID_2)
+
+		// Create notification request
+		req := &models.NotificationRequest{
+			RecipientID:   transaction.StudentID,
+			RecipientType: models.RecipientTypeStudent,
+			Type:          models.NotificationTypeOverdueReminder,
+			Title:         title,
+			Message:       message,
+			Priority:      models.NotificationPriorityHigh,
+			Metadata: map[string]interface{}{
+				"transaction_id": transaction.ID,
+				"book_id":        transaction.BookID,
+				"due_date":       transaction.DueDate.Time.Format("2006-01-02"),
+				"days_overdue":   daysOverdue,
+				"fine_amount":    fineAmount,
+			},
+		}
+
+		// Create the notification
+		notification, err := s.CreateNotification(ctx, req)
+		if err != nil {
+			s.logger.Warn("Failed to create overdue notification",
+				"student_id", transaction.StudentID,
+				"book_id", transaction.BookID,
+				"error", err)
+			failureCount++
+			continue
+		}
+
+		s.logger.Info("Overdue notification created",
+			"notification_id", notification.ID,
+			"student_id", transaction.StudentID,
+			"student_code", transaction.StudentID_2,
+			"book_title", transaction.Title,
+			"days_overdue", daysOverdue,
+			"fine_amount", fineAmount)
+
+		successCount++
+	}
+
+	s.logger.Info("Overdue reminders process completed",
+		"total_books", len(overdueTransactions),
+		"successful_notifications", successCount,
+		"failed_notifications", failureCount)
+
 	return nil
 }
 
 // SendBookAvailableNotifications sends notifications when reserved books become available
 func (s *NotificationService) SendBookAvailableNotifications(ctx context.Context, bookID int32) error {
-	// TODO: Implement in Phase 7.2
-	s.logger.Info("SendBookAvailableNotifications called - implementation pending", "book_id", bookID)
+	s.logger.Info("Starting book available notifications process", "book_id", bookID)
+
+	// Get all active reservations for this book
+	reservations, err := s.querier.ListActiveReservationsForAvailableBook(ctx, bookID)
+	if err != nil {
+		s.logger.Error("Failed to get active reservations for book", "book_id", bookID, "error", err)
+		return fmt.Errorf("failed to get active reservations for book: %w", err)
+	}
+
+	if len(reservations) == 0 {
+		s.logger.Info("No active reservations for book - no notifications to send", "book_id", bookID)
+		return nil
+	}
+
+	var successCount, failureCount int
+	for _, reservation := range reservations {
+		// Calculate how long the book has been reserved
+		daysReserved := int(time.Since(reservation.ReservedAt.Time).Hours() / 24)
+
+		// Create personalized notification
+		title := fmt.Sprintf("Reserved Book Available: %s", reservation.Title)
+		message := fmt.Sprintf("Dear %s %s,\n\n"+
+			"Great news! The book \"%s\" by %s that you reserved is now available.\n\n"+
+			"Reserved on: %s\n"+
+			"Days waited: %d\n\n"+
+			"Please visit the library to collect your book within 24 hours, "+
+			"or your reservation will expire.\n\n"+
+			"Book ID: %s\n"+
+			"Student ID: %s\n\n"+
+			"Thank you,\nLibrary Management System",
+			reservation.FirstName, reservation.LastName,
+			reservation.Title, reservation.Author,
+			reservation.ReservedAt.Time.Format("January 2, 2006"),
+			daysReserved,
+			reservation.BookCode, reservation.StudentCode)
+
+		// Create notification request
+		req := &models.NotificationRequest{
+			RecipientID:   reservation.StudentID,
+			RecipientType: models.RecipientTypeStudent,
+			Type:          models.NotificationTypeBookAvailable,
+			Title:         title,
+			Message:       message,
+			Priority:      models.NotificationPriorityHigh,
+			Metadata: map[string]interface{}{
+				"reservation_id": reservation.ID,
+				"book_id":        reservation.BookID,
+				"reserved_date":  reservation.ReservedAt.Time.Format("2006-01-02"),
+				"days_waited":    daysReserved,
+			},
+		}
+
+		// Create the notification
+		notification, err := s.CreateNotification(ctx, req)
+		if err != nil {
+			s.logger.Warn("Failed to create book available notification",
+				"student_id", reservation.StudentID,
+				"book_id", reservation.BookID,
+				"reservation_id", reservation.ID,
+				"error", err)
+			failureCount++
+			continue
+		}
+
+		s.logger.Info("Book available notification created",
+			"notification_id", notification.ID,
+			"student_id", reservation.StudentID,
+			"student_code", reservation.StudentCode,
+			"book_title", reservation.Title,
+			"reservation_id", reservation.ID)
+
+		successCount++
+	}
+
+	s.logger.Info("Book available notifications process completed",
+		"book_id", bookID,
+		"total_reservations", len(reservations),
+		"successful_notifications", successCount,
+		"failed_notifications", failureCount)
+
 	return nil
 }
 
 // SendFineNotices sends notifications about fines
 func (s *NotificationService) SendFineNotices(ctx context.Context) error {
-	// TODO: Implement in Phase 7.2
-	s.logger.Info("SendFineNotices called - implementation pending")
+	s.logger.Info("Starting fine notices process")
+
+	// Get all transactions with unpaid fines
+	fineTransactions, err := s.querier.ListTransactionsWithUnpaidFines(ctx)
+	if err != nil {
+		s.logger.Error("Failed to get transactions with unpaid fines", "error", err)
+		return fmt.Errorf("failed to get transactions with unpaid fines: %w", err)
+	}
+
+	if len(fineTransactions) == 0 {
+		s.logger.Info("No unpaid fines - no fine notices to send")
+		return nil
+	}
+
+	var successCount, failureCount int
+	for _, transaction := range fineTransactions {
+		// Format fine amount
+		fineAmount := "0.00"
+		if transaction.FineAmount.Valid {
+			if jsonBytes, err := transaction.FineAmount.MarshalJSON(); err == nil {
+				fineAmount = string(jsonBytes)
+				// Remove quotes if present
+				if len(fineAmount) >= 2 && fineAmount[0] == '"' && fineAmount[len(fineAmount)-1] == '"' {
+					fineAmount = fineAmount[1 : len(fineAmount)-1]
+				}
+			}
+		}
+
+		// Determine if the book is still overdue or returned
+		bookStatus := "returned"
+		statusMessage := "Although the book has been returned, there is still an outstanding fine."
+		if !transaction.ReturnedDate.Valid {
+			bookStatus = "overdue"
+			daysOverdue := int(time.Since(transaction.DueDate.Time).Hours() / 24)
+			statusMessage = fmt.Sprintf("The book is still %d days overdue. Please return it immediately.", daysOverdue)
+		}
+
+		// Create personalized notification
+		title := fmt.Sprintf("Outstanding Fine: $%s", fineAmount)
+		message := fmt.Sprintf("Dear %s %s,\n\n"+
+			"You have an outstanding fine of $%s for the book \"%s\" by %s.\n\n"+
+			"Book Status: %s\n"+
+			"%s\n\n"+
+			"Please pay this fine at the library as soon as possible.\n\n"+
+			"Book ID: %s\n"+
+			"Student ID: %s\n"+
+			"Fine Amount: $%s\n\n"+
+			"Contact the library for payment options.\n\n"+
+			"Thank you,\nLibrary Management System",
+			transaction.FirstName, transaction.LastName,
+			fineAmount,
+			transaction.Title, transaction.Author,
+			bookStatus,
+			statusMessage,
+			transaction.BookID_2, transaction.StudentID_2,
+			fineAmount)
+
+		// Create notification request
+		req := &models.NotificationRequest{
+			RecipientID:   transaction.StudentID,
+			RecipientType: models.RecipientTypeStudent,
+			Type:          models.NotificationTypeFineNotice,
+			Title:         title,
+			Message:       message,
+			Priority:      models.NotificationPriorityHigh,
+			Metadata: map[string]interface{}{
+				"transaction_id": transaction.ID,
+				"book_id":        transaction.BookID,
+				"fine_amount":    fineAmount,
+				"book_status":    bookStatus,
+			},
+		}
+
+		// Create the notification
+		notification, err := s.CreateNotification(ctx, req)
+		if err != nil {
+			s.logger.Warn("Failed to create fine notice notification",
+				"student_id", transaction.StudentID,
+				"book_id", transaction.BookID,
+				"fine_amount", fineAmount,
+				"error", err)
+			failureCount++
+			continue
+		}
+
+		s.logger.Info("Fine notice notification created",
+			"notification_id", notification.ID,
+			"student_id", transaction.StudentID,
+			"student_code", transaction.StudentID_2,
+			"book_title", transaction.Title,
+			"fine_amount", fineAmount)
+
+		successCount++
+	}
+
+	s.logger.Info("Fine notices process completed",
+		"total_fines", len(fineTransactions),
+		"successful_notifications", successCount,
+		"failed_notifications", failureCount)
+
 	return nil
+}
+
+// getRecipientEmail retrieves the email address for a recipient
+func (s *NotificationService) getRecipientEmail(ctx context.Context, recipientID int32, recipientType models.RecipientType) (string, error) {
+	switch recipientType {
+	case models.RecipientTypeStudent:
+		// Cast querier to include student queries
+		if studentQuerier, ok := s.querier.(interface {
+			GetStudentByID(ctx context.Context, id int32) (queries.Student, error)
+		}); ok {
+			student, err := studentQuerier.GetStudentByID(ctx, recipientID)
+			if err != nil {
+				return "", fmt.Errorf("failed to get student: %w", err)
+			}
+			if !student.Email.Valid {
+				return "", fmt.Errorf("student has no email address")
+			}
+			return student.Email.String, nil
+		}
+		return "", fmt.Errorf("querier does not support student queries")
+
+	case models.RecipientTypeLibrarian:
+		// Cast querier to include user queries
+		if userQuerier, ok := s.querier.(interface {
+			GetUserByID(ctx context.Context, id int32) (queries.User, error)
+		}); ok {
+			user, err := userQuerier.GetUserByID(ctx, recipientID)
+			if err != nil {
+				return "", fmt.Errorf("failed to get user: %w", err)
+			}
+			return user.Email, nil
+		}
+		return "", fmt.Errorf("querier does not support user queries")
+
+	default:
+		return "", fmt.Errorf("unsupported recipient type: %s", recipientType)
+	}
+}
+
+// extractTemplateData extracts template data from notification metadata
+func (s *NotificationService) extractTemplateData(notification queries.Notification) map[string]interface{} {
+	// For now, return basic template data
+	// In a real implementation, this would parse the metadata field
+	return map[string]interface{}{
+		"NotificationTitle":   notification.Title,
+		"NotificationMessage": notification.Message,
+		"NotificationID":      notification.ID,
+		"RecipientID":         notification.RecipientID,
+	}
 }

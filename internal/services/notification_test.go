@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math/big"
 	"os"
 	"testing"
 	"time"
@@ -84,6 +85,27 @@ func (m *MockNotificationQuerier) DeleteNotification(ctx context.Context, id int
 func (m *MockNotificationQuerier) DeleteOldNotifications(ctx context.Context, createdAt pgtype.Timestamp) error {
 	args := m.Called(ctx, createdAt)
 	return args.Error(0)
+}
+
+// Phase 7.2 - Automated notifications mock methods
+func (m *MockNotificationQuerier) ListTransactionsDueSoon(ctx context.Context) ([]queries.ListTransactionsDueSoonRow, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]queries.ListTransactionsDueSoonRow), args.Error(1)
+}
+
+func (m *MockNotificationQuerier) ListTransactionsOverdue(ctx context.Context) ([]queries.ListTransactionsOverdueRow, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]queries.ListTransactionsOverdueRow), args.Error(1)
+}
+
+func (m *MockNotificationQuerier) ListTransactionsWithUnpaidFines(ctx context.Context) ([]queries.ListTransactionsWithUnpaidFinesRow, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]queries.ListTransactionsWithUnpaidFinesRow), args.Error(1)
+}
+
+func (m *MockNotificationQuerier) ListActiveReservationsForAvailableBook(ctx context.Context, bookID int32) ([]queries.ListActiveReservationsForAvailableBookRow, error) {
+	args := m.Called(ctx, bookID)
+	return args.Get(0).([]queries.ListActiveReservationsForAvailableBookRow), args.Error(1)
 }
 
 // MockEmailService is a mock implementation of EmailServiceInterface
@@ -188,6 +210,16 @@ func createSampleDBNotification() queries.Notification {
 		IsRead:        pgtype.Bool{Bool: false, Valid: true},
 		SentAt:        pgtype.Timestamp{Valid: false},
 		CreatedAt:     pgtype.Timestamp{Time: time.Now(), Valid: true},
+	}
+}
+
+// Helper function to create pgtype.Numeric from string
+func createNumeric(value string) pgtype.Numeric {
+	bigInt, _ := new(big.Int).SetString(value, 10)
+	return pgtype.Numeric{
+		Int:   bigInt,
+		Exp:   -2, // Two decimal places
+		Valid: true,
 	}
 }
 
@@ -870,5 +902,356 @@ func TestNotificationService_ProcessMessageTemplate(t *testing.T) {
 		// Missing variables remain as placeholders
 		assert.Contains(t, result, "Hello John Doe")
 		assert.Contains(t, result, "{{.BookTitle}}")
+	})
+}
+
+// Phase 7.2 - Automated notification method tests
+
+func TestNotificationService_SendDueSoonReminders(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("successful due soon reminders", func(t *testing.T) {
+		service, mockQuerier, _, mockQueueService := createTestNotificationService()
+
+		// Create sample due soon transactions
+		dueDate := time.Now().Add(time.Hour * 24) // Due tomorrow
+		dueSoonTransactions := []queries.ListTransactionsDueSoonRow{
+			{
+				ID:          1,
+				StudentID:   1,
+				BookID:      1,
+				DueDate:     pgtype.Timestamp{Time: dueDate, Valid: true},
+				FirstName:   "John",
+				LastName:    "Doe",
+				StudentID_2: "STU001",
+				Email:       pgtype.Text{String: "john.doe@example.com", Valid: true},
+				Title:       "The Great Gatsby",
+				Author:      "F. Scott Fitzgerald",
+				BookID_2:    "BOOK001",
+			},
+			{
+				ID:          2,
+				StudentID:   2,
+				BookID:      2,
+				DueDate:     pgtype.Timestamp{Time: dueDate.Add(time.Hour * 24), Valid: true}, // Due in 2 days
+				FirstName:   "Jane",
+				LastName:    "Smith",
+				StudentID_2: "STU002",
+				Email:       pgtype.Text{String: "jane.smith@example.com", Valid: true},
+				Title:       "To Kill a Mockingbird",
+				Author:      "Harper Lee",
+				BookID_2:    "BOOK002",
+			},
+		}
+
+		mockQuerier.On("ListTransactionsDueSoon", ctx).Return(dueSoonTransactions, nil)
+
+		// Mock notification creation for each transaction
+		for i, transaction := range dueSoonTransactions {
+			dbNotification := createSampleDBNotification()
+			dbNotification.ID = int32(i + 1)
+			dbNotification.RecipientID = transaction.StudentID
+			dbNotification.Type = "due_soon"
+
+			mockQuerier.On("CreateNotification", ctx, mock.MatchedBy(func(params queries.CreateNotificationParams) bool {
+				return params.RecipientID == transaction.StudentID &&
+					params.Type == "due_soon" &&
+					params.RecipientType == "student"
+			})).Return(dbNotification, nil)
+
+			mockQueueService.On("QueueNotification", ctx, dbNotification.ID).Return(nil)
+		}
+
+		err := service.SendDueSoonReminders(ctx)
+
+		assert.NoError(t, err)
+		mockQuerier.AssertExpectations(t)
+		mockQueueService.AssertExpectations(t)
+	})
+
+	t.Run("no due soon transactions", func(t *testing.T) {
+		service, mockQuerier, _, _ := createTestNotificationService()
+
+		mockQuerier.On("ListTransactionsDueSoon", ctx).Return([]queries.ListTransactionsDueSoonRow{}, nil)
+
+		err := service.SendDueSoonReminders(ctx)
+
+		assert.NoError(t, err)
+		mockQuerier.AssertExpectations(t)
+	})
+
+	t.Run("database error", func(t *testing.T) {
+		service, mockQuerier, _, _ := createTestNotificationService()
+
+		mockQuerier.On("ListTransactionsDueSoon", ctx).Return([]queries.ListTransactionsDueSoonRow{}, fmt.Errorf("database error"))
+
+		err := service.SendDueSoonReminders(ctx)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to get due soon transactions")
+		mockQuerier.AssertExpectations(t)
+	})
+
+	t.Run("notification creation failure", func(t *testing.T) {
+		service, mockQuerier, _, _ := createTestNotificationService()
+
+		dueDate := time.Now().Add(time.Hour * 24)
+		dueSoonTransactions := []queries.ListTransactionsDueSoonRow{
+			{
+				ID:          1,
+				StudentID:   1,
+				BookID:      1,
+				DueDate:     pgtype.Timestamp{Time: dueDate, Valid: true},
+				FirstName:   "John",
+				LastName:    "Doe",
+				StudentID_2: "STU001",
+				Email:       pgtype.Text{String: "john.doe@example.com", Valid: true},
+				Title:       "The Great Gatsby",
+				Author:      "F. Scott Fitzgerald",
+				BookID_2:    "BOOK001",
+			},
+		}
+
+		mockQuerier.On("ListTransactionsDueSoon", ctx).Return(dueSoonTransactions, nil)
+		mockQuerier.On("CreateNotification", ctx, mock.AnythingOfType("queries.CreateNotificationParams")).Return(queries.Notification{}, fmt.Errorf("creation failed"))
+
+		err := service.SendDueSoonReminders(ctx)
+
+		assert.NoError(t, err) // Should not fail even if some notifications fail
+		mockQuerier.AssertExpectations(t)
+	})
+}
+
+func TestNotificationService_SendOverdueReminders(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("successful overdue reminders", func(t *testing.T) {
+		service, mockQuerier, _, mockQueueService := createTestNotificationService()
+
+		// Create sample overdue transactions
+		overdueDate := time.Now().Add(-time.Hour * 24 * 3) // 3 days overdue
+		fineAmount := createNumeric("1500")                // $15.00
+		overdueTransactions := []queries.ListTransactionsOverdueRow{
+			{
+				ID:          1,
+				StudentID:   1,
+				BookID:      1,
+				DueDate:     pgtype.Timestamp{Time: overdueDate, Valid: true},
+				FineAmount:  fineAmount,
+				FirstName:   "John",
+				LastName:    "Doe",
+				StudentID_2: "STU001",
+				Email:       pgtype.Text{String: "john.doe@example.com", Valid: true},
+				Title:       "The Great Gatsby",
+				Author:      "F. Scott Fitzgerald",
+				BookID_2:    "BOOK001",
+			},
+		}
+
+		mockQuerier.On("ListTransactionsOverdue", ctx).Return(overdueTransactions, nil)
+
+		dbNotification := createSampleDBNotification()
+		dbNotification.ID = 1
+		dbNotification.RecipientID = 1
+		dbNotification.Type = "overdue_reminder"
+
+		mockQuerier.On("CreateNotification", ctx, mock.MatchedBy(func(params queries.CreateNotificationParams) bool {
+			return params.RecipientID == 1 &&
+				params.Type == "overdue_reminder" &&
+				params.RecipientType == "student"
+		})).Return(dbNotification, nil)
+
+		mockQueueService.On("QueueNotification", ctx, dbNotification.ID).Return(nil)
+
+		err := service.SendOverdueReminders(ctx)
+
+		assert.NoError(t, err)
+		mockQuerier.AssertExpectations(t)
+		mockQueueService.AssertExpectations(t)
+	})
+
+	t.Run("no overdue transactions", func(t *testing.T) {
+		service, mockQuerier, _, _ := createTestNotificationService()
+
+		mockQuerier.On("ListTransactionsOverdue", ctx).Return([]queries.ListTransactionsOverdueRow{}, nil)
+
+		err := service.SendOverdueReminders(ctx)
+
+		assert.NoError(t, err)
+		mockQuerier.AssertExpectations(t)
+	})
+
+	t.Run("database error", func(t *testing.T) {
+		service, mockQuerier, _, _ := createTestNotificationService()
+
+		mockQuerier.On("ListTransactionsOverdue", ctx).Return([]queries.ListTransactionsOverdueRow{}, fmt.Errorf("database error"))
+
+		err := service.SendOverdueReminders(ctx)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to get overdue transactions")
+		mockQuerier.AssertExpectations(t)
+	})
+}
+
+func TestNotificationService_SendBookAvailableNotifications(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("successful book available notifications", func(t *testing.T) {
+		service, mockQuerier, _, mockQueueService := createTestNotificationService()
+
+		bookID := int32(1)
+		reservedDate := time.Now().Add(-time.Hour * 24 * 2) // Reserved 2 days ago
+		reservations := []queries.ListActiveReservationsForAvailableBookRow{
+			{
+				ID:          1,
+				StudentID:   1,
+				BookID:      bookID,
+				ReservedAt:  pgtype.Timestamp{Time: reservedDate, Valid: true},
+				FirstName:   "John",
+				LastName:    "Doe",
+				StudentCode: "STU001",
+				Email:       pgtype.Text{String: "john.doe@example.com", Valid: true},
+				Title:       "The Great Gatsby",
+				Author:      "F. Scott Fitzgerald",
+				BookCode:    "BOOK001",
+			},
+		}
+
+		mockQuerier.On("ListActiveReservationsForAvailableBook", ctx, bookID).Return(reservations, nil)
+
+		dbNotification := createSampleDBNotification()
+		dbNotification.ID = 1
+		dbNotification.RecipientID = 1
+		dbNotification.Type = "book_available"
+
+		mockQuerier.On("CreateNotification", ctx, mock.MatchedBy(func(params queries.CreateNotificationParams) bool {
+			return params.RecipientID == 1 &&
+				params.Type == "book_available" &&
+				params.RecipientType == "student"
+		})).Return(dbNotification, nil)
+
+		mockQueueService.On("QueueNotification", ctx, dbNotification.ID).Return(nil)
+
+		err := service.SendBookAvailableNotifications(ctx, bookID)
+
+		assert.NoError(t, err)
+		mockQuerier.AssertExpectations(t)
+		mockQueueService.AssertExpectations(t)
+	})
+
+	t.Run("no active reservations", func(t *testing.T) {
+		service, mockQuerier, _, _ := createTestNotificationService()
+
+		bookID := int32(1)
+		mockQuerier.On("ListActiveReservationsForAvailableBook", ctx, bookID).Return([]queries.ListActiveReservationsForAvailableBookRow{}, nil)
+
+		err := service.SendBookAvailableNotifications(ctx, bookID)
+
+		assert.NoError(t, err)
+		mockQuerier.AssertExpectations(t)
+	})
+
+	t.Run("database error", func(t *testing.T) {
+		service, mockQuerier, _, _ := createTestNotificationService()
+
+		bookID := int32(1)
+		mockQuerier.On("ListActiveReservationsForAvailableBook", ctx, bookID).Return([]queries.ListActiveReservationsForAvailableBookRow{}, fmt.Errorf("database error"))
+
+		err := service.SendBookAvailableNotifications(ctx, bookID)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to get active reservations for book")
+		mockQuerier.AssertExpectations(t)
+	})
+}
+
+func TestNotificationService_SendFineNotices(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("successful fine notices", func(t *testing.T) {
+		service, mockQuerier, _, mockQueueService := createTestNotificationService()
+
+		// Create sample transactions with unpaid fines
+		fineAmount := createNumeric("2550") // $25.50
+		fineTransactions := []queries.ListTransactionsWithUnpaidFinesRow{
+			{
+				ID:           1,
+				StudentID:    1,
+				BookID:       1,
+				FineAmount:   fineAmount,
+				ReturnedDate: pgtype.Timestamp{Valid: false},                                           // Still not returned
+				DueDate:      pgtype.Timestamp{Time: time.Now().Add(-time.Hour * 24 * 5), Valid: true}, // 5 days overdue
+				FirstName:    "John",
+				LastName:     "Doe",
+				StudentID_2:  "STU001",
+				Email:        pgtype.Text{String: "john.doe@example.com", Valid: true},
+				Title:        "The Great Gatsby",
+				Author:       "F. Scott Fitzgerald",
+				BookID_2:     "BOOK001",
+			},
+			{
+				ID:           2,
+				StudentID:    2,
+				BookID:       2,
+				FineAmount:   createNumeric("1000"),                                                // $10.00
+				ReturnedDate: pgtype.Timestamp{Time: time.Now().Add(-time.Hour * 24), Valid: true}, // Returned but fine not paid
+				DueDate:      pgtype.Timestamp{Time: time.Now().Add(-time.Hour * 24 * 3), Valid: true},
+				FirstName:    "Jane",
+				LastName:     "Smith",
+				StudentID_2:  "STU002",
+				Email:        pgtype.Text{String: "jane.smith@example.com", Valid: true},
+				Title:        "To Kill a Mockingbird",
+				Author:       "Harper Lee",
+				BookID_2:     "BOOK002",
+			},
+		}
+
+		mockQuerier.On("ListTransactionsWithUnpaidFines", ctx).Return(fineTransactions, nil)
+
+		// Mock notification creation for each transaction
+		for i, transaction := range fineTransactions {
+			dbNotification := createSampleDBNotification()
+			dbNotification.ID = int32(i + 1)
+			dbNotification.RecipientID = transaction.StudentID
+			dbNotification.Type = "fine_notice"
+
+			mockQuerier.On("CreateNotification", ctx, mock.MatchedBy(func(params queries.CreateNotificationParams) bool {
+				return params.RecipientID == transaction.StudentID &&
+					params.Type == "fine_notice" &&
+					params.RecipientType == "student"
+			})).Return(dbNotification, nil)
+
+			mockQueueService.On("QueueNotification", ctx, dbNotification.ID).Return(nil)
+		}
+
+		err := service.SendFineNotices(ctx)
+
+		assert.NoError(t, err)
+		mockQuerier.AssertExpectations(t)
+		mockQueueService.AssertExpectations(t)
+	})
+
+	t.Run("no unpaid fines", func(t *testing.T) {
+		service, mockQuerier, _, _ := createTestNotificationService()
+
+		mockQuerier.On("ListTransactionsWithUnpaidFines", ctx).Return([]queries.ListTransactionsWithUnpaidFinesRow{}, nil)
+
+		err := service.SendFineNotices(ctx)
+
+		assert.NoError(t, err)
+		mockQuerier.AssertExpectations(t)
+	})
+
+	t.Run("database error", func(t *testing.T) {
+		service, mockQuerier, _, _ := createTestNotificationService()
+
+		mockQuerier.On("ListTransactionsWithUnpaidFines", ctx).Return([]queries.ListTransactionsWithUnpaidFinesRow{}, fmt.Errorf("database error"))
+
+		err := service.SendFineNotices(ctx)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to get transactions with unpaid fines")
+		mockQuerier.AssertExpectations(t)
 	})
 }
