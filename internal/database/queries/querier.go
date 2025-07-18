@@ -12,7 +12,9 @@ import (
 
 type Querier interface {
 	BulkUpdateStudentStatus(ctx context.Context, arg BulkUpdateStudentStatusParams) error
+	CancelQueueItem(ctx context.Context, id int32) (EmailQueue, error)
 	CancelReservation(ctx context.Context, id int32) (Reservation, error)
+	CompleteQueueItem(ctx context.Context, id int32) (EmailQueue, error)
 	CountActiveReservationsByBook(ctx context.Context, bookID int32) (int64, error)
 	CountActiveReservationsByStudent(ctx context.Context, studentID int32) (int64, error)
 	CountAuditLogs(ctx context.Context) (int64, error)
@@ -31,6 +33,12 @@ type Querier interface {
 	CountUsers(ctx context.Context) (int64, error)
 	CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) error
 	CreateBook(ctx context.Context, arg CreateBookParams) (Book, error)
+	// Email Deliveries Queries
+	// Phase 7.4: Email Integration - Delivery Tracking
+	CreateEmailDelivery(ctx context.Context, arg CreateEmailDeliveryParams) (EmailDelivery, error)
+	// Email Queue Queries
+	// Phase 7.4: Email Integration - Queue Processing
+	CreateEmailQueueItem(ctx context.Context, arg CreateEmailQueueItemParams) (EmailQueue, error)
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) (Notification, error)
 	CreateReservation(ctx context.Context, arg CreateReservationParams) (Reservation, error)
 	CreateStudent(ctx context.Context, arg CreateStudentParams) (Student, error)
@@ -38,12 +46,27 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteNotification(ctx context.Context, id int32) error
 	DeleteOldAuditLogs(ctx context.Context, createdAt pgtype.Timestamp) error
+	DeleteOldEmailDeliveries(ctx context.Context, createdAt pgtype.Timestamp) error
 	DeleteOldNotifications(ctx context.Context, createdAt pgtype.Timestamp) error
+	DeleteOldQueueItems(ctx context.Context, createdAt pgtype.Timestamp) error
 	GetBookByBookID(ctx context.Context, bookID string) (Book, error)
 	GetBookByID(ctx context.Context, id int32) (Book, error)
 	GetBookByISBN(ctx context.Context, isbn pgtype.Text) (Book, error)
+	GetEmailDeliveriesByNotification(ctx context.Context, notificationID int32) ([]EmailDelivery, error)
+	GetEmailDeliveriesByStatus(ctx context.Context, arg GetEmailDeliveriesByStatusParams) ([]EmailDelivery, error)
+	GetEmailDelivery(ctx context.Context, id int32) (EmailDelivery, error)
+	GetEmailDeliveryHistory(ctx context.Context, arg GetEmailDeliveryHistoryParams) ([]GetEmailDeliveryHistoryRow, error)
+	GetEmailDeliveryStats(ctx context.Context, arg GetEmailDeliveryStatsParams) (GetEmailDeliveryStatsRow, error)
+	GetEmailQueueItem(ctx context.Context, id int32) (EmailQueue, error)
+	GetFailedEmailDeliveries(ctx context.Context, limit int32) ([]EmailDelivery, error)
+	GetNextQueueItems(ctx context.Context, limit int32) ([]EmailQueue, error)
 	GetNextReservationForBook(ctx context.Context, bookID int32) (GetNextReservationForBookRow, error)
 	GetNotificationByID(ctx context.Context, id int32) (Notification, error)
+	GetPendingEmailDeliveries(ctx context.Context, limit int32) ([]EmailDelivery, error)
+	GetProcessingQueueItems(ctx context.Context, processingStartedAt pgtype.Timestamp) ([]EmailQueue, error)
+	GetQueueItemsByNotification(ctx context.Context, notificationID int32) ([]EmailQueue, error)
+	GetQueueItemsByStatus(ctx context.Context, arg GetQueueItemsByStatusParams) ([]EmailQueue, error)
+	GetQueueStats(ctx context.Context, arg GetQueueStatsParams) (GetQueueStatsRow, error)
 	GetRenewalStatisticsByStudent(ctx context.Context, studentID int32) (GetRenewalStatisticsByStudentRow, error)
 	GetReservationByID(ctx context.Context, id int32) (GetReservationByIDRow, error)
 	GetStudentByEmail(ctx context.Context, email pgtype.Text) (Student, error)
@@ -95,6 +118,7 @@ type Querier interface {
 	MarkNotificationAsRead(ctx context.Context, id int32) error
 	MarkNotificationAsSent(ctx context.Context, id int32) error
 	PayTransactionFine(ctx context.Context, id int32) error
+	ResetStuckQueueItems(ctx context.Context, processingStartedAt pgtype.Timestamp) error
 	ReturnBook(ctx context.Context, arg ReturnBookParams) (Transaction, error)
 	SearchBooks(ctx context.Context, arg SearchBooksParams) ([]Book, error)
 	SearchBooksByGenre(ctx context.Context, arg SearchBooksByGenreParams) ([]Book, error)
@@ -106,6 +130,18 @@ type Querier interface {
 	UpdateBook(ctx context.Context, arg UpdateBookParams) (Book, error)
 	UpdateBookAvailability(ctx context.Context, arg UpdateBookAvailabilityParams) error
 	UpdateBookCondition(ctx context.Context, arg UpdateBookConditionParams) error
+	UpdateEmailDeliveryError(ctx context.Context, arg UpdateEmailDeliveryErrorParams) (EmailDelivery, error)
+	UpdateEmailDeliveryProviderInfo(ctx context.Context, arg UpdateEmailDeliveryProviderInfoParams) (EmailDelivery, error)
+	UpdateEmailDeliveryStatus(ctx context.Context, arg UpdateEmailDeliveryStatusParams) (EmailDelivery, error)
+	UpdateEmailDeliveryToDelivered(ctx context.Context, id int32) (EmailDelivery, error)
+	UpdateEmailDeliveryToFailed(ctx context.Context, id int32) (EmailDelivery, error)
+	UpdateEmailDeliveryToSent(ctx context.Context, id int32) (EmailDelivery, error)
+	UpdateQueueItemError(ctx context.Context, arg UpdateQueueItemErrorParams) (EmailQueue, error)
+	// Items processing longer than threshold
+	UpdateQueueItemStatus(ctx context.Context, arg UpdateQueueItemStatusParams) (EmailQueue, error)
+	UpdateQueueItemToCompleted(ctx context.Context, arg UpdateQueueItemToCompletedParams) (EmailQueue, error)
+	UpdateQueueItemToFailed(ctx context.Context, arg UpdateQueueItemToFailedParams) (EmailQueue, error)
+	UpdateQueueItemToProcessing(ctx context.Context, arg UpdateQueueItemToProcessingParams) (EmailQueue, error)
 	UpdateReservationStatus(ctx context.Context, arg UpdateReservationStatusParams) (Reservation, error)
 	UpdateStudent(ctx context.Context, arg UpdateStudentParams) (Student, error)
 	UpdateStudentPassword(ctx context.Context, arg UpdateStudentPasswordParams) error

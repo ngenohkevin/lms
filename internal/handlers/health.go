@@ -7,17 +7,20 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/ngenohkevin/lms/internal/database"
+	"github.com/ngenohkevin/lms/internal/services"
 )
 
 type HealthHandler struct {
-	db    *database.Database
-	redis *database.RedisClient
+	db           *database.Database
+	redis        *database.RedisClient
+	emailService services.EmailServiceInterface
 }
 
-func NewHealthHandler(db *database.Database, redis *database.RedisClient) *HealthHandler {
+func NewHealthHandler(db *database.Database, redis *database.RedisClient, emailService services.EmailServiceInterface) *HealthHandler {
 	return &HealthHandler{
-		db:    db,
-		redis: redis,
+		db:           db,
+		redis:        redis,
+		emailService: emailService,
 	}
 }
 
@@ -71,6 +74,21 @@ func (h *HealthHandler) Health(c *gin.Context) {
 			response.Status = "unhealthy"
 		} else {
 			response.Checks["redis"] = HealthCheck{
+				Status: "healthy",
+			}
+		}
+	}
+
+	// Check Email Service
+	if h.emailService != nil {
+		if err := h.emailService.TestConnection(ctx); err != nil {
+			response.Checks["email"] = HealthCheck{
+				Status:  "unhealthy",
+				Message: err.Error(),
+			}
+			response.Status = "unhealthy"
+		} else {
+			response.Checks["email"] = HealthCheck{
 				Status: "healthy",
 			}
 		}

@@ -523,6 +523,10 @@ func (m *MockEmailService) GetDeliveryStatus(ctx context.Context, messageID stri
 	return &services.EmailDeliveryStatus{Status: "delivered"}, nil
 }
 
+func (m *MockEmailService) TestConnection(ctx context.Context) error {
+	return nil
+}
+
 // MockQueueService for testing
 type MockQueueService struct{}
 

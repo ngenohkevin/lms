@@ -14,7 +14,7 @@ func TestHealthHandler_Ping(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	// Create handler
-	handler := NewHealthHandler(nil, nil)
+	handler := NewHealthHandler(nil, nil, nil)
 
 	// Create test router
 	router := gin.New()
@@ -57,7 +57,7 @@ func TestHealthHandler_Health_WithoutDependencies(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	// Create handler without dependencies
-	handler := NewHealthHandler(nil, nil)
+	handler := NewHealthHandler(nil, nil, nil)
 
 	// Create test router
 	router := gin.New()
