@@ -19,6 +19,7 @@ type EmailServiceInterface interface {
 	SendBatchEmails(ctx context.Context, emails []EmailRequest) error
 	ValidateEmail(email string) error
 	GetDeliveryStatus(ctx context.Context, messageID string) (*EmailDeliveryStatus, error)
+	TestConnection(ctx context.Context) error
 }
 
 // EmailRequest represents an email request
@@ -48,10 +49,17 @@ type EmailService struct {
 
 // NewEmailService creates a new email service
 func NewEmailService(config *models.EmailConfig, logger *slog.Logger) *EmailService {
-	return &EmailService{
+	service := &EmailService{
 		config: config,
 		logger: logger,
 	}
+
+	// Validate configuration on creation
+	if err := service.validateConfig(); err != nil {
+		logger.Warn("Email service created with invalid configuration", "error", err)
+	}
+
+	return service
 }
 
 // SendEmail sends a simple email
@@ -301,6 +309,142 @@ func (s *EmailService) sendWithSSL(addr string, auth smtp.Auth, from string, to 
 	}
 
 	return client.Quit()
+}
+
+// validateConfig validates the email configuration
+func (s *EmailService) validateConfig() error {
+	if s.config == nil {
+		return fmt.Errorf("email configuration is nil")
+	}
+
+	if s.config.SMTPHost == "" {
+		return fmt.Errorf("SMTP host is required")
+	}
+
+	if s.config.SMTPPort <= 0 || s.config.SMTPPort > 65535 {
+		return fmt.Errorf("invalid SMTP port: %d", s.config.SMTPPort)
+	}
+
+	if s.config.FromEmail == "" {
+		return fmt.Errorf("from email is required")
+	}
+
+	if err := s.ValidateEmail(s.config.FromEmail); err != nil {
+		return fmt.Errorf("invalid from email: %w", err)
+	}
+
+	// Validate encryption settings
+	if s.config.UseTLS && s.config.UseSSL {
+		return fmt.Errorf("cannot use both TLS and SSL simultaneously")
+	}
+
+	return s.validateSecuritySettings()
+}
+
+// validateSecuritySettings validates security-related configuration
+func (s *EmailService) validateSecuritySettings() error {
+	// Ensure encryption is enabled for production
+	if !s.config.UseTLS && !s.config.UseSSL {
+		return fmt.Errorf("insecure configuration: neither TLS nor SSL enabled")
+	}
+
+	// Validate password strength (basic check)
+	if len(s.config.SMTPPassword) < 6 {
+		return fmt.Errorf("password too short: minimum 6 characters required")
+	}
+
+	return nil
+}
+
+// TestConnection tests the SMTP connection
+func (s *EmailService) TestConnection(ctx context.Context) error {
+	if err := s.validateConfig(); err != nil {
+		return fmt.Errorf("configuration validation failed: %w", err)
+	}
+
+	// Set up authentication
+	auth := smtp.PlainAuth("", s.config.SMTPUsername, s.config.SMTPPassword, s.config.SMTPHost)
+
+	// Server address
+	addr := fmt.Sprintf("%s:%d", s.config.SMTPHost, s.config.SMTPPort)
+
+	// Test connection based on encryption type
+	if s.config.UseSSL {
+		return s.testSSLConnection(addr, auth)
+	} else if s.config.UseTLS {
+		return s.testTLSConnection(addr, auth)
+	} else {
+		return s.testPlainConnection(addr, auth)
+	}
+}
+
+// testTLSConnection tests TLS connection
+func (s *EmailService) testTLSConnection(addr string, auth smtp.Auth) error {
+	client, err := smtp.Dial(addr)
+	if err != nil {
+		return fmt.Errorf("failed to connect to SMTP server: %w", err)
+	}
+	defer client.Quit()
+
+	// Start TLS
+	if err := client.StartTLS(&tls.Config{ServerName: s.config.SMTPHost}); err != nil {
+		return fmt.Errorf("failed to start TLS: %w", err)
+	}
+
+	// Test authentication
+	if auth != nil {
+		if err := client.Auth(auth); err != nil {
+			return fmt.Errorf("SMTP authentication failed: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// testSSLConnection tests SSL connection
+func (s *EmailService) testSSLConnection(addr string, auth smtp.Auth) error {
+	tlsConfig := &tls.Config{
+		ServerName: s.config.SMTPHost,
+	}
+
+	conn, err := tls.Dial("tcp", addr, tlsConfig)
+	if err != nil {
+		return fmt.Errorf("failed to establish SSL connection: %w", err)
+	}
+	defer conn.Close()
+
+	client, err := smtp.NewClient(conn, s.config.SMTPHost)
+	if err != nil {
+		return fmt.Errorf("failed to create SMTP client: %w", err)
+	}
+	defer client.Quit()
+
+	// Test authentication
+	if auth != nil {
+		if err := client.Auth(auth); err != nil {
+			return fmt.Errorf("SMTP authentication failed: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// testPlainConnection tests plain connection (not recommended for production)
+func (s *EmailService) testPlainConnection(addr string, auth smtp.Auth) error {
+	client, err := smtp.Dial(addr)
+	if err != nil {
+		return fmt.Errorf("failed to connect to SMTP server: %w", err)
+	}
+	defer client.Quit()
+
+	// Test authentication
+	if auth != nil {
+		if err := client.Auth(auth); err != nil {
+			return fmt.Errorf("SMTP authentication failed: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // Default email templates

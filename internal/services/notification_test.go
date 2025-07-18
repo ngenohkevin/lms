@@ -138,6 +138,11 @@ func (m *MockEmailService) GetDeliveryStatus(ctx context.Context, messageID stri
 	return args.Get(0).(*EmailDeliveryStatus), args.Error(1)
 }
 
+func (m *MockEmailService) TestConnection(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
 // MockQueueService is a mock implementation of QueueServiceInterface
 type MockQueueService struct {
 	mock.Mock

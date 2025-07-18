@@ -45,6 +45,50 @@ type Book struct {
 	Condition       pgtype.Text      `db:"condition" json:"condition"`
 }
 
+// Tracks email delivery status and attempts for notifications
+type EmailDelivery struct {
+	ID             int32  `db:"id" json:"id"`
+	NotificationID int32  `db:"notification_id" json:"notification_id"`
+	EmailAddress   string `db:"email_address" json:"email_address"`
+	// Email delivery status: pending, sent, delivered, failed, bounced
+	Status       string           `db:"status" json:"status"`
+	SentAt       pgtype.Timestamp `db:"sent_at" json:"sent_at"`
+	DeliveredAt  pgtype.Timestamp `db:"delivered_at" json:"delivered_at"`
+	FailedAt     pgtype.Timestamp `db:"failed_at" json:"failed_at"`
+	ErrorMessage pgtype.Text      `db:"error_message" json:"error_message"`
+	// Number of delivery attempts made
+	RetryCount pgtype.Int4 `db:"retry_count" json:"retry_count"`
+	MaxRetries pgtype.Int4 `db:"max_retries" json:"max_retries"`
+	// External email provider message ID for tracking
+	ProviderMessageID pgtype.Text `db:"provider_message_id" json:"provider_message_id"`
+	// Additional delivery information in JSON format
+	DeliveryMetadata []byte           `db:"delivery_metadata" json:"delivery_metadata"`
+	CreatedAt        pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt        pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+}
+
+// Queue for processing email notifications with priority and retry support
+type EmailQueue struct {
+	ID             int32 `db:"id" json:"id"`
+	NotificationID int32 `db:"notification_id" json:"notification_id"`
+	// Processing priority: 1 (highest) to 10 (lowest)
+	Priority     pgtype.Int4      `db:"priority" json:"priority"`
+	ScheduledFor pgtype.Timestamp `db:"scheduled_for" json:"scheduled_for"`
+	Attempts     pgtype.Int4      `db:"attempts" json:"attempts"`
+	MaxAttempts  pgtype.Int4      `db:"max_attempts" json:"max_attempts"`
+	// Queue item status: pending, processing, completed, failed, cancelled
+	Status                pgtype.Text      `db:"status" json:"status"`
+	ErrorMessage          pgtype.Text      `db:"error_message" json:"error_message"`
+	ProcessingStartedAt   pgtype.Timestamp `db:"processing_started_at" json:"processing_started_at"`
+	ProcessingCompletedAt pgtype.Timestamp `db:"processing_completed_at" json:"processing_completed_at"`
+	// ID of worker processing this queue item
+	WorkerID pgtype.Text `db:"worker_id" json:"worker_id"`
+	// Additional queue processing information in JSON format
+	QueueMetadata []byte           `db:"queue_metadata" json:"queue_metadata"`
+	CreatedAt     pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt     pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+}
+
 type Notification struct {
 	ID            int32            `db:"id" json:"id"`
 	RecipientID   int32            `db:"recipient_id" json:"recipient_id"`

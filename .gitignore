@@ -85,6 +85,10 @@ docker-compose.override.yml
 # Local development
 local/
 
+# Build files
+main
+server
+
 # Miscellaneous
 excalidraw.log
 flow.md
@@ -96,4 +100,5 @@ PHASE2_SUMMARY.md
 report.md
 project_security.md
 phase3implementation.md
+phase7.4.md
 

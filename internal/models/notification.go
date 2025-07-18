@@ -251,6 +251,25 @@ type EmailConfig struct {
 	UseSSL       bool   `json:"use_ssl"`
 }
 
+// TemplateFilter represents filters for template queries
+type TemplateFilter struct {
+	NamePattern string `json:"name_pattern"`
+	IsActive    *bool  `json:"is_active"`
+	IsHTML      *bool  `json:"is_html"`
+}
+
+// TemplateTestResult represents the result of testing a template
+type TemplateTestResult struct {
+	TemplateName     string                 `json:"template_name"`
+	TestData         map[string]interface{} `json:"test_data"`
+	ProcessedSubject string                 `json:"processed_subject"`
+	ProcessedBody    string                 `json:"processed_body"`
+	Success          bool                   `json:"success"`
+	ErrorMessage     string                 `json:"error_message,omitempty"`
+	Warnings         []string               `json:"warnings,omitempty"`
+	TestedAt         time.Time              `json:"tested_at"`
+}
+
 // ConvertToDBNotification converts a NotificationRequest to database format
 func ConvertToDBNotification(req *NotificationRequest) (map[string]interface{}, error) {
 	result := map[string]interface{}{
@@ -283,6 +302,143 @@ func ConvertFromDBNotification(dbNotification interface{}) (*NotificationRespons
 	return &NotificationResponse{}, nil
 }
 
+// Email Delivery Models - Phase 7.4
+
+// EmailDeliveryStatus represents the status of an email delivery
+type EmailDeliveryStatus string
+
+const (
+	EmailDeliveryStatusPending   EmailDeliveryStatus = "pending"
+	EmailDeliveryStatusSent      EmailDeliveryStatus = "sent"
+	EmailDeliveryStatusDelivered EmailDeliveryStatus = "delivered"
+	EmailDeliveryStatusFailed    EmailDeliveryStatus = "failed"
+	EmailDeliveryStatusBounced   EmailDeliveryStatus = "bounced"
+)
+
+// IsValid checks if the email delivery status is valid
+func (eds EmailDeliveryStatus) IsValid() bool {
+	switch eds {
+	case EmailDeliveryStatusPending, EmailDeliveryStatusSent, EmailDeliveryStatusDelivered,
+		EmailDeliveryStatusFailed, EmailDeliveryStatusBounced:
+		return true
+	default:
+		return false
+	}
+}
+
+// EmailDelivery represents an email delivery record
+type EmailDelivery struct {
+	ID                int32                  `json:"id"`
+	NotificationID    int32                  `json:"notification_id"`
+	EmailAddress      string                 `json:"email_address"`
+	Status            EmailDeliveryStatus    `json:"status"`
+	SentAt            *time.Time             `json:"sent_at,omitempty"`
+	DeliveredAt       *time.Time             `json:"delivered_at,omitempty"`
+	FailedAt          *time.Time             `json:"failed_at,omitempty"`
+	ErrorMessage      *string                `json:"error_message,omitempty"`
+	RetryCount        int                    `json:"retry_count"`
+	MaxRetries        int                    `json:"max_retries"`
+	ProviderMessageID *string                `json:"provider_message_id,omitempty"`
+	Metadata          map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt         time.Time              `json:"created_at"`
+	UpdatedAt         time.Time              `json:"updated_at"`
+}
+
+// EmailDeliveryRequest represents a request to create an email delivery
+type EmailDeliveryRequest struct {
+	NotificationID int32                  `json:"notification_id" validate:"required,min=1"`
+	EmailAddress   string                 `json:"email_address" validate:"required,email"`
+	Status         EmailDeliveryStatus    `json:"status" validate:"required,email_delivery_status"`
+	RetryCount     int                    `json:"retry_count" validate:"min=0"`
+	MaxRetries     int                    `json:"max_retries" validate:"min=0"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// EmailDeliveryStats represents email delivery statistics
+type EmailDeliveryStats struct {
+	Total                      int       `json:"total"`
+	Pending                    int       `json:"pending"`
+	Sent                       int       `json:"sent"`
+	Delivered                  int       `json:"delivered"`
+	Failed                     int       `json:"failed"`
+	Bounced                    int       `json:"bounced"`
+	AverageDeliveryTimeSeconds *float64  `json:"average_delivery_time_seconds,omitempty"`
+	From                       time.Time `json:"from"`
+	To                         time.Time `json:"to"`
+}
+
+// EmailDeliveryHistory represents delivery history with notification details
+type EmailDeliveryHistory struct {
+	*EmailDelivery
+	NotificationTitle string `json:"notification_title"`
+	NotificationType  string `json:"notification_type"`
+}
+
+// Email Queue Models - Phase 7.4
+
+// EmailQueueStatus represents the status of an email queue item
+type EmailQueueStatus string
+
+const (
+	EmailQueueStatusPending    EmailQueueStatus = "pending"
+	EmailQueueStatusProcessing EmailQueueStatus = "processing"
+	EmailQueueStatusCompleted  EmailQueueStatus = "completed"
+	EmailQueueStatusFailed     EmailQueueStatus = "failed"
+	EmailQueueStatusCancelled  EmailQueueStatus = "cancelled"
+)
+
+// IsValid checks if the email queue status is valid
+func (eqs EmailQueueStatus) IsValid() bool {
+	switch eqs {
+	case EmailQueueStatusPending, EmailQueueStatusProcessing, EmailQueueStatusCompleted,
+		EmailQueueStatusFailed, EmailQueueStatusCancelled:
+		return true
+	default:
+		return false
+	}
+}
+
+// EmailQueueItem represents an item in the email processing queue
+type EmailQueueItem struct {
+	ID                    int32                  `json:"id"`
+	NotificationID        int32                  `json:"notification_id"`
+	Priority              int                    `json:"priority"` // 1 (highest) to 10 (lowest)
+	ScheduledFor          time.Time              `json:"scheduled_for"`
+	Attempts              int                    `json:"attempts"`
+	MaxAttempts           int                    `json:"max_attempts"`
+	Status                EmailQueueStatus       `json:"status"`
+	ErrorMessage          *string                `json:"error_message,omitempty"`
+	ProcessingStartedAt   *time.Time             `json:"processing_started_at,omitempty"`
+	ProcessingCompletedAt *time.Time             `json:"processing_completed_at,omitempty"`
+	WorkerID              *string                `json:"worker_id,omitempty"`
+	Metadata              map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt             time.Time              `json:"created_at"`
+	UpdatedAt             time.Time              `json:"updated_at"`
+}
+
+// EmailQueueRequest represents a request to queue an email
+type EmailQueueRequest struct {
+	NotificationID int32                  `json:"notification_id" validate:"required,min=1"`
+	Priority       int                    `json:"priority" validate:"min=1,max=10"`
+	ScheduledFor   *time.Time             `json:"scheduled_for,omitempty"`
+	MaxAttempts    int                    `json:"max_attempts" validate:"min=1,max=10"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// EmailQueueStats represents email queue statistics
+type EmailQueueStats struct {
+	Total                        int       `json:"total"`
+	Pending                      int       `json:"pending"`
+	Processing                   int       `json:"processing"`
+	Completed                    int       `json:"completed"`
+	Failed                       int       `json:"failed"`
+	Cancelled                    int       `json:"cancelled"`
+	AverageProcessingTimeSeconds *float64  `json:"average_processing_time_seconds,omitempty"`
+	AverageAttempts              *float64  `json:"average_attempts,omitempty"`
+	From                         time.Time `json:"from"`
+	To                           time.Time `json:"to"`
+}
+
 // Custom validators
 func validateNotificationType(fl validator.FieldLevel) bool {
 	return NotificationType(fl.Field().String()).IsValid()
@@ -294,4 +450,12 @@ func validateRecipientType(fl validator.FieldLevel) bool {
 
 func validateNotificationPriority(fl validator.FieldLevel) bool {
 	return NotificationPriority(fl.Field().String()).IsValid()
+}
+
+func validateEmailDeliveryStatus(fl validator.FieldLevel) bool {
+	return EmailDeliveryStatus(fl.Field().String()).IsValid()
+}
+
+func validateEmailQueueStatus(fl validator.FieldLevel) bool {
+	return EmailQueueStatus(fl.Field().String()).IsValid()
 }

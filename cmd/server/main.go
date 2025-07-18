@@ -18,6 +18,7 @@ import (
 	"github.com/ngenohkevin/lms/internal/database"
 	"github.com/ngenohkevin/lms/internal/handlers"
 	"github.com/ngenohkevin/lms/internal/middleware"
+	"github.com/ngenohkevin/lms/internal/models"
 	"github.com/ngenohkevin/lms/internal/services"
 )
 
@@ -85,6 +86,21 @@ func main() {
 	enhancedTransactionService := services.NewEnhancedTransactionService(db.Queries, reservationService)
 	importExportService := services.NewImportExportService(bookService, "./uploads")
 
+	// Initialize notification system services
+	emailConfig := &models.EmailConfig{
+		SMTPHost:     cfg.Email.SMTPHost,
+		SMTPPort:     cfg.Email.SMTPPort,
+		SMTPUsername: cfg.Email.SMTPUsername,
+		SMTPPassword: cfg.Email.SMTPPassword,
+		FromEmail:    cfg.Email.FromEmail,
+		FromName:     cfg.Email.FromName,
+		UseTLS:       cfg.Email.UseTLS,
+		UseSSL:       cfg.Email.UseSSL,
+	}
+	emailService := services.NewEmailService(emailConfig, logger)
+	queueService := services.NewQueueService(redis.Client, logger)
+	notificationService := services.NewNotificationService(db.Queries, emailService, queueService, logger)
+
 	// Initialize Gin router
 	r := gin.New()
 
@@ -102,7 +118,7 @@ func main() {
 	authMiddleware := middleware.NewAuthMiddleware(authService)
 
 	// Initialize handlers
-	healthHandler := handlers.NewHealthHandler(db, redis)
+	healthHandler := handlers.NewHealthHandler(db, redis, emailService)
 	authHandler := handlers.NewAuthHandler(authService, userService)
 	bookHandler := handlers.NewBookHandler(bookService)
 	studentHandler := handlers.NewStudentHandler(studentService)
@@ -110,6 +126,7 @@ func main() {
 	transactionHandler := handlers.NewTransactionHandler(enhancedTransactionService)
 	uploadHandler := handlers.NewUploadHandler(bookService)
 	importExportHandler := handlers.NewImportExportHandler(importExportService)
+	notificationHandler := handlers.NewNotificationHandler(notificationService)
 
 	// Public routes (no authentication required)
 	public := r.Group("/api/v1")
@@ -201,7 +218,7 @@ func main() {
 			students.GET("/analytics/trends", studentHandler.GetEnrollmentTrends)
 
 			// Phase 6.7: Renewal statistics for students (accessible by librarians)
-			students.GET("/:student_id/renewal-statistics", transactionHandler.GetRenewalStatistics)
+			students.GET("/:id/renewal-statistics", transactionHandler.GetRenewalStatistics)
 		}
 
 		// Reservation management routes
@@ -252,6 +269,30 @@ func main() {
 		{
 			profile.GET("", studentHandler.GetStudentProfile)
 			profile.PUT("", studentHandler.UpdateStudentProfile)
+		}
+
+		// Notification management routes
+		notifications := protected.Group("/notifications")
+		{
+			// Student routes - students can view their own notifications
+			notifications.GET("", notificationHandler.ListNotifications)
+			notifications.GET("/:id", notificationHandler.GetNotification)
+			notifications.PUT("/:id/read", notificationHandler.MarkNotificationAsRead)
+			notifications.DELETE("/:id", notificationHandler.DeleteNotification)
+
+			// Librarian routes - librarians can manage all notifications
+			librarianNotifications := notifications.Group("")
+			librarianNotifications.Use(authMiddleware.RequireLibrarian())
+			{
+				librarianNotifications.POST("", notificationHandler.CreateNotification)
+				librarianNotifications.GET("/stats", notificationHandler.GetNotificationStats)
+				librarianNotifications.POST("/process", notificationHandler.ProcessPendingNotifications)
+				librarianNotifications.POST("/cleanup", notificationHandler.CleanupOldNotifications)
+				librarianNotifications.POST("/due-soon", notificationHandler.SendDueSoonReminders)
+				librarianNotifications.POST("/overdue", notificationHandler.SendOverdueReminders)
+				librarianNotifications.POST("/book-available", notificationHandler.SendBookAvailableNotifications)
+				librarianNotifications.POST("/fine-notices", notificationHandler.SendFineNotices)
+			}
 		}
 
 	}
