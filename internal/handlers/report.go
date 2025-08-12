@@ -19,6 +19,13 @@ type ReportService interface {
 	GetLibraryOverview(ctx interface{}) (*models.LibraryOverviewReport, error)
 	GetBorrowingTrends(ctx interface{}, startDate, endDate time.Time, interval string) (*models.BorrowingTrendsReport, error)
 	GetYearlyComparison(ctx interface{}, years []int32) (*models.YearlyComparisonReport, error)
+
+	// Phase 8.2 - Year-based Reporting Methods
+	GetYearEndSummary(ctx interface{}) (*models.YearEndSummaryReport, error)
+	GetYearSpecificBorrowingReport(ctx interface{}, year int32) (*models.YearSpecificBorrowingReport, error)
+	GetYearOverYearComparison(ctx interface{}, years []int32) (*models.YearOverYearComparisonReport, error)
+	GetYearBasedOverdueAnalysis(ctx interface{}, year *int32, yearOfStudy *int32) (*models.YearBasedOverdueAnalysisReport, error)
+	GetAcademicYearAnalytics(ctx interface{}, academicYear, calendarYear int32) (*models.AcademicYearAnalyticsReport, error)
 }
 
 // ReportHandler handles all report-related HTTP requests
@@ -48,6 +55,13 @@ func (rh *ReportHandler) RegisterRoutes(router *gin.RouterGroup) {
 		// Advanced analytics
 		reports.POST("/borrowing-trends", rh.GetBorrowingTrends)
 		reports.POST("/yearly-comparison", rh.GetYearlyComparison)
+
+		// Phase 8.2 - Year-based Reporting
+		reports.GET("/year-end-summary", rh.GetYearEndSummary)
+		reports.POST("/year-specific-borrowing", rh.GetYearSpecificBorrowingReport)
+		reports.POST("/year-over-year-comparison", rh.GetYearOverYearComparison)
+		reports.POST("/year-based-overdue-analysis", rh.GetYearBasedOverdueAnalysis)
+		reports.POST("/academic-year-analytics", rh.GetAcademicYearAnalytics)
 
 		// Dashboard metrics
 		reports.GET("/dashboard-metrics", rh.GetDashboardMetrics)
@@ -592,5 +606,193 @@ func (rh *ReportHandler) ScheduleReport(c *gin.Context) {
 		Success: true,
 		Message: "Report schedule created successfully",
 		Data:    scheduleResult,
+	})
+}
+
+// Phase 8.2 - Year-based Reporting Handler Methods
+
+// GetYearEndSummary generates comprehensive year-end summary report
+func (rh *ReportHandler) GetYearEndSummary(c *gin.Context) {
+	report, err := rh.reportService.GetYearEndSummary(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to generate year-end summary report",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Message: "Year-end summary report generated successfully",
+		Data:    report,
+	})
+}
+
+// GetYearSpecificBorrowingReport generates borrowing report for specific year
+func (rh *ReportHandler) GetYearSpecificBorrowingReport(c *gin.Context) {
+	var req models.YearSpecificBorrowingRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid request parameters",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	report, err := rh.reportService.GetYearSpecificBorrowingReport(c.Request.Context(), req.Year)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to generate year-specific borrowing report",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Message: "Year-specific borrowing report generated successfully",
+		Data:    report,
+	})
+}
+
+// GetYearOverYearComparison generates year-over-year comparison report
+func (rh *ReportHandler) GetYearOverYearComparison(c *gin.Context) {
+	var req models.YearOverYearComparisonRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid request parameters",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	if len(req.Years) < 2 {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "At least 2 years required for year-over-year comparison",
+				Details: nil,
+			},
+		})
+		return
+	}
+
+	report, err := rh.reportService.GetYearOverYearComparison(c.Request.Context(), req.Years)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to generate year-over-year comparison report",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Message: "Year-over-year comparison report generated successfully",
+		Data:    report,
+	})
+}
+
+// GetYearBasedOverdueAnalysis generates year-based overdue analysis
+func (rh *ReportHandler) GetYearBasedOverdueAnalysis(c *gin.Context) {
+	var req models.YearBasedOverdueAnalysisRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid request parameters",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	report, err := rh.reportService.GetYearBasedOverdueAnalysis(c.Request.Context(), req.Year, req.YearOfStudy)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to generate year-based overdue analysis",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Message: "Year-based overdue analysis generated successfully",
+		Data:    report,
+	})
+}
+
+// GetAcademicYearAnalytics generates comprehensive analytics for specific academic year
+func (rh *ReportHandler) GetAcademicYearAnalytics(c *gin.Context) {
+	var req models.AcademicYearAnalyticsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid request parameters",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	if req.AcademicYear < 1 || req.AcademicYear > 8 {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid academic year: must be between 1 and 8",
+				Details: nil,
+			},
+		})
+		return
+	}
+
+	report, err := rh.reportService.GetAcademicYearAnalytics(c.Request.Context(), req.AcademicYear, req.CalendarYear)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to generate academic year analytics",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Message: "Academic year analytics generated successfully",
+		Data:    report,
 	})
 }

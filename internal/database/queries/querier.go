@@ -49,6 +49,7 @@ type Querier interface {
 	DeleteOldEmailDeliveries(ctx context.Context, createdAt pgtype.Timestamp) error
 	DeleteOldNotifications(ctx context.Context, createdAt pgtype.Timestamp) error
 	DeleteOldQueueItems(ctx context.Context, createdAt pgtype.Timestamp) error
+	GetAcademicYearAnalytics(ctx context.Context, arg GetAcademicYearAnalyticsParams) (GetAcademicYearAnalyticsRow, error)
 	GetBookByBookID(ctx context.Context, bookID string) (Book, error)
 	GetBookByID(ctx context.Context, id int32) (Book, error)
 	GetBookByISBN(ctx context.Context, isbn pgtype.Text) (Book, error)
@@ -94,6 +95,10 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id int32) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
+	GetYearBasedOverdueAnalysis(ctx context.Context, arg GetYearBasedOverdueAnalysisParams) ([]GetYearBasedOverdueAnalysisRow, error)
+	GetYearEndSummary(ctx context.Context) (GetYearEndSummaryRow, error)
+	GetYearOverYearComparison(ctx context.Context, dollar_1 []int32) ([]GetYearOverYearComparisonRow, error)
+	GetYearSpecificBorrowingReport(ctx context.Context, dollar_1 int32) ([]GetYearSpecificBorrowingReportRow, error)
 	GetYearlyStatistics(ctx context.Context, dollar_1 []int32) ([]GetYearlyStatisticsRow, error)
 	HasActiveReservationsByOtherStudents(ctx context.Context, arg HasActiveReservationsByOtherStudentsParams) (bool, error)
 	ListActiveBorrowings(ctx context.Context, arg ListActiveBorrowingsParams) ([]ListActiveBorrowingsRow, error)

@@ -21,6 +21,13 @@ type ReportQuerier interface {
 	GetBorrowingTrends(ctx context.Context, arg queries.GetBorrowingTrendsParams) ([]queries.GetBorrowingTrendsRow, error)
 	GetYearlyStatistics(ctx context.Context, years []int32) ([]queries.GetYearlyStatisticsRow, error)
 	GetLibraryOverview(ctx context.Context) (queries.GetLibraryOverviewRow, error)
+
+	// Phase 8.2 - Year-based Reporting Methods
+	GetYearEndSummary(ctx context.Context) (queries.GetYearEndSummaryRow, error)
+	GetYearSpecificBorrowingReport(ctx context.Context, year int32) ([]queries.GetYearSpecificBorrowingReportRow, error)
+	GetYearOverYearComparison(ctx context.Context, years []int32) ([]queries.GetYearOverYearComparisonRow, error)
+	GetYearBasedOverdueAnalysis(ctx context.Context, arg queries.GetYearBasedOverdueAnalysisParams) ([]queries.GetYearBasedOverdueAnalysisRow, error)
+	GetAcademicYearAnalytics(ctx context.Context, arg queries.GetAcademicYearAnalyticsParams) (queries.GetAcademicYearAnalyticsRow, error)
 }
 
 // ReportService handles all reporting and analytics functionality
@@ -509,4 +516,209 @@ func (rs *ReportService) validateDateRange(startDate, endDate time.Time) error {
 		return fmt.Errorf("start date cannot be after end date")
 	}
 	return nil
+}
+
+// Phase 8.2 - Year-based Reporting Service Methods
+
+// GetYearEndSummary generates a comprehensive year-end summary report
+func (rs *ReportService) GetYearEndSummary(ctx context.Context) (*models.YearEndSummaryReport, error) {
+	row, err := rs.db.GetYearEndSummary(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get year-end summary: %w", err)
+	}
+
+	return &models.YearEndSummaryReport{
+		Year:                   row.Year,
+		TotalStudents:          row.TotalStudents,
+		TotalBooks:             row.TotalBooks,
+		YearlyBorrows:          row.YearlyBorrows,
+		YearlyReturns:          row.YearlyReturns,
+		CurrentOverdue:         row.CurrentOverdue,
+		ActiveStudentsThisYear: row.ActiveStudentsThisYear,
+		TotalFinesGenerated:    row.TotalFinesGenerated,
+		YearlyReservations:     row.YearlyReservations,
+		AvgLoanDurationDays:    row.AvgLoanDurationDays,
+		GeneratedAt:            time.Now(),
+	}, nil
+}
+
+// GetYearSpecificBorrowingReport generates a borrowing report for a specific year
+func (rs *ReportService) GetYearSpecificBorrowingReport(ctx context.Context, year int32) (*models.YearSpecificBorrowingReport, error) {
+	rows, err := rs.db.GetYearSpecificBorrowingReport(ctx, year)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get year-specific borrowing report: %w", err)
+	}
+
+	yearData := make([]models.YearSpecificBorrowingData, len(rows))
+	var totalBorrows, totalReturns, totalOverdue, totalUniqueStudents int32
+
+	for i, row := range rows {
+		yearData[i] = models.YearSpecificBorrowingData{
+			Month:           row.Month,
+			YearOfStudy:     row.YearOfStudy,
+			TotalBorrows:    row.TotalBorrows,
+			TotalReturns:    row.TotalReturns,
+			TotalOverdue:    row.TotalOverdue,
+			UniqueStudents:  row.UniqueStudents,
+			AvgLoanDuration: row.AvgLoanDuration,
+		}
+		totalBorrows += row.TotalBorrows
+		totalReturns += row.TotalReturns
+		totalOverdue += row.TotalOverdue
+		totalUniqueStudents += row.UniqueStudents
+	}
+
+	return &models.YearSpecificBorrowingReport{
+		YearData: yearData,
+		Summary: models.YearSpecificBorrowingSummary{
+			Year:                int32(year),
+			TotalBorrows:        totalBorrows,
+			TotalReturns:        totalReturns,
+			TotalOverdue:        totalOverdue,
+			TotalUniqueStudents: totalUniqueStudents,
+		},
+		GeneratedAt: time.Now(),
+	}, nil
+}
+
+// GetYearOverYearComparison generates year-over-year comparison analysis
+func (rs *ReportService) GetYearOverYearComparison(ctx context.Context, years []int32) (*models.YearOverYearComparisonReport, error) {
+	if len(years) < 2 {
+		return nil, fmt.Errorf("at least 2 years required for year-over-year comparison")
+	}
+
+	rows, err := rs.db.GetYearOverYearComparison(ctx, years)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get year-over-year comparison: %w", err)
+	}
+
+	yearComparisons := make([]models.YearOverYearData, len(rows))
+	var totalBorrowGrowth, totalStudentGrowth float64
+	var validComparisons int
+
+	for i, row := range rows {
+		yearComparisons[i] = models.YearOverYearData{
+			Year:                 row.Year,
+			TotalBorrows:         row.TotalBorrows,
+			TotalReturns:         row.TotalReturns,
+			TotalStudents:        row.TotalStudents,
+			PreviousYearBorrows:  row.PreviousYearBorrows,
+			PreviousYearStudents: row.PreviousYearStudents,
+			BorrowGrowthRate:     row.BorrowGrowthRate,
+			StudentGrowthRate:    row.StudentGrowthRate,
+		}
+
+		// Calculate average growth rates (excluding 0.00 values)
+		if borrowGrowth, err := strconv.ParseFloat(row.BorrowGrowthRate, 64); err == nil && borrowGrowth != 0 {
+			totalBorrowGrowth += borrowGrowth
+			validComparisons++
+		}
+		if studentGrowth, err := strconv.ParseFloat(row.StudentGrowthRate, 64); err == nil && studentGrowth != 0 {
+			totalStudentGrowth += studentGrowth
+		}
+	}
+
+	avgBorrowGrowthRate := "0.00"
+	avgStudentGrowthRate := "0.00"
+	if validComparisons > 0 {
+		avgBorrowGrowthRate = fmt.Sprintf("%.2f", totalBorrowGrowth/float64(validComparisons))
+		avgStudentGrowthRate = fmt.Sprintf("%.2f", totalStudentGrowth/float64(validComparisons))
+	}
+
+	return &models.YearOverYearComparisonReport{
+		YearComparisons: yearComparisons,
+		Summary: models.YearOverYearComparisonSummary{
+			AnalyzedYears:        int32(len(years)),
+			AvgBorrowGrowthRate:  avgBorrowGrowthRate,
+			AvgStudentGrowthRate: avgStudentGrowthRate,
+		},
+		GeneratedAt: time.Now(),
+	}, nil
+}
+
+// GetYearBasedOverdueAnalysis generates year-based overdue analysis
+func (rs *ReportService) GetYearBasedOverdueAnalysis(ctx context.Context, year *int32, yearOfStudy *int32) (*models.YearBasedOverdueAnalysisReport, error) {
+	params := queries.GetYearBasedOverdueAnalysisParams{
+		Year:        pgtype.Int4{Valid: year != nil, Int32: 0},
+		YearOfStudy: pgtype.Int4{Valid: yearOfStudy != nil, Int32: 0},
+	}
+
+	if year != nil {
+		params.Year.Int32 = *year
+	}
+	if yearOfStudy != nil {
+		params.YearOfStudy.Int32 = *yearOfStudy
+	}
+
+	rows, err := rs.db.GetYearBasedOverdueAnalysis(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get year-based overdue analysis: %w", err)
+	}
+
+	overdueAnalysis := make([]models.YearBasedOverdueData, len(rows))
+	var totalOverdueBooks int32
+	var totalFinesGenerated float64
+	var mostProblematicYear int32
+	var maxOverdueCount int32
+
+	for i, row := range rows {
+		overdueAnalysis[i] = models.YearBasedOverdueData{
+			Year:             row.Year,
+			YearOfStudy:      row.YearOfStudy,
+			OverdueCount:     row.OverdueCount,
+			AvgDaysOverdue:   row.AvgDaysOverdue,
+			TotalFines:       row.TotalFines,
+			AffectedStudents: row.AffectedStudents,
+		}
+
+		totalOverdueBooks += row.OverdueCount
+		if fines, err := strconv.ParseFloat(row.TotalFines, 64); err == nil {
+			totalFinesGenerated += fines
+		}
+
+		// Find most problematic year
+		if row.OverdueCount > maxOverdueCount {
+			maxOverdueCount = row.OverdueCount
+			mostProblematicYear = row.Year
+		}
+	}
+
+	return &models.YearBasedOverdueAnalysisReport{
+		OverdueAnalysis: overdueAnalysis,
+		Summary: models.YearBasedOverdueAnalysisSummary{
+			TotalOverdueBooks:   totalOverdueBooks,
+			TotalFinesGenerated: fmt.Sprintf("%.2f", totalFinesGenerated),
+			MostProblematicYear: mostProblematicYear,
+		},
+		GeneratedAt: time.Now(),
+	}, nil
+}
+
+// GetAcademicYearAnalytics generates comprehensive analytics for a specific academic year
+func (rs *ReportService) GetAcademicYearAnalytics(ctx context.Context, academicYear, calendarYear int32) (*models.AcademicYearAnalyticsReport, error) {
+	if academicYear < 1 || academicYear > 8 {
+		return nil, fmt.Errorf("invalid academic year: must be between 1 and 8")
+	}
+
+	params := queries.GetAcademicYearAnalyticsParams{
+		Column1: academicYear,
+		Column2: calendarYear,
+	}
+
+	row, err := rs.db.GetAcademicYearAnalytics(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get academic year analytics: %w", err)
+	}
+
+	return &models.AcademicYearAnalyticsReport{
+		AcademicYear:       row.AcademicYear,
+		CalendarYear:       calendarYear,
+		TotalStudents:      row.TotalStudents,
+		TotalBorrows:       row.TotalBorrows,
+		TotalReturns:       row.TotalReturns,
+		CurrentOverdue:     row.CurrentOverdue,
+		TotalFines:         row.TotalFines,
+		AvgBooksPerStudent: row.AvgBooksPerStudent,
+		GeneratedAt:        time.Now(),
+	}, nil
 }

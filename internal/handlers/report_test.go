@@ -61,6 +61,32 @@ func (m *MockReportService) GetYearlyComparison(ctx interface{}, years []int32) 
 	return args.Get(0).(*models.YearlyComparisonReport), args.Error(1)
 }
 
+// Phase 8.2 - Additional mock methods
+func (m *MockReportService) GetYearEndSummary(ctx interface{}) (*models.YearEndSummaryReport, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(*models.YearEndSummaryReport), args.Error(1)
+}
+
+func (m *MockReportService) GetYearSpecificBorrowingReport(ctx interface{}, year int32) (*models.YearSpecificBorrowingReport, error) {
+	args := m.Called(ctx, year)
+	return args.Get(0).(*models.YearSpecificBorrowingReport), args.Error(1)
+}
+
+func (m *MockReportService) GetYearOverYearComparison(ctx interface{}, years []int32) (*models.YearOverYearComparisonReport, error) {
+	args := m.Called(ctx, years)
+	return args.Get(0).(*models.YearOverYearComparisonReport), args.Error(1)
+}
+
+func (m *MockReportService) GetYearBasedOverdueAnalysis(ctx interface{}, year *int32, yearOfStudy *int32) (*models.YearBasedOverdueAnalysisReport, error) {
+	args := m.Called(ctx, year, yearOfStudy)
+	return args.Get(0).(*models.YearBasedOverdueAnalysisReport), args.Error(1)
+}
+
+func (m *MockReportService) GetAcademicYearAnalytics(ctx interface{}, academicYear, calendarYear int32) (*models.AcademicYearAnalyticsReport, error) {
+	args := m.Called(ctx, academicYear, calendarYear)
+	return args.Get(0).(*models.AcademicYearAnalyticsReport), args.Error(1)
+}
+
 // ReportHandlerTestSuite for comprehensive testing
 type ReportHandlerTestSuite struct {
 	suite.Suite

@@ -282,3 +282,110 @@ WHERE t.transaction_type = 'borrow'
     AND b.deleted_at IS NULL
 GROUP BY b.genre
 ORDER BY total_borrows DESC;
+
+-- name: GetYearEndSummary :one
+SELECT 
+    EXTRACT(YEAR FROM NOW())::int as year,
+    (SELECT COUNT(*) FROM students WHERE deleted_at IS NULL AND is_active = true)::int as total_students,
+    (SELECT COUNT(*) FROM books WHERE deleted_at IS NULL AND is_active = true)::int as total_books,
+    (SELECT COUNT(*) FROM transactions WHERE EXTRACT(YEAR FROM transaction_date) = EXTRACT(YEAR FROM NOW()) AND transaction_type = 'borrow')::int as yearly_borrows,
+    (SELECT COUNT(*) FROM transactions WHERE EXTRACT(YEAR FROM transaction_date) = EXTRACT(YEAR FROM NOW()) AND transaction_type = 'return')::int as yearly_returns,
+    (SELECT COUNT(*) FROM transactions WHERE due_date < NOW() AND returned_date IS NULL)::int as current_overdue,
+    (SELECT COUNT(DISTINCT student_id) FROM transactions WHERE EXTRACT(YEAR FROM transaction_date) = EXTRACT(YEAR FROM NOW()))::int as active_students_this_year,
+    (SELECT COALESCE(SUM(fine_amount), 0)::text FROM transactions WHERE EXTRACT(YEAR FROM transaction_date) = EXTRACT(YEAR FROM NOW()))::text as total_fines_generated,
+    (SELECT COUNT(*) FROM reservations WHERE EXTRACT(YEAR FROM reserved_at) = EXTRACT(YEAR FROM NOW()))::int as yearly_reservations,
+    (SELECT COALESCE(AVG(EXTRACT(DAY FROM (returned_date - transaction_date))), 0)::int FROM transactions WHERE EXTRACT(YEAR FROM transaction_date) = EXTRACT(YEAR FROM NOW()) AND returned_date IS NOT NULL)::int as avg_loan_duration_days;
+
+-- name: GetYearSpecificBorrowingReport :many
+SELECT 
+    TO_CHAR(DATE_TRUNC('month', t.transaction_date), 'YYYY-MM') as month,
+    s.year_of_study,
+    COUNT(CASE WHEN t.transaction_type = 'borrow' THEN 1 END)::int as total_borrows,
+    COUNT(CASE WHEN t.transaction_type = 'return' THEN 1 END)::int as total_returns,
+    COUNT(CASE WHEN t.due_date < NOW() AND t.returned_date IS NULL THEN 1 END)::int as total_overdue,
+    COUNT(DISTINCT t.student_id)::int as unique_students,
+    COALESCE(AVG(EXTRACT(DAY FROM (t.returned_date - t.transaction_date))), 0)::int as avg_loan_duration
+FROM transactions t
+INNER JOIN students s ON t.student_id = s.id
+WHERE EXTRACT(YEAR FROM t.transaction_date) = $1::int
+    AND s.deleted_at IS NULL
+GROUP BY DATE_TRUNC('month', t.transaction_date), s.year_of_study
+ORDER BY month, s.year_of_study;
+
+-- name: GetYearOverYearComparison :many
+SELECT 
+    current_year.year,
+    current_year.total_borrows,
+    current_year.total_returns,
+    current_year.total_students,
+    COALESCE(previous_year.total_borrows, 0)::int as previous_year_borrows,
+    COALESCE(previous_year.total_students, 0)::int as previous_year_students,
+    CASE 
+        WHEN COALESCE(previous_year.total_borrows, 0) > 0 THEN 
+            ROUND((((current_year.total_borrows - COALESCE(previous_year.total_borrows, 0))::numeric / COALESCE(previous_year.total_borrows, 1)::numeric) * 100), 2)::text
+        ELSE '0.00'
+    END as borrow_growth_rate,
+    CASE 
+        WHEN COALESCE(previous_year.total_students, 0) > 0 THEN 
+            ROUND((((current_year.total_students - COALESCE(previous_year.total_students, 0))::numeric / COALESCE(previous_year.total_students, 1)::numeric) * 100), 2)::text
+        ELSE '0.00'
+    END as student_growth_rate
+FROM (
+    SELECT 
+        EXTRACT(YEAR FROM t.transaction_date)::int as year,
+        COUNT(CASE WHEN t.transaction_type = 'borrow' THEN 1 END)::int as total_borrows,
+        COUNT(CASE WHEN t.transaction_type = 'return' THEN 1 END)::int as total_returns,
+        COUNT(DISTINCT s.id)::int as total_students
+    FROM transactions t
+    INNER JOIN students s ON t.student_id = s.id
+    WHERE EXTRACT(YEAR FROM t.transaction_date) = ANY($1::int[])
+        AND s.deleted_at IS NULL
+    GROUP BY EXTRACT(YEAR FROM t.transaction_date)
+) current_year
+LEFT JOIN (
+    SELECT 
+        EXTRACT(YEAR FROM t.transaction_date)::int as year,
+        COUNT(CASE WHEN t.transaction_type = 'borrow' THEN 1 END)::int as total_borrows,
+        COUNT(CASE WHEN t.transaction_type = 'return' THEN 1 END)::int as total_returns,
+        COUNT(DISTINCT s.id)::int as total_students
+    FROM transactions t
+    INNER JOIN students s ON t.student_id = s.id
+    WHERE s.deleted_at IS NULL
+    GROUP BY EXTRACT(YEAR FROM t.transaction_date)
+) previous_year ON current_year.year = previous_year.year + 1
+ORDER BY current_year.year;
+
+-- name: GetYearBasedOverdueAnalysis :many
+SELECT 
+    EXTRACT(YEAR FROM t.due_date)::int as year,
+    s.year_of_study,
+    COUNT(*)::int as overdue_count,
+    COALESCE(AVG(EXTRACT(DAY FROM (NOW() - t.due_date))), 0)::int as avg_days_overdue,
+    COALESCE(SUM(t.fine_amount), 0)::text as total_fines,
+    COUNT(DISTINCT s.id)::int as affected_students
+FROM transactions t
+INNER JOIN students s ON t.student_id = s.id
+WHERE t.due_date < NOW()
+    AND t.returned_date IS NULL
+    AND (sqlc.narg(year)::int IS NULL OR EXTRACT(YEAR FROM t.due_date) = sqlc.narg(year)::int)
+    AND (sqlc.narg(year_of_study)::int IS NULL OR s.year_of_study = sqlc.narg(year_of_study)::int)
+    AND s.deleted_at IS NULL
+GROUP BY EXTRACT(YEAR FROM t.due_date), s.year_of_study
+ORDER BY year, s.year_of_study;
+
+-- name: GetAcademicYearAnalytics :one
+SELECT 
+    $1::int as academic_year,
+    (SELECT COUNT(DISTINCT s.id) FROM students s WHERE s.year_of_study = $1::int AND s.deleted_at IS NULL AND s.is_active = true)::int as total_students,
+    (SELECT COUNT(*) FROM transactions t INNER JOIN students s ON t.student_id = s.id WHERE s.year_of_study = $1::int AND t.transaction_type = 'borrow' AND EXTRACT(YEAR FROM t.transaction_date) = $2::int)::int as total_borrows,
+    (SELECT COUNT(*) FROM transactions t INNER JOIN students s ON t.student_id = s.id WHERE s.year_of_study = $1::int AND t.transaction_type = 'return' AND EXTRACT(YEAR FROM t.transaction_date) = $2::int)::int as total_returns,
+    (SELECT COUNT(*) FROM transactions t INNER JOIN students s ON t.student_id = s.id WHERE s.year_of_study = $1::int AND t.due_date < NOW() AND t.returned_date IS NULL)::int as current_overdue,
+    (SELECT COALESCE(SUM(t.fine_amount), 0)::text FROM transactions t INNER JOIN students s ON t.student_id = s.id WHERE s.year_of_study = $1::int AND t.fine_amount > 0)::text as total_fines,
+    (SELECT 
+        CASE 
+            WHEN COUNT(DISTINCT s.id) > 0 THEN 
+                ROUND((COUNT(*)::numeric / COUNT(DISTINCT s.id)::numeric), 2)::text
+            ELSE '0.00'
+        END
+     FROM transactions t INNER JOIN students s ON t.student_id = s.id 
+     WHERE s.year_of_study = $1::int AND t.transaction_type = 'borrow' AND EXTRACT(YEAR FROM t.transaction_date) = $2::int)::text as avg_books_per_student;

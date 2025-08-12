@@ -57,6 +57,32 @@ func (m *MockReportQuerier) GetLibraryOverview(ctx context.Context) (queries.Get
 	return args.Get(0).(queries.GetLibraryOverviewRow), args.Error(1)
 }
 
+// Phase 8.2 - Additional mock methods
+func (m *MockReportQuerier) GetYearEndSummary(ctx context.Context) (queries.GetYearEndSummaryRow, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(queries.GetYearEndSummaryRow), args.Error(1)
+}
+
+func (m *MockReportQuerier) GetYearSpecificBorrowingReport(ctx context.Context, year int32) ([]queries.GetYearSpecificBorrowingReportRow, error) {
+	args := m.Called(ctx, year)
+	return args.Get(0).([]queries.GetYearSpecificBorrowingReportRow), args.Error(1)
+}
+
+func (m *MockReportQuerier) GetYearOverYearComparison(ctx context.Context, years []int32) ([]queries.GetYearOverYearComparisonRow, error) {
+	args := m.Called(ctx, years)
+	return args.Get(0).([]queries.GetYearOverYearComparisonRow), args.Error(1)
+}
+
+func (m *MockReportQuerier) GetYearBasedOverdueAnalysis(ctx context.Context, arg queries.GetYearBasedOverdueAnalysisParams) ([]queries.GetYearBasedOverdueAnalysisRow, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).([]queries.GetYearBasedOverdueAnalysisRow), args.Error(1)
+}
+
+func (m *MockReportQuerier) GetAcademicYearAnalytics(ctx context.Context, arg queries.GetAcademicYearAnalyticsParams) (queries.GetAcademicYearAnalyticsRow, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(queries.GetAcademicYearAnalyticsRow), args.Error(1)
+}
+
 // ReportServiceTestSuite for comprehensive testing
 type ReportServiceTestSuite struct {
 	suite.Suite
