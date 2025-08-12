@@ -303,3 +303,137 @@ type PerformanceMetrics struct {
 	CacheHitRate      float64   `json:"cache_hit_rate_percent"`
 	LastUpdated       time.Time `json:"last_updated"`
 }
+
+// YearEndSummaryReport represents comprehensive year-end analytics
+type YearEndSummaryReport struct {
+	Year                   int32     `json:"year"`
+	TotalStudents          int32     `json:"total_students"`
+	TotalBooks             int32     `json:"total_books"`
+	YearlyBorrows          int32     `json:"yearly_borrows"`
+	YearlyReturns          int32     `json:"yearly_returns"`
+	CurrentOverdue         int32     `json:"current_overdue"`
+	ActiveStudentsThisYear int32     `json:"active_students_this_year"`
+	TotalFinesGenerated    string    `json:"total_fines_generated"`
+	YearlyReservations     int32     `json:"yearly_reservations"`
+	AvgLoanDurationDays    int32     `json:"avg_loan_duration_days"`
+	GeneratedAt            time.Time `json:"generated_at"`
+}
+
+// YearSpecificBorrowingReport represents borrowing report for specific year
+type YearSpecificBorrowingReport struct {
+	YearData    []YearSpecificBorrowingData  `json:"year_data"`
+	Summary     YearSpecificBorrowingSummary `json:"summary"`
+	GeneratedAt time.Time                    `json:"generated_at"`
+}
+
+// YearSpecificBorrowingData represents borrowing data for specific year and student year
+type YearSpecificBorrowingData struct {
+	Month           string `json:"month"`
+	YearOfStudy     int32  `json:"year_of_study"`
+	TotalBorrows    int32  `json:"total_borrows"`
+	TotalReturns    int32  `json:"total_returns"`
+	TotalOverdue    int32  `json:"total_overdue"`
+	UniqueStudents  int32  `json:"unique_students"`
+	AvgLoanDuration int32  `json:"avg_loan_duration"`
+}
+
+// YearSpecificBorrowingSummary represents summary for year-specific borrowing report
+type YearSpecificBorrowingSummary struct {
+	Year                int32 `json:"year"`
+	TotalBorrows        int32 `json:"total_borrows"`
+	TotalReturns        int32 `json:"total_returns"`
+	TotalOverdue        int32 `json:"total_overdue"`
+	TotalUniqueStudents int32 `json:"total_unique_students"`
+}
+
+// YearOverYearComparisonReport represents year-over-year growth analysis
+type YearOverYearComparisonReport struct {
+	YearComparisons []YearOverYearData            `json:"year_comparisons"`
+	Summary         YearOverYearComparisonSummary `json:"summary"`
+	GeneratedAt     time.Time                     `json:"generated_at"`
+}
+
+// YearOverYearData represents year-over-year comparison data
+type YearOverYearData struct {
+	Year                 int32  `json:"year"`
+	TotalBorrows         int32  `json:"total_borrows"`
+	TotalReturns         int32  `json:"total_returns"`
+	TotalStudents        int32  `json:"total_students"`
+	PreviousYearBorrows  int32  `json:"previous_year_borrows"`
+	PreviousYearStudents int32  `json:"previous_year_students"`
+	BorrowGrowthRate     string `json:"borrow_growth_rate"`
+	StudentGrowthRate    string `json:"student_growth_rate"`
+}
+
+// YearOverYearComparisonSummary represents summary for year-over-year comparison
+type YearOverYearComparisonSummary struct {
+	AnalyzedYears        int32  `json:"analyzed_years"`
+	AvgBorrowGrowthRate  string `json:"avg_borrow_growth_rate"`
+	AvgStudentGrowthRate string `json:"avg_student_growth_rate"`
+}
+
+// YearBasedOverdueAnalysisReport represents overdue analysis by year
+type YearBasedOverdueAnalysisReport struct {
+	OverdueAnalysis []YearBasedOverdueData          `json:"overdue_analysis"`
+	Summary         YearBasedOverdueAnalysisSummary `json:"summary"`
+	GeneratedAt     time.Time                       `json:"generated_at"`
+}
+
+// YearBasedOverdueData represents overdue data by year and student year
+type YearBasedOverdueData struct {
+	Year             int32  `json:"year"`
+	YearOfStudy      int32  `json:"year_of_study"`
+	OverdueCount     int32  `json:"overdue_count"`
+	AvgDaysOverdue   int32  `json:"avg_days_overdue"`
+	TotalFines       string `json:"total_fines"`
+	AffectedStudents int32  `json:"affected_students"`
+}
+
+// YearBasedOverdueAnalysisSummary represents summary for year-based overdue analysis
+type YearBasedOverdueAnalysisSummary struct {
+	TotalOverdueBooks   int32  `json:"total_overdue_books"`
+	TotalFinesGenerated string `json:"total_fines_generated"`
+	MostProblematicYear int32  `json:"most_problematic_year"`
+}
+
+// AcademicYearAnalyticsReport represents comprehensive analytics for specific academic year
+type AcademicYearAnalyticsReport struct {
+	AcademicYear       int32     `json:"academic_year"`
+	CalendarYear       int32     `json:"calendar_year"`
+	TotalStudents      int32     `json:"total_students"`
+	TotalBorrows       int32     `json:"total_borrows"`
+	TotalReturns       int32     `json:"total_returns"`
+	CurrentOverdue     int32     `json:"current_overdue"`
+	TotalFines         string    `json:"total_fines"`
+	AvgBooksPerStudent string    `json:"avg_books_per_student"`
+	GeneratedAt        time.Time `json:"generated_at"`
+}
+
+// Phase 8.2 Request Models
+
+// YearEndSummaryRequest represents request for year-end summary report
+type YearEndSummaryRequest struct {
+	Year *int32 `json:"year,omitempty"` // Optional, defaults to current year
+}
+
+// YearSpecificBorrowingRequest represents request for year-specific borrowing report
+type YearSpecificBorrowingRequest struct {
+	Year int32 `json:"year" binding:"required"`
+}
+
+// YearOverYearComparisonRequest represents request for year-over-year comparison
+type YearOverYearComparisonRequest struct {
+	Years []int32 `json:"years" binding:"required,min=2,max=10"`
+}
+
+// YearBasedOverdueAnalysisRequest represents request for year-based overdue analysis
+type YearBasedOverdueAnalysisRequest struct {
+	Year        *int32 `json:"year,omitempty"`
+	YearOfStudy *int32 `json:"year_of_study,omitempty"`
+}
+
+// AcademicYearAnalyticsRequest represents request for academic year analytics
+type AcademicYearAnalyticsRequest struct {
+	AcademicYear int32 `json:"academic_year" binding:"required,min=1,max=8"`
+	CalendarYear int32 `json:"calendar_year" binding:"required"`
+}
