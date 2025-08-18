@@ -91,14 +91,11 @@ server
 
 # Miscellaneous
 excalidraw.log
-flow.md
-progress.md
-CLAUDE.md
+
+# All markdown files except README.md
+*.md
+!README.md
+
+# Claude files
 .claude/
-SECURITY.md
-PHASE2_SUMMARY.md
-report.md
-project_security.md
-phase3implementation.md
-phase7.4.md
 
