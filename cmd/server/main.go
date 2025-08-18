@@ -55,6 +55,13 @@ func main() {
 	}
 	defer redis.Close()
 
+	// Initialize Phase 9.1 advanced services
+	// Cache service for performance optimization
+	cacheService := services.NewCacheService(redis)
+
+	// Backup service for data protection
+	backupService := services.NewBackupService(db, "./backups", 30*24*time.Hour) // 30 days retention
+
 	// Initialize services
 	// Use RSA keys if available, otherwise generate fallback keys
 	jwtPrivateKey := cfg.JWT.PrivateKey
@@ -80,8 +87,8 @@ func main() {
 		os.Exit(1)
 	}
 	userService := services.NewUserService(db.Pool, logger)
-	bookService := services.NewBookService(db.Queries)
-	studentService := services.NewStudentService(db.Queries, authService)
+	bookService := services.NewBookService(db.Queries, cacheService)
+	studentService := services.NewStudentService(db.Queries, authService, cacheService)
 	reservationService := services.NewReservationService(db.Queries)
 	enhancedTransactionService := services.NewEnhancedTransactionService(db.Queries, reservationService)
 	importExportService := services.NewImportExportService(bookService, "./uploads")
@@ -100,15 +107,22 @@ func main() {
 	emailService := services.NewEmailService(emailConfig, logger)
 	queueService := services.NewQueueService(redis.Client, logger)
 	notificationService := services.NewNotificationService(db.Queries, emailService, queueService, logger)
+	reportService := services.NewReportService(db.Queries, cacheService)
 
 	// Initialize Gin router
 	r := gin.New()
 
-	// Add global middleware
+	// Phase 9.1: Initialize advanced security and versioning configurations
+	securityConfig := middleware.DefaultSecurityConfig()
+	versionConfig := middleware.DefaultVersionConfig()
+
+	// Add global middleware with enhanced security
 	r.Use(middleware.Logger())
 	r.Use(middleware.Recovery())
 	r.Use(middleware.CORS())
-	r.Use(middleware.SecurityHeaders())
+	r.Use(middleware.SecurityHeaders(securityConfig))
+	r.Use(middleware.AdvancedSecurityMiddleware(securityConfig))
+	r.Use(middleware.APIVersioningMiddleware(versionConfig))
 	r.Use(middleware.SecureJSON())
 
 	// Initialize rate limiter
@@ -117,8 +131,8 @@ func main() {
 	// Initialize middleware
 	authMiddleware := middleware.NewAuthMiddleware(authService)
 
-	// Initialize handlers
-	healthHandler := handlers.NewHealthHandler(db, redis, emailService)
+	// Initialize handlers with Phase 9.1 enhancements
+	healthHandler := handlers.NewHealthHandler(db, redis, emailService, cacheService)
 	authHandler := handlers.NewAuthHandler(authService, userService)
 	bookHandler := handlers.NewBookHandler(bookService)
 	studentHandler := handlers.NewStudentHandler(studentService)
@@ -127,12 +141,21 @@ func main() {
 	uploadHandler := handlers.NewUploadHandler(bookService)
 	importExportHandler := handlers.NewImportExportHandler(importExportService)
 	notificationHandler := handlers.NewNotificationHandler(notificationService)
+	reportHandler := handlers.NewReportHandler(reportService)
 
 	// Public routes (no authentication required)
 	public := r.Group("/api/v1")
 	{
 		public.GET("/ping", healthHandler.Ping)
 		public.GET("/health", healthHandler.Health)
+
+		// Phase 9.1: Enhanced health monitoring endpoints
+		public.GET("/health/live", healthHandler.Live)
+		public.GET("/health/ready", healthHandler.Ready)
+		public.GET("/health/metrics", healthHandler.Metrics)
+
+		// Phase 9.1: API versioning information
+		public.GET("/versions", middleware.VersionHandler(versionConfig))
 
 		// Authentication routes with rate limiting
 		auth := public.Group("/auth")
@@ -295,6 +318,172 @@ func main() {
 			}
 		}
 
+		// Reporting and Analytics routes (librarian access required)
+		librarianReports := protected.Group("")
+		librarianReports.Use(authMiddleware.RequireLibrarian())
+		{
+			reportHandler.RegisterRoutes(librarianReports)
+		}
+
+		// Phase 9.1: Admin routes for advanced features (admin access required)
+		admin := protected.Group("/admin")
+		admin.Use(authMiddleware.RequireAdmin()) // You may need to implement RequireAdmin middleware
+		{
+			// Cache management endpoints
+			cache := admin.Group("/cache")
+			{
+				cache.GET("/stats", func(c *gin.Context) {
+					ctx := c.Request.Context()
+					stats, err := cacheService.GetCacheStats(ctx)
+					if err != nil {
+						c.JSON(500, gin.H{"error": err.Error()})
+						return
+					}
+					c.JSON(200, gin.H{"success": true, "data": stats})
+				})
+
+				cache.DELETE("/invalidate", func(c *gin.Context) {
+					pattern := c.Query("pattern")
+					if pattern == "" {
+						c.JSON(400, gin.H{"error": "pattern parameter is required"})
+						return
+					}
+
+					ctx := c.Request.Context()
+					err := cacheService.InvalidateByPattern(ctx, pattern)
+					if err != nil {
+						c.JSON(500, gin.H{"error": err.Error()})
+						return
+					}
+					c.JSON(200, gin.H{"success": true, "message": "Cache invalidated"})
+				})
+
+				cache.POST("/warm", func(c *gin.Context) {
+					ctx := c.Request.Context()
+					err := cacheService.WarmCache(ctx)
+					if err != nil {
+						c.JSON(500, gin.H{"error": err.Error()})
+						return
+					}
+					c.JSON(200, gin.H{"success": true, "message": "Cache warmed"})
+				})
+			}
+
+			// Backup management endpoints
+			backup := admin.Group("/backup")
+			{
+				backup.POST("/create", func(c *gin.Context) {
+					var req struct {
+						Type string `json:"type" binding:"required"`
+					}
+
+					if err := c.ShouldBindJSON(&req); err != nil {
+						c.JSON(400, gin.H{"error": err.Error()})
+						return
+					}
+
+					ctx := c.Request.Context()
+					backupInfo, err := backupService.CreateBackup(ctx, services.BackupType(req.Type))
+					if err != nil {
+						c.JSON(500, gin.H{"error": err.Error()})
+						return
+					}
+					c.JSON(200, gin.H{"success": true, "data": backupInfo})
+				})
+
+				backup.GET("/list", func(c *gin.Context) {
+					ctx := c.Request.Context()
+					backups, err := backupService.ListBackups(ctx)
+					if err != nil {
+						c.JSON(500, gin.H{"error": err.Error()})
+						return
+					}
+					c.JSON(200, gin.H{"success": true, "data": backups})
+				})
+
+				backup.POST("/restore", func(c *gin.Context) {
+					var req struct {
+						BackupPath string `json:"backup_path" binding:"required"`
+					}
+
+					if err := c.ShouldBindJSON(&req); err != nil {
+						c.JSON(400, gin.H{"error": err.Error()})
+						return
+					}
+
+					ctx := c.Request.Context()
+					err := backupService.RestoreBackup(ctx, req.BackupPath)
+					if err != nil {
+						c.JSON(500, gin.H{"error": err.Error()})
+						return
+					}
+					c.JSON(200, gin.H{"success": true, "message": "Backup restored successfully"})
+				})
+
+				backup.POST("/verify", func(c *gin.Context) {
+					var req struct {
+						BackupPath string `json:"backup_path" binding:"required"`
+					}
+
+					if err := c.ShouldBindJSON(&req); err != nil {
+						c.JSON(400, gin.H{"error": err.Error()})
+						return
+					}
+
+					ctx := c.Request.Context()
+					verification, err := backupService.VerifyBackup(ctx, req.BackupPath)
+					if err != nil {
+						c.JSON(500, gin.H{"error": err.Error()})
+						return
+					}
+					c.JSON(200, gin.H{"success": true, "data": verification})
+				})
+
+				backup.DELETE("/cleanup", func(c *gin.Context) {
+					ctx := c.Request.Context()
+					err := backupService.CleanupOldBackups(ctx)
+					if err != nil {
+						c.JSON(500, gin.H{"error": err.Error()})
+						return
+					}
+					c.JSON(200, gin.H{"success": true, "message": "Old backups cleaned up"})
+				})
+
+				backup.GET("/metrics", func(c *gin.Context) {
+					ctx := c.Request.Context()
+					metrics, err := backupService.GetBackupMetrics(ctx)
+					if err != nil {
+						c.JSON(500, gin.H{"error": err.Error()})
+						return
+					}
+					c.JSON(200, gin.H{"success": true, "data": metrics})
+				})
+			}
+
+			// Security management endpoints
+			security := admin.Group("/security")
+			{
+				security.GET("/config", func(c *gin.Context) {
+					// Return security configuration (without sensitive data)
+					publicConfig := map[string]interface{}{
+						"api_versioning_enabled":   true,
+						"rate_limiting_enabled":    true,
+						"security_headers_enabled": true,
+						"supported_api_versions":   versionConfig.SupportedVersions,
+						"max_request_size":         securityConfig.MaxRequestSize,
+						"allowed_methods":          securityConfig.AllowedMethods,
+					}
+					c.JSON(200, gin.H{"success": true, "data": publicConfig})
+				})
+
+				security.GET("/api-keys", func(c *gin.Context) {
+					// List active API keys (without exposing the actual keys)
+					keys := securityConfig.ListActiveAPIKeys()
+					c.JSON(200, gin.H{"success": true, "data": keys})
+				})
+			}
+		}
+
 	}
 
 	// Static file serving for uploaded images
@@ -302,6 +491,35 @@ func main() {
 
 	// Root health check
 	r.GET("/health", healthHandler.Health)
+
+	// Phase 9.1: Start background services
+	bgCtx, bgCancel := context.WithCancel(context.Background())
+	defer bgCancel()
+
+	// Start cache warming and cleanup routines
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour) // Run every hour
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-bgCtx.Done():
+				return
+			case <-ticker.C:
+				// Warm cache periodically
+				if err := cacheService.WarmCache(context.Background()); err != nil {
+					slog.Error("Failed to warm cache", "error", err)
+				}
+
+				// Cleanup old backups
+				if err := backupService.CleanupOldBackups(context.Background()); err != nil {
+					slog.Error("Failed to cleanup old backups", "error", err)
+				}
+
+				slog.Info("Background maintenance tasks completed")
+			}
+		}
+	}()
 
 	port := os.Getenv("PORT")
 	if port == "" {

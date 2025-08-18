@@ -59,6 +59,111 @@ func (q *Queries) GetAcademicYearAnalytics(ctx context.Context, arg GetAcademicY
 	return i, err
 }
 
+const getBookDemandPrediction = `-- name: GetBookDemandPrediction :many
+SELECT 
+    b.id as book_id,
+    b.book_id as book_code,
+    b.title,
+    b.author,
+    b.genre,
+    COUNT(t.id)::int as historical_borrows,
+    COUNT(DISTINCT t.student_id)::int as unique_borrowers,
+    COALESCE(AVG(EXTRACT(DAY FROM (t.returned_date - t.transaction_date))), 14)::text as avg_loan_duration,
+    CASE 
+        WHEN COUNT(t.id) > 0 THEN 
+            ROUND((COUNT(t.id)::numeric / EXTRACT(DAY FROM ($2::timestamp - $1::timestamp)) * 30), 2)::text
+        ELSE '0.00'
+    END as predicted_monthly_demand,
+    CASE 
+        WHEN COUNT(r.id) > 0 AND b.available_copies = 0 THEN 'High'
+        WHEN COUNT(t.id) > AVG(book_stats.avg_borrows) * 1.5 THEN 'High'
+        WHEN COUNT(t.id) > AVG(book_stats.avg_borrows) THEN 'Medium' 
+        ELSE 'Low'
+    END as demand_category,
+    COUNT(r.id)::int as current_reservations,
+    b.available_copies,
+    b.total_copies
+FROM books b
+LEFT JOIN transactions t ON b.id = t.book_id 
+    AND t.transaction_type = 'borrow'
+    AND t.transaction_date >= $1::timestamp
+    AND t.transaction_date <= $2::timestamp
+LEFT JOIN reservations r ON b.id = r.book_id 
+    AND r.status = 'active'
+CROSS JOIN (
+    SELECT AVG(borrow_count) as avg_borrows
+    FROM (
+        SELECT COUNT(*)::int as borrow_count
+        FROM transactions 
+        WHERE transaction_type = 'borrow'
+        AND transaction_date >= $1::timestamp
+        AND transaction_date <= $2::timestamp
+        GROUP BY book_id
+    ) book_counts
+) book_stats
+WHERE b.deleted_at IS NULL
+    AND b.is_active = true
+    AND ($3::text IS NULL OR b.genre = $3::text)
+GROUP BY b.id, b.book_id, b.title, b.author, b.genre, b.available_copies, b.total_copies, book_stats.avg_borrows
+ORDER BY historical_borrows DESC, current_reservations DESC
+`
+
+type GetBookDemandPredictionParams struct {
+	Column1 pgtype.Timestamp `db:"column_1" json:"column_1"`
+	Column2 pgtype.Timestamp `db:"column_2" json:"column_2"`
+	Column3 string           `db:"column_3" json:"column_3"`
+}
+
+type GetBookDemandPredictionRow struct {
+	BookID                 int32       `db:"book_id" json:"book_id"`
+	BookCode               string      `db:"book_code" json:"book_code"`
+	Title                  string      `db:"title" json:"title"`
+	Author                 string      `db:"author" json:"author"`
+	Genre                  pgtype.Text `db:"genre" json:"genre"`
+	HistoricalBorrows      int32       `db:"historical_borrows" json:"historical_borrows"`
+	UniqueBorrowers        int32       `db:"unique_borrowers" json:"unique_borrowers"`
+	AvgLoanDuration        string      `db:"avg_loan_duration" json:"avg_loan_duration"`
+	PredictedMonthlyDemand string      `db:"predicted_monthly_demand" json:"predicted_monthly_demand"`
+	DemandCategory         string      `db:"demand_category" json:"demand_category"`
+	CurrentReservations    int32       `db:"current_reservations" json:"current_reservations"`
+	AvailableCopies        pgtype.Int4 `db:"available_copies" json:"available_copies"`
+	TotalCopies            pgtype.Int4 `db:"total_copies" json:"total_copies"`
+}
+
+func (q *Queries) GetBookDemandPrediction(ctx context.Context, arg GetBookDemandPredictionParams) ([]GetBookDemandPredictionRow, error) {
+	rows, err := q.db.Query(ctx, getBookDemandPrediction, arg.Column1, arg.Column2, arg.Column3)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetBookDemandPredictionRow{}
+	for rows.Next() {
+		var i GetBookDemandPredictionRow
+		if err := rows.Scan(
+			&i.BookID,
+			&i.BookCode,
+			&i.Title,
+			&i.Author,
+			&i.Genre,
+			&i.HistoricalBorrows,
+			&i.UniqueBorrowers,
+			&i.AvgLoanDuration,
+			&i.PredictedMonthlyDemand,
+			&i.DemandCategory,
+			&i.CurrentReservations,
+			&i.AvailableCopies,
+			&i.TotalCopies,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getBookUtilizationReport = `-- name: GetBookUtilizationReport :many
 SELECT 
     b.book_id,
@@ -321,6 +426,57 @@ func (q *Queries) GetBorrowingTrends(ctx context.Context, arg GetBorrowingTrends
 		return nil, err
 	}
 	return items, nil
+}
+
+const getCapacityPlanningAnalysis = `-- name: GetCapacityPlanningAnalysis :one
+SELECT 
+    (SELECT COUNT(*) FROM books WHERE deleted_at IS NULL AND is_active = true)::int as total_books_in_system,
+    (SELECT SUM(total_copies) FROM books WHERE deleted_at IS NULL AND is_active = true)::int as total_book_copies,
+    (SELECT SUM(available_copies) FROM books WHERE deleted_at IS NULL AND is_active = true)::int as currently_available_copies,
+    (SELECT COUNT(*) FROM transactions WHERE transaction_type = 'borrow' AND returned_date IS NULL)::int as books_currently_borrowed,
+    (SELECT COUNT(*) FROM reservations WHERE status = 'active' AND expires_at > NOW())::int as active_reservations,
+    (SELECT COUNT(DISTINCT student_id) FROM transactions WHERE DATE(transaction_date) >= CURRENT_DATE - INTERVAL '30 days')::int as active_users_last_30_days,
+    ROUND(
+        (SELECT COUNT(*) FROM transactions WHERE transaction_type = 'borrow' AND returned_date IS NULL)::numeric /
+        (SELECT CASE WHEN SUM(total_copies) > 0 THEN SUM(total_copies) ELSE 1 END FROM books WHERE deleted_at IS NULL AND is_active = true)::numeric * 100,
+        2
+    )::text as system_utilization_percent,
+    CASE 
+        WHEN (SELECT COUNT(*) FROM reservations WHERE status = 'active' AND expires_at > NOW()) > 
+             (SELECT SUM(available_copies) FROM books WHERE deleted_at IS NULL AND is_active = true) * 0.1
+        THEN 'Consider adding more copies of popular books'
+        WHEN (SELECT COUNT(*) FROM transactions WHERE transaction_type = 'borrow' AND returned_date IS NULL)::numeric /
+             (SELECT CASE WHEN SUM(total_copies) > 0 THEN SUM(total_copies) ELSE 1 END FROM books WHERE deleted_at IS NULL AND is_active = true)::numeric > 0.8
+        THEN 'System near capacity - consider expanding collection'
+        ELSE 'Capacity is adequate'
+    END as capacity_recommendation
+`
+
+type GetCapacityPlanningAnalysisRow struct {
+	TotalBooksInSystem       int32  `db:"total_books_in_system" json:"total_books_in_system"`
+	TotalBookCopies          int32  `db:"total_book_copies" json:"total_book_copies"`
+	CurrentlyAvailableCopies int32  `db:"currently_available_copies" json:"currently_available_copies"`
+	BooksCurrentlyBorrowed   int32  `db:"books_currently_borrowed" json:"books_currently_borrowed"`
+	ActiveReservations       int32  `db:"active_reservations" json:"active_reservations"`
+	ActiveUsersLast30Days    int32  `db:"active_users_last_30_days" json:"active_users_last_30_days"`
+	SystemUtilizationPercent string `db:"system_utilization_percent" json:"system_utilization_percent"`
+	CapacityRecommendation   string `db:"capacity_recommendation" json:"capacity_recommendation"`
+}
+
+func (q *Queries) GetCapacityPlanningAnalysis(ctx context.Context) (GetCapacityPlanningAnalysisRow, error) {
+	row := q.db.QueryRow(ctx, getCapacityPlanningAnalysis)
+	var i GetCapacityPlanningAnalysisRow
+	err := row.Scan(
+		&i.TotalBooksInSystem,
+		&i.TotalBookCopies,
+		&i.CurrentlyAvailableCopies,
+		&i.BooksCurrentlyBorrowed,
+		&i.ActiveReservations,
+		&i.ActiveUsersLast30Days,
+		&i.SystemUtilizationPercent,
+		&i.CapacityRecommendation,
+	)
+	return i, err
 }
 
 const getDashboardMetrics = `-- name: GetDashboardMetrics :one
@@ -759,6 +915,193 @@ func (q *Queries) GetPopularBooks(ctx context.Context, arg GetPopularBooksParams
 	return items, nil
 }
 
+const getRiskAnalysis = `-- name: GetRiskAnalysis :many
+SELECT 
+    'overdue_books' as risk_category,
+    COUNT(*)::int as risk_count,
+    CASE 
+        WHEN COUNT(*) > 100 THEN 'High'
+        WHEN COUNT(*) > 50 THEN 'Medium'
+        ELSE 'Low'
+    END as risk_level,
+    COALESCE(SUM(fine_amount), 0)::text as financial_impact,
+    'Books overdue for more than 7 days' as description
+FROM transactions 
+WHERE due_date < NOW() - INTERVAL '7 days' 
+AND returned_date IS NULL
+
+UNION ALL
+
+SELECT 
+    'students_with_multiple_overdue' as risk_category,
+    COUNT(DISTINCT student_id)::int as risk_count,
+    CASE 
+        WHEN COUNT(DISTINCT student_id) > 20 THEN 'High'
+        WHEN COUNT(DISTINCT student_id) > 10 THEN 'Medium'
+        ELSE 'Low'
+    END as risk_level,
+    COALESCE(SUM(fine_amount), 0)::text as financial_impact,
+    'Students with 3+ overdue books' as description
+FROM transactions 
+WHERE due_date < NOW() AND returned_date IS NULL
+GROUP BY student_id
+HAVING COUNT(*) >= 3
+
+UNION ALL
+
+SELECT 
+    'high_demand_books_low_copies' as risk_category,
+    COUNT(*)::int as risk_count,
+    CASE 
+        WHEN COUNT(*) > 10 THEN 'High'
+        WHEN COUNT(*) > 5 THEN 'Medium'
+        ELSE 'Low'
+    END as risk_level,
+    '0.00' as financial_impact,
+    'Books with high reservations but low total copies' as description
+FROM (
+    SELECT b.id
+    FROM books b
+    WHERE (
+        SELECT COUNT(*) FROM reservations r 
+        WHERE r.book_id = b.id AND r.status = 'active' AND r.expires_at > NOW()
+    ) >= b.total_copies * 0.5
+    AND b.total_copies < 5
+    AND b.deleted_at IS NULL
+    AND b.is_active = true
+) risky_books
+
+UNION ALL
+
+SELECT 
+    'unpaid_fines' as risk_category,
+    COUNT(DISTINCT student_id)::int as risk_count,
+    CASE 
+        WHEN COALESCE(SUM(fine_amount), 0) > 1000 THEN 'High'
+        WHEN COALESCE(SUM(fine_amount), 0) > 500 THEN 'Medium'
+        ELSE 'Low'
+    END as risk_level,
+    COALESCE(SUM(fine_amount), 0)::text as financial_impact,
+    'Outstanding unpaid fines' as description
+FROM transactions 
+WHERE fine_amount > 0 AND fine_paid = false
+
+ORDER BY 
+    CASE risk_level 
+        WHEN 'High' THEN 1 
+        WHEN 'Medium' THEN 2 
+        ELSE 3 
+    END,
+    risk_count DESC
+`
+
+type GetRiskAnalysisRow struct {
+	RiskCategory    string `db:"risk_category" json:"risk_category"`
+	RiskCount       int32  `db:"risk_count" json:"risk_count"`
+	RiskLevel       string `db:"risk_level" json:"risk_level"`
+	FinancialImpact string `db:"financial_impact" json:"financial_impact"`
+	Description     string `db:"description" json:"description"`
+}
+
+func (q *Queries) GetRiskAnalysis(ctx context.Context) ([]GetRiskAnalysisRow, error) {
+	rows, err := q.db.Query(ctx, getRiskAnalysis)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetRiskAnalysisRow{}
+	for rows.Next() {
+		var i GetRiskAnalysisRow
+		if err := rows.Scan(
+			&i.RiskCategory,
+			&i.RiskCount,
+			&i.RiskLevel,
+			&i.FinancialImpact,
+			&i.Description,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getSeasonalTrends = `-- name: GetSeasonalTrends :many
+SELECT 
+    CASE 
+        WHEN EXTRACT(MONTH FROM t.transaction_date) IN (12, 1, 2) THEN 'Winter'
+        WHEN EXTRACT(MONTH FROM t.transaction_date) IN (3, 4, 5) THEN 'Spring'
+        WHEN EXTRACT(MONTH FROM t.transaction_date) IN (6, 7, 8) THEN 'Summer'
+        ELSE 'Fall'
+    END as season,
+    EXTRACT(YEAR FROM t.transaction_date)::int as year,
+    COUNT(CASE WHEN t.transaction_type = 'borrow' THEN 1 END)::int as total_borrows,
+    COUNT(CASE WHEN t.transaction_type = 'return' THEN 1 END)::int as total_returns,
+    COUNT(DISTINCT t.student_id)::int as unique_students,
+    COUNT(DISTINCT t.book_id)::int as unique_books,
+    COALESCE(AVG(EXTRACT(DAY FROM (t.returned_date - t.transaction_date))), 0)::text as avg_loan_duration
+FROM transactions t
+INNER JOIN students s ON t.student_id = s.id
+WHERE t.transaction_date >= $1::timestamp
+    AND t.transaction_date <= $2::timestamp
+    AND s.deleted_at IS NULL
+GROUP BY 
+    CASE 
+        WHEN EXTRACT(MONTH FROM t.transaction_date) IN (12, 1, 2) THEN 'Winter'
+        WHEN EXTRACT(MONTH FROM t.transaction_date) IN (3, 4, 5) THEN 'Spring'
+        WHEN EXTRACT(MONTH FROM t.transaction_date) IN (6, 7, 8) THEN 'Summer'
+        ELSE 'Fall'
+    END,
+    EXTRACT(YEAR FROM t.transaction_date)
+ORDER BY year, season
+`
+
+type GetSeasonalTrendsParams struct {
+	Column1 pgtype.Timestamp `db:"column_1" json:"column_1"`
+	Column2 pgtype.Timestamp `db:"column_2" json:"column_2"`
+}
+
+type GetSeasonalTrendsRow struct {
+	Season          string `db:"season" json:"season"`
+	Year            int32  `db:"year" json:"year"`
+	TotalBorrows    int32  `db:"total_borrows" json:"total_borrows"`
+	TotalReturns    int32  `db:"total_returns" json:"total_returns"`
+	UniqueStudents  int32  `db:"unique_students" json:"unique_students"`
+	UniqueBooks     int32  `db:"unique_books" json:"unique_books"`
+	AvgLoanDuration string `db:"avg_loan_duration" json:"avg_loan_duration"`
+}
+
+func (q *Queries) GetSeasonalTrends(ctx context.Context, arg GetSeasonalTrendsParams) ([]GetSeasonalTrendsRow, error) {
+	rows, err := q.db.Query(ctx, getSeasonalTrends, arg.Column1, arg.Column2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetSeasonalTrendsRow{}
+	for rows.Next() {
+		var i GetSeasonalTrendsRow
+		if err := rows.Scan(
+			&i.Season,
+			&i.Year,
+			&i.TotalBorrows,
+			&i.TotalReturns,
+			&i.UniqueStudents,
+			&i.UniqueBooks,
+			&i.AvgLoanDuration,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getStudentActivity = `-- name: GetStudentActivity :many
 SELECT 
     s.student_id,
@@ -840,6 +1183,112 @@ func (q *Queries) GetStudentActivity(ctx context.Context, arg GetStudentActivity
 	return items, nil
 }
 
+const getStudentBehaviorAnalysis = `-- name: GetStudentBehaviorAnalysis :many
+SELECT 
+    s.year_of_study,
+    s.department,
+    COUNT(DISTINCT s.id)::int as total_students,
+    ROUND(AVG(student_stats.total_borrows), 2)::text as avg_borrows_per_student,
+    ROUND(AVG(student_stats.avg_loan_duration), 2)::text as avg_loan_duration_days,
+    ROUND(AVG(student_stats.overdue_rate) * 100, 2)::text as avg_overdue_rate_percent,
+    COUNT(CASE WHEN student_stats.total_borrows > 10 THEN 1 END)::int as heavy_users,
+    COUNT(CASE WHEN student_stats.total_borrows <= 3 THEN 1 END)::int as light_users,
+    STRING_AGG(DISTINCT student_stats.favorite_genre, ', ') as popular_genres
+FROM students s
+INNER JOIN (
+    SELECT 
+        s.id,
+        s.year_of_study,
+        s.department,
+        COUNT(CASE WHEN t.transaction_type = 'borrow' THEN 1 END)::int as total_borrows,
+        COALESCE(AVG(EXTRACT(DAY FROM (t.returned_date - t.transaction_date))), 14) as avg_loan_duration,
+        CASE 
+            WHEN COUNT(CASE WHEN t.transaction_type = 'borrow' THEN 1 END) > 0 THEN
+                COUNT(CASE WHEN t.due_date < COALESCE(t.returned_date, NOW()) THEN 1 END)::numeric / 
+                COUNT(CASE WHEN t.transaction_type = 'borrow' THEN 1 END)::numeric
+            ELSE 0
+        END as overdue_rate,
+        (
+            SELECT b.genre 
+            FROM transactions t2 
+            INNER JOIN books b ON t2.book_id = b.id 
+            WHERE t2.student_id = s.id 
+            AND t2.transaction_type = 'borrow'
+            AND t2.transaction_date >= $1::timestamp
+            AND t2.transaction_date <= $2::timestamp
+            AND b.genre IS NOT NULL
+            GROUP BY b.genre 
+            ORDER BY COUNT(*) DESC 
+            LIMIT 1
+        ) as favorite_genre
+    FROM students s
+    LEFT JOIN transactions t ON s.id = t.student_id
+        AND t.transaction_date >= $1::timestamp
+        AND t.transaction_date <= $2::timestamp
+    WHERE s.deleted_at IS NULL
+    AND s.is_active = true
+    AND ($3::int IS NULL OR s.year_of_study = $3::int)
+    AND ($4::text IS NULL OR s.department = $4::text)
+    GROUP BY s.id, s.year_of_study, s.department
+) student_stats ON s.id = student_stats.id
+GROUP BY s.year_of_study, s.department
+ORDER BY s.year_of_study, s.department
+`
+
+type GetStudentBehaviorAnalysisParams struct {
+	Column1 pgtype.Timestamp `db:"column_1" json:"column_1"`
+	Column2 pgtype.Timestamp `db:"column_2" json:"column_2"`
+	Column3 int32            `db:"column_3" json:"column_3"`
+	Column4 string           `db:"column_4" json:"column_4"`
+}
+
+type GetStudentBehaviorAnalysisRow struct {
+	YearOfStudy           int32       `db:"year_of_study" json:"year_of_study"`
+	Department            pgtype.Text `db:"department" json:"department"`
+	TotalStudents         int32       `db:"total_students" json:"total_students"`
+	AvgBorrowsPerStudent  string      `db:"avg_borrows_per_student" json:"avg_borrows_per_student"`
+	AvgLoanDurationDays   string      `db:"avg_loan_duration_days" json:"avg_loan_duration_days"`
+	AvgOverdueRatePercent string      `db:"avg_overdue_rate_percent" json:"avg_overdue_rate_percent"`
+	HeavyUsers            int32       `db:"heavy_users" json:"heavy_users"`
+	LightUsers            int32       `db:"light_users" json:"light_users"`
+	PopularGenres         []byte      `db:"popular_genres" json:"popular_genres"`
+}
+
+func (q *Queries) GetStudentBehaviorAnalysis(ctx context.Context, arg GetStudentBehaviorAnalysisParams) ([]GetStudentBehaviorAnalysisRow, error) {
+	rows, err := q.db.Query(ctx, getStudentBehaviorAnalysis,
+		arg.Column1,
+		arg.Column2,
+		arg.Column3,
+		arg.Column4,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetStudentBehaviorAnalysisRow{}
+	for rows.Next() {
+		var i GetStudentBehaviorAnalysisRow
+		if err := rows.Scan(
+			&i.YearOfStudy,
+			&i.Department,
+			&i.TotalStudents,
+			&i.AvgBorrowsPerStudent,
+			&i.AvgLoanDurationDays,
+			&i.AvgOverdueRatePercent,
+			&i.HeavyUsers,
+			&i.LightUsers,
+			&i.PopularGenres,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTopBorrowingStudents = `-- name: GetTopBorrowingStudents :many
 SELECT 
     s.student_id,
@@ -900,6 +1349,68 @@ func (q *Queries) GetTopBorrowingStudents(ctx context.Context, arg GetTopBorrowi
 			&i.TotalBorrows,
 			&i.CurrentBooks,
 			&i.OverdueBooks,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUsagePatternAnalysis = `-- name: GetUsagePatternAnalysis :many
+
+SELECT 
+    EXTRACT(DOW FROM t.transaction_date)::int as day_of_week,  -- 0=Sunday, 6=Saturday
+    EXTRACT(HOUR FROM t.transaction_date)::int as hour_of_day,
+    COUNT(CASE WHEN t.transaction_type = 'borrow' THEN 1 END)::int as borrow_count,
+    COUNT(CASE WHEN t.transaction_type = 'return' THEN 1 END)::int as return_count,
+    COUNT(DISTINCT t.student_id)::int as unique_users,
+    ROUND(AVG(EXTRACT(EPOCH FROM (t.returned_date - t.transaction_date)) / 86400), 2)::text as avg_loan_duration_days
+FROM transactions t
+INNER JOIN students s ON t.student_id = s.id
+WHERE t.transaction_date >= $1::timestamp
+    AND t.transaction_date <= $2::timestamp
+    AND s.deleted_at IS NULL
+    AND ($3::int IS NULL OR s.year_of_study = $3::int)
+GROUP BY EXTRACT(DOW FROM t.transaction_date), EXTRACT(HOUR FROM t.transaction_date)
+ORDER BY day_of_week, hour_of_day
+`
+
+type GetUsagePatternAnalysisParams struct {
+	Column1 pgtype.Timestamp `db:"column_1" json:"column_1"`
+	Column2 pgtype.Timestamp `db:"column_2" json:"column_2"`
+	Column3 int32            `db:"column_3" json:"column_3"`
+}
+
+type GetUsagePatternAnalysisRow struct {
+	DayOfWeek           int32  `db:"day_of_week" json:"day_of_week"`
+	HourOfDay           int32  `db:"hour_of_day" json:"hour_of_day"`
+	BorrowCount         int32  `db:"borrow_count" json:"borrow_count"`
+	ReturnCount         int32  `db:"return_count" json:"return_count"`
+	UniqueUsers         int32  `db:"unique_users" json:"unique_users"`
+	AvgLoanDurationDays string `db:"avg_loan_duration_days" json:"avg_loan_duration_days"`
+}
+
+// Phase 8.3 - Advanced Analytics Queries
+func (q *Queries) GetUsagePatternAnalysis(ctx context.Context, arg GetUsagePatternAnalysisParams) ([]GetUsagePatternAnalysisRow, error) {
+	rows, err := q.db.Query(ctx, getUsagePatternAnalysis, arg.Column1, arg.Column2, arg.Column3)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetUsagePatternAnalysisRow{}
+	for rows.Next() {
+		var i GetUsagePatternAnalysisRow
+		if err := rows.Scan(
+			&i.DayOfWeek,
+			&i.HourOfDay,
+			&i.BorrowCount,
+			&i.ReturnCount,
+			&i.UniqueUsers,
+			&i.AvgLoanDurationDays,
 		); err != nil {
 			return nil, err
 		}

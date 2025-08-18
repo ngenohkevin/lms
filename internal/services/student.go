@@ -53,15 +53,17 @@ type AuthServiceInterface interface {
 
 // StudentService handles all student-related business logic
 type StudentService struct {
-	queries     StudentQuerier
-	authService AuthServiceInterface
+	queries      StudentQuerier
+	authService  AuthServiceInterface
+	cacheService CacheServiceInterface
 }
 
 // NewStudentService creates a new student service
-func NewStudentService(queries StudentQuerier, authService AuthServiceInterface) *StudentService {
+func NewStudentService(queries StudentQuerier, authService AuthServiceInterface, cacheService CacheServiceInterface) *StudentService {
 	return &StudentService{
-		queries:     queries,
-		authService: authService,
+		queries:      queries,
+		authService:  authService,
+		cacheService: cacheService,
 	}
 }
 
@@ -137,11 +139,28 @@ func (s *StudentService) CreateStudent(ctx context.Context, req *models.CreateSt
 		UpdatedAt:      student.UpdatedAt,
 	}
 
+	// Invalidate student-related caches after successful creation
+	if s.cacheService != nil {
+		// Invalidate student lists and search results
+		s.cacheService.InvalidateByPattern(ctx, "students:*")
+		s.cacheService.InvalidateByPattern(ctx, "student_search:*")
+	}
+
 	return studentDB, nil
 }
 
 // GetStudentByID retrieves a student by their ID
 func (s *StudentService) GetStudentByID(ctx context.Context, id int32) (*models.StudentDB, error) {
+	// Try to get from cache first
+	if s.cacheService != nil {
+		if cachedData, err := s.cacheService.GetStudentProfile(ctx, int(id)); err == nil {
+			var studentDB models.StudentDB
+			if err := json.Unmarshal([]byte(cachedData), &studentDB); err == nil {
+				return &studentDB, nil
+			}
+		}
+	}
+
 	student, err := s.queries.GetStudentByID(ctx, id)
 	if err != nil {
 		return nil, models.ErrStudentNotFound
@@ -163,6 +182,11 @@ func (s *StudentService) GetStudentByID(ctx context.Context, id int32) (*models.
 		DeletedAt:      student.DeletedAt,
 		CreatedAt:      student.CreatedAt,
 		UpdatedAt:      student.UpdatedAt,
+	}
+
+	// Cache the student profile for future requests
+	if s.cacheService != nil {
+		s.cacheService.SetStudentProfile(ctx, int(id), studentDB)
 	}
 
 	return studentDB, nil
