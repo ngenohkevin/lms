@@ -14,7 +14,7 @@ func TestHealthHandler_Ping(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	// Create handler
-	handler := NewHealthHandler(nil, nil, nil)
+	handler := NewHealthHandler(nil, nil, nil, nil)
 
 	// Create test router
 	router := gin.New()
@@ -57,7 +57,7 @@ func TestHealthHandler_Health_WithoutDependencies(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	// Create handler without dependencies
-	handler := NewHealthHandler(nil, nil, nil)
+	handler := NewHealthHandler(nil, nil, nil, nil)
 
 	// Create test router
 	router := gin.New()
@@ -75,9 +75,9 @@ func TestHealthHandler_Health_WithoutDependencies(t *testing.T) {
 	// Perform request
 	router.ServeHTTP(w, req)
 
-	// Check status code
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
+	// Check status code - should be degraded (206) when dependencies are nil
+	if w.Code != http.StatusPartialContent {
+		t.Errorf("Expected status %d, got %d", http.StatusPartialContent, w.Code)
 	}
 
 	// Check response body
@@ -86,8 +86,8 @@ func TestHealthHandler_Health_WithoutDependencies(t *testing.T) {
 		t.Fatalf("Failed to unmarshal response: %v", err)
 	}
 
-	if response.Status != "healthy" {
-		t.Errorf("Expected status 'healthy', got %s", response.Status)
+	if response.Status != "degraded" {
+		t.Errorf("Expected status 'degraded', got %s", response.Status)
 	}
 
 	if response.Service != "lms-backend" {
@@ -102,8 +102,8 @@ func TestHealthHandler_Health_WithoutDependencies(t *testing.T) {
 		t.Error("Expected timestamp in response")
 	}
 
-	// Should have no checks since no dependencies provided
-	if len(response.Checks) != 0 {
-		t.Errorf("Expected 0 checks, got %d", len(response.Checks))
+	// Should have all checks even without dependencies
+	if len(response.Checks) != 6 {
+		t.Errorf("Expected 6 checks, got %d", len(response.Checks))
 	}
 }

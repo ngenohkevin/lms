@@ -17,6 +17,101 @@ type MockBookQuerier struct {
 	mock.Mock
 }
 
+// MockCacheService is a mock implementation of CacheServiceInterface
+type MockCacheService struct {
+	mock.Mock
+}
+
+func (m *MockCacheService) SetBookCatalog(ctx context.Context, books interface{}) error {
+	args := m.Called(ctx, books)
+	return args.Error(0)
+}
+
+func (m *MockCacheService) GetBookCatalog(ctx context.Context) (string, error) {
+	args := m.Called(ctx)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockCacheService) InvalidateBookCatalog(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
+func (m *MockCacheService) SetStudentProfile(ctx context.Context, studentID int, profile interface{}) error {
+	args := m.Called(ctx, studentID, profile)
+	return args.Error(0)
+}
+
+func (m *MockCacheService) GetStudentProfile(ctx context.Context, studentID int) (string, error) {
+	args := m.Called(ctx, studentID)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockCacheService) InvalidateStudentProfile(ctx context.Context, studentID int) error {
+	args := m.Called(ctx, studentID)
+	return args.Error(0)
+}
+
+func (m *MockCacheService) SetPopularBooks(ctx context.Context, report interface{}) error {
+	args := m.Called(ctx, report)
+	return args.Error(0)
+}
+
+func (m *MockCacheService) GetPopularBooks(ctx context.Context) (string, error) {
+	args := m.Called(ctx)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockCacheService) InvalidatePopularBooks(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
+func (m *MockCacheService) SetSearchResults(ctx context.Context, query string, results interface{}) error {
+	args := m.Called(ctx, query, results)
+	return args.Error(0)
+}
+
+func (m *MockCacheService) GetSearchResults(ctx context.Context, query string) (string, error) {
+	args := m.Called(ctx, query)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockCacheService) InvalidateSearchResults(ctx context.Context, query string) error {
+	args := m.Called(ctx, query)
+	return args.Error(0)
+}
+
+func (m *MockCacheService) InvalidateByPattern(ctx context.Context, pattern string) error {
+	args := m.Called(ctx, pattern)
+	return args.Error(0)
+}
+
+func (m *MockCacheService) GetCacheStats(ctx context.Context) (*CacheStats, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(*CacheStats), args.Error(1)
+}
+
+func (m *MockCacheService) GetHitRatio(ctx context.Context, cacheType string) (*HitRatio, error) {
+	args := m.Called(ctx, cacheType)
+	return args.Get(0).(*HitRatio), args.Error(1)
+}
+
+func (m *MockCacheService) IncrementHit(ctx context.Context, cacheType string) error {
+	args := m.Called(ctx, cacheType)
+	return args.Error(0)
+}
+
+func (m *MockCacheService) IncrementMiss(ctx context.Context, cacheType string) error {
+	args := m.Called(ctx, cacheType)
+	return args.Error(0)
+}
+
+func (m *MockCacheService) WarmCache(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
 func (m *MockBookQuerier) CreateBook(ctx context.Context, arg queries.CreateBookParams) (queries.Book, error) {
 	args := m.Called(ctx, arg)
 	return args.Get(0).(queries.Book), args.Error(1)
@@ -84,7 +179,8 @@ func (m *MockBookQuerier) CountAvailableBooks(ctx context.Context) (int64, error
 
 func TestBookService_CreateBook(t *testing.T) {
 	mockQuerier := new(MockBookQuerier)
-	service := NewBookService(mockQuerier)
+	mockCache := new(MockCacheService)
+	service := NewBookService(mockQuerier, mockCache)
 
 	tests := []struct {
 		name    string
@@ -135,6 +231,10 @@ func TestBookService_CreateBook(t *testing.T) {
 					CreatedAt:       pgtype.Timestamp{Time: time.Now(), Valid: true},
 					UpdatedAt:       pgtype.Timestamp{Time: time.Now(), Valid: true},
 				}, nil)
+				// Mock cache invalidation calls
+				mockCache.On("InvalidateByPattern", mock.Anything, "books:list:*").Return(nil)
+				mockCache.On("InvalidateByPattern", mock.Anything, "search:*").Return(nil)
+				mockCache.On("InvalidateBookCatalog", mock.Anything).Return(nil)
 			},
 			wantErr: false,
 		},
@@ -236,7 +336,8 @@ func TestBookService_CreateBook(t *testing.T) {
 
 func TestBookService_GetBookByID(t *testing.T) {
 	mockQuerier := new(MockBookQuerier)
-	service := NewBookService(mockQuerier)
+	mockCache := new(MockCacheService)
+	service := NewBookService(mockQuerier, mockCache)
 
 	tests := []struct {
 		name    string
@@ -297,7 +398,8 @@ func TestBookService_GetBookByID(t *testing.T) {
 
 func TestBookService_SearchBooks(t *testing.T) {
 	mockQuerier := new(MockBookQuerier)
-	service := NewBookService(mockQuerier)
+	mockCache := new(MockCacheService)
+	service := NewBookService(mockQuerier, mockCache)
 
 	tests := []struct {
 		name    string
@@ -392,6 +494,12 @@ func TestBookService_SearchBooks(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockQuerier.ExpectedCalls = nil
+			mockCache.ExpectedCalls = nil
+
+			// Setup cache mock to return empty result (cache miss) and allow setting results
+			mockCache.On("GetSearchResults", mock.Anything, mock.AnythingOfType("string")).Return("", nil)
+			mockCache.On("SetSearchResults", mock.Anything, mock.AnythingOfType("string"), mock.Anything).Return(nil)
+
 			tt.setup()
 
 			result, err := service.SearchBooks(context.Background(), tt.request)
@@ -414,7 +522,8 @@ func TestBookService_SearchBooks(t *testing.T) {
 
 func TestBookService_UpdateBookAvailability(t *testing.T) {
 	mockQuerier := new(MockBookQuerier)
-	service := NewBookService(mockQuerier)
+	mockCache := new(MockCacheService)
+	service := NewBookService(mockQuerier, mockCache)
 
 	tests := []struct {
 		name            string

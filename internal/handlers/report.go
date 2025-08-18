@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"time"
@@ -11,14 +12,30 @@ import (
 
 // ReportService interface defines the methods for report operations
 type ReportService interface {
-	GetBorrowingStatistics(ctx interface{}, startDate, endDate time.Time, yearOfStudy *int32) (*models.BorrowingStatisticsReport, error)
-	GetOverdueBooks(ctx interface{}, yearOfStudy *int32, department *string) (*models.OverdueBooksReport, error)
-	GetPopularBooks(ctx interface{}, startDate, endDate time.Time, limit int32, yearOfStudy *int32) (*models.PopularBooksReport, error)
-	GetStudentActivity(ctx interface{}, yearOfStudy *int32, department *string, startDate, endDate time.Time) (*models.StudentActivityReport, error)
-	GetInventoryStatus(ctx interface{}) (*models.InventoryStatusReport, error)
-	GetLibraryOverview(ctx interface{}) (*models.LibraryOverviewReport, error)
-	GetBorrowingTrends(ctx interface{}, startDate, endDate time.Time, interval string) (*models.BorrowingTrendsReport, error)
-	GetYearlyComparison(ctx interface{}, years []int32) (*models.YearlyComparisonReport, error)
+	GetBorrowingStatistics(ctx context.Context, startDate, endDate time.Time, yearOfStudy *int32) (*models.BorrowingStatisticsReport, error)
+	GetOverdueBooks(ctx context.Context, yearOfStudy *int32, department *string) (*models.OverdueBooksReport, error)
+	GetPopularBooks(ctx context.Context, startDate, endDate time.Time, limit int32, yearOfStudy *int32) (*models.PopularBooksReport, error)
+	GetStudentActivity(ctx context.Context, yearOfStudy *int32, department *string, startDate, endDate time.Time) (*models.StudentActivityReport, error)
+	GetInventoryStatus(ctx context.Context) (*models.InventoryStatusReport, error)
+	GetLibraryOverview(ctx context.Context) (*models.LibraryOverviewReport, error)
+	GetBorrowingTrends(ctx context.Context, startDate, endDate time.Time, interval string) (*models.BorrowingTrendsReport, error)
+	GetYearlyComparison(ctx context.Context, years []int32) (*models.YearlyComparisonReport, error)
+
+	// Phase 8.2 - Year-based Reporting Methods
+	GetYearEndSummary(ctx context.Context) (*models.YearEndSummaryReport, error)
+	GetYearSpecificBorrowingReport(ctx context.Context, year int32) (*models.YearSpecificBorrowingReport, error)
+	GetYearOverYearComparison(ctx context.Context, years []int32) (*models.YearOverYearComparisonReport, error)
+	GetYearBasedOverdueAnalysis(ctx context.Context, year *int32, yearOfStudy *int32) (*models.YearBasedOverdueAnalysisReport, error)
+	GetAcademicYearAnalytics(ctx context.Context, academicYear, calendarYear int32) (*models.AcademicYearAnalyticsReport, error)
+
+	// Phase 8.3 - Advanced Analytics Methods
+	GetUsagePatternAnalysis(ctx context.Context, startDate, endDate time.Time, yearOfStudy *int32) (*models.UsagePatternAnalysisReport, error)
+	GetSeasonalTrends(ctx context.Context, startDate, endDate time.Time) (*models.SeasonalTrendsReport, error)
+	GetBookDemandPrediction(ctx context.Context, startDate, endDate time.Time, genre *string) (*models.BookDemandPredictionReport, error)
+	GetStudentBehaviorAnalysis(ctx context.Context, startDate, endDate time.Time, yearOfStudy *int32, department *string) (*models.StudentBehaviorAnalysisReport, error)
+	GetCapacityPlanningAnalysis(ctx context.Context) (*models.CapacityPlanningReport, error)
+	GetRiskAnalysis(ctx context.Context) (*models.RiskAnalysisReport, error)
+	GetDataVisualization(ctx context.Context, reportType, chartType string, parameters map[string]interface{}, title string, colors []string) (*models.DataVisualizationReport, error)
 }
 
 // ReportHandler handles all report-related HTTP requests
@@ -48,6 +65,22 @@ func (rh *ReportHandler) RegisterRoutes(router *gin.RouterGroup) {
 		// Advanced analytics
 		reports.POST("/borrowing-trends", rh.GetBorrowingTrends)
 		reports.POST("/yearly-comparison", rh.GetYearlyComparison)
+
+		// Phase 8.2 - Year-based Reporting
+		reports.GET("/year-end-summary", rh.GetYearEndSummary)
+		reports.POST("/year-specific-borrowing", rh.GetYearSpecificBorrowingReport)
+		reports.POST("/year-over-year-comparison", rh.GetYearOverYearComparison)
+		reports.POST("/year-based-overdue-analysis", rh.GetYearBasedOverdueAnalysis)
+		reports.POST("/academic-year-analytics", rh.GetAcademicYearAnalytics)
+
+		// Phase 8.3 - Advanced Analytics
+		reports.POST("/usage-pattern-analysis", rh.GetUsagePatternAnalysis)
+		reports.POST("/seasonal-trends", rh.GetSeasonalTrends)
+		reports.POST("/book-demand-prediction", rh.GetBookDemandPrediction)
+		reports.POST("/student-behavior-analysis", rh.GetStudentBehaviorAnalysis)
+		reports.GET("/capacity-planning-analysis", rh.GetCapacityPlanningAnalysis)
+		reports.GET("/risk-analysis", rh.GetRiskAnalysis)
+		reports.POST("/data-visualization", rh.GetDataVisualization)
 
 		// Dashboard metrics
 		reports.GET("/dashboard-metrics", rh.GetDashboardMetrics)
@@ -592,5 +625,414 @@ func (rh *ReportHandler) ScheduleReport(c *gin.Context) {
 		Success: true,
 		Message: "Report schedule created successfully",
 		Data:    scheduleResult,
+	})
+}
+
+// Phase 8.2 - Year-based Reporting Handler Methods
+
+// GetYearEndSummary generates comprehensive year-end summary report
+func (rh *ReportHandler) GetYearEndSummary(c *gin.Context) {
+	report, err := rh.reportService.GetYearEndSummary(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to generate year-end summary report",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Message: "Year-end summary report generated successfully",
+		Data:    report,
+	})
+}
+
+// GetYearSpecificBorrowingReport generates borrowing report for specific year
+func (rh *ReportHandler) GetYearSpecificBorrowingReport(c *gin.Context) {
+	var req models.YearSpecificBorrowingRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid request parameters",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	report, err := rh.reportService.GetYearSpecificBorrowingReport(c.Request.Context(), req.Year)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to generate year-specific borrowing report",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Message: "Year-specific borrowing report generated successfully",
+		Data:    report,
+	})
+}
+
+// GetYearOverYearComparison generates year-over-year comparison report
+func (rh *ReportHandler) GetYearOverYearComparison(c *gin.Context) {
+	var req models.YearOverYearComparisonRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid request parameters",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	if len(req.Years) < 2 {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "At least 2 years required for year-over-year comparison",
+				Details: nil,
+			},
+		})
+		return
+	}
+
+	report, err := rh.reportService.GetYearOverYearComparison(c.Request.Context(), req.Years)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to generate year-over-year comparison report",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Message: "Year-over-year comparison report generated successfully",
+		Data:    report,
+	})
+}
+
+// GetYearBasedOverdueAnalysis generates year-based overdue analysis
+func (rh *ReportHandler) GetYearBasedOverdueAnalysis(c *gin.Context) {
+	var req models.YearBasedOverdueAnalysisRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid request parameters",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	report, err := rh.reportService.GetYearBasedOverdueAnalysis(c.Request.Context(), req.Year, req.YearOfStudy)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to generate year-based overdue analysis",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Message: "Year-based overdue analysis generated successfully",
+		Data:    report,
+	})
+}
+
+// GetAcademicYearAnalytics generates comprehensive analytics for specific academic year
+func (rh *ReportHandler) GetAcademicYearAnalytics(c *gin.Context) {
+	var req models.AcademicYearAnalyticsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid request parameters",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	if req.AcademicYear < 1 || req.AcademicYear > 8 {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid academic year: must be between 1 and 8",
+				Details: nil,
+			},
+		})
+		return
+	}
+
+	report, err := rh.reportService.GetAcademicYearAnalytics(c.Request.Context(), req.AcademicYear, req.CalendarYear)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to generate academic year analytics",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Message: "Academic year analytics generated successfully",
+		Data:    report,
+	})
+}
+
+// Phase 8.3 - Advanced Analytics Handler Methods
+
+// GetUsagePatternAnalysis generates usage pattern analysis
+func (rh *ReportHandler) GetUsagePatternAnalysis(c *gin.Context) {
+	var req models.UsagePatternAnalysisRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid request payload",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	report, err := rh.reportService.GetUsagePatternAnalysis(c.Request.Context(), req.StartDate, req.EndDate, req.YearOfStudy)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "SERVICE_ERROR",
+				Message: "Failed to generate usage pattern analysis",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Message: "Usage pattern analysis generated successfully",
+		Data:    report,
+	})
+}
+
+// GetSeasonalTrends generates seasonal trends analysis
+func (rh *ReportHandler) GetSeasonalTrends(c *gin.Context) {
+	var req models.SeasonalTrendsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid request payload",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	report, err := rh.reportService.GetSeasonalTrends(c.Request.Context(), req.StartDate, req.EndDate)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "SERVICE_ERROR",
+				Message: "Failed to generate seasonal trends analysis",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Message: "Seasonal trends analysis generated successfully",
+		Data:    report,
+	})
+}
+
+// GetBookDemandPrediction generates book demand prediction analysis
+func (rh *ReportHandler) GetBookDemandPrediction(c *gin.Context) {
+	var req models.BookDemandPredictionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid request payload",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	report, err := rh.reportService.GetBookDemandPrediction(c.Request.Context(), req.StartDate, req.EndDate, req.Genre)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "SERVICE_ERROR",
+				Message: "Failed to generate book demand prediction",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Message: "Book demand prediction generated successfully",
+		Data:    report,
+	})
+}
+
+// GetStudentBehaviorAnalysis generates student behavior analysis
+func (rh *ReportHandler) GetStudentBehaviorAnalysis(c *gin.Context) {
+	var req models.StudentBehaviorAnalysisRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid request payload",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	report, err := rh.reportService.GetStudentBehaviorAnalysis(c.Request.Context(), req.StartDate, req.EndDate, req.YearOfStudy, req.Department)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "SERVICE_ERROR",
+				Message: "Failed to generate student behavior analysis",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Message: "Student behavior analysis generated successfully",
+		Data:    report,
+	})
+}
+
+// GetCapacityPlanningAnalysis generates capacity planning analysis
+func (rh *ReportHandler) GetCapacityPlanningAnalysis(c *gin.Context) {
+	report, err := rh.reportService.GetCapacityPlanningAnalysis(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "SERVICE_ERROR",
+				Message: "Failed to generate capacity planning analysis",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Message: "Capacity planning analysis generated successfully",
+		Data:    report,
+	})
+}
+
+// GetRiskAnalysis generates comprehensive risk analysis
+func (rh *ReportHandler) GetRiskAnalysis(c *gin.Context) {
+	report, err := rh.reportService.GetRiskAnalysis(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "SERVICE_ERROR",
+				Message: "Failed to generate risk analysis",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Message: "Risk analysis generated successfully",
+		Data:    report,
+	})
+}
+
+// GetDataVisualization generates data visualization for charts
+func (rh *ReportHandler) GetDataVisualization(c *gin.Context) {
+	var req models.DataVisualizationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid request payload",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	report, err := rh.reportService.GetDataVisualization(c.Request.Context(), req.ReportType, req.ChartType, req.Parameters, req.Title, req.Colors)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "SERVICE_ERROR",
+				Message: "Failed to generate data visualization",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Message: "Data visualization generated successfully",
+		Data:    report,
 	})
 }

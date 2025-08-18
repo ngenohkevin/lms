@@ -43,7 +43,8 @@ func TestImportExportIntegration(t *testing.T) {
 	defer db.Close()
 
 	// Initialize services
-	bookService := services.NewBookService(db.Queries)
+	mockCache := &MockCacheService{}
+	bookService := services.NewBookService(db.Queries, mockCache)
 	importExportService := services.NewImportExportService(bookService, "./testdata")
 
 	// Initialize handlers
@@ -340,7 +341,8 @@ func TestImportExportFileOperations(t *testing.T) {
 		require.NoError(t, err)
 		defer db.Close()
 
-		bookService := services.NewBookService(db.Queries)
+		mockCache := &MockCacheService{}
+		bookService := services.NewBookService(db.Queries, mockCache)
 		importExportService := services.NewImportExportService(bookService, "./testdata")
 		importExportHandler := handlers.NewImportExportHandler(importExportService)
 
@@ -384,7 +386,8 @@ func TestImportExportFileOperations(t *testing.T) {
 		require.NoError(t, err)
 		defer db.Close()
 
-		bookService := services.NewBookService(db.Queries)
+		mockCache := &MockCacheService{}
+		bookService := services.NewBookService(db.Queries, mockCache)
 		importExportService := services.NewImportExportService(bookService, "./testdata")
 		importExportHandler := handlers.NewImportExportHandler(importExportService)
 
@@ -440,7 +443,8 @@ func TestImportExportPersistence(t *testing.T) {
 		require.NoError(t, err)
 		defer db.Close()
 
-		bookService := services.NewBookService(db.Queries)
+		mockCache := &MockCacheService{}
+		bookService := services.NewBookService(db.Queries, mockCache)
 		importExportService := services.NewImportExportService(bookService, "./testdata")
 
 		// Use a unique book ID and ISBN for each test run to avoid conflicts

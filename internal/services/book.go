@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -42,13 +43,15 @@ type BookServiceInterface interface {
 
 // BookService handles book-related business logic
 type BookService struct {
-	querier BookQuerier
+	querier      BookQuerier
+	cacheService CacheServiceInterface
 }
 
 // NewBookService creates a new book service
-func NewBookService(querier BookQuerier) *BookService {
+func NewBookService(querier BookQuerier, cacheService CacheServiceInterface) *BookService {
 	return &BookService{
-		querier: querier,
+		querier:      querier,
+		cacheService: cacheService,
 	}
 }
 
@@ -118,6 +121,14 @@ func (s *BookService) CreateBook(ctx context.Context, req models.CreateBookReque
 	book, err := s.querier.CreateBook(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create book: %w", err)
+	}
+
+	// Invalidate book-related caches after successful creation
+	if s.cacheService != nil {
+		// Invalidate book catalog and search results
+		s.cacheService.InvalidateByPattern(ctx, "books:list:*")
+		s.cacheService.InvalidateByPattern(ctx, "search:*")
+		s.cacheService.InvalidateBookCatalog(ctx)
 	}
 
 	// Convert to response model
@@ -268,6 +279,14 @@ func (s *BookService) UpdateBook(ctx context.Context, id int32, req models.Updat
 		return nil, fmt.Errorf("failed to update book: %w", err)
 	}
 
+	// Invalidate book-related caches after successful update
+	if s.cacheService != nil {
+		// Invalidate book catalog and search results
+		s.cacheService.InvalidateByPattern(ctx, "books:list:*")
+		s.cacheService.InvalidateByPattern(ctx, "search:*")
+		s.cacheService.InvalidateBookCatalog(ctx)
+	}
+
 	response := book.ToResponse()
 	return &response, nil
 }
@@ -286,11 +305,32 @@ func (s *BookService) DeleteBook(ctx context.Context, id int32) error {
 		return fmt.Errorf("failed to delete book: %w", err)
 	}
 
+	// Invalidate book-related caches after successful deletion
+	if s.cacheService != nil {
+		// Invalidate book catalog and search results
+		s.cacheService.InvalidateByPattern(ctx, "books:list:*")
+		s.cacheService.InvalidateByPattern(ctx, "search:*")
+		s.cacheService.InvalidateBookCatalog(ctx)
+	}
+
 	return nil
 }
 
 // ListBooks lists all books with pagination
 func (s *BookService) ListBooks(ctx context.Context, page, limit int) (*models.BookListResponse, error) {
+	// Create cache key for this specific page and limit
+	cacheKey := fmt.Sprintf("books:list:page_%d:limit_%d", page, limit)
+
+	// Try to get from cache first
+	if s.cacheService != nil {
+		if cachedData, err := s.cacheService.GetSearchResults(ctx, cacheKey); err == nil {
+			var response models.BookListResponse
+			if err := json.Unmarshal([]byte(cachedData), &response); err == nil {
+				return &response, nil
+			}
+		}
+	}
+
 	offset := (page - 1) * limit
 
 	books, err := s.querier.ListBooks(ctx, queries.ListBooksParams{
@@ -319,7 +359,7 @@ func (s *BookService) ListBooks(ctx context.Context, page, limit int) (*models.B
 		totalPages++
 	}
 
-	return &models.BookListResponse{
+	response := &models.BookListResponse{
 		Books: bookResponses,
 		Pagination: models.Pagination{
 			Page:       page,
@@ -327,7 +367,14 @@ func (s *BookService) ListBooks(ctx context.Context, page, limit int) (*models.B
 			Total:      total,
 			TotalPages: totalPages,
 		},
-	}, nil
+	}
+
+	// Cache the response for future requests
+	if s.cacheService != nil {
+		s.cacheService.SetSearchResults(ctx, cacheKey, response)
+	}
+
+	return response, nil
 }
 
 // SearchBooks searches for books with various filters
@@ -341,6 +388,29 @@ func (s *BookService) SearchBooks(ctx context.Context, req models.BookSearchRequ
 	}
 	if req.Limit > 100 {
 		req.Limit = 100
+	}
+
+	// Create cache key based on search parameters
+	cacheKey := fmt.Sprintf("search:query_%s:genre_%s:available_%t:page_%d:limit_%d",
+		req.Query,
+		func() string {
+			if req.Genre != nil {
+				return *req.Genre
+			}
+			return ""
+		}(),
+		req.AvailableOnly,
+		req.Page,
+		req.Limit)
+
+	// Try to get from cache first
+	if s.cacheService != nil {
+		if cachedData, err := s.cacheService.GetSearchResults(ctx, cacheKey); err == nil {
+			var response models.BookListResponse
+			if err := json.Unmarshal([]byte(cachedData), &response); err == nil {
+				return &response, nil
+			}
+		}
 	}
 
 	offset := (req.Page - 1) * req.Limit
@@ -422,7 +492,7 @@ func (s *BookService) SearchBooks(ctx context.Context, req models.BookSearchRequ
 		totalPages++
 	}
 
-	return &models.BookListResponse{
+	response := &models.BookListResponse{
 		Books: bookResponses,
 		Pagination: models.Pagination{
 			Page:       req.Page,
@@ -430,7 +500,14 @@ func (s *BookService) SearchBooks(ctx context.Context, req models.BookSearchRequ
 			Total:      total,
 			TotalPages: totalPages,
 		},
-	}, nil
+	}
+
+	// Cache the search results for future requests
+	if s.cacheService != nil {
+		s.cacheService.SetSearchResults(ctx, cacheKey, response)
+	}
+
+	return response, nil
 }
 
 // UpdateBookAvailability updates the available copies count for a book

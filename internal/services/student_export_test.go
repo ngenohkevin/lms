@@ -259,7 +259,7 @@ func TestStudentService_DataExport(t *testing.T) {
 			tt.setupMocks(mockQueries)
 
 			mockAuth := &MockAuthService{}
-			service := NewStudentService(mockQueries, mockAuth)
+			service := NewStudentService(mockQueries, mockAuth, nil)
 			ctx := context.Background()
 
 			result, err := service.ExportStudents(ctx, tt.request)
@@ -445,7 +445,7 @@ func TestStudentService_ExportByYear(t *testing.T) {
 			tt.setupMocks(mockQueries)
 
 			mockAuth := &MockAuthService{}
-			service := NewStudentService(mockQueries, mockAuth)
+			service := NewStudentService(mockQueries, mockAuth, nil)
 			ctx := context.Background()
 
 			result, err := service.ExportStudentsByYear(ctx, tt.year, tt.format)
@@ -520,7 +520,7 @@ func TestStudentService_ExportByDepartment(t *testing.T) {
 			tt.setupMocks(mockQueries)
 
 			mockAuth := &MockAuthService{}
-			service := NewStudentService(mockQueries, mockAuth)
+			service := NewStudentService(mockQueries, mockAuth, nil)
 			ctx := context.Background()
 
 			result, err := service.ExportStudentsByDepartment(ctx, tt.department, tt.format)
