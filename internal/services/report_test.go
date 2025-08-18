@@ -83,6 +83,37 @@ func (m *MockReportQuerier) GetAcademicYearAnalytics(ctx context.Context, arg qu
 	return args.Get(0).(queries.GetAcademicYearAnalyticsRow), args.Error(1)
 }
 
+// Phase 8.3 - Advanced Analytics Mock Methods
+func (m *MockReportQuerier) GetUsagePatternAnalysis(ctx context.Context, arg queries.GetUsagePatternAnalysisParams) ([]queries.GetUsagePatternAnalysisRow, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).([]queries.GetUsagePatternAnalysisRow), args.Error(1)
+}
+
+func (m *MockReportQuerier) GetSeasonalTrends(ctx context.Context, arg queries.GetSeasonalTrendsParams) ([]queries.GetSeasonalTrendsRow, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).([]queries.GetSeasonalTrendsRow), args.Error(1)
+}
+
+func (m *MockReportQuerier) GetBookDemandPrediction(ctx context.Context, arg queries.GetBookDemandPredictionParams) ([]queries.GetBookDemandPredictionRow, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).([]queries.GetBookDemandPredictionRow), args.Error(1)
+}
+
+func (m *MockReportQuerier) GetStudentBehaviorAnalysis(ctx context.Context, arg queries.GetStudentBehaviorAnalysisParams) ([]queries.GetStudentBehaviorAnalysisRow, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).([]queries.GetStudentBehaviorAnalysisRow), args.Error(1)
+}
+
+func (m *MockReportQuerier) GetCapacityPlanningAnalysis(ctx context.Context) (queries.GetCapacityPlanningAnalysisRow, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(queries.GetCapacityPlanningAnalysisRow), args.Error(1)
+}
+
+func (m *MockReportQuerier) GetRiskAnalysis(ctx context.Context) ([]queries.GetRiskAnalysisRow, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]queries.GetRiskAnalysisRow), args.Error(1)
+}
+
 // ReportServiceTestSuite for comprehensive testing
 type ReportServiceTestSuite struct {
 	suite.Suite
@@ -93,12 +124,12 @@ type ReportServiceTestSuite struct {
 
 func (suite *ReportServiceTestSuite) SetupTest() {
 	suite.mockDB = &MockReportQuerier{}
-	suite.service = NewReportService(suite.mockDB)
+	suite.service = NewReportService(suite.mockDB, nil)
 	suite.ctx = context.Background()
 }
 
 func (suite *ReportServiceTestSuite) TestNewReportService() {
-	service := NewReportService(suite.mockDB)
+	service := NewReportService(suite.mockDB, nil)
 	assert.NotNil(suite.T(), service)
 	assert.Equal(suite.T(), suite.mockDB, service.db)
 }
@@ -512,7 +543,7 @@ func TestReportServiceTestSuite(t *testing.T) {
 // Unit tests for individual report functions
 func TestNewReportService(t *testing.T) {
 	mockDB := &MockReportQuerier{}
-	service := NewReportService(mockDB)
+	service := NewReportService(mockDB, nil)
 
 	assert.NotNil(t, service)
 	assert.Equal(t, mockDB, service.db)
@@ -520,7 +551,7 @@ func TestNewReportService(t *testing.T) {
 
 func TestReportService_ValidateDateRange(t *testing.T) {
 	mockDB := &MockReportQuerier{}
-	service := NewReportService(mockDB)
+	service := NewReportService(mockDB, nil)
 
 	tests := []struct {
 		name      string

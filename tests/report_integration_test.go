@@ -22,7 +22,8 @@ func (suite *ReportIntegrationTestSuite) SetupTest() {
 	// Set up test database
 	db := setupTestDB(suite.T())
 	suite.queries = queries.New(db)
-	suite.reportService = services.NewReportService(suite.queries)
+	mockCache := &MockCacheService{}
+	suite.reportService = services.NewReportService(suite.queries, mockCache)
 
 	// Create test data
 	suite.createTestDataForReports()

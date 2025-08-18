@@ -96,7 +96,7 @@ func TestStudentService_StatusManagement(t *testing.T) {
 			tt.setupMocks(mockQueries)
 
 			mockAuth := &MockAuthService{}
-			service := NewStudentService(mockQueries, mockAuth)
+			service := NewStudentService(mockQueries, mockAuth, nil)
 			ctx := context.Background()
 
 			result, err := service.UpdateStudentStatus(ctx, tt.studentID, tt.isActive, tt.reason)
@@ -209,7 +209,7 @@ func TestStudentService_GetStudentsByStatus(t *testing.T) {
 			tt.setupMocks(mockQueries)
 
 			mockAuth := &MockAuthService{}
-			service := NewStudentService(mockQueries, mockAuth)
+			service := NewStudentService(mockQueries, mockAuth, nil)
 			ctx := context.Background()
 
 			result, err := service.GetStudentsByStatus(ctx, tt.isActive, tt.request)
@@ -279,7 +279,7 @@ func TestStudentService_GetStatusStatistics(t *testing.T) {
 			tt.setupMocks(mockQueries)
 
 			mockAuth := &MockAuthService{}
-			service := NewStudentService(mockQueries, mockAuth)
+			service := NewStudentService(mockQueries, mockAuth, nil)
 			ctx := context.Background()
 
 			result, err := service.GetStatusStatistics(ctx)
@@ -398,7 +398,7 @@ func TestStudentService_BulkUpdateStatus(t *testing.T) {
 			tt.setupMocks(mockQueries)
 
 			mockAuth := &MockAuthService{}
-			service := NewStudentService(mockQueries, mockAuth)
+			service := NewStudentService(mockQueries, mockAuth, nil)
 			ctx := context.Background()
 
 			err := service.BulkUpdateStatus(ctx, tt.request)
@@ -459,7 +459,7 @@ func TestStudentService_StatusValidation(t *testing.T) {
 			tt.setupMocks(mockQueries)
 
 			mockAuth := &MockAuthService{}
-			service := NewStudentService(mockQueries, mockAuth)
+			service := NewStudentService(mockQueries, mockAuth, nil)
 			ctx := context.Background()
 
 			student, err := service.GetStudentByID(ctx, tt.studentID)

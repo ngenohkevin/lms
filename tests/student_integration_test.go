@@ -114,7 +114,7 @@ func (suite *StudentIntegrationTestSuite) SetupSuite() {
 	suite.router = gin.New()
 	suite.router.Use(middleware.Logger())
 	suite.router.Use(middleware.CORS())
-	suite.router.Use(middleware.SecurityHeaders())
+	suite.router.Use(middleware.SecurityHeaders(middleware.DefaultSecurityConfig()))
 
 	// Set up API routes (students endpoints will be added by the test)
 	api := suite.router.Group("/api/v1")
@@ -130,7 +130,8 @@ func (suite *StudentIntegrationTestSuite) SetupSuite() {
 // setupStudentRoutes sets up the student-related routes for testing
 func (suite *StudentIntegrationTestSuite) setupStudentRoutes(api *gin.RouterGroup) {
 	// Create student service and handler
-	studentService := services.NewStudentService(suite.queries, suite.authService)
+	mockCache := &MockCacheService{}
+	studentService := services.NewStudentService(suite.queries, suite.authService, mockCache)
 	studentHandler := handlers.NewStudentHandler(studentService)
 
 	// Set up authentication middleware

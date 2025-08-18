@@ -21,7 +21,7 @@ type YearBasedReportServiceTestSuite struct {
 
 func (suite *YearBasedReportServiceTestSuite) SetupTest() {
 	suite.mockDB = new(MockReportQuerier)
-	suite.reportService = NewReportService(suite.mockDB)
+	suite.reportService = NewReportService(suite.mockDB, nil)
 }
 
 func (suite *YearBasedReportServiceTestSuite) TestGetYearEndSummary_Success() {

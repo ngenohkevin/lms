@@ -86,7 +86,7 @@ func TestStudentService_ActivityTracking(t *testing.T) {
 			tt.setupMocks(mockQueries)
 
 			mockAuth := &MockAuthService{}
-			service := NewStudentService(mockQueries, mockAuth)
+			service := NewStudentService(mockQueries, mockAuth, nil)
 			ctx := context.Background()
 
 			// Test getting basic student info first
@@ -164,7 +164,7 @@ func TestStudentService_ActivityAnalytics(t *testing.T) {
 			tt.setupMocks(mockQueries)
 
 			mockAuth := &MockAuthService{}
-			service := NewStudentService(mockQueries, mockAuth)
+			service := NewStudentService(mockQueries, mockAuth, nil)
 			ctx := context.Background()
 
 			// Test basic statistics functionality as a foundation
@@ -261,7 +261,7 @@ func TestStudentService_ActivityScoring(t *testing.T) {
 			tt.setupMocks(mockQueries)
 
 			mockAuth := &MockAuthService{}
-			service := NewStudentService(mockQueries, mockAuth)
+			service := NewStudentService(mockQueries, mockAuth, nil)
 			ctx := context.Background()
 
 			// Test basic student retrieval

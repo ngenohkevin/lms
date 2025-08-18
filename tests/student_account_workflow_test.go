@@ -59,7 +59,8 @@ func setupIntegrationTestEnvironment(t *testing.T) (*database.Database, *queries
 	require.NoError(t, err)
 
 	// Create student service
-	studentService := services.NewStudentService(testQueries, authService)
+	mockCache := &MockCacheService{}
+	studentService := services.NewStudentService(testQueries, authService, mockCache)
 
 	// Clean database before tests
 	cleanTestDatabase(t, db)

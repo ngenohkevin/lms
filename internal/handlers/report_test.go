@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -21,70 +22,106 @@ type MockReportService struct {
 	mock.Mock
 }
 
-func (m *MockReportService) GetBorrowingStatistics(ctx interface{}, startDate, endDate time.Time, yearOfStudy *int32) (*models.BorrowingStatisticsReport, error) {
+func (m *MockReportService) GetBorrowingStatistics(ctx context.Context, startDate, endDate time.Time, yearOfStudy *int32) (*models.BorrowingStatisticsReport, error) {
 	args := m.Called(ctx, startDate, endDate, yearOfStudy)
 	return args.Get(0).(*models.BorrowingStatisticsReport), args.Error(1)
 }
 
-func (m *MockReportService) GetOverdueBooks(ctx interface{}, yearOfStudy *int32, department *string) (*models.OverdueBooksReport, error) {
+func (m *MockReportService) GetOverdueBooks(ctx context.Context, yearOfStudy *int32, department *string) (*models.OverdueBooksReport, error) {
 	args := m.Called(ctx, yearOfStudy, department)
 	return args.Get(0).(*models.OverdueBooksReport), args.Error(1)
 }
 
-func (m *MockReportService) GetPopularBooks(ctx interface{}, startDate, endDate time.Time, limit int32, yearOfStudy *int32) (*models.PopularBooksReport, error) {
+func (m *MockReportService) GetPopularBooks(ctx context.Context, startDate, endDate time.Time, limit int32, yearOfStudy *int32) (*models.PopularBooksReport, error) {
 	args := m.Called(ctx, startDate, endDate, limit, yearOfStudy)
 	return args.Get(0).(*models.PopularBooksReport), args.Error(1)
 }
 
-func (m *MockReportService) GetStudentActivity(ctx interface{}, yearOfStudy *int32, department *string, startDate, endDate time.Time) (*models.StudentActivityReport, error) {
+func (m *MockReportService) GetStudentActivity(ctx context.Context, yearOfStudy *int32, department *string, startDate, endDate time.Time) (*models.StudentActivityReport, error) {
 	args := m.Called(ctx, yearOfStudy, department, startDate, endDate)
 	return args.Get(0).(*models.StudentActivityReport), args.Error(1)
 }
 
-func (m *MockReportService) GetInventoryStatus(ctx interface{}) (*models.InventoryStatusReport, error) {
+func (m *MockReportService) GetInventoryStatus(ctx context.Context) (*models.InventoryStatusReport, error) {
 	args := m.Called(ctx)
 	return args.Get(0).(*models.InventoryStatusReport), args.Error(1)
 }
 
-func (m *MockReportService) GetLibraryOverview(ctx interface{}) (*models.LibraryOverviewReport, error) {
+func (m *MockReportService) GetLibraryOverview(ctx context.Context) (*models.LibraryOverviewReport, error) {
 	args := m.Called(ctx)
 	return args.Get(0).(*models.LibraryOverviewReport), args.Error(1)
 }
 
-func (m *MockReportService) GetBorrowingTrends(ctx interface{}, startDate, endDate time.Time, interval string) (*models.BorrowingTrendsReport, error) {
+func (m *MockReportService) GetBorrowingTrends(ctx context.Context, startDate, endDate time.Time, interval string) (*models.BorrowingTrendsReport, error) {
 	args := m.Called(ctx, startDate, endDate, interval)
 	return args.Get(0).(*models.BorrowingTrendsReport), args.Error(1)
 }
 
-func (m *MockReportService) GetYearlyComparison(ctx interface{}, years []int32) (*models.YearlyComparisonReport, error) {
+func (m *MockReportService) GetYearlyComparison(ctx context.Context, years []int32) (*models.YearlyComparisonReport, error) {
 	args := m.Called(ctx, years)
 	return args.Get(0).(*models.YearlyComparisonReport), args.Error(1)
 }
 
 // Phase 8.2 - Additional mock methods
-func (m *MockReportService) GetYearEndSummary(ctx interface{}) (*models.YearEndSummaryReport, error) {
+func (m *MockReportService) GetYearEndSummary(ctx context.Context) (*models.YearEndSummaryReport, error) {
 	args := m.Called(ctx)
 	return args.Get(0).(*models.YearEndSummaryReport), args.Error(1)
 }
 
-func (m *MockReportService) GetYearSpecificBorrowingReport(ctx interface{}, year int32) (*models.YearSpecificBorrowingReport, error) {
+func (m *MockReportService) GetYearSpecificBorrowingReport(ctx context.Context, year int32) (*models.YearSpecificBorrowingReport, error) {
 	args := m.Called(ctx, year)
 	return args.Get(0).(*models.YearSpecificBorrowingReport), args.Error(1)
 }
 
-func (m *MockReportService) GetYearOverYearComparison(ctx interface{}, years []int32) (*models.YearOverYearComparisonReport, error) {
+func (m *MockReportService) GetYearOverYearComparison(ctx context.Context, years []int32) (*models.YearOverYearComparisonReport, error) {
 	args := m.Called(ctx, years)
 	return args.Get(0).(*models.YearOverYearComparisonReport), args.Error(1)
 }
 
-func (m *MockReportService) GetYearBasedOverdueAnalysis(ctx interface{}, year *int32, yearOfStudy *int32) (*models.YearBasedOverdueAnalysisReport, error) {
+func (m *MockReportService) GetYearBasedOverdueAnalysis(ctx context.Context, year *int32, yearOfStudy *int32) (*models.YearBasedOverdueAnalysisReport, error) {
 	args := m.Called(ctx, year, yearOfStudy)
 	return args.Get(0).(*models.YearBasedOverdueAnalysisReport), args.Error(1)
 }
 
-func (m *MockReportService) GetAcademicYearAnalytics(ctx interface{}, academicYear, calendarYear int32) (*models.AcademicYearAnalyticsReport, error) {
+func (m *MockReportService) GetAcademicYearAnalytics(ctx context.Context, academicYear, calendarYear int32) (*models.AcademicYearAnalyticsReport, error) {
 	args := m.Called(ctx, academicYear, calendarYear)
 	return args.Get(0).(*models.AcademicYearAnalyticsReport), args.Error(1)
+}
+
+// Phase 8.3 - Advanced Analytics Mock Methods
+func (m *MockReportService) GetUsagePatternAnalysis(ctx context.Context, startDate, endDate time.Time, yearOfStudy *int32) (*models.UsagePatternAnalysisReport, error) {
+	args := m.Called(ctx, startDate, endDate, yearOfStudy)
+	return args.Get(0).(*models.UsagePatternAnalysisReport), args.Error(1)
+}
+
+func (m *MockReportService) GetSeasonalTrends(ctx context.Context, startDate, endDate time.Time) (*models.SeasonalTrendsReport, error) {
+	args := m.Called(ctx, startDate, endDate)
+	return args.Get(0).(*models.SeasonalTrendsReport), args.Error(1)
+}
+
+func (m *MockReportService) GetBookDemandPrediction(ctx context.Context, startDate, endDate time.Time, genre *string) (*models.BookDemandPredictionReport, error) {
+	args := m.Called(ctx, startDate, endDate, genre)
+	return args.Get(0).(*models.BookDemandPredictionReport), args.Error(1)
+}
+
+func (m *MockReportService) GetStudentBehaviorAnalysis(ctx context.Context, startDate, endDate time.Time, yearOfStudy *int32, department *string) (*models.StudentBehaviorAnalysisReport, error) {
+	args := m.Called(ctx, startDate, endDate, yearOfStudy, department)
+	return args.Get(0).(*models.StudentBehaviorAnalysisReport), args.Error(1)
+}
+
+func (m *MockReportService) GetCapacityPlanningAnalysis(ctx context.Context) (*models.CapacityPlanningReport, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(*models.CapacityPlanningReport), args.Error(1)
+}
+
+func (m *MockReportService) GetRiskAnalysis(ctx context.Context) (*models.RiskAnalysisReport, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(*models.RiskAnalysisReport), args.Error(1)
+}
+
+func (m *MockReportService) GetDataVisualization(ctx context.Context, reportType, chartType string, parameters map[string]interface{}, title string, colors []string) (*models.DataVisualizationReport, error) {
+	args := m.Called(ctx, reportType, chartType, parameters, title, colors)
+	return args.Get(0).(*models.DataVisualizationReport), args.Error(1)
 }
 
 // ReportHandlerTestSuite for comprehensive testing

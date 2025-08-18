@@ -273,7 +273,7 @@ func TestStudentService_CreateStudent(t *testing.T) {
 
 			mockAuth := &MockAuthService{}
 			mockAuth.On("HashPassword", mock.AnythingOfType("string")).Return("hashed_password", nil)
-			service := NewStudentService(mockQueries, mockAuth)
+			service := NewStudentService(mockQueries, mockAuth, nil)
 			ctx := context.Background()
 
 			result, err := service.CreateStudent(ctx, tt.request)
@@ -332,7 +332,7 @@ func TestStudentService_GetStudentByID(t *testing.T) {
 
 			mockAuth := &MockAuthService{}
 			mockAuth.On("HashPassword", mock.AnythingOfType("string")).Return("hashed_password", nil)
-			service := NewStudentService(mockQueries, mockAuth)
+			service := NewStudentService(mockQueries, mockAuth, nil)
 			ctx := context.Background()
 
 			result, err := service.GetStudentByID(ctx, tt.studentID)
@@ -439,7 +439,7 @@ func TestStudentService_UpdateStudent(t *testing.T) {
 
 			mockAuth := &MockAuthService{}
 			mockAuth.On("HashPassword", mock.AnythingOfType("string")).Return("hashed_password", nil)
-			service := NewStudentService(mockQueries, mockAuth)
+			service := NewStudentService(mockQueries, mockAuth, nil)
 			ctx := context.Background()
 
 			result, err := service.UpdateStudent(ctx, tt.studentID, tt.request)
@@ -498,7 +498,7 @@ func TestStudentService_DeleteStudent(t *testing.T) {
 
 			mockAuth := &MockAuthService{}
 			mockAuth.On("HashPassword", mock.AnythingOfType("string")).Return("hashed_password", nil)
-			service := NewStudentService(mockQueries, mockAuth)
+			service := NewStudentService(mockQueries, mockAuth, nil)
 			ctx := context.Background()
 
 			err := service.DeleteStudent(ctx, tt.studentID)
@@ -597,7 +597,7 @@ func TestStudentService_ListStudents(t *testing.T) {
 
 			mockAuth := &MockAuthService{}
 			mockAuth.On("HashPassword", mock.AnythingOfType("string")).Return("hashed_password", nil)
-			service := NewStudentService(mockQueries, mockAuth)
+			service := NewStudentService(mockQueries, mockAuth, nil)
 			ctx := context.Background()
 
 			result, err := service.ListStudents(ctx, tt.request)
@@ -685,7 +685,7 @@ func TestStudentService_SearchStudents(t *testing.T) {
 
 			mockAuth := &MockAuthService{}
 			mockAuth.On("HashPassword", mock.AnythingOfType("string")).Return("hashed_password", nil)
-			service := NewStudentService(mockQueries, mockAuth)
+			service := NewStudentService(mockQueries, mockAuth, nil)
 			ctx := context.Background()
 
 			result, err := service.SearchStudents(ctx, tt.request)
@@ -789,7 +789,7 @@ func TestStudentService_BulkImportStudents(t *testing.T) {
 
 			mockAuth := &MockAuthService{}
 			mockAuth.On("HashPassword", mock.AnythingOfType("string")).Return("hashed_password", nil)
-			service := NewStudentService(mockQueries, mockAuth)
+			service := NewStudentService(mockQueries, mockAuth, nil)
 			ctx := context.Background()
 
 			result := service.BulkImportStudents(ctx, tt.requests)
@@ -849,7 +849,7 @@ func TestStudentService_GenerateNextStudentID(t *testing.T) {
 
 			mockAuth := &MockAuthService{}
 			mockAuth.On("HashPassword", mock.AnythingOfType("string")).Return("hashed_password", nil)
-			service := NewStudentService(mockQueries, mockAuth)
+			service := NewStudentService(mockQueries, mockAuth, nil)
 			ctx := context.Background()
 
 			result, err := service.GenerateNextStudentID(ctx, tt.year)
@@ -891,7 +891,7 @@ func TestStudentService_GetStudentStatistics(t *testing.T) {
 
 	mockAuth := &MockAuthService{}
 	mockAuth.On("HashPassword", mock.AnythingOfType("string")).Return("hashed_password", nil)
-	service := NewStudentService(mockQueries, mockAuth)
+	service := NewStudentService(mockQueries, mockAuth, nil)
 	ctx := context.Background()
 
 	result, err := service.GetStudentStatistics(ctx)
@@ -1040,7 +1040,7 @@ func TestStudentService_UpdateStudentPassword(t *testing.T) {
 			mockAuth := new(MockAuthService)
 			tt.setupMocks(mockQueries, mockAuth)
 
-			service := NewStudentService(mockQueries, mockAuth)
+			service := NewStudentService(mockQueries, mockAuth, nil)
 			ctx := context.Background()
 
 			err := service.UpdateStudentPassword(ctx, tt.studentID, tt.newPassword)
@@ -1119,7 +1119,7 @@ func TestStudentService_StudentIDAsDefaultPassword(t *testing.T) {
 			mockAuth := new(MockAuthService)
 			tt.setupMocks(mockQueries, mockAuth)
 
-			service := NewStudentService(mockQueries, mockAuth)
+			service := NewStudentService(mockQueries, mockAuth, nil)
 			ctx := context.Background()
 
 			request := &models.CreateStudentRequest{
@@ -1268,7 +1268,7 @@ func TestStudentService_QuickAccountCreation(t *testing.T) {
 			mockAuth := new(MockAuthService)
 			tt.setupMocks(mockQueries, mockAuth)
 
-			service := NewStudentService(mockQueries, mockAuth)
+			service := NewStudentService(mockQueries, mockAuth, nil)
 			ctx := context.Background()
 
 			student, err := service.CreateStudent(ctx, tt.studentData)
@@ -1380,7 +1380,7 @@ func TestStudentService_YearOrganization(t *testing.T) {
 			tt.setupMocks(mockQueries)
 
 			mockAuth := &MockAuthService{}
-			service := NewStudentService(mockQueries, mockAuth)
+			service := NewStudentService(mockQueries, mockAuth, nil)
 			ctx := context.Background()
 
 			request := &models.StudentSearchRequest{
