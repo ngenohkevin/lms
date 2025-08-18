@@ -121,10 +121,10 @@ func (rs *ReportService) GetPopularBooks(ctx context.Context, startDate, endDate
 	}
 
 	// Note: Cache key could be used for more sophisticated caching logic
-	_ = fmt.Sprintf("popular_books:%s:%s:%d:%d", 
-		startDate.Format("2006-01-02"), 
-		endDate.Format("2006-01-02"), 
-		limit, 
+	_ = fmt.Sprintf("popular_books:%s:%s:%d:%d",
+		startDate.Format("2006-01-02"),
+		endDate.Format("2006-01-02"),
+		limit,
 		yearValue)
 
 	// Try to get from cache first

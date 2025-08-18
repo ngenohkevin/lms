@@ -31,29 +31,29 @@ func (v APIVersion) Compare(other APIVersion) int {
 		}
 		return 1
 	}
-	
+
 	if v.Minor != other.Minor {
 		if v.Minor < other.Minor {
 			return -1
 		}
 		return 1
 	}
-	
+
 	if v.Patch != other.Patch {
 		if v.Patch < other.Patch {
 			return -1
 		}
 		return 1
 	}
-	
+
 	return 0
 }
 
 // VersionConfig holds versioning configuration
 type VersionConfig struct {
-	SupportedVersions []APIVersion
-	DefaultVersion    APIVersion
-	DeprecatedVersions map[string]string // version -> deprecation message
+	SupportedVersions   []APIVersion
+	DefaultVersion      APIVersion
+	DeprecatedVersions  map[string]string // version -> deprecation message
 	MinSupportedVersion APIVersion
 	MaxSupportedVersion APIVersion
 }
@@ -76,32 +76,32 @@ func DefaultVersionConfig() *VersionConfig {
 func APIVersioningMiddleware(config *VersionConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		version := extractVersion(c)
-		
+
 		if version == nil {
 			// Use default version
 			version = &config.DefaultVersion
 		}
-		
+
 		// Validate version
 		if !isVersionSupported(*version, config.SupportedVersions) {
 			c.JSON(http.StatusNotFound, gin.H{
 				"success": false,
 				"error": gin.H{
-					"code":    "UNSUPPORTED_VERSION",
-					"message": fmt.Sprintf("API version %s is not supported", version.String()),
+					"code":               "UNSUPPORTED_VERSION",
+					"message":            fmt.Sprintf("API version %s is not supported", version.String()),
 					"supported_versions": getSupportedVersionStrings(config.SupportedVersions),
 				},
 			})
 			c.Abort()
 			return
 		}
-		
+
 		// Check if version is deprecated
 		if deprecationMsg, isDeprecated := config.DeprecatedVersions[version.String()]; isDeprecated {
 			c.Header("X-API-Deprecation-Warning", deprecationMsg)
 			c.Header("X-API-Supported-Versions", strings.Join(getSupportedVersionStrings(config.SupportedVersions), ", "))
 		}
-		
+
 		// Check version range
 		if version.Compare(config.MinSupportedVersion) < 0 {
 			c.JSON(http.StatusNotFound, gin.H{
@@ -114,7 +114,7 @@ func APIVersioningMiddleware(config *VersionConfig) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		
+
 		if version.Compare(config.MaxSupportedVersion) > 0 {
 			c.JSON(http.StatusNotFound, gin.H{
 				"success": false,
@@ -126,14 +126,14 @@ func APIVersioningMiddleware(config *VersionConfig) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		
+
 		// Set version in context for handlers to use
 		c.Set("api_version", *version)
-		
+
 		// Set response headers
 		c.Header("X-API-Version", version.String())
 		c.Header("X-API-Supported-Versions", strings.Join(getSupportedVersionStrings(config.SupportedVersions), ", "))
-		
+
 		c.Next()
 	}
 }
@@ -145,25 +145,25 @@ func extractVersion(c *gin.Context) *APIVersion {
 	if pathVersion != nil {
 		return pathVersion
 	}
-	
+
 	// Method 2: Check Accept header (e.g., Accept: application/vnd.lms.v1+json)
 	acceptVersion := extractVersionFromAcceptHeader(c.GetHeader("Accept"))
 	if acceptVersion != nil {
 		return acceptVersion
 	}
-	
+
 	// Method 3: Check custom header (e.g., X-API-Version: v1.0)
 	headerVersion := extractVersionFromCustomHeader(c.GetHeader("X-API-Version"))
 	if headerVersion != nil {
 		return headerVersion
 	}
-	
+
 	// Method 4: Check query parameter (e.g., ?version=v1.0)
 	queryVersion := extractVersionFromQuery(c.Query("version"))
 	if queryVersion != nil {
 		return queryVersion
 	}
-	
+
 	return nil
 }
 
@@ -172,26 +172,26 @@ func extractVersionFromPath(path string) *APIVersion {
 	// Matches patterns like /api/v1, /api/v1.0, /api/v1.0.0
 	re := regexp.MustCompile(`/api/v(\d+)(?:\.(\d+))?(?:\.(\d+))?`)
 	matches := re.FindStringSubmatch(path)
-	
+
 	if len(matches) < 2 {
 		return nil
 	}
-	
+
 	major, err := strconv.Atoi(matches[1])
 	if err != nil {
 		return nil
 	}
-	
+
 	minor := 0
 	if len(matches) > 2 && matches[2] != "" {
 		minor, _ = strconv.Atoi(matches[2])
 	}
-	
+
 	patch := 0
 	if len(matches) > 3 && matches[3] != "" {
 		patch, _ = strconv.Atoi(matches[3])
 	}
-	
+
 	return &APIVersion{Major: major, Minor: minor, Patch: patch}
 }
 
@@ -200,26 +200,26 @@ func extractVersionFromAcceptHeader(accept string) *APIVersion {
 	// Matches patterns like application/vnd.lms.v1+json, application/vnd.lms.v1.0+json
 	re := regexp.MustCompile(`application/vnd\.lms\.v(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:\+json)?`)
 	matches := re.FindStringSubmatch(accept)
-	
+
 	if len(matches) < 2 {
 		return nil
 	}
-	
+
 	major, err := strconv.Atoi(matches[1])
 	if err != nil {
 		return nil
 	}
-	
+
 	minor := 0
 	if len(matches) > 2 && matches[2] != "" {
 		minor, _ = strconv.Atoi(matches[2])
 	}
-	
+
 	patch := 0
 	if len(matches) > 3 && matches[3] != "" {
 		patch, _ = strconv.Atoi(matches[3])
 	}
-	
+
 	return &APIVersion{Major: major, Minor: minor, Patch: patch}
 }
 
@@ -228,7 +228,7 @@ func extractVersionFromCustomHeader(header string) *APIVersion {
 	if header == "" {
 		return nil
 	}
-	
+
 	return parseVersionString(header)
 }
 
@@ -237,7 +237,7 @@ func extractVersionFromQuery(query string) *APIVersion {
 	if query == "" {
 		return nil
 	}
-	
+
 	return parseVersionString(query)
 }
 
@@ -245,29 +245,29 @@ func extractVersionFromQuery(query string) *APIVersion {
 func parseVersionString(version string) *APIVersion {
 	// Remove 'v' prefix if present
 	version = strings.TrimPrefix(version, "v")
-	
+
 	// Split by dots
 	parts := strings.Split(version, ".")
-	
+
 	if len(parts) < 1 {
 		return nil
 	}
-	
+
 	major, err := strconv.Atoi(parts[0])
 	if err != nil {
 		return nil
 	}
-	
+
 	minor := 0
 	if len(parts) > 1 {
 		minor, _ = strconv.Atoi(parts[1])
 	}
-	
+
 	patch := 0
 	if len(parts) > 2 {
 		patch, _ = strconv.Atoi(parts[2])
 	}
-	
+
 	return &APIVersion{Major: major, Minor: minor, Patch: patch}
 }
 
@@ -295,7 +295,7 @@ func GetAPIVersion(c *gin.Context) APIVersion {
 	if version, exists := c.Get("api_version"); exists {
 		return version.(APIVersion)
 	}
-	
+
 	// Return default if not set
 	return DefaultVersionConfig().DefaultVersion
 }
@@ -306,10 +306,10 @@ func VersionHandler(config *VersionConfig) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"data": gin.H{
-				"supported_versions": getSupportedVersionStrings(config.SupportedVersions),
-				"default_version":    config.DefaultVersion.String(),
-				"min_version":        config.MinSupportedVersion.String(),
-				"max_version":        config.MaxSupportedVersion.String(),
+				"supported_versions":  getSupportedVersionStrings(config.SupportedVersions),
+				"default_version":     config.DefaultVersion.String(),
+				"min_version":         config.MinSupportedVersion.String(),
+				"max_version":         config.MaxSupportedVersion.String(),
 				"deprecated_versions": config.DeprecatedVersions,
 			},
 		})
@@ -327,7 +327,7 @@ func (config *VersionConfig) DeprecateVersion(version APIVersion, message string
 // AddSupportedVersion adds a new supported version
 func (config *VersionConfig) AddSupportedVersion(version APIVersion) {
 	config.SupportedVersions = append(config.SupportedVersions, version)
-	
+
 	// Update max version if this is newer
 	if version.Compare(config.MaxSupportedVersion) > 0 {
 		config.MaxSupportedVersion = version

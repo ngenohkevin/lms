@@ -14,20 +14,20 @@ import (
 // SecurityConfig holds security configuration
 type SecurityConfig struct {
 	// API Key settings
-	APIKeys           map[string]APIKeyInfo
-	RequireAPIKey     bool
-	APIKeyHeader      string
-	
+	APIKeys       map[string]APIKeyInfo
+	RequireAPIKey bool
+	APIKeyHeader  string
+
 	// IP Whitelist settings
 	IPWhitelist       []string
 	EnableIPWhitelist bool
-	
+
 	// Security headers
-	EnableHSTS        bool
-	HSTSMaxAge        int
-	CSPPolicy         string
-	CustomHeaders     map[string]string
-	
+	EnableHSTS    bool
+	HSTSMaxAge    int
+	CSPPolicy     string
+	CustomHeaders map[string]string
+
 	// Request validation
 	MaxRequestSize    int64
 	AllowedMethods    []string
@@ -75,7 +75,7 @@ func AdvancedSecurityMiddleware(config *SecurityConfig) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		
+
 		// 2. Request size validation
 		if c.Request.ContentLength > config.MaxRequestSize {
 			c.JSON(http.StatusRequestEntityTooLarge, gin.H{
@@ -88,7 +88,7 @@ func AdvancedSecurityMiddleware(config *SecurityConfig) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		
+
 		// 3. IP Whitelist check
 		if config.EnableIPWhitelist && len(config.IPWhitelist) > 0 {
 			if !isIPAllowed(c.ClientIP(), config.IPWhitelist) {
@@ -103,7 +103,7 @@ func AdvancedSecurityMiddleware(config *SecurityConfig) gin.HandlerFunc {
 				return
 			}
 		}
-		
+
 		// 4. User Agent validation
 		if config.BlockSuspiciousUA {
 			if isSuspiciousUserAgent(c.GetHeader("User-Agent")) {
@@ -118,7 +118,7 @@ func AdvancedSecurityMiddleware(config *SecurityConfig) gin.HandlerFunc {
 				return
 			}
 		}
-		
+
 		// 5. API Key validation (if required)
 		if config.RequireAPIKey {
 			apiKey := c.GetHeader(config.APIKeyHeader)
@@ -133,11 +133,11 @@ func AdvancedSecurityMiddleware(config *SecurityConfig) gin.HandlerFunc {
 				c.Abort()
 				return
 			}
-			
+
 			// Update last used time
 			updateAPIKeyUsage(apiKey, config.APIKeys)
 		}
-		
+
 		c.Next()
 	}
 }
@@ -147,7 +147,7 @@ func SecurityHeaders(config *SecurityConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// HSTS (HTTP Strict Transport Security)
 		if config.EnableHSTS {
-			c.Header("Strict-Transport-Security", 
+			c.Header("Strict-Transport-Security",
 				fmt.Sprintf("max-age=%d; includeSubDomains; preload", config.HSTSMaxAge))
 		}
 
@@ -185,16 +185,16 @@ func SecurityHeaders(config *SecurityConfig) gin.HandlerFunc {
 
 		// Remove server information
 		c.Header("Server", "")
-		
+
 		// Cross-Origin Resource Sharing (stricter)
 		c.Header("Cross-Origin-Embedder-Policy", "require-corp")
 		c.Header("Cross-Origin-Opener-Policy", "same-origin")
 		c.Header("Cross-Origin-Resource-Policy", "same-origin")
-		
+
 		// Additional security headers
 		c.Header("X-Permitted-Cross-Domain-Policies", "none")
 		c.Header("X-Download-Options", "noopen")
-		
+
 		// Apply custom headers
 		for header, value := range config.CustomHeaders {
 			c.Header(header, value)
@@ -225,7 +225,7 @@ func APIKeyManagerMiddleware(config *SecurityConfig) gin.HandlerFunc {
 			// This would be handled by specific handler functions
 			// for creating, listing, revoking API keys
 		}
-		
+
 		c.Next()
 	}
 }
@@ -248,7 +248,7 @@ func isIPAllowed(clientIP string, whitelist []string) bool {
 	if ip == nil {
 		return false
 	}
-	
+
 	for _, allowed := range whitelist {
 		// Check if it's a CIDR range
 		if strings.Contains(allowed, "/") {
@@ -264,7 +264,7 @@ func isIPAllowed(clientIP string, whitelist []string) bool {
 			}
 		}
 	}
-	
+
 	return false
 }
 
@@ -273,7 +273,7 @@ func isSuspiciousUserAgent(ua string) bool {
 	if ua == "" {
 		return true // Block empty user agents
 	}
-	
+
 	suspiciousPatterns := []string{
 		"sqlmap",
 		"nikto",
@@ -298,14 +298,14 @@ func isSuspiciousUserAgent(ua string) bool {
 		"curl", // Might want to be more selective here
 		"wget",
 	}
-	
+
 	uaLower := strings.ToLower(ua)
 	for _, pattern := range suspiciousPatterns {
 		if strings.Contains(uaLower, pattern) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -314,13 +314,13 @@ func isValidAPIKey(providedKey string, apiKeys map[string]APIKeyInfo) bool {
 	if providedKey == "" {
 		return false
 	}
-	
+
 	for validKey, keyInfo := range apiKeys {
 		if keyInfo.IsActive && subtle.ConstantTimeCompare([]byte(providedKey), []byte(validKey)) == 1 {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -373,7 +373,7 @@ func IPWhitelistMiddleware(whitelist []string) gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		
+
 		if !isIPAllowed(c.ClientIP(), whitelist) {
 			c.JSON(http.StatusForbidden, gin.H{
 				"success": false,
@@ -385,7 +385,7 @@ func IPWhitelistMiddleware(whitelist []string) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		
+
 		c.Next()
 	}
 }

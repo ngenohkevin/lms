@@ -25,13 +25,13 @@ func TestCacheServiceTestSuite(t *testing.T) {
 
 func (s *CacheServiceTestSuite) SetupSuite() {
 	s.ctx = context.Background()
-	
+
 	// Create test Redis client
 	client := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
 		DB:   1, // Use a different DB for testing
 	})
-	
+
 	s.redis = &database.RedisClient{Client: client}
 	s.cacheService = NewCacheService(s.redis)
 }
@@ -56,32 +56,32 @@ func (s *CacheServiceTestSuite) TestBookCatalogCaching() {
 		},
 		"total": 2,
 	}
-	
+
 	// Test setting book catalog
 	err := s.cacheService.SetBookCatalog(s.ctx, books)
 	s.NoError(err)
-	
+
 	// Test getting book catalog
 	result, err := s.cacheService.GetBookCatalog(s.ctx)
 	s.NoError(err)
 	s.Contains(result, "Test Book 1")
 	s.Contains(result, "Author 1")
-	
+
 	// Test cache hit statistics
 	hitRatio, err := s.cacheService.GetHitRatio(s.ctx, "books")
 	s.NoError(err)
 	s.Equal(int64(1), hitRatio.Hits)
 	s.Equal(int64(0), hitRatio.Misses)
 	s.Equal(1.0, hitRatio.Ratio)
-	
+
 	// Test invalidating book catalog
 	err = s.cacheService.InvalidateBookCatalog(s.ctx)
 	s.NoError(err)
-	
+
 	// Verify cache is cleared
 	_, err = s.cacheService.GetBookCatalog(s.ctx)
 	s.Error(err)
-	
+
 	// Test cache miss statistics
 	hitRatio, err = s.cacheService.GetHitRatio(s.ctx, "books")
 	s.NoError(err)
@@ -99,21 +99,21 @@ func (s *CacheServiceTestSuite) TestStudentProfileCaching() {
 		"email":      "john.doe@example.com",
 		"year":       1,
 	}
-	
+
 	// Test setting student profile
 	err := s.cacheService.SetStudentProfile(s.ctx, studentID, profile)
 	s.NoError(err)
-	
+
 	// Test getting student profile
 	result, err := s.cacheService.GetStudentProfile(s.ctx, studentID)
 	s.NoError(err)
 	s.Contains(result, "John")
 	s.Contains(result, "Doe")
-	
+
 	// Test invalidating student profile
 	err = s.cacheService.InvalidateStudentProfile(s.ctx, studentID)
 	s.NoError(err)
-	
+
 	// Verify cache is cleared
 	_, err = s.cacheService.GetStudentProfile(s.ctx, studentID)
 	s.Error(err)
@@ -127,21 +127,21 @@ func (s *CacheServiceTestSuite) TestPopularBooksCaching() {
 		},
 		"generated_at": time.Now(),
 	}
-	
+
 	// Test setting popular books report
 	err := s.cacheService.SetPopularBooks(s.ctx, report)
 	s.NoError(err)
-	
+
 	// Test getting popular books report
 	result, err := s.cacheService.GetPopularBooks(s.ctx)
 	s.NoError(err)
 	s.Contains(result, "Popular Book 1")
 	s.Contains(result, "borrow_count")
-	
+
 	// Test invalidating popular books report
 	err = s.cacheService.InvalidatePopularBooks(s.ctx)
 	s.NoError(err)
-	
+
 	// Verify cache is cleared
 	_, err = s.cacheService.GetPopularBooks(s.ctx)
 	s.Error(err)
@@ -157,21 +157,21 @@ func (s *CacheServiceTestSuite) TestSearchResultsCaching() {
 		},
 		"total": 2,
 	}
-	
+
 	// Test setting search results
 	err := s.cacheService.SetSearchResults(s.ctx, query, results)
 	s.NoError(err)
-	
+
 	// Test getting search results
 	result, err := s.cacheService.GetSearchResults(s.ctx, query)
 	s.NoError(err)
 	s.Contains(result, "Search Result 1")
 	s.Contains(result, query)
-	
+
 	// Test invalidating specific search results
 	err = s.cacheService.InvalidateSearchResults(s.ctx, query)
 	s.NoError(err)
-	
+
 	// Verify cache is cleared
 	_, err = s.cacheService.GetSearchResults(s.ctx, query)
 	s.Error(err)
@@ -182,11 +182,11 @@ func (s *CacheServiceTestSuite) TestCacheStats() {
 	books := map[string]string{"test": "data"}
 	s.cacheService.SetBookCatalog(s.ctx, books)
 	s.cacheService.GetBookCatalog(s.ctx)
-	
+
 	profile := map[string]string{"student": "data"}
 	s.cacheService.SetStudentProfile(s.ctx, 1, profile)
 	s.cacheService.GetStudentProfile(s.ctx, 1)
-	
+
 	// Test getting cache statistics
 	stats, err := s.cacheService.GetCacheStats(s.ctx)
 	s.NoError(err)
@@ -199,22 +199,22 @@ func (s *CacheServiceTestSuite) TestHitRatioCalculation() {
 	// Generate some hits and misses
 	books := map[string]string{"test": "data"}
 	s.cacheService.SetBookCatalog(s.ctx, books)
-	
+
 	// Generate hits
 	s.cacheService.GetBookCatalog(s.ctx) // hit 1
 	s.cacheService.GetBookCatalog(s.ctx) // hit 2
-	
+
 	// Generate misses by trying to get non-existent data
 	s.cacheService.GetStudentProfile(s.ctx, 999) // miss 1
 	s.cacheService.GetStudentProfile(s.ctx, 998) // miss 2
-	
+
 	// Test book cache hit ratio
 	bookRatio, err := s.cacheService.GetHitRatio(s.ctx, "books")
 	s.NoError(err)
 	s.Equal("books", bookRatio.CacheType)
 	s.True(bookRatio.Hits > 0)
 	s.Equal(1.0, bookRatio.Ratio) // All book cache accesses were hits
-	
+
 	// Test student cache hit ratio
 	studentRatio, err := s.cacheService.GetHitRatio(s.ctx, "students")
 	s.NoError(err)
@@ -229,21 +229,21 @@ func (s *CacheServiceTestSuite) TestInvalidateByPattern() {
 		profile := map[string]interface{}{"id": i, "name": "Student " + string(rune(i))}
 		s.cacheService.SetStudentProfile(s.ctx, i, profile)
 	}
-	
+
 	// Set some other cache entries
 	books := map[string]string{"test": "data"}
 	s.cacheService.SetBookCatalog(s.ctx, books)
-	
+
 	// Invalidate all student profiles by pattern
 	err := s.cacheService.InvalidateByPattern(s.ctx, "cache:student:*")
 	s.NoError(err)
-	
+
 	// Verify student profiles are cleared
 	for i := 1; i <= 3; i++ {
 		_, err := s.cacheService.GetStudentProfile(s.ctx, i)
 		s.Error(err) // Should be cache miss
 	}
-	
+
 	// Verify book catalog is still there
 	_, err = s.cacheService.GetBookCatalog(s.ctx)
 	s.NoError(err) // Should be cache hit
@@ -252,21 +252,21 @@ func (s *CacheServiceTestSuite) TestInvalidateByPattern() {
 func (s *CacheServiceTestSuite) TestCacheTTL() {
 	// This test verifies that cache entries expire after their TTL
 	// For testing purposes, we'll use a very short TTL
-	
+
 	// Manually set with short TTL using Redis client
 	key := BookCatalogPrefix
 	data := `{"test": "data"}`
 	err := s.redis.Set(s.ctx, key, data, 100*time.Millisecond)
 	s.NoError(err)
-	
+
 	// Should be able to get it immediately
 	result, err := s.cacheService.GetBookCatalog(s.ctx)
 	s.NoError(err)
 	s.NotEmpty(result)
-	
+
 	// Wait for TTL to expire
 	time.Sleep(150 * time.Millisecond)
-	
+
 	// Should now be expired
 	_, err = s.cacheService.GetBookCatalog(s.ctx)
 	s.Error(err)
@@ -285,7 +285,7 @@ func (s *CacheServiceTestSuite) TestCachePerformance() {
 		"books": make([]map[string]interface{}, 100),
 		"total": 100,
 	}
-	
+
 	// Fill with test data
 	booksList := books["books"].([]map[string]interface{})
 	for i := 0; i < 100; i++ {
@@ -295,20 +295,20 @@ func (s *CacheServiceTestSuite) TestCachePerformance() {
 			"author": "Test Author " + fmt.Sprintf("%d", i+1),
 		}
 	}
-	
+
 	// Measure set performance
 	start := time.Now()
 	err := s.cacheService.SetBookCatalog(s.ctx, books)
 	setDuration := time.Since(start)
-	
+
 	s.NoError(err)
 	s.True(setDuration < 10*time.Millisecond, "Cache set should be fast")
-	
+
 	// Measure get performance
 	start = time.Now()
 	_, err = s.cacheService.GetBookCatalog(s.ctx)
 	getDuration := time.Since(start)
-	
+
 	s.NoError(err)
 	s.True(getDuration < 10*time.Millisecond, "Cache get should be fast")
 }
@@ -319,24 +319,24 @@ func TestCacheService_IncrementHit(t *testing.T) {
 		Addr: "localhost:6379",
 		DB:   1,
 	})
-	
+
 	redisClient := &database.RedisClient{Client: client}
 	cacheService := NewCacheService(redisClient)
 	ctx := context.Background()
-	
+
 	// Clean up
 	defer func() {
 		client.FlushDB(ctx)
 		client.Close()
 	}()
-	
+
 	// Test incrementing hits
 	err := cacheService.IncrementHit(ctx, "test")
 	assert.NoError(t, err)
-	
+
 	err = cacheService.IncrementHit(ctx, "test")
 	assert.NoError(t, err)
-	
+
 	// Verify count
 	ratio, err := cacheService.GetHitRatio(ctx, "test")
 	assert.NoError(t, err)
@@ -349,24 +349,24 @@ func TestCacheService_IncrementMiss(t *testing.T) {
 		Addr: "localhost:6379",
 		DB:   1,
 	})
-	
+
 	redisClient := &database.RedisClient{Client: client}
 	cacheService := NewCacheService(redisClient)
 	ctx := context.Background()
-	
+
 	// Clean up
 	defer func() {
 		client.FlushDB(ctx)
 		client.Close()
 	}()
-	
+
 	// Test incrementing misses
 	err := cacheService.IncrementMiss(ctx, "test")
 	assert.NoError(t, err)
-	
+
 	err = cacheService.IncrementMiss(ctx, "test")
 	assert.NoError(t, err)
-	
+
 	// Verify count
 	ratio, err := cacheService.GetHitRatio(ctx, "test")
 	assert.NoError(t, err)

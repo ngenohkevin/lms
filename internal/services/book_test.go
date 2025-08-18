@@ -495,11 +495,11 @@ func TestBookService_SearchBooks(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockQuerier.ExpectedCalls = nil
 			mockCache.ExpectedCalls = nil
-			
+
 			// Setup cache mock to return empty result (cache miss) and allow setting results
 			mockCache.On("GetSearchResults", mock.Anything, mock.AnythingOfType("string")).Return("", nil)
 			mockCache.On("SetSearchResults", mock.Anything, mock.AnythingOfType("string"), mock.Anything).Return(nil)
-			
+
 			tt.setup()
 
 			result, err := service.SearchBooks(context.Background(), tt.request)

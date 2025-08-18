@@ -47,12 +47,12 @@ type CacheServiceInterface interface {
 }
 
 type CacheStats struct {
-	TotalKeys    int64     `json:"total_keys"`
-	UsedMemory   string    `json:"used_memory"`
-	Connections  int       `json:"connections"`
-	HitRatio     float64   `json:"hit_ratio"`
-	Uptime       int64     `json:"uptime"`
-	LastUpdated  time.Time `json:"last_updated"`
+	TotalKeys   int64     `json:"total_keys"`
+	UsedMemory  string    `json:"used_memory"`
+	Connections int       `json:"connections"`
+	HitRatio    float64   `json:"hit_ratio"`
+	Uptime      int64     `json:"uptime"`
+	LastUpdated time.Time `json:"last_updated"`
 }
 
 type HitRatio struct {
@@ -64,17 +64,17 @@ type HitRatio struct {
 
 const (
 	// Cache TTL settings
-	BookCatalogTTL      = 30 * time.Minute
-	StudentProfileTTL   = 15 * time.Minute
-	PopularBooksTTL     = 1 * time.Hour
-	SearchResultsTTL    = 5 * time.Minute
+	BookCatalogTTL    = 30 * time.Minute
+	StudentProfileTTL = 15 * time.Minute
+	PopularBooksTTL   = 1 * time.Hour
+	SearchResultsTTL  = 5 * time.Minute
 
 	// Cache key prefixes
-	BookCatalogPrefix   = "cache:books:catalog"
+	BookCatalogPrefix    = "cache:books:catalog"
 	StudentProfilePrefix = "cache:student:"
-	PopularBooksPrefix  = "cache:reports:popular"
-	SearchResultsPrefix = "cache:search:"
-	StatsPrefix         = "cache:stats:"
+	PopularBooksPrefix   = "cache:reports:popular"
+	SearchResultsPrefix  = "cache:search:"
+	StatsPrefix          = "cache:stats:"
 )
 
 func NewCacheService(redis *database.RedisClient) CacheServiceInterface {
@@ -89,12 +89,12 @@ func (c *CacheService) SetBookCatalog(ctx context.Context, books interface{}) er
 	if err != nil {
 		return fmt.Errorf("failed to marshal books: %w", err)
 	}
-	
+
 	err = c.redis.Set(ctx, BookCatalogPrefix, data, BookCatalogTTL)
 	if err != nil {
 		return fmt.Errorf("failed to cache book catalog: %w", err)
 	}
-	
+
 	// Update cache stats
 	c.updateCacheTimestamp(ctx, "books")
 	return nil
@@ -106,7 +106,7 @@ func (c *CacheService) GetBookCatalog(ctx context.Context) (string, error) {
 		c.IncrementMiss(ctx, "books")
 		return "", err
 	}
-	
+
 	c.IncrementHit(ctx, "books")
 	return result, nil
 }
@@ -121,13 +121,13 @@ func (c *CacheService) SetStudentProfile(ctx context.Context, studentID int, pro
 	if err != nil {
 		return fmt.Errorf("failed to marshal student profile: %w", err)
 	}
-	
+
 	key := fmt.Sprintf("%s%d", StudentProfilePrefix, studentID)
 	err = c.redis.Set(ctx, key, data, StudentProfileTTL)
 	if err != nil {
 		return fmt.Errorf("failed to cache student profile: %w", err)
 	}
-	
+
 	c.updateCacheTimestamp(ctx, "students")
 	return nil
 }
@@ -139,7 +139,7 @@ func (c *CacheService) GetStudentProfile(ctx context.Context, studentID int) (st
 		c.IncrementMiss(ctx, "students")
 		return "", err
 	}
-	
+
 	c.IncrementHit(ctx, "students")
 	return result, nil
 }
@@ -155,12 +155,12 @@ func (c *CacheService) SetPopularBooks(ctx context.Context, report interface{}) 
 	if err != nil {
 		return fmt.Errorf("failed to marshal popular books report: %w", err)
 	}
-	
+
 	err = c.redis.Set(ctx, PopularBooksPrefix, data, PopularBooksTTL)
 	if err != nil {
 		return fmt.Errorf("failed to cache popular books report: %w", err)
 	}
-	
+
 	c.updateCacheTimestamp(ctx, "reports")
 	return nil
 }
@@ -171,7 +171,7 @@ func (c *CacheService) GetPopularBooks(ctx context.Context) (string, error) {
 		c.IncrementMiss(ctx, "reports")
 		return "", err
 	}
-	
+
 	c.IncrementHit(ctx, "reports")
 	return result, nil
 }
@@ -186,13 +186,13 @@ func (c *CacheService) SetSearchResults(ctx context.Context, query string, resul
 	if err != nil {
 		return fmt.Errorf("failed to marshal search results: %w", err)
 	}
-	
+
 	key := fmt.Sprintf("%s%s", SearchResultsPrefix, query)
 	err = c.redis.Set(ctx, key, data, SearchResultsTTL)
 	if err != nil {
 		return fmt.Errorf("failed to cache search results: %w", err)
 	}
-	
+
 	c.updateCacheTimestamp(ctx, "search")
 	return nil
 }
@@ -204,7 +204,7 @@ func (c *CacheService) GetSearchResults(ctx context.Context, query string) (stri
 		c.IncrementMiss(ctx, "search")
 		return "", err
 	}
-	
+
 	c.IncrementHit(ctx, "search")
 	return result, nil
 }
@@ -221,22 +221,22 @@ func (c *CacheService) GetCacheStats(ctx context.Context) (*CacheStats, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Redis info: %w", err)
 	}
-	
+
 	// Parse info and extract relevant statistics
 	stats := &CacheStats{
 		LastUpdated: time.Now(),
 	}
-	
+
 	// Get key count
 	dbSize, err := c.redis.Client.DBSize(ctx).Result()
 	if err == nil {
 		stats.TotalKeys = dbSize
 	}
-	
+
 	// Calculate overall hit ratio
 	totalHits := int64(0)
 	totalMisses := int64(0)
-	
+
 	cacheTypes := []string{"books", "students", "reports", "search"}
 	for _, cacheType := range cacheTypes {
 		ratio, err := c.GetHitRatio(ctx, cacheType)
@@ -245,38 +245,38 @@ func (c *CacheService) GetCacheStats(ctx context.Context) (*CacheStats, error) {
 			totalMisses += ratio.Misses
 		}
 	}
-	
+
 	if totalHits+totalMisses > 0 {
 		stats.HitRatio = float64(totalHits) / float64(totalHits+totalMisses)
 	}
-	
+
 	// Store parsed information in stats
 	stats.UsedMemory = c.parseInfoValue(info, "used_memory_human")
-	
+
 	return stats, nil
 }
 
 func (c *CacheService) GetHitRatio(ctx context.Context, cacheType string) (*HitRatio, error) {
 	hitsKey := fmt.Sprintf("%shits:%s", StatsPrefix, cacheType)
 	missesKey := fmt.Sprintf("%smisses:%s", StatsPrefix, cacheType)
-	
+
 	hitsStr, _ := c.redis.Get(ctx, hitsKey)
 	missesStr, _ := c.redis.Get(ctx, missesKey)
-	
+
 	hits, _ := strconv.ParseInt(hitsStr, 10, 64)
 	misses, _ := strconv.ParseInt(missesStr, 10, 64)
-	
+
 	ratio := &HitRatio{
 		CacheType: cacheType,
 		Hits:      hits,
 		Misses:    misses,
 		Ratio:     0,
 	}
-	
+
 	if hits+misses > 0 {
 		ratio.Ratio = float64(hits) / float64(hits+misses)
 	}
-	
+
 	return ratio, nil
 }
 
@@ -296,11 +296,11 @@ func (c *CacheService) InvalidateByPattern(ctx context.Context, pattern string) 
 	if err != nil {
 		return fmt.Errorf("failed to find keys by pattern: %w", err)
 	}
-	
+
 	if len(keys) == 0 {
 		return nil
 	}
-	
+
 	return c.redis.Client.Del(ctx, keys...).Err()
 }
 
@@ -309,10 +309,10 @@ func (c *CacheService) WarmCache(ctx context.Context) error {
 	// This method would be called during application startup
 	// to pre-populate cache with frequently accessed data
 	// Implementation would depend on your specific data patterns
-	
+
 	// Example: Pre-load popular books, recent transactions, etc.
 	// This is left as a placeholder for specific business logic
-	
+
 	return nil
 }
 
@@ -326,7 +326,7 @@ func (c *CacheService) parseInfoValue(info, key string) string {
 	// Simple parser for Redis INFO output
 	lines := []rune(info)
 	keyWithColon := key + ":"
-	
+
 	start := -1
 	for i := 0; i <= len(lines)-len(keyWithColon); i++ {
 		if string(lines[i:i+len(keyWithColon)]) == keyWithColon {
@@ -334,15 +334,15 @@ func (c *CacheService) parseInfoValue(info, key string) string {
 			break
 		}
 	}
-	
+
 	if start == -1 {
 		return "unknown"
 	}
-	
+
 	end := start
 	for end < len(lines) && lines[end] != '\r' && lines[end] != '\n' {
 		end++
 	}
-	
+
 	return string(lines[start:end])
 }

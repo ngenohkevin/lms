@@ -35,10 +35,10 @@ type BackupServiceInterface interface {
 type BackupType string
 
 const (
-	BackupTypeFull         BackupType = "full"
-	BackupTypeIncremental  BackupType = "incremental"
-	BackupTypeData         BackupType = "data_only"
-	BackupTypeSchema       BackupType = "schema_only"
+	BackupTypeFull        BackupType = "full"
+	BackupTypeIncremental BackupType = "incremental"
+	BackupTypeData        BackupType = "data_only"
+	BackupTypeSchema      BackupType = "schema_only"
 )
 
 type BackupInfo struct {
@@ -70,10 +70,10 @@ func NewBackupService(db *database.Database, backupDir string, retentionPeriod t
 	if retentionPeriod == 0 {
 		retentionPeriod = 30 * 24 * time.Hour // Default 30 days
 	}
-	
+
 	// Ensure backup directory exists
 	os.MkdirAll(backupDir, 0755)
-	
+
 	return &BackupService{
 		db:              db,
 		backupDir:       backupDir,
@@ -83,12 +83,12 @@ func NewBackupService(db *database.Database, backupDir string, retentionPeriod t
 
 func (bs *BackupService) CreateBackup(ctx context.Context, backupType BackupType) (*BackupInfo, error) {
 	start := time.Now()
-	
+
 	// Generate backup ID and filename
 	backupID := fmt.Sprintf("%s_%s_%d", backupType, time.Now().Format("20060102_150405"), start.Unix())
 	filename := fmt.Sprintf("%s.sql.gz", backupID)
 	backupPath := filepath.Join(bs.backupDir, filename)
-	
+
 	backupInfo := &BackupInfo{
 		ID:           backupID,
 		Type:         backupType,
@@ -99,7 +99,7 @@ func (bs *BackupService) CreateBackup(ctx context.Context, backupType BackupType
 		DatabaseName: "lms_db", // This would come from config
 		Status:       "in_progress",
 	}
-	
+
 	// Create backup based on type
 	var err error
 	switch backupType {
@@ -114,21 +114,21 @@ func (bs *BackupService) CreateBackup(ctx context.Context, backupType BackupType
 	default:
 		return nil, fmt.Errorf("unsupported backup type: %s", backupType)
 	}
-	
+
 	backupInfo.Duration = time.Since(start)
-	
+
 	if err != nil {
 		backupInfo.Status = "failed"
 		// Clean up failed backup file
 		os.Remove(backupPath)
 		return backupInfo, fmt.Errorf("backup creation failed: %w", err)
 	}
-	
+
 	// Get file info and calculate checksum
 	if fileInfo, err := os.Stat(backupPath); err == nil {
 		backupInfo.Size = fileInfo.Size()
 	}
-	
+
 	checksum, err := bs.calculateChecksum(backupPath)
 	if err != nil {
 		backupInfo.Status = "completed_with_warnings"
@@ -136,14 +136,14 @@ func (bs *BackupService) CreateBackup(ctx context.Context, backupType BackupType
 		backupInfo.Checksum = checksum
 		backupInfo.Status = "completed"
 	}
-	
+
 	return backupInfo, nil
 }
 
 func (bs *BackupService) createFullBackup(ctx context.Context, backupPath string) error {
 	// Use pg_dump to create a full backup
 	// This is a simplified version - in production, you'd use proper database connection parameters
-	
+
 	cmd := exec.CommandContext(ctx, "pg_dump",
 		"--verbose",
 		"--clean",
@@ -153,20 +153,20 @@ func (bs *BackupService) createFullBackup(ctx context.Context, backupPath string
 		"--no-password",
 		bs.getDatabaseURL(),
 	)
-	
+
 	// Create output file with gzip compression
 	outFile, err := os.Create(backupPath)
 	if err != nil {
 		return fmt.Errorf("failed to create backup file: %w", err)
 	}
 	defer outFile.Close()
-	
+
 	gzipWriter := gzip.NewWriter(outFile)
 	defer gzipWriter.Close()
-	
+
 	cmd.Stdout = gzipWriter
 	cmd.Stderr = os.Stderr
-	
+
 	return cmd.Run()
 }
 
@@ -178,7 +178,7 @@ func (bs *BackupService) createDataOnlyBackup(ctx context.Context, backupPath st
 		"--no-password",
 		bs.getDatabaseURL(),
 	)
-	
+
 	return bs.executeBackupCommand(cmd, backupPath)
 }
 
@@ -190,7 +190,7 @@ func (bs *BackupService) createSchemaOnlyBackup(ctx context.Context, backupPath 
 		"--no-password",
 		bs.getDatabaseURL(),
 	)
-	
+
 	return bs.executeBackupCommand(cmd, backupPath)
 }
 
@@ -198,7 +198,7 @@ func (bs *BackupService) createIncrementalBackup(ctx context.Context, backupPath
 	// Incremental backups would require WAL archiving setup
 	// This is a placeholder implementation
 	// In practice, you'd use pg_basebackup with WAL files
-	
+
 	return fmt.Errorf("incremental backups not yet implemented")
 }
 
@@ -208,13 +208,13 @@ func (bs *BackupService) executeBackupCommand(cmd *exec.Cmd, backupPath string) 
 		return fmt.Errorf("failed to create backup file: %w", err)
 	}
 	defer outFile.Close()
-	
+
 	gzipWriter := gzip.NewWriter(outFile)
 	defer gzipWriter.Close()
-	
+
 	cmd.Stdout = gzipWriter
 	cmd.Stderr = os.Stderr
-	
+
 	return cmd.Run()
 }
 
@@ -224,24 +224,24 @@ func (bs *BackupService) RestoreBackup(ctx context.Context, backupPath string) e
 	if err != nil {
 		return fmt.Errorf("backup verification failed: %w", err)
 	}
-	
+
 	if !verification.IsValid {
 		return fmt.Errorf("backup is not valid: %v", verification.Issues)
 	}
-	
+
 	// Open and decompress backup file
 	backupFile, err := os.Open(backupPath)
 	if err != nil {
 		return fmt.Errorf("failed to open backup file: %w", err)
 	}
 	defer backupFile.Close()
-	
+
 	gzipReader, err := gzip.NewReader(backupFile)
 	if err != nil {
 		return fmt.Errorf("failed to create gzip reader: %w", err)
 	}
 	defer gzipReader.Close()
-	
+
 	// Use pg_restore to restore the backup
 	cmd := exec.CommandContext(ctx, "pg_restore",
 		"--verbose",
@@ -250,27 +250,27 @@ func (bs *BackupService) RestoreBackup(ctx context.Context, backupPath string) e
 		"--no-password",
 		"--dbname", bs.getDatabaseURL(),
 	)
-	
+
 	cmd.Stdin = gzipReader
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	
+
 	return cmd.Run()
 }
 
 func (bs *BackupService) ListBackups(ctx context.Context) ([]BackupInfo, error) {
 	var backups []BackupInfo
-	
+
 	err := filepath.Walk(bs.backupDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		
+
 		if strings.HasSuffix(path, ".sql.gz") {
 			// Parse backup info from filename
 			filename := info.Name()
 			backupID := strings.TrimSuffix(filename, ".sql.gz")
-			
+
 			// Extract backup type from filename
 			parts := strings.Split(backupID, "_")
 			var backupType BackupType
@@ -287,7 +287,7 @@ func (bs *BackupService) ListBackups(ctx context.Context) ([]BackupInfo, error) 
 			} else if len(parts) > 0 {
 				backupType = BackupType(parts[0])
 			}
-			
+
 			backup := BackupInfo{
 				ID:           backupID,
 				Type:         backupType,
@@ -299,18 +299,18 @@ func (bs *BackupService) ListBackups(ctx context.Context) ([]BackupInfo, error) 
 				DatabaseName: "lms_db",
 				Status:       "completed",
 			}
-			
+
 			// Calculate checksum
 			if checksum, err := bs.calculateChecksum(path); err == nil {
 				backup.Checksum = checksum
 			}
-			
+
 			backups = append(backups, backup)
 		}
-		
+
 		return nil
 	})
-	
+
 	return backups, err
 }
 
@@ -318,11 +318,11 @@ func (bs *BackupService) DeleteBackup(ctx context.Context, backupPath string) er
 	// Verify the path is within our backup directory (security check)
 	absBackupDir, _ := filepath.Abs(bs.backupDir)
 	absBackupPath, _ := filepath.Abs(backupPath)
-	
+
 	if !strings.HasPrefix(absBackupPath, absBackupDir) {
 		return fmt.Errorf("backup path is outside backup directory")
 	}
-	
+
 	return os.Remove(backupPath)
 }
 
@@ -332,14 +332,14 @@ func (bs *BackupService) VerifyBackup(ctx context.Context, backupPath string) (*
 		VerifiedAt: start,
 		Issues:     []string{},
 	}
-	
+
 	// Check if file exists
 	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
 		verification.FileExists = false
 		verification.Issues = append(verification.Issues, "backup file does not exist")
 	} else {
 		verification.FileExists = true
-		
+
 		// Check if file is readable
 		file, err := os.Open(backupPath)
 		if err != nil {
@@ -348,17 +348,17 @@ func (bs *BackupService) VerifyBackup(ctx context.Context, backupPath string) (*
 		} else {
 			verification.ReadableFile = true
 			file.Close()
-			
+
 			// Get file size
 			if fileInfo, err := os.Stat(backupPath); err == nil {
 				verification.Size = fileInfo.Size()
 			}
-			
+
 			// Verify gzip compression
 			if err := bs.verifyGzipFile(backupPath); err != nil {
 				verification.Issues = append(verification.Issues, fmt.Sprintf("gzip verification failed: %v", err))
 			}
-			
+
 			// Verify checksum if available
 			if checksum, err := bs.calculateChecksum(backupPath); err == nil {
 				// In a real implementation, you'd compare against stored checksum
@@ -366,10 +366,10 @@ func (bs *BackupService) VerifyBackup(ctx context.Context, backupPath string) (*
 			}
 		}
 	}
-	
+
 	verification.IsValid = len(verification.Issues) == 0
 	verification.Duration = time.Since(start)
-	
+
 	return verification, nil
 }
 
@@ -378,10 +378,10 @@ func (bs *BackupService) CleanupOldBackups(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to list backups: %w", err)
 	}
-	
+
 	cutoffTime := time.Now().Add(-bs.retentionPeriod)
 	deletedCount := 0
-	
+
 	for _, backup := range backups {
 		if backup.CreatedAt.Before(cutoffTime) {
 			if err := bs.DeleteBackup(ctx, backup.FilePath); err != nil {
@@ -390,7 +390,7 @@ func (bs *BackupService) CleanupOldBackups(ctx context.Context) error {
 			deletedCount++
 		}
 	}
-	
+
 	return nil
 }
 
@@ -414,12 +414,12 @@ func (bs *BackupService) calculateChecksum(filePath string) (string, error) {
 		return "", err
 	}
 	defer file.Close()
-	
+
 	hash := sha256.New()
 	if _, err := io.Copy(hash, file); err != nil {
 		return "", err
 	}
-	
+
 	return fmt.Sprintf("%x", hash.Sum(nil)), nil
 }
 
@@ -429,33 +429,33 @@ func (bs *BackupService) verifyGzipFile(filePath string) error {
 		return err
 	}
 	defer file.Close()
-	
+
 	gzipReader, err := gzip.NewReader(file)
 	if err != nil {
 		return err
 	}
 	defer gzipReader.Close()
-	
+
 	// Try to read a small amount to verify the file is valid
 	buffer := make([]byte, 1024)
 	_, err = gzipReader.Read(buffer)
 	if err != nil && err != io.EOF {
 		return err
 	}
-	
+
 	return nil
 }
 
 // BackupMetrics provides metrics about backup operations
 type BackupMetrics struct {
-	TotalBackups     int           `json:"total_backups"`
-	BackupsByType    map[string]int `json:"backups_by_type"`
-	TotalSize        int64         `json:"total_size"`
-	AverageSize      int64         `json:"average_size"`
-	OldestBackup     time.Time     `json:"oldest_backup"`
-	NewestBackup     time.Time     `json:"newest_backup"`
-	FailedBackups    int           `json:"failed_backups"`
-	LastBackupTime   time.Time     `json:"last_backup_time"`
+	TotalBackups   int            `json:"total_backups"`
+	BackupsByType  map[string]int `json:"backups_by_type"`
+	TotalSize      int64          `json:"total_size"`
+	AverageSize    int64          `json:"average_size"`
+	OldestBackup   time.Time      `json:"oldest_backup"`
+	NewestBackup   time.Time      `json:"newest_backup"`
+	FailedBackups  int            `json:"failed_backups"`
+	LastBackupTime time.Time      `json:"last_backup_time"`
 }
 
 func (bs *BackupService) GetBackupMetrics(ctx context.Context) (*BackupMetrics, error) {
@@ -463,20 +463,20 @@ func (bs *BackupService) GetBackupMetrics(ctx context.Context) (*BackupMetrics, 
 	if err != nil {
 		return nil, err
 	}
-	
+
 	metrics := &BackupMetrics{
 		BackupsByType: make(map[string]int),
 	}
-	
+
 	var totalSize int64
 	var oldest, newest time.Time
 	first := true
-	
+
 	for _, backup := range backups {
 		metrics.TotalBackups++
 		metrics.BackupsByType[string(backup.Type)]++
 		totalSize += backup.Size
-		
+
 		if first {
 			oldest = backup.CreatedAt
 			newest = backup.CreatedAt
@@ -489,22 +489,22 @@ func (bs *BackupService) GetBackupMetrics(ctx context.Context) (*BackupMetrics, 
 				newest = backup.CreatedAt
 			}
 		}
-		
+
 		if backup.Status == "failed" {
 			metrics.FailedBackups++
 		}
-		
+
 		if backup.CreatedAt.After(metrics.LastBackupTime) {
 			metrics.LastBackupTime = backup.CreatedAt
 		}
 	}
-	
+
 	metrics.TotalSize = totalSize
 	if metrics.TotalBackups > 0 {
 		metrics.AverageSize = totalSize / int64(metrics.TotalBackups)
 	}
 	metrics.OldestBackup = oldest
 	metrics.NewestBackup = newest
-	
+
 	return metrics, nil
 }

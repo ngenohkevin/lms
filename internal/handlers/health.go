@@ -47,9 +47,9 @@ type HealthCheck struct {
 }
 
 type SystemMetrics struct {
-	Memory        MemoryMetrics `json:"memory"`
-	Goroutines    int           `json:"goroutines"`
-	GCStats       GCMetrics     `json:"gc"`
+	Memory        MemoryMetrics  `json:"memory"`
+	Goroutines    int            `json:"goroutines"`
+	GCStats       GCMetrics      `json:"gc"`
 	RequestCounts RequestMetrics `json:"requests"`
 }
 
@@ -65,9 +65,9 @@ type MemoryMetrics struct {
 }
 
 type GCMetrics struct {
-	NumGC        uint32  `json:"num_gc"`
-	PauseTotalNs uint64  `json:"pause_total_ns"`
-	PauseNs      uint64  `json:"pause_ns"`
+	NumGC         uint32  `json:"num_gc"`
+	PauseTotalNs  uint64  `json:"pause_total_ns"`
+	PauseNs       uint64  `json:"pause_ns"`
 	GCCPUFraction float64 `json:"gc_cpu_fraction"`
 }
 
@@ -92,7 +92,7 @@ var (
 func IncrementRequestCount(success bool) {
 	requestCounter.Lock()
 	defer requestCounter.Unlock()
-	
+
 	requestCounter.total++
 	if success {
 		requestCounter.success++
@@ -118,7 +118,7 @@ func (h *HealthHandler) Health(c *gin.Context) {
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	
+
 	// Concurrent health checks for better performance
 	checks := []struct {
 		name string
@@ -131,17 +131,17 @@ func (h *HealthHandler) Health(c *gin.Context) {
 		{"disk", h.checkDiskSpace},
 		{"memory", h.checkMemoryUsage},
 	}
-	
+
 	for _, check := range checks {
 		wg.Add(1)
 		go func(name string, checkFn func() HealthCheck) {
 			defer wg.Done()
-			
+
 			start := time.Now()
 			result := checkFn()
 			result.Duration = time.Since(start)
 			result.Timestamp = time.Now().UTC().Format(time.RFC3339)
-			
+
 			mu.Lock()
 			response.Checks[name] = result
 			if result.Status != "healthy" {
@@ -150,9 +150,9 @@ func (h *HealthHandler) Health(c *gin.Context) {
 			mu.Unlock()
 		}(check.name, check.fn)
 	}
-	
+
 	wg.Wait()
-	
+
 	// Determine overall status
 	unhealthyCount := 0
 	for _, check := range response.Checks {
@@ -160,7 +160,7 @@ func (h *HealthHandler) Health(c *gin.Context) {
 			unhealthyCount++
 		}
 	}
-	
+
 	if unhealthyCount > 0 {
 		if unhealthyCount >= len(response.Checks)/2 {
 			response.Status = "unhealthy"
@@ -188,14 +188,14 @@ func (h *HealthHandler) checkDatabase(ctx context.Context) func() HealthCheck {
 				Message: "Database connection not initialized",
 			}
 		}
-		
+
 		if err := h.db.Health(ctx); err != nil {
 			return HealthCheck{
 				Status:  "unhealthy",
 				Message: err.Error(),
 			}
 		}
-		
+
 		return HealthCheck{Status: "healthy"}
 	}
 }
@@ -208,14 +208,14 @@ func (h *HealthHandler) checkRedis(ctx context.Context) func() HealthCheck {
 				Message: "Redis connection not initialized",
 			}
 		}
-		
+
 		if err := h.redis.Health(ctx); err != nil {
 			return HealthCheck{
 				Status:  "unhealthy",
 				Message: err.Error(),
 			}
 		}
-		
+
 		return HealthCheck{Status: "healthy"}
 	}
 }
@@ -228,14 +228,14 @@ func (h *HealthHandler) checkEmail(ctx context.Context) func() HealthCheck {
 				Message: "Email service not configured",
 			}
 		}
-		
+
 		if err := h.emailService.TestConnection(ctx); err != nil {
 			return HealthCheck{
 				Status:  "degraded",
 				Message: err.Error(),
 			}
 		}
-		
+
 		return HealthCheck{Status: "healthy"}
 	}
 }
@@ -248,7 +248,7 @@ func (h *HealthHandler) checkCache(ctx context.Context) func() HealthCheck {
 				Message: "Cache service not configured",
 			}
 		}
-		
+
 		// Test cache connectivity by trying to get cache stats
 		_, err := h.cacheService.GetCacheStats(ctx)
 		if err != nil {
@@ -257,7 +257,7 @@ func (h *HealthHandler) checkCache(ctx context.Context) func() HealthCheck {
 				Message: err.Error(),
 			}
 		}
-		
+
 		return HealthCheck{Status: "healthy"}
 	}
 }
@@ -274,7 +274,7 @@ func (h *HealthHandler) checkDiskSpace() HealthCheck {
 func (h *HealthHandler) checkMemoryUsage() HealthCheck {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
-	
+
 	// Check if memory usage is too high (simplified check)
 	if m.Alloc > 1024*1024*1024 { // 1GB
 		return HealthCheck{
@@ -282,23 +282,23 @@ func (h *HealthHandler) checkMemoryUsage() HealthCheck {
 			Message: "High memory usage detected",
 		}
 	}
-	
+
 	return HealthCheck{Status: "healthy"}
 }
 
 func (h *HealthHandler) getSystemMetrics() SystemMetrics {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
-	
+
 	requestCounter.RLock()
 	totalReqs := requestCounter.total
 	successReqs := requestCounter.success
 	errorReqs := requestCounter.error
 	requestCounter.RUnlock()
-	
+
 	uptime := time.Since(startTime).Seconds()
 	rate := float64(totalReqs) / uptime
-	
+
 	return SystemMetrics{
 		Memory: MemoryMetrics{
 			Alloc:      m.Alloc,
@@ -338,11 +338,11 @@ func (h *HealthHandler) Ping(c *gin.Context) {
 func (h *HealthHandler) Ready(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
-	
+
 	// Readiness check - only essential services
 	ready := true
 	issues := []string{}
-	
+
 	// Check database (essential)
 	if h.db != nil {
 		if err := h.db.Health(ctx); err != nil {
@@ -350,7 +350,7 @@ func (h *HealthHandler) Ready(c *gin.Context) {
 			issues = append(issues, "database: "+err.Error())
 		}
 	}
-	
+
 	// Check Redis (essential for sessions)
 	if h.redis != nil {
 		if err := h.redis.Health(ctx); err != nil {
@@ -358,7 +358,7 @@ func (h *HealthHandler) Ready(c *gin.Context) {
 			issues = append(issues, "redis: "+err.Error())
 		}
 	}
-	
+
 	if ready {
 		IncrementRequestCount(true)
 		c.JSON(http.StatusOK, gin.H{
@@ -387,12 +387,12 @@ func (h *HealthHandler) Live(c *gin.Context) {
 
 func (h *HealthHandler) Metrics(c *gin.Context) {
 	metrics := h.getSystemMetrics()
-	
+
 	// Add cache metrics if available
 	if h.cacheService != nil {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 		defer cancel()
-		
+
 		if cacheStats, err := h.cacheService.GetCacheStats(ctx); err == nil {
 			c.JSON(http.StatusOK, gin.H{
 				"system": metrics,
@@ -400,7 +400,7 @@ func (h *HealthHandler) Metrics(c *gin.Context) {
 			})
 		} else {
 			c.JSON(http.StatusOK, gin.H{
-				"system": metrics,
+				"system":      metrics,
 				"cache_error": err.Error(),
 			})
 		}

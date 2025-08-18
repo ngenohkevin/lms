@@ -320,7 +320,7 @@ func (s *BookService) DeleteBook(ctx context.Context, id int32) error {
 func (s *BookService) ListBooks(ctx context.Context, page, limit int) (*models.BookListResponse, error) {
 	// Create cache key for this specific page and limit
 	cacheKey := fmt.Sprintf("books:list:page_%d:limit_%d", page, limit)
-	
+
 	// Try to get from cache first
 	if s.cacheService != nil {
 		if cachedData, err := s.cacheService.GetSearchResults(ctx, cacheKey); err == nil {
@@ -330,7 +330,7 @@ func (s *BookService) ListBooks(ctx context.Context, page, limit int) (*models.B
 			}
 		}
 	}
-	
+
 	offset := (page - 1) * limit
 
 	books, err := s.querier.ListBooks(ctx, queries.ListBooksParams{
@@ -368,7 +368,7 @@ func (s *BookService) ListBooks(ctx context.Context, page, limit int) (*models.B
 			TotalPages: totalPages,
 		},
 	}
-	
+
 	// Cache the response for future requests
 	if s.cacheService != nil {
 		s.cacheService.SetSearchResults(ctx, cacheKey, response)
@@ -391,18 +391,18 @@ func (s *BookService) SearchBooks(ctx context.Context, req models.BookSearchRequ
 	}
 
 	// Create cache key based on search parameters
-	cacheKey := fmt.Sprintf("search:query_%s:genre_%s:available_%t:page_%d:limit_%d", 
-		req.Query, 
+	cacheKey := fmt.Sprintf("search:query_%s:genre_%s:available_%t:page_%d:limit_%d",
+		req.Query,
 		func() string {
 			if req.Genre != nil {
 				return *req.Genre
 			}
 			return ""
-		}(), 
-		req.AvailableOnly, 
-		req.Page, 
+		}(),
+		req.AvailableOnly,
+		req.Page,
 		req.Limit)
-	
+
 	// Try to get from cache first
 	if s.cacheService != nil {
 		if cachedData, err := s.cacheService.GetSearchResults(ctx, cacheKey); err == nil {
@@ -501,7 +501,7 @@ func (s *BookService) SearchBooks(ctx context.Context, req models.BookSearchRequ
 			TotalPages: totalPages,
 		},
 	}
-	
+
 	// Cache the search results for future requests
 	if s.cacheService != nil {
 		s.cacheService.SetSearchResults(ctx, cacheKey, response)
