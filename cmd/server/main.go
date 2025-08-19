@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -55,12 +57,18 @@ func main() {
 	}
 	defer redis.Close()
 
-	// Initialize Phase 9.1 advanced services
+	// Initialize Phase 9.1 & 9.2 advanced services
 	// Cache service for performance optimization
 	cacheService := services.NewCacheService(redis)
 
 	// Backup service for data protection
 	backupService := services.NewBackupService(db, "./backups", 30*24*time.Hour) // 30 days retention
+
+	// Phase 9.2: Version management and API documentation services  
+	// Note: Version management services use go-redis/v8 client, we need to convert
+	// For now, we'll create a temporary solution until services are updated
+	versionManagementService := services.NewVersionManagementService(nil) // Will create Redis client internally
+	apiDocumentationService := services.NewAPIDocumentationService(nil)   // Will create Redis client internally
 
 	// Initialize services
 	// Use RSA keys if available, otherwise generate fallback keys
@@ -109,29 +117,7 @@ func main() {
 	notificationService := services.NewNotificationService(db.Queries, emailService, queueService, logger)
 	reportService := services.NewReportService(db.Queries, cacheService)
 
-	// Initialize Gin router
-	r := gin.New()
-
-	// Phase 9.1: Initialize advanced security and versioning configurations
-	securityConfig := middleware.DefaultSecurityConfig()
-	versionConfig := middleware.DefaultVersionConfig()
-
-	// Add global middleware with enhanced security
-	r.Use(middleware.Logger())
-	r.Use(middleware.Recovery())
-	r.Use(middleware.CORS())
-	r.Use(middleware.SecurityHeaders(securityConfig))
-	r.Use(middleware.AdvancedSecurityMiddleware(securityConfig))
-	r.Use(middleware.APIVersioningMiddleware(versionConfig))
-	r.Use(middleware.SecureJSON())
-
-	// Initialize rate limiter
-	rateLimiter := middleware.NewRateLimiter(redis.Client)
-
-	// Initialize middleware
-	authMiddleware := middleware.NewAuthMiddleware(authService)
-
-	// Initialize handlers with Phase 9.1 enhancements
+	// Initialize handlers with Phase 9.1 & 9.2 enhancements
 	healthHandler := handlers.NewHealthHandler(db, redis, emailService, cacheService)
 	authHandler := handlers.NewAuthHandler(authService, userService)
 	bookHandler := handlers.NewBookHandler(bookService)
@@ -142,6 +128,30 @@ func main() {
 	importExportHandler := handlers.NewImportExportHandler(importExportService)
 	notificationHandler := handlers.NewNotificationHandler(notificationService)
 	reportHandler := handlers.NewReportHandler(reportService)
+	versionManagementHandler := handlers.NewVersionManagementHandler(versionManagementService, apiDocumentationService)
+
+	// Initialize Gin router
+	r := gin.New()
+
+	// Phase 9.1: Initialize advanced security and versioning configurations
+	securityConfig := middleware.DefaultSecurityConfig()
+	versionConfig := middleware.DefaultVersionConfig()
+
+	// Initialize rate limiter
+	rateLimiter := middleware.NewRateLimiter(redis.Client)
+
+	// Initialize middleware
+	authMiddleware := middleware.NewAuthMiddleware(authService)
+
+	// Add global middleware with enhanced security
+	r.Use(middleware.Logger())
+	r.Use(middleware.Recovery())
+	r.Use(middleware.CORS())
+	r.Use(middleware.SecurityHeaders(securityConfig))
+	r.Use(middleware.AdvancedSecurityMiddleware(securityConfig))
+	r.Use(middleware.APIVersioningMiddleware(versionConfig))
+	r.Use(versionManagementHandler.UsageStatisticsMiddleware())
+	r.Use(middleware.SecureJSON())
 
 	// Public routes (no authentication required)
 	public := r.Group("/api/v1")
@@ -156,6 +166,50 @@ func main() {
 
 		// Phase 9.1: API versioning information
 		public.GET("/versions", middleware.VersionHandler(versionConfig))
+
+		// Phase 9.2: Public API documentation routes
+		docs := public.Group("/docs")
+		{
+			docs.GET("", func(c *gin.Context) {
+				documentations, err := apiDocumentationService.ListAvailableDocumentations(c.Request.Context())
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					return
+				}
+				c.JSON(http.StatusOK, gin.H{"success": true, "data": documentations})
+			})
+			docs.GET("/:version", func(c *gin.Context) {
+				versionStr := c.Param("version")
+				version := parseVersionFromString(versionStr)
+				if version == nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid version format"})
+					return
+				}
+				
+				documentation, err := apiDocumentationService.GetDocumentation(c.Request.Context(), *version)
+				if err != nil {
+					c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+					return
+				}
+				c.JSON(http.StatusOK, gin.H{"success": true, "data": documentation})
+			})
+			docs.GET("/:version/openapi.json", func(c *gin.Context) {
+				versionStr := c.Param("version")
+				version := parseVersionFromString(versionStr)
+				if version == nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid version format"})
+					return
+				}
+				
+				spec, err := apiDocumentationService.GenerateOpenAPISpec(c.Request.Context(), *version)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					return
+				}
+				c.Header("Content-Type", "application/json")
+				c.JSON(http.StatusOK, spec)
+			})
+		}
 
 		// Authentication routes with rate limiting
 		auth := public.Group("/auth")
@@ -323,6 +377,13 @@ func main() {
 		librarianReports.Use(authMiddleware.RequireLibrarian())
 		{
 			reportHandler.RegisterRoutes(librarianReports)
+		}
+
+		// Phase 9.2: Version management and API documentation routes (admin access required)
+		versionMgmt := protected.Group("")
+		versionMgmt.Use(authMiddleware.RequireAdmin())
+		{
+			versionManagementHandler.RegisterRoutes(versionMgmt)
 		}
 
 		// Phase 9.1: Admin routes for advanced features (admin access required)
@@ -577,4 +638,34 @@ func getDefaultRSAPrivateKey() string {
 	}
 
 	return string(pem.EncodeToMemory(privateKeyPEM))
+}
+
+// parseVersionFromString parses version string to APIVersion struct
+func parseVersionFromString(versionStr string) *middleware.APIVersion {
+	// Remove 'v' prefix if present
+	if len(versionStr) > 0 && versionStr[0] == 'v' {
+		versionStr = versionStr[1:]
+	}
+
+	parts := strings.Split(versionStr, ".")
+	if len(parts) < 1 {
+		return nil
+	}
+
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return nil
+	}
+
+	minor := 0
+	if len(parts) > 1 {
+		minor, _ = strconv.Atoi(parts[1])
+	}
+
+	patch := 0
+	if len(parts) > 2 {
+		patch, _ = strconv.Atoi(parts[2])
+	}
+
+	return &middleware.APIVersion{Major: major, Minor: minor, Patch: patch}
 }
