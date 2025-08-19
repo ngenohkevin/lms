@@ -40,6 +40,7 @@ type APIKeyInfo struct {
 	Permissions []string
 	CreatedAt   time.Time
 	LastUsed    *time.Time
+	ExpiresAt   *time.Time
 	IsActive    bool
 }
 
@@ -316,7 +317,18 @@ func isValidAPIKey(providedKey string, apiKeys map[string]APIKeyInfo) bool {
 	}
 
 	for validKey, keyInfo := range apiKeys {
-		if keyInfo.IsActive && subtle.ConstantTimeCompare([]byte(providedKey), []byte(validKey)) == 1 {
+		// Check if key is active
+		if !keyInfo.IsActive {
+			continue
+		}
+
+		// Check if key has expired
+		if keyInfo.ExpiresAt != nil && keyInfo.ExpiresAt.Before(time.Now()) {
+			continue
+		}
+
+		// Check if the key matches using constant time comparison
+		if subtle.ConstantTimeCompare([]byte(providedKey), []byte(validKey)) == 1 {
 			return true
 		}
 	}
