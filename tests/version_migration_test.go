@@ -94,8 +94,8 @@ func (s *VersionMigrationTestSuite) setupTestRoutes() {
 func (s *VersionMigrationTestSuite) handleV1Test(c *gin.Context) {
 	version := middleware.GetAPIVersion(c)
 	c.JSON(http.StatusOK, gin.H{
-		"version": version.String(),
-		"message": "v1 endpoint",
+		"version":  version.String(),
+		"message":  "v1 endpoint",
 		"features": []string{"basic_crud", "authentication"},
 	})
 }
@@ -103,8 +103,8 @@ func (s *VersionMigrationTestSuite) handleV1Test(c *gin.Context) {
 func (s *VersionMigrationTestSuite) handleV1_1Test(c *gin.Context) {
 	version := middleware.GetAPIVersion(c)
 	c.JSON(http.StatusOK, gin.H{
-		"version": version.String(),
-		"message": "v1.1 endpoint",
+		"version":  version.String(),
+		"message":  "v1.1 endpoint",
 		"features": []string{"basic_crud", "authentication", "advanced_search", "bulk_operations"},
 	})
 }
@@ -112,15 +112,15 @@ func (s *VersionMigrationTestSuite) handleV1_1Test(c *gin.Context) {
 func (s *VersionMigrationTestSuite) handleV1_2Test(c *gin.Context) {
 	version := middleware.GetAPIVersion(c)
 	c.JSON(http.StatusOK, gin.H{
-		"version": version.String(),
-		"message": "v1.2 endpoint (future)",
+		"version":  version.String(),
+		"message":  "v1.2 endpoint (future)",
 		"features": []string{"basic_crud", "authentication", "advanced_search", "bulk_operations", "ai_recommendations"},
 	})
 }
 
 func (s *VersionMigrationTestSuite) handleGenericTest(c *gin.Context) {
 	version := middleware.GetAPIVersion(c)
-	
+
 	// Provide version-specific responses
 	var response gin.H
 	switch version.Minor {

@@ -20,29 +20,29 @@ type APIDocumentationService struct {
 
 // APIDocumentation represents the complete documentation for an API version
 type APIDocumentation struct {
-	Version     models.APIVersion `json:"version"`
-	Title       string                `json:"title"`
-	Description string                `json:"description"`
-	BaseURL     string                `json:"base_url"`
-	Endpoints   []EndpointDoc         `json:"endpoints"`
-	Schemas     map[string]SchemaDoc  `json:"schemas"`
-	Examples    []ExampleDoc          `json:"examples"`
-	ChangeLog   []ChangeLogEntry      `json:"changelog"`
-	Generated   time.Time             `json:"generated"`
+	Version     models.APIVersion    `json:"version"`
+	Title       string               `json:"title"`
+	Description string               `json:"description"`
+	BaseURL     string               `json:"base_url"`
+	Endpoints   []EndpointDoc        `json:"endpoints"`
+	Schemas     map[string]SchemaDoc `json:"schemas"`
+	Examples    []ExampleDoc         `json:"examples"`
+	ChangeLog   []ChangeLogEntry     `json:"changelog"`
+	Generated   time.Time            `json:"generated"`
 }
 
 // EndpointDoc documents an API endpoint
 type EndpointDoc struct {
-	Path        string            `json:"path"`
-	Method      string            `json:"method"`
-	Summary     string            `json:"summary"`
-	Description string            `json:"description"`
-	Parameters  []ParameterDoc    `json:"parameters"`
-	RequestBody *RequestBodyDoc   `json:"request_body,omitempty"`
+	Path        string                 `json:"path"`
+	Method      string                 `json:"method"`
+	Summary     string                 `json:"summary"`
+	Description string                 `json:"description"`
+	Parameters  []ParameterDoc         `json:"parameters"`
+	RequestBody *RequestBodyDoc        `json:"request_body,omitempty"`
 	Responses   map[string]ResponseDoc `json:"responses"`
-	Tags        []string          `json:"tags"`
-	Deprecated  bool              `json:"deprecated"`
-	Examples    []EndpointExample `json:"examples"`
+	Tags        []string               `json:"tags"`
+	Deprecated  bool                   `json:"deprecated"`
+	Examples    []EndpointExample      `json:"examples"`
 }
 
 // ParameterDoc documents an API parameter
@@ -59,9 +59,9 @@ type ParameterDoc struct {
 
 // RequestBodyDoc documents request body structure
 type RequestBodyDoc struct {
-	Description string                `json:"description"`
-	Required    bool                  `json:"required"`
-	Content     map[string]MediaType  `json:"content"`
+	Description string               `json:"description"`
+	Required    bool                 `json:"required"`
+	Content     map[string]MediaType `json:"content"`
 }
 
 // ResponseDoc documents an API response
@@ -145,7 +145,7 @@ func NewAPIDocumentationService(redisClient *redis.Client) *APIDocumentationServ
 			DB:       0,
 		})
 	}
-	
+
 	service := &APIDocumentationService{
 		redis:          redisClient,
 		documentations: make(map[string]*APIDocumentation),
@@ -417,7 +417,7 @@ func (s *APIDocumentationService) getV1Endpoints() []EndpointDoc {
 			Method:      "POST",
 			Summary:     "User authentication",
 			Description: "Authenticate a user (librarian or student) and return JWT tokens",
-			Parameters: []ParameterDoc{},
+			Parameters:  []ParameterDoc{},
 			RequestBody: &RequestBodyDoc{
 				Description: "Login credentials",
 				Required:    true,
@@ -510,7 +510,7 @@ func (s *APIDocumentationService) getV1Endpoints() []EndpointDoc {
 // getV1_1Endpoints returns endpoint documentation for v1.1.0
 func (s *APIDocumentationService) getV1_1Endpoints() []EndpointDoc {
 	v1Endpoints := s.getV1Endpoints()
-	
+
 	// Add new endpoints for v1.1.0
 	v1_1Endpoints := []EndpointDoc{
 		{
@@ -641,7 +641,7 @@ func (s *APIDocumentationService) getV1Schemas() map[string]SchemaDoc {
 // getV1_1Schemas returns schema documentation for v1.1.0 (extends v1.0.0)
 func (s *APIDocumentationService) getV1_1Schemas() map[string]SchemaDoc {
 	schemas := s.getV1Schemas()
-	
+
 	// Add new schemas for v1.1.0
 	schemas["SearchResponse"] = SchemaDoc{
 		Type: "object",
@@ -682,7 +682,7 @@ func (s *APIDocumentationService) getV1Examples() []ExampleDoc {
 // getV1_1Examples returns usage examples for v1.1.0
 func (s *APIDocumentationService) getV1_1Examples() []ExampleDoc {
 	examples := s.getV1Examples()
-	
+
 	examples = append(examples, ExampleDoc{
 		Title:       "Advanced Search Example",
 		Description: "How to use the advanced search functionality",
@@ -710,7 +710,7 @@ func (s *APIDocumentationService) getV1ChangeLog() []ChangeLogEntry {
 // getV1_1ChangeLog returns changelog for v1.1.0
 func (s *APIDocumentationService) getV1_1ChangeLog() []ChangeLogEntry {
 	changelog := s.getV1ChangeLog()
-	
+
 	changelog = append(changelog, []ChangeLogEntry{
 		{
 			Version:     "v1.1.0",

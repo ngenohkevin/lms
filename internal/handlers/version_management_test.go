@@ -68,7 +68,7 @@ func (s *VersionManagementHandlerTestSuite) TestGetVersionInfo() {
 	s.router.ServeHTTP(w, req)
 
 	s.Equal(http.StatusOK, w.Code)
-	
+
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	s.NoError(err)
@@ -81,7 +81,7 @@ func (s *VersionManagementHandlerTestSuite) TestGetVersionInfo() {
 	s.router.ServeHTTP(w, req)
 
 	s.Equal(http.StatusNotFound, w.Code)
-	
+
 	err = json.Unmarshal(w.Body.Bytes(), &response)
 	s.NoError(err)
 	s.False(response["success"].(bool))
@@ -94,12 +94,12 @@ func (s *VersionManagementHandlerTestSuite) TestListAllVersions() {
 	s.router.ServeHTTP(w, req)
 
 	s.Equal(http.StatusOK, w.Code)
-	
+
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	s.NoError(err)
 	s.True(response["success"].(bool))
-	
+
 	data := response["data"].([]interface{})
 	s.Greater(len(data), 0)
 }
@@ -119,7 +119,7 @@ func (s *VersionManagementHandlerTestSuite) TestDeprecateVersion() {
 	s.router.ServeHTTP(w, req)
 
 	s.Equal(http.StatusOK, w.Code)
-	
+
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	s.NoError(err)
@@ -141,7 +141,7 @@ func (s *VersionManagementHandlerTestSuite) TestDeprecateVersionInvalidInput() {
 	s.router.ServeHTTP(w, req)
 
 	s.Equal(http.StatusBadRequest, w.Code)
-	
+
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	s.NoError(err)
@@ -155,7 +155,7 @@ func (s *VersionManagementHandlerTestSuite) TestGetMigrationPath() {
 	s.router.ServeHTTP(w, req)
 
 	s.Equal(http.StatusOK, w.Code)
-	
+
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	s.NoError(err)
@@ -173,7 +173,7 @@ func (s *VersionManagementHandlerTestSuite) TestGetMigrationPathMissingParams() 
 	s.router.ServeHTTP(w, req)
 
 	s.Equal(http.StatusBadRequest, w.Code)
-	
+
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	s.NoError(err)
@@ -187,7 +187,7 @@ func (s *VersionManagementHandlerTestSuite) TestGetVersionCompatibility() {
 	s.router.ServeHTTP(w, req)
 
 	s.Equal(http.StatusOK, w.Code)
-	
+
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	s.NoError(err)
@@ -205,7 +205,7 @@ func (s *VersionManagementHandlerTestSuite) TestGetVersionHealth() {
 	s.router.ServeHTTP(w, req)
 
 	s.Equal(http.StatusOK, w.Code)
-	
+
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	s.NoError(err)
@@ -223,7 +223,7 @@ func (s *VersionManagementHandlerTestSuite) TestGetAPIDocumentation() {
 	s.router.ServeHTTP(w, req)
 
 	s.Equal(http.StatusOK, w.Code)
-	
+
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	s.NoError(err)
@@ -243,12 +243,12 @@ func (s *VersionManagementHandlerTestSuite) TestListAPIDocumentations() {
 	s.router.ServeHTTP(w, req)
 
 	s.Equal(http.StatusOK, w.Code)
-	
+
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	s.NoError(err)
 	s.True(response["success"].(bool))
-	
+
 	data := response["data"].([]interface{})
 	s.Greater(len(data), 0)
 }
@@ -259,7 +259,7 @@ func (s *VersionManagementHandlerTestSuite) TestSearchEndpoints() {
 	s.router.ServeHTTP(w, req)
 
 	s.Equal(http.StatusOK, w.Code)
-	
+
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	s.NoError(err)
@@ -277,7 +277,7 @@ func (s *VersionManagementHandlerTestSuite) TestSearchEndpointsMissingParams() {
 	s.router.ServeHTTP(w, req)
 
 	s.Equal(http.StatusBadRequest, w.Code)
-	
+
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	s.NoError(err)
@@ -291,7 +291,7 @@ func (s *VersionManagementHandlerTestSuite) TestGetEndpointDocumentation() {
 	s.router.ServeHTTP(w, req)
 
 	s.Equal(http.StatusOK, w.Code)
-	
+
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	s.NoError(err)
@@ -312,7 +312,7 @@ func (s *VersionManagementHandlerTestSuite) TestGenerateOpenAPISpec() {
 
 	s.Equal(http.StatusOK, w.Code)
 	s.Equal("application/json", w.Header().Get("Content-Type"))
-	
+
 	var spec map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &spec)
 	s.NoError(err)
@@ -337,7 +337,7 @@ func (s *VersionManagementHandlerTestSuite) TestUpdateUsageStatistics() {
 	s.router.ServeHTTP(w, req)
 
 	s.Equal(http.StatusOK, w.Code)
-	
+
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	s.NoError(err)
@@ -349,7 +349,7 @@ func (s *VersionManagementHandlerTestSuite) TestUsageStatisticsMiddleware() {
 	// Setup test router with middleware
 	testRouter := gin.New()
 	testRouter.Use(s.handler.UsageStatisticsMiddleware())
-	
+
 	// Add test route
 	testRouter.GET("/test", func(c *gin.Context) {
 		// Set a fake API version in context
@@ -362,7 +362,7 @@ func (s *VersionManagementHandlerTestSuite) TestUsageStatisticsMiddleware() {
 	testRouter.ServeHTTP(w, req)
 
 	s.Equal(http.StatusOK, w.Code)
-	
+
 	// Give the goroutine time to update statistics
 	time.Sleep(100 * time.Millisecond)
 
@@ -431,7 +431,7 @@ func (s *VersionManagementHandlerTestSuite) TestInvalidVersionInRequests() {
 		s.router.ServeHTTP(w, req)
 
 		s.Equal(http.StatusBadRequest, w.Code, "Endpoint: %s %s", endpoint.method, endpoint.path)
-		
+
 		var response map[string]interface{}
 		err := json.Unmarshal(w.Body.Bytes(), &response)
 		s.NoError(err)

@@ -24,7 +24,7 @@ func TestVersionManagementTestSuite(t *testing.T) {
 
 func (s *VersionManagementTestSuite) SetupTest() {
 	s.ctx = context.Background()
-	
+
 	// Setup Redis client for testing
 	s.redis = redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",
@@ -85,12 +85,12 @@ func (s *VersionManagementTestSuite) TestListAllVersions() {
 
 func (s *VersionManagementTestSuite) TestAddVersion() {
 	newVersion := &VersionInfo{
-		Version:           models.APIVersion{Major: 1, Minor: 2, Patch: 0},
-		ReleaseDate:       time.Now(),
-		Status:            VersionStatusBeta,
-		Features:          []string{"New feature 1", "New feature 2"},
-		BreakingChanges:   []string{"Breaking change 1"},
-		Documentation:     "/api/v1.2.0/docs",
+		Version:            models.APIVersion{Major: 1, Minor: 2, Patch: 0},
+		ReleaseDate:        time.Now(),
+		Status:             VersionStatusBeta,
+		Features:           []string{"New feature 1", "New feature 2"},
+		BreakingChanges:    []string{"Breaking change 1"},
+		Documentation:      "/api/v1.2.0/docs",
 		BackwardCompatible: false,
 	}
 
@@ -211,7 +211,7 @@ func (s *VersionManagementTestSuite) TestGetVersionCompatibilityWithDeprecation(
 	// First deprecate the client version
 	clientVersion := models.APIVersion{Major: 1, Minor: 0, Patch: 0}
 	deprecationDate := time.Now()
-	
+
 	err := s.service.DeprecateVersion(s.ctx, clientVersion, deprecationDate, nil)
 	s.NoError(err)
 

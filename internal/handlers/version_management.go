@@ -659,7 +659,7 @@ func (h *VersionManagementHandler) UsageStatisticsMiddleware() gin.HandlerFunc {
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			
+
 			h.versionService.UpdateUsageStatistics(ctx, version, endpoint, responseTime, success)
 		}()
 	}

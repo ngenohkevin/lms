@@ -19,18 +19,18 @@ type VersionManagementService struct {
 
 // VersionInfo contains detailed information about an API version
 type VersionInfo struct {
-	Version           models.APIVersion `json:"version"`
-	ReleaseDate       time.Time             `json:"release_date"`
-	DeprecationDate   *time.Time            `json:"deprecation_date,omitempty"`
-	SunsetDate        *time.Time            `json:"sunset_date,omitempty"`
-	Status            VersionStatus         `json:"status"`
-	Features          []string              `json:"features"`
-	BreakingChanges   []string              `json:"breaking_changes"`
-	Documentation     string                `json:"documentation"`
-	ChangelogURL      string                `json:"changelog_url"`
-	UsageStatistics   *UsageStats           `json:"usage_statistics,omitempty"`
-	BackwardCompatible bool                 `json:"backward_compatible"`
-	MigrationGuide    string                `json:"migration_guide,omitempty"`
+	Version            models.APIVersion `json:"version"`
+	ReleaseDate        time.Time         `json:"release_date"`
+	DeprecationDate    *time.Time        `json:"deprecation_date,omitempty"`
+	SunsetDate         *time.Time        `json:"sunset_date,omitempty"`
+	Status             VersionStatus     `json:"status"`
+	Features           []string          `json:"features"`
+	BreakingChanges    []string          `json:"breaking_changes"`
+	Documentation      string            `json:"documentation"`
+	ChangelogURL       string            `json:"changelog_url"`
+	UsageStatistics    *UsageStats       `json:"usage_statistics,omitempty"`
+	BackwardCompatible bool              `json:"backward_compatible"`
+	MigrationGuide     string            `json:"migration_guide,omitempty"`
 }
 
 // VersionStatus represents the lifecycle status of an API version
@@ -46,23 +46,23 @@ const (
 
 // UsageStats tracks usage statistics for an API version
 type UsageStats struct {
-	RequestCount     int64     `json:"request_count"`
-	UniqueClients    int64     `json:"unique_clients"`
-	LastAccessed     time.Time `json:"last_accessed"`
-	AverageResponse  float64   `json:"average_response_time"`
-	ErrorRate        float64   `json:"error_rate"`
-	TopEndpoints     []string  `json:"top_endpoints"`
-	LastUpdated      time.Time `json:"last_updated"`
+	RequestCount    int64     `json:"request_count"`
+	UniqueClients   int64     `json:"unique_clients"`
+	LastAccessed    time.Time `json:"last_accessed"`
+	AverageResponse float64   `json:"average_response_time"`
+	ErrorRate       float64   `json:"error_rate"`
+	TopEndpoints    []string  `json:"top_endpoints"`
+	LastUpdated     time.Time `json:"last_updated"`
 }
 
 // VersionMigration represents a version migration path
 type VersionMigration struct {
 	FromVersion   models.APIVersion `json:"from_version"`
 	ToVersion     models.APIVersion `json:"to_version"`
-	MigrationPath string                `json:"migration_path"`
-	Required      bool                  `json:"required"`
-	Deadline      time.Time             `json:"deadline"`
-	Guide         string                `json:"guide"`
+	MigrationPath string            `json:"migration_path"`
+	Required      bool              `json:"required"`
+	Deadline      time.Time         `json:"deadline"`
+	Guide         string            `json:"guide"`
 }
 
 // NewVersionManagementService creates a new version management service
@@ -75,7 +75,7 @@ func NewVersionManagementService(redisClient *redis.Client) *VersionManagementSe
 			DB:       0,
 		})
 	}
-	
+
 	service := &VersionManagementService{
 		redis:        redisClient,
 		versionStore: make(map[string]*VersionInfo),
@@ -89,26 +89,26 @@ func NewVersionManagementService(redisClient *redis.Client) *VersionManagementSe
 // initializeDefaultVersions sets up default version information
 func (s *VersionManagementService) initializeDefaultVersions() {
 	v1_0_0 := &VersionInfo{
-		Version:           models.APIVersion{Major: 1, Minor: 0, Patch: 0},
-		ReleaseDate:       time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
-		Status:            VersionStatusActive,
-		Features:          []string{"Basic CRUD operations", "Authentication", "Book management", "Student management"},
-		BreakingChanges:   []string{},
-		Documentation:     "/api/v1.0.0/docs",
-		ChangelogURL:      "/api/v1.0.0/changelog",
+		Version:            models.APIVersion{Major: 1, Minor: 0, Patch: 0},
+		ReleaseDate:        time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+		Status:             VersionStatusActive,
+		Features:           []string{"Basic CRUD operations", "Authentication", "Book management", "Student management"},
+		BreakingChanges:    []string{},
+		Documentation:      "/api/v1.0.0/docs",
+		ChangelogURL:       "/api/v1.0.0/changelog",
 		BackwardCompatible: true,
 	}
 
 	v1_1_0 := &VersionInfo{
-		Version:           models.APIVersion{Major: 1, Minor: 1, Patch: 0},
-		ReleaseDate:       time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC),
-		Status:            VersionStatusActive,
-		Features:          []string{"Advanced search", "Bulk operations", "Enhanced reporting", "Notification system"},
-		BreakingChanges:   []string{"Changed response format for search endpoints", "Updated authentication headers"},
-		Documentation:     "/api/v1.1.0/docs",
-		ChangelogURL:      "/api/v1.1.0/changelog",
+		Version:            models.APIVersion{Major: 1, Minor: 1, Patch: 0},
+		ReleaseDate:        time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC),
+		Status:             VersionStatusActive,
+		Features:           []string{"Advanced search", "Bulk operations", "Enhanced reporting", "Notification system"},
+		BreakingChanges:    []string{"Changed response format for search endpoints", "Updated authentication headers"},
+		Documentation:      "/api/v1.1.0/docs",
+		ChangelogURL:       "/api/v1.1.0/changelog",
 		BackwardCompatible: false,
-		MigrationGuide:    "/api/migration/v1.0.0-to-v1.1.0",
+		MigrationGuide:     "/api/migration/v1.0.0-to-v1.1.0",
 	}
 
 	s.versionStore[v1_0_0.Version.String()] = v1_0_0
@@ -118,7 +118,7 @@ func (s *VersionManagementService) initializeDefaultVersions() {
 // GetVersionInfo retrieves detailed information about a specific version
 func (s *VersionManagementService) GetVersionInfo(ctx context.Context, version models.APIVersion) (*VersionInfo, error) {
 	versionKey := version.String()
-	
+
 	// Try to get from cache first
 	cached, err := s.redis.Get(ctx, fmt.Sprintf("version_info:%s", versionKey)).Result()
 	if err == nil {
@@ -144,7 +144,7 @@ func (s *VersionManagementService) GetVersionInfo(ctx context.Context, version m
 // ListAllVersions returns all available versions with their information
 func (s *VersionManagementService) ListAllVersions(ctx context.Context) ([]*VersionInfo, error) {
 	versions := make([]*VersionInfo, 0, len(s.versionStore))
-	
+
 	for _, versionInfo := range s.versionStore {
 		versions = append(versions, versionInfo)
 	}
@@ -160,7 +160,7 @@ func (s *VersionManagementService) ListAllVersions(ctx context.Context) ([]*Vers
 // AddVersion adds a new version to the management system
 func (s *VersionManagementService) AddVersion(ctx context.Context, versionInfo *VersionInfo) error {
 	versionKey := versionInfo.Version.String()
-	
+
 	// Validate version info
 	if err := s.validateVersionInfo(versionInfo); err != nil {
 		return fmt.Errorf("invalid version info: %w", err)
@@ -229,7 +229,7 @@ func (s *VersionManagementService) UpdateUsageStatistics(ctx context.Context, ve
 	stats := versionInfo.UsageStatistics
 	stats.RequestCount++
 	stats.LastAccessed = time.Now()
-	
+
 	// Update average response time
 	if stats.RequestCount == 1 {
 		stats.AverageResponse = responseTime
@@ -248,7 +248,7 @@ func (s *VersionManagementService) UpdateUsageStatistics(ctx context.Context, ve
 
 	// Update top endpoints
 	s.updateTopEndpoints(stats, endpoint)
-	
+
 	stats.LastUpdated = time.Now()
 
 	// Save updated statistics
@@ -263,11 +263,11 @@ func (s *VersionManagementService) GetVersionCompatibility(ctx context.Context, 
 	}
 
 	compatibility := &VersionCompatibility{
-		ClientVersion:     clientVersion,
+		ClientVersion:      clientVersion,
 		CompatibleVersions: make([]models.APIVersion, 0),
 		RecommendedVersion: models.APIVersion{},
-		MigrationRequired: false,
-		MigrationPath:     "",
+		MigrationRequired:  false,
+		MigrationPath:      "",
 	}
 
 	var latestActive models.APIVersion
@@ -311,8 +311,8 @@ type VersionCompatibility struct {
 	ClientVersion      models.APIVersion   `json:"client_version"`
 	CompatibleVersions []models.APIVersion `json:"compatible_versions"`
 	RecommendedVersion models.APIVersion   `json:"recommended_version"`
-	MigrationRequired  bool                    `json:"migration_required"`
-	MigrationPath      string                  `json:"migration_path,omitempty"`
+	MigrationRequired  bool                `json:"migration_required"`
+	MigrationPath      string              `json:"migration_path,omitempty"`
 }
 
 // validateVersionInfo validates version information
@@ -344,7 +344,7 @@ func (s *VersionManagementService) validateVersionInfo(versionInfo *VersionInfo)
 func (s *VersionManagementService) updateTopEndpoints(stats *UsageStats, endpoint string) {
 	// Simple implementation - keep track of top 10 endpoints
 	maxEndpoints := 10
-	
+
 	// Check if endpoint already exists
 	for i, ep := range stats.TopEndpoints {
 		if ep == endpoint {

@@ -64,7 +64,7 @@ func main() {
 	// Backup service for data protection
 	backupService := services.NewBackupService(db, "./backups", 30*24*time.Hour) // 30 days retention
 
-	// Phase 9.2: Version management and API documentation services  
+	// Phase 9.2: Version management and API documentation services
 	// Note: Version management services use go-redis/v8 client, we need to convert
 	// For now, we'll create a temporary solution until services are updated
 	versionManagementService := services.NewVersionManagementService(nil) // Will create Redis client internally
@@ -185,7 +185,7 @@ func main() {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid version format"})
 					return
 				}
-				
+
 				documentation, err := apiDocumentationService.GetDocumentation(c.Request.Context(), *version)
 				if err != nil {
 					c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
@@ -200,7 +200,7 @@ func main() {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid version format"})
 					return
 				}
-				
+
 				spec, err := apiDocumentationService.GenerateOpenAPISpec(c.Request.Context(), *version)
 				if err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

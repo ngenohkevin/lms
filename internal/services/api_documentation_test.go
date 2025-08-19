@@ -23,7 +23,7 @@ func TestAPIDocumentationTestSuite(t *testing.T) {
 
 func (s *APIDocumentationTestSuite) SetupTest() {
 	s.ctx = context.Background()
-	
+
 	// Setup Redis client for testing
 	s.redis = redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",
@@ -78,7 +78,7 @@ func (s *APIDocumentationTestSuite) TestGetDocumentation() {
 
 func (s *APIDocumentationTestSuite) TestGetDocumentationCaching() {
 	version := models.APIVersion{Major: 1, Minor: 0, Patch: 0}
-	
+
 	// First call
 	doc1, err := s.service.GetDocumentation(s.ctx, version)
 	s.NoError(err)
@@ -185,7 +185,7 @@ func (s *APIDocumentationTestSuite) TestGenerateOpenAPISpec() {
 
 	// Check OpenAPI structure
 	s.Equal("3.0.0", spec["openapi"])
-	
+
 	info := spec["info"].(map[string]interface{})
 	s.Equal("Library Management System API v1.0.0", info["title"])
 	s.Equal("v1.0.0", info["version"])

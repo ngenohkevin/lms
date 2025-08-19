@@ -15,6 +15,7 @@ type Config struct {
 	Redis    RedisConfig    `mapstructure:"redis"`
 	JWT      JWTConfig      `mapstructure:"jwt"`
 	Email    EmailConfig    `mapstructure:"email"`
+	Backup   BackupConfig   `mapstructure:"backup"`
 }
 
 type ServerConfig struct {
@@ -57,6 +58,25 @@ type EmailConfig struct {
 	UseSSL       bool   `mapstructure:"use_ssl"`
 }
 
+type BackupConfig struct {
+	Directory       string   `mapstructure:"directory"`
+	RetentionDays   int      `mapstructure:"retention_days"`
+	Schedule        string   `mapstructure:"schedule"`
+	Types           []string `mapstructure:"types"`
+	Compression     bool     `mapstructure:"compression"`
+	Encryption      bool     `mapstructure:"encryption"`
+	EncryptionKey   string   `mapstructure:"encryption_key"`
+	RemoteStorage   bool     `mapstructure:"remote_storage"`
+	S3Bucket        string   `mapstructure:"s3_bucket"`
+	S3Region        string   `mapstructure:"s3_region"`
+	S3AccessKey     string   `mapstructure:"s3_access_key"`
+	S3SecretKey     string   `mapstructure:"s3_secret_key"`
+	MaxBackups      int      `mapstructure:"max_backups"`
+	BackupTimeout   int      `mapstructure:"backup_timeout"`
+	HealthCheckURL  string   `mapstructure:"health_check_url"`
+	NotifyOnFailure bool     `mapstructure:"notify_on_failure"`
+}
+
 func Load() (*Config, error) {
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
@@ -83,6 +103,18 @@ func Load() (*Config, error) {
 	viper.SetDefault("email.from_name", "Library Management System")
 	viper.SetDefault("email.use_tls", true)
 	viper.SetDefault("email.use_ssl", false)
+
+	// Backup defaults
+	viper.SetDefault("backup.directory", "./backups")
+	viper.SetDefault("backup.retention_days", 30)
+	viper.SetDefault("backup.schedule", "0 2 * * *") // Daily at 2 AM
+	viper.SetDefault("backup.types", []string{"full"})
+	viper.SetDefault("backup.compression", true)
+	viper.SetDefault("backup.encryption", false)
+	viper.SetDefault("backup.remote_storage", false)
+	viper.SetDefault("backup.max_backups", 10)
+	viper.SetDefault("backup.backup_timeout", 3600) // 1 hour
+	viper.SetDefault("backup.notify_on_failure", true)
 
 	// Try to read config file
 	if err := viper.ReadInConfig(); err != nil {
