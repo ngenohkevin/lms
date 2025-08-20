@@ -46,6 +46,14 @@ services:
       - LMS_SERVER_MODE=${LMS_SERVER_MODE:-debug}
       - LMS_JWT_SECRET=${LMS_JWT_SECRET:?JWT secret is required}
       - LMS_JWT_REFRESH_SECRET=${LMS_JWT_REFRESH_SECRET:?JWT refresh secret is required}
+      - LMS_EMAIL_SMTP_HOST=${LMS_EMAIL_SMTP_HOST:-smtp.gmail.com}
+      - LMS_EMAIL_SMTP_PORT=${LMS_EMAIL_SMTP_PORT:-587}
+      - LMS_EMAIL_SMTP_USERNAME=${LMS_EMAIL_SMTP_USERNAME:-test@example.com}
+      - LMS_EMAIL_SMTP_PASSWORD=${LMS_EMAIL_SMTP_PASSWORD:-test-password}
+      - LMS_EMAIL_FROM_EMAIL=${LMS_EMAIL_FROM_EMAIL:-noreply@library.com}
+      - LMS_EMAIL_FROM_NAME=${LMS_EMAIL_FROM_NAME:-Library Management System}
+      - LMS_EMAIL_USE_TLS=${LMS_EMAIL_USE_TLS:-true}
+      - LMS_EMAIL_USE_SSL=${LMS_EMAIL_USE_SSL:-false}
     volumes:
       - ./uploads:/app/uploads
     restart: unless-stopped

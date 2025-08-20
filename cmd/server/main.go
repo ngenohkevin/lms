@@ -102,6 +102,14 @@ func main() {
 	importExportService := services.NewImportExportService(bookService, "./uploads")
 
 	// Initialize notification system services
+	// Debug: Log email configuration
+	slog.Info("Email configuration loaded",
+		"SMTPHost", cfg.Email.SMTPHost,
+		"SMTPPort", cfg.Email.SMTPPort,
+		"FromEmail", cfg.Email.FromEmail,
+		"FromName", cfg.Email.FromName,
+	)
+	
 	emailConfig := &models.EmailConfig{
 		SMTPHost:     cfg.Email.SMTPHost,
 		SMTPPort:     cfg.Email.SMTPPort,
