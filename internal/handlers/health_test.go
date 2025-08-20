@@ -106,4 +106,82 @@ func TestHealthHandler_Health_WithoutDependencies(t *testing.T) {
 	if len(response.Checks) != 6 {
 		t.Errorf("Expected 6 checks, got %d", len(response.Checks))
 	}
+
+	// Verify disk check exists and has proper status
+	diskCheck, exists := response.Checks["disk"]
+	if !exists {
+		t.Error("Expected disk check to exist")
+	} else {
+		// Disk check should be healthy since we're running on a real filesystem
+		if diskCheck.Status != "healthy" && diskCheck.Status != "degraded" {
+			t.Errorf("Expected disk check status to be 'healthy' or 'degraded', got %s", diskCheck.Status)
+		}
+		// Should have a meaningful message with disk usage information
+		if diskCheck.Message == "" {
+			t.Error("Expected disk check to have a message")
+		}
+	}
+}
+
+func TestHealthHandler_CheckDiskSpace(t *testing.T) {
+	handler := NewHealthHandler(nil, nil, nil, nil)
+
+	// Test disk space check
+	result := handler.checkDiskSpace()
+
+	// Should not be unhealthy on a normal system
+	if result.Status == "unhealthy" && result.Message != "" {
+		// Only fail if it's unhealthy due to actual disk space issues, not system errors
+		if result.Message[:20] == "Critical disk space" {
+			t.Logf("Warning: System has critical disk space: %s", result.Message)
+		} else {
+			t.Errorf("Unexpected unhealthy status: %s", result.Message)
+		}
+	}
+
+	// Should have a message with disk usage info
+	if result.Message == "" {
+		t.Error("Expected disk check to have a message")
+	}
+
+	// Timestamp should be set during health check execution
+	if result.Timestamp == "" {
+		// This is expected since we're calling checkDiskSpace directly
+		t.Logf("Timestamp not set (expected when calling function directly)")
+	}
+}
+
+func TestGetDiskSpaceInfo(t *testing.T) {
+	// Test with current working directory
+	info, err := getDiskSpaceInfo(".")
+	if err != nil {
+		t.Fatalf("Failed to get disk space info: %v", err)
+	}
+
+	// Validate the disk space info
+	if info.Path == "" {
+		t.Error("Expected path to be set")
+	}
+
+	if info.Total == 0 {
+		t.Error("Expected total disk space to be greater than 0")
+	}
+
+	if info.UsedPercent < 0 || info.UsedPercent > 100 {
+		t.Errorf("Expected used percentage to be between 0-100, got %.2f", info.UsedPercent)
+	}
+
+	if info.Used > info.Total {
+		t.Error("Used space cannot be greater than total space")
+	}
+
+	if info.Free > info.Total {
+		t.Error("Free space cannot be greater than total space")
+	}
+
+	// Test with invalid path
+	_, err = getDiskSpaceInfo("/nonexistent/path/that/should/not/exist")
+	if err == nil {
+		t.Error("Expected error for nonexistent path")
+	}
 }
