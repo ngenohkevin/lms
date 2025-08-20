@@ -10,39 +10,44 @@ import (
 	"time"
 
 	"github.com/gocarina/gocsv"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/xuri/excelize/v2"
 
+	"github.com/ngenohkevin/lms/internal/database/queries"
 	"github.com/ngenohkevin/lms/internal/models"
 )
 
 // ImportExportServiceInterface defines the interface for import/export operations
 type ImportExportServiceInterface interface {
-	ImportBooksFromCSV(ctx context.Context, reader io.Reader, fileName string) (*models.ImportResult, error)
-	ImportBooksFromExcel(ctx context.Context, reader io.Reader, fileName string) (*models.ImportResult, error)
-	ExportBooksToCSV(ctx context.Context, req models.ExportRequest) (*models.ExportResult, error)
+	ImportBooksFromCSV(ctx context.Context, reader io.Reader, fileName string, userID int32) (*models.ImportResult, error)
+	ImportBooksFromExcel(ctx context.Context, reader io.Reader, fileName string, userID int32) (*models.ImportResult, error)
+	ExportBooksToCSV(ctx context.Context, req models.ExportRequest, userID int32) (*models.ExportResult, error)
 	ExportBooksToCSVContent(ctx context.Context, req models.ExportRequest) (string, string, error)
-	ExportBooksToExcel(ctx context.Context, req models.ExportRequest) (*models.ExportResult, error)
+	ExportBooksToExcel(ctx context.Context, req models.ExportRequest, userID int32) (*models.ExportResult, error)
 	ExportBooksToExcelContent(ctx context.Context, req models.ExportRequest) ([]byte, string, error)
 	ReadExcelFile(filePath string) ([]byte, error)
 	GenerateImportTemplate(format string) (*models.ImportTemplate, error)
+	GetImportHistory(ctx context.Context, userID int32, page, limit int, operationType, entityType, status string) ([]models.ImportHistory, models.Pagination, error)
 }
 
 // ImportExportService handles book import and export operations
 type ImportExportService struct {
 	bookService BookServiceInterface
+	queries     *queries.Queries
 	uploadPath  string
 }
 
 // NewImportExportService creates a new import/export service
-func NewImportExportService(bookService BookServiceInterface, uploadPath string) *ImportExportService {
+func NewImportExportService(bookService BookServiceInterface, queries *queries.Queries, uploadPath string) *ImportExportService {
 	return &ImportExportService{
 		bookService: bookService,
+		queries:     queries,
 		uploadPath:  uploadPath,
 	}
 }
 
 // ImportBooksFromCSV imports books from a CSV file
-func (s *ImportExportService) ImportBooksFromCSV(ctx context.Context, reader io.Reader, fileName string) (*models.ImportResult, error) {
+func (s *ImportExportService) ImportBooksFromCSV(ctx context.Context, reader io.Reader, fileName string, userID int32) (*models.ImportResult, error) {
 	startTime := time.Now()
 
 	// Parse CSV
@@ -51,11 +56,11 @@ func (s *ImportExportService) ImportBooksFromCSV(ctx context.Context, reader io.
 		return nil, fmt.Errorf("failed to parse CSV: %w", err)
 	}
 
-	return s.processImport(ctx, importData, fileName, startTime)
+	return s.processImport(ctx, importData, fileName, userID, startTime)
 }
 
 // ImportBooksFromExcel imports books from an Excel file
-func (s *ImportExportService) ImportBooksFromExcel(ctx context.Context, reader io.Reader, fileName string) (*models.ImportResult, error) {
+func (s *ImportExportService) ImportBooksFromExcel(ctx context.Context, reader io.Reader, fileName string, userID int32) (*models.ImportResult, error) {
 	startTime := time.Now()
 
 	// Create temporary file to handle Excel reading
@@ -89,11 +94,39 @@ func (s *ImportExportService) ImportBooksFromExcel(ctx context.Context, reader i
 		return nil, fmt.Errorf("failed to convert Excel data: %w", err)
 	}
 
-	return s.processImport(ctx, importData, fileName, startTime)
+	return s.processImport(ctx, importData, fileName, userID, startTime)
 }
 
-// processImport processes the import data and creates books
-func (s *ImportExportService) processImport(ctx context.Context, importData []models.BookImportRequest, fileName string, startTime time.Time) (*models.ImportResult, error) {
+// processImport processes the import data and creates books with history tracking
+func (s *ImportExportService) processImport(ctx context.Context, importData []models.BookImportRequest, fileName string, userID int32, startTime time.Time) (*models.ImportResult, error) {
+	// Create initial import history record
+	var startedAtTimestamp pgtype.Timestamp
+	startedAtTimestamp.Scan(startTime)
+	
+	historyParams := queries.CreateImportHistoryParams{
+		OperationType:     "import",
+		EntityType:        "books", 
+		Filename:          fileName,
+		OriginalFilename:  fileName,
+		FileSize:          1, // Placeholder size to satisfy constraint
+		TotalRecords:      int32(len(importData)),
+		ProcessedRecords:  0,
+		SuccessfulRecords: 0,
+		FailedRecords:     0,
+		Status:           "processing",
+		UserID:           userID,
+		StartedAt:        startedAtTimestamp,
+	}
+
+	var historyID int32
+	if s.queries != nil {
+		history, err := s.queries.CreateImportHistory(ctx, historyParams)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create import history: %w", err)
+		}
+		historyID = history.ID
+	}
+
 	result := &models.ImportResult{
 		TotalRecords:  len(importData),
 		Errors:        make([]models.ImportError, 0),
@@ -113,6 +146,17 @@ func (s *ImportExportService) processImport(ctx context.Context, importData []mo
 
 		// Validate book data
 		if err := bookData.Validate(); err != nil {
+			// Record error in database (if queries available)
+			if s.queries != nil {
+				errorParams := queries.CreateImportErrorParams{
+					ImportHistoryID: historyID,
+					RowNumber:      int32(rowNum),
+					ErrorType:      "validation",
+					ErrorMessage:   err.Error(),
+				}
+				_, _ = s.queries.CreateImportError(ctx, errorParams)
+			}
+
 			result.Errors = append(result.Errors, models.ImportError{
 				Row:     rowNum,
 				BookID:  bookData.BookID,
@@ -147,6 +191,17 @@ func (s *ImportExportService) processImport(ctx context.Context, importData []mo
 				result.Summary.DuplicatesFound++
 			}
 
+			// Record error in database (if queries available)
+			if s.queries != nil {
+				errorParams := queries.CreateImportErrorParams{
+					ImportHistoryID: historyID,
+					RowNumber:      int32(rowNum),
+					ErrorType:      errorType,
+					ErrorMessage:   err.Error(),
+				}
+				_, _ = s.queries.CreateImportError(ctx, errorParams)
+			}
+
 			result.Errors = append(result.Errors, models.ImportError{
 				Row:     rowNum,
 				BookID:  bookData.BookID,
@@ -165,37 +220,135 @@ func (s *ImportExportService) processImport(ctx context.Context, importData []mo
 
 	// Calculate processing time
 	processingTime := time.Since(startTime)
-	result.Summary.ProcessingTime = processingTime.String()
+	processingDurationSec := int32(processingTime.Seconds())
+	completedAt := time.Now()
+	
+	// Final status
+	status := "completed"
+	if result.FailureCount == result.TotalRecords {
+		status = "failed"
+	}
 
+	// Update history record with final results
+	var processedRecordsPg pgtype.Int4
+	var successfulRecordsPg pgtype.Int4 
+	var failedRecordsPg pgtype.Int4
+	var statusPg pgtype.Text
+	var completedAtPg pgtype.Timestamp
+	var processingDurationPg pgtype.Int4
+	
+	processedRecordsPg.Scan(int32(result.TotalRecords))
+	successfulRecordsPg.Scan(int32(result.SuccessCount))
+	failedRecordsPg.Scan(int32(result.FailureCount))
+	statusPg.Scan(status)
+	completedAtPg.Scan(completedAt)
+	processingDurationPg.Scan(processingDurationSec)
+	
+	// Update import history (if queries available)
+	if s.queries != nil {
+		updateParams := queries.UpdateImportHistoryParams{
+			ID:                historyID,
+			ProcessedRecords:  processedRecordsPg,
+			SuccessfulRecords: successfulRecordsPg,
+			FailedRecords:     failedRecordsPg,
+			Status:           statusPg,
+			CompletedAt:      completedAtPg,
+			ProcessingDuration: processingDurationPg,
+		}
+
+		_, err := s.queries.UpdateImportHistory(ctx, updateParams)
+		if err != nil {
+			// Log error but don't fail the import
+			fmt.Printf("Failed to update import history: %v\n", err)
+		}
+	}
+
+	result.Summary.ProcessingTime = processingTime.String()
 	return result, nil
 }
 
 // ExportBooksToCSV exports books to CSV format
-func (s *ImportExportService) ExportBooksToCSV(ctx context.Context, req models.ExportRequest) (*models.ExportResult, error) {
+func (s *ImportExportService) ExportBooksToCSV(ctx context.Context, req models.ExportRequest, userID int32) (*models.ExportResult, error) {
 	startTime := time.Now()
+
+	// Create initial export history record if queries is available
+	fileName := s.generateFileName(req.FileName, "csv")
+	var history queries.ImportHistory
+	var err error
+
+	if s.queries != nil {
+		var startedAtTimestamp pgtype.Timestamp
+		startedAtTimestamp.Scan(startTime)
+		
+		historyParams := queries.CreateImportHistoryParams{
+			OperationType:     "export",
+			EntityType:        "books", 
+			Filename:          fileName,
+			OriginalFilename:  fileName,
+			FileSize:          1, // Placeholder size to satisfy constraint
+			TotalRecords:      0, // Will be updated after counting records
+			ProcessedRecords:  0,
+			SuccessfulRecords: 0,
+			FailedRecords:     0,
+			Status:           "processing",
+			UserID:           userID,
+			StartedAt:        startedAtTimestamp,
+		}
+
+		history, err = s.queries.CreateImportHistory(ctx, historyParams)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create export history: %w", err)
+		}
+	}
 
 	// Get books based on filters
 	books, err := s.getBooksForExport(ctx, req.Filters)
 	if err != nil {
+		// Update history with failure status if queries is available
+		if s.queries != nil {
+			updateParams := queries.UpdateImportHistoryParams{
+				ID: history.ID,
+				Status: pgtype.Text{String: "failed", Valid: true},
+				ErrorMessage: pgtype.Text{String: err.Error(), Valid: true},
+			}
+			s.queries.UpdateImportHistory(ctx, updateParams)
+		}
 		return nil, fmt.Errorf("failed to get books for export: %w", err)
 	}
 
 	// Convert to export data
 	exportData := s.convertBooksToExportData(books)
 
-	// Generate file name
-	fileName := s.generateFileName(req.FileName, "csv")
+	// Generate file path
 	filePath := filepath.Join(s.uploadPath, fileName)
 
 	// Create CSV file
 	file, err := os.Create(filePath)
 	if err != nil {
+		// Update history with failure status if queries is available
+		if s.queries != nil {
+			updateParams := queries.UpdateImportHistoryParams{
+				ID: history.ID,
+				Status: pgtype.Text{String: "failed", Valid: true},
+				ErrorMessage: pgtype.Text{String: err.Error(), Valid: true},
+			}
+			s.queries.UpdateImportHistory(ctx, updateParams)
+		}
 		return nil, fmt.Errorf("failed to create CSV file: %w", err)
 	}
 	defer file.Close()
 
 	// Write CSV data
 	if err := gocsv.Marshal(exportData, file); err != nil {
+		// Update history with failure status if queries is available
+		if s.queries != nil {
+			updateParams := queries.UpdateImportHistoryParams{
+				ID: history.ID,
+				Status: pgtype.Text{String: "failed", Valid: true},
+				ErrorMessage: pgtype.Text{String: err.Error(), Valid: true},
+			}
+			s.queries.UpdateImportHistory(ctx, updateParams)
+		}
 		return nil, fmt.Errorf("failed to write CSV data: %w", err)
 	}
 
@@ -205,7 +358,43 @@ func (s *ImportExportService) ExportBooksToCSV(ctx context.Context, req models.E
 		return nil, fmt.Errorf("failed to get file info: %w", err)
 	}
 
+	// Calculate processing time and mark as completed
 	processingTime := time.Since(startTime)
+	processingDurationSec := int32(processingTime.Seconds())
+	completedAt := time.Now()
+	
+	// Update history record with success
+	updateParams := queries.UpdateImportHistoryParams{
+		ID:                history.ID,
+		TotalRecords:      pgtype.Int4{Int32: int32(len(exportData)), Valid: true},
+		ProcessedRecords:  pgtype.Int4{Int32: int32(len(exportData)), Valid: true},
+		SuccessfulRecords: pgtype.Int4{Int32: int32(len(exportData)), Valid: true},
+		FailedRecords:     pgtype.Int4{Int32: 0, Valid: true},
+		Status:           pgtype.Text{String: "completed", Valid: true},
+		CompletedAt:      pgtype.Timestamp{Time: completedAt, Valid: true},
+		ProcessingDuration: pgtype.Int4{Int32: processingDurationSec, Valid: true},
+	}
+	if s.queries != nil {
+		_, err = s.queries.UpdateImportHistory(ctx, updateParams)
+		if err != nil {
+			// Log error but don't fail the export
+			fmt.Printf("Failed to update export history: %v\n", err)
+		}
+	}
+
+	// Create export file record if queries is available
+	if s.queries != nil {
+		_, err = s.queries.CreateExportFile(ctx, queries.CreateExportFileParams{
+			ImportHistoryID: history.ID,
+			FilePath:       filePath,
+			FileFormat:     "csv",
+			DownloadCount:  0,
+		})
+		if err != nil {
+			// Log error but don't fail the export
+			fmt.Printf("Failed to create export file record: %v\n", err)
+		}
+	}
 
 	return &models.ExportResult{
 		FileName:       fileName,
@@ -220,12 +409,51 @@ func (s *ImportExportService) ExportBooksToCSV(ctx context.Context, req models.E
 }
 
 // ExportBooksToExcel exports books to Excel format
-func (s *ImportExportService) ExportBooksToExcel(ctx context.Context, req models.ExportRequest) (*models.ExportResult, error) {
+func (s *ImportExportService) ExportBooksToExcel(ctx context.Context, req models.ExportRequest, userID int32) (*models.ExportResult, error) {
 	startTime := time.Now()
+
+	// Create initial export history record (skip if queries is nil for testing)
+	var history *queries.ImportHistory
+	fileName := s.generateFileName(req.FileName, "xlsx")
+	
+	if s.queries != nil {
+		var startedAtTimestamp pgtype.Timestamp
+		startedAtTimestamp.Scan(startTime)
+		
+		historyParams := queries.CreateImportHistoryParams{
+			OperationType:     "export",
+			EntityType:        "books", 
+			Filename:          fileName,
+			OriginalFilename:  fileName,
+			FileSize:          1, // Placeholder size to satisfy constraint
+			TotalRecords:      0, // Will be updated after counting records
+			ProcessedRecords:  0,
+			SuccessfulRecords: 0,
+			FailedRecords:     0,
+			Status:           "processing",
+			UserID:           userID,
+			StartedAt:        startedAtTimestamp,
+		}
+
+		historyRecord, err := s.queries.CreateImportHistory(ctx, historyParams)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create export history: %w", err)
+		}
+		history = &historyRecord
+	}
 
 	// Get books based on filters
 	books, err := s.getBooksForExport(ctx, req.Filters)
 	if err != nil {
+		// Update history with failure status (if available)
+		if s.queries != nil && history != nil {
+			updateParams := queries.UpdateImportHistoryParams{
+				ID: history.ID,
+				Status: pgtype.Text{String: "failed", Valid: true},
+				ErrorMessage: pgtype.Text{String: err.Error(), Valid: true},
+			}
+			s.queries.UpdateImportHistory(ctx, updateParams)
+		}
 		return nil, fmt.Errorf("failed to get books for export: %w", err)
 	}
 
@@ -267,11 +495,19 @@ func (s *ImportExportService) ExportBooksToExcel(ctx context.Context, req models
 		f.SetCellValue("Sheet1", fmt.Sprintf("N%d", row), book.UpdatedAt.Format("2006-01-02 15:04:05"))
 	}
 
-	// Generate file name and save
-	fileName := s.generateFileName(req.FileName, "xlsx")
+	// Generate file path and save
 	filePath := filepath.Join(s.uploadPath, fileName)
 
 	if err := f.SaveAs(filePath); err != nil {
+		// Update history with failure status (if available)
+		if s.queries != nil && history != nil {
+			updateParams := queries.UpdateImportHistoryParams{
+				ID: history.ID,
+				Status: pgtype.Text{String: "failed", Valid: true},
+				ErrorMessage: pgtype.Text{String: err.Error(), Valid: true},
+			}
+			s.queries.UpdateImportHistory(ctx, updateParams)
+		}
 		return nil, fmt.Errorf("failed to save Excel file: %w", err)
 	}
 
@@ -281,7 +517,43 @@ func (s *ImportExportService) ExportBooksToExcel(ctx context.Context, req models
 		return nil, fmt.Errorf("failed to get file info: %w", err)
 	}
 
+	// Calculate processing time and mark as completed
 	processingTime := time.Since(startTime)
+	
+	// Update history record with success (if available)
+	if s.queries != nil && history != nil {
+		processingDurationSec := int32(processingTime.Seconds())
+		completedAt := time.Now()
+		
+		updateParams := queries.UpdateImportHistoryParams{
+			ID:                history.ID,
+			TotalRecords:      pgtype.Int4{Int32: int32(len(exportData)), Valid: true},
+			ProcessedRecords:  pgtype.Int4{Int32: int32(len(exportData)), Valid: true},
+			SuccessfulRecords: pgtype.Int4{Int32: int32(len(exportData)), Valid: true},
+			FailedRecords:     pgtype.Int4{Int32: 0, Valid: true},
+			Status:           pgtype.Text{String: "completed", Valid: true},
+			CompletedAt:      pgtype.Timestamp{Time: completedAt, Valid: true},
+			ProcessingDuration: pgtype.Int4{Int32: processingDurationSec, Valid: true},
+		}
+
+		_, err = s.queries.UpdateImportHistory(ctx, updateParams)
+		if err != nil {
+			// Log error but don't fail the export
+			fmt.Printf("Failed to update export history: %v\n", err)
+		}
+
+		// Create export file record
+		_, err = s.queries.CreateExportFile(ctx, queries.CreateExportFileParams{
+			ImportHistoryID: history.ID,
+			FilePath:       filePath,
+			FileFormat:     "excel",
+			DownloadCount:  0,
+		})
+		if err != nil {
+			// Log error but don't fail the export
+			fmt.Printf("Failed to create export file record: %v\n", err)
+		}
+	}
 
 	return &models.ExportResult{
 		FileName:       fileName,
@@ -587,4 +859,95 @@ func (s *ImportExportService) ReadExcelFile(filePath string) ([]byte, error) {
 	}
 
 	return data, nil
+}
+
+// GetImportHistory retrieves the import/export history with pagination and filters
+func (s *ImportExportService) GetImportHistory(ctx context.Context, userID int32, page, limit int, operationType, entityType, status string) ([]models.ImportHistory, models.Pagination, error) {
+	// Calculate offset
+	offset := (page - 1) * limit
+
+	// Get count for pagination
+	count, err := s.queries.CountImportHistoryByFilters(ctx, queries.CountImportHistoryByFiltersParams{
+		UserID:  userID,
+		Column2: operationType,
+		Column3: entityType,
+		Column4: status,
+	})
+	if err != nil {
+		return nil, models.Pagination{}, fmt.Errorf("failed to count import history: %w", err)
+	}
+
+	// Get history records
+	dbHistory, err := s.queries.GetImportHistoryByFilters(ctx, queries.GetImportHistoryByFiltersParams{
+		UserID:  userID,
+		Column2: operationType,
+		Column3: entityType,
+		Column4: status,
+		Limit:   int32(limit),
+		Offset:  int32(offset),
+	})
+	if err != nil {
+		return nil, models.Pagination{}, fmt.Errorf("failed to get import history: %w", err)
+	}
+
+	// Convert database records to models
+	var history []models.ImportHistory
+	for _, dbRecord := range dbHistory {
+		historyRecord := models.ImportHistory{
+			ID:                dbRecord.ID,
+			OperationType:     dbRecord.OperationType,
+			EntityType:        dbRecord.EntityType,
+			Filename:          dbRecord.Filename,
+			OriginalFilename:  dbRecord.OriginalFilename,
+			FileSize:          dbRecord.FileSize,
+			TotalRecords:      dbRecord.TotalRecords,
+			ProcessedRecords:  dbRecord.ProcessedRecords,
+			SuccessfulRecords: dbRecord.SuccessfulRecords,
+			FailedRecords:     dbRecord.FailedRecords,
+			Status:           dbRecord.Status,
+			UserID:          dbRecord.UserID,
+		}
+		
+		// Handle nullable/optional fields with pgtype conversion
+		if dbRecord.ErrorMessage.Valid {
+			historyRecord.ErrorMessage = &dbRecord.ErrorMessage.String
+		}
+		
+		if dbRecord.StartedAt.Valid {
+			historyRecord.StartedAt = dbRecord.StartedAt.Time
+		}
+		
+		if dbRecord.CompletedAt.Valid {
+			historyRecord.CompletedAt = &dbRecord.CompletedAt.Time
+		}
+		
+		if dbRecord.ProcessingDuration.Valid {
+			historyRecord.ProcessingDuration = &dbRecord.ProcessingDuration.Int32
+		}
+		
+		if dbRecord.CreatedAt.Valid {
+			historyRecord.CreatedAt = dbRecord.CreatedAt.Time
+		}
+		
+		if dbRecord.UpdatedAt.Valid {
+			historyRecord.UpdatedAt = dbRecord.UpdatedAt.Time
+		}
+		
+		history = append(history, historyRecord)
+	}
+
+	// Calculate pagination
+	totalPages := int(count) / limit
+	if int(count)%limit != 0 {
+		totalPages++
+	}
+
+	pagination := models.Pagination{
+		Page:       page,
+		Limit:      limit,
+		Total:      count,
+		TotalPages: totalPages,
+	}
+
+	return history, pagination, nil
 }

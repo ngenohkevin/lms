@@ -65,21 +65,33 @@ func main() {
 	backupService := services.NewBackupService(db, "./backups", 30*24*time.Hour) // 30 days retention
 
 	// Phase 9.2: Version management and API documentation services
-	// Note: Version management services use go-redis/v8 client, we need to convert
-	// For now, we'll create a temporary solution until services are updated
-	versionManagementService := services.NewVersionManagementService(nil) // Will create Redis client internally
-	apiDocumentationService := services.NewAPIDocumentationService(nil)   // Will create Redis client internally
+	versionManagementService := services.NewVersionManagementService(nil) // Creates Redis client internally
+	apiDocumentationService := services.NewAPIDocumentationService(nil)   // Creates Redis client internally
 
 	// Initialize services
-	// Use RSA keys if available, otherwise generate fallback keys
+	// RSA keys are required for JWT authentication
 	jwtPrivateKey := cfg.JWT.PrivateKey
 	refreshPrivateKey := cfg.JWT.RefreshPrivateKey
 
-	if jwtPrivateKey == "" {
-		jwtPrivateKey = getDefaultRSAPrivateKey()
-	}
-	if refreshPrivateKey == "" {
-		refreshPrivateKey = getDefaultRSAPrivateKey()
+	// In production, RSA keys must be provided via configuration
+	if cfg.Server.Mode == "release" || cfg.Server.Mode == "production" {
+		if jwtPrivateKey == "" || refreshPrivateKey == "" {
+			slog.Error("RSA private keys are required in production mode",
+				"jwt_key_present", jwtPrivateKey != "",
+				"refresh_key_present", refreshPrivateKey != "",
+				"mode", cfg.Server.Mode)
+			os.Exit(1)
+		}
+	} else {
+		// Development mode fallback - generate keys if not provided
+		if jwtPrivateKey == "" {
+			slog.Warn("No JWT private key provided, generating temporary key for development")
+			jwtPrivateKey = generateDevelopmentRSAKey()
+		}
+		if refreshPrivateKey == "" {
+			slog.Warn("No refresh private key provided, generating temporary key for development")
+			refreshPrivateKey = generateDevelopmentRSAKey()
+		}
 	}
 
 	authService, err := services.NewAuthService(
@@ -99,7 +111,7 @@ func main() {
 	studentService := services.NewStudentService(db.Queries, authService, cacheService)
 	reservationService := services.NewReservationService(db.Queries)
 	enhancedTransactionService := services.NewEnhancedTransactionService(db.Queries, reservationService)
-	importExportService := services.NewImportExportService(bookService, "./uploads")
+	importExportService := services.NewImportExportService(bookService, db.Queries, "./uploads")
 
 	// Initialize notification system services
 	// Debug: Log email configuration
@@ -127,7 +139,7 @@ func main() {
 
 	// Initialize handlers with Phase 9.1 & 9.2 enhancements
 	healthHandler := handlers.NewHealthHandler(db, redis, emailService, cacheService)
-	authHandler := handlers.NewAuthHandler(authService, userService)
+	authHandler := handlers.NewAuthHandler(authService, userService, emailService)
 	bookHandler := handlers.NewBookHandler(bookService)
 	studentHandler := handlers.NewStudentHandler(studentService)
 	reservationHandler := handlers.NewReservationHandler(reservationService)
@@ -631,9 +643,9 @@ func main() {
 	slog.Info("Server exited")
 }
 
-// getDefaultRSAPrivateKey generates a default RSA private key for development
-// In production, use proper RSA keys from configuration
-func getDefaultRSAPrivateKey() string {
+// generateDevelopmentRSAKey generates a temporary RSA private key for development
+// In production, proper RSA keys must be provided via configuration
+func generateDevelopmentRSAKey() string {
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		slog.Error("Failed to generate RSA key", "error", err)

@@ -27,9 +27,9 @@ TEST_DB_USER="lms_test_user"
 TEST_DB_PASSWORD="lms_test_password"
 TEST_DB_NAME="lms_test_db"
 
-# Check if PostgreSQL is running
-if ! pg_isready -h localhost -p 5432 > /dev/null 2>&1; then
-    echo -e "${RED}Error: PostgreSQL is not running${NC}"
+# Check if PostgreSQL is running via Docker
+if ! docker compose ps postgres | grep -q "Up"; then
+    echo -e "${RED}Error: PostgreSQL container is not running${NC}"
     echo -e "${YELLOW}Please start PostgreSQL with: docker compose up -d postgres${NC}"
     exit 1
 fi
@@ -38,7 +38,7 @@ echo -e "${GREEN}✓ PostgreSQL is running${NC}"
 
 # Create test user if it doesn't exist
 echo -e "${YELLOW}Creating test user...${NC}"
-PGPASSWORD="$LMS_DATABASE_PASSWORD" psql -h localhost -p 5432 -U "$LMS_DATABASE_USER" -d "$LMS_DATABASE_NAME" -c "
+docker compose exec -T postgres psql -U "$LMS_DATABASE_USER" -d "$LMS_DATABASE_NAME" -c "
 DO \$\$
 BEGIN
    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '$TEST_DB_USER') THEN
@@ -50,7 +50,7 @@ END
 echo -e "${GREEN}✓ Test user ready${NC}"
 
 # Grant permissions
-PGPASSWORD="$LMS_DATABASE_PASSWORD" psql -h localhost -p 5432 -U "$LMS_DATABASE_USER" -d "$LMS_DATABASE_NAME" -c "
+docker compose exec -T postgres psql -U "$LMS_DATABASE_USER" -d "$LMS_DATABASE_NAME" -c "
 ALTER USER $TEST_DB_USER CREATEDB;
 ALTER USER $TEST_DB_USER WITH SUPERUSER;" > /dev/null 2>&1
 
@@ -58,14 +58,14 @@ echo -e "${GREEN}✓ Permissions granted${NC}"
 
 # Create test database
 echo -e "${YELLOW}Setting up test database...${NC}"
-PGPASSWORD="$LMS_DATABASE_PASSWORD" psql -h localhost -p 5432 -U "$LMS_DATABASE_USER" -d "$LMS_DATABASE_NAME" -c "DROP DATABASE IF EXISTS $TEST_DB_NAME;" > /dev/null 2>&1 || true
-PGPASSWORD="$LMS_DATABASE_PASSWORD" psql -h localhost -p 5432 -U "$LMS_DATABASE_USER" -d "$LMS_DATABASE_NAME" -c "CREATE DATABASE $TEST_DB_NAME OWNER $TEST_DB_USER;" > /dev/null 2>&1
+docker compose exec -T postgres psql -U "$LMS_DATABASE_USER" -d "$LMS_DATABASE_NAME" -c "DROP DATABASE IF EXISTS $TEST_DB_NAME;" > /dev/null 2>&1 || true
+docker compose exec -T postgres psql -U "$LMS_DATABASE_USER" -d "$LMS_DATABASE_NAME" -c "CREATE DATABASE $TEST_DB_NAME OWNER $TEST_DB_USER;" > /dev/null 2>&1
 
 echo -e "${GREEN}✓ Test database created${NC}"
 
 # Test connection
 echo -e "${YELLOW}Testing connection...${NC}"
-if PGPASSWORD="$TEST_DB_PASSWORD" psql -h localhost -p 5432 -U "$TEST_DB_USER" -d "$TEST_DB_NAME" -c "\q" > /dev/null 2>&1; then
+if docker compose exec -T postgres psql -U "$TEST_DB_USER" -d "$TEST_DB_NAME" -c "\q" > /dev/null 2>&1; then
     echo -e "${GREEN}✓ Test database connection successful${NC}"
     
     # Export test database URL

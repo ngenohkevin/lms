@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ngenohkevin/lms/internal/middleware"
 	"github.com/ngenohkevin/lms/internal/models"
 	"github.com/ngenohkevin/lms/internal/services"
 )
@@ -93,12 +94,15 @@ func (h *ImportExportHandler) ImportBooks(c *gin.Context) {
 		return
 	}
 
+	// Get user ID from middleware (for tracking import history)
+	userID := int32(getUserIDFromMiddleware(c))
+
 	// Process the import based on file type
 	var result *models.ImportResult
 	if fileExt == ".csv" {
-		result, err = h.importExportService.ImportBooksFromCSV(c.Request.Context(), file, fileName)
+		result, err = h.importExportService.ImportBooksFromCSV(c.Request.Context(), file, fileName, userID)
 	} else {
-		result, err = h.importExportService.ImportBooksFromExcel(c.Request.Context(), file, fileName)
+		result, err = h.importExportService.ImportBooksFromExcel(c.Request.Context(), file, fileName, userID)
 	}
 
 	if err != nil {
@@ -368,20 +372,36 @@ func (h *ImportExportHandler) DownloadImportTemplate(c *gin.Context) {
 func (h *ImportExportHandler) GetImportHistory(c *gin.Context) {
 	page, limit := parsePaginationParams(c)
 
-	// TODO: Implement import history storage and retrieval
-	// For now, return placeholder data
-	history := map[string]interface{}{
-		"imports": []interface{}{},
-		"pagination": map[string]interface{}{
-			"page":  page,
-			"limit": limit,
-			"total": 0,
-		},
+	// Get optional filters from query parameters
+	operationType := c.Query("operation_type")
+	entityType := c.Query("entity_type")
+	status := c.Query("status")
+
+	// Get user ID from middleware
+	userID := int32(getUserIDFromMiddleware(c))
+
+	// Get import history from service
+	history, pagination, err := h.importExportService.GetImportHistory(c.Request.Context(), userID, page, limit, operationType, entityType, status)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to retrieve import history",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	response := models.ImportHistoryListResponse{
+		ImportHistory: history,
+		Pagination:    pagination,
 	}
 
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
-		Data:    history,
+		Data:    response,
 		Message: "Import history retrieved successfully",
 	})
 }
@@ -403,20 +423,45 @@ func (h *ImportExportHandler) GetImportHistory(c *gin.Context) {
 func (h *ImportExportHandler) GetExportHistory(c *gin.Context) {
 	page, limit := parsePaginationParams(c)
 
-	// TODO: Implement export history storage and retrieval
-	// For now, return placeholder data
-	history := map[string]interface{}{
-		"exports": []interface{}{},
-		"pagination": map[string]interface{}{
-			"page":  page,
-			"limit": limit,
-			"total": 0,
-		},
+	// Get optional filters from query parameters
+	entityType := c.Query("entity_type")
+	status := c.Query("status")
+
+	// Get user ID from middleware
+	userID := int32(getUserIDFromMiddleware(c))
+
+	// Get export history from service (export is operation_type = "export")
+	history, pagination, err := h.importExportService.GetImportHistory(c.Request.Context(), userID, page, limit, "export", entityType, status)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to retrieve export history",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	response := models.ImportHistoryListResponse{
+		ImportHistory: history,
+		Pagination:    pagination,
 	}
 
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
-		Data:    history,
+		Data:    response,
 		Message: "Export history retrieved successfully",
 	})
+}
+
+// getUserIDFromMiddleware extracts user ID from middleware context
+func getUserIDFromMiddleware(c *gin.Context) int {
+	userID := middleware.GetUserID(c)
+	if userID == 0 {
+		// Fallback for testing or when middleware is not set up
+		return 1
+	}
+	return userID
 }

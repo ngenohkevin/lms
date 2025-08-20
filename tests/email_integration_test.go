@@ -83,7 +83,7 @@ func (suite *EmailIntegrationTestSuite) SetupSuite() {
 
 	suite.templateManager = services.NewEmailTemplateManager(suite.logger)
 	suite.emailDeliveryService = services.NewEmailDeliveryService(suite.db.Queries, suite.logger).(*services.EmailDeliveryService)
-	suite.emailQueueService = services.NewEmailQueueService(suite.db.Queries, suite.redisClient, suite.logger).(*services.EmailQueueService)
+	suite.emailQueueService = services.NewEmailQueueService(suite.db.Queries, suite.redisClient, suite.emailService, suite.logger).(*services.EmailQueueService)
 
 	// Skip notification service for now - focus on individual email services
 	// suite.notificationService = services.NewNotificationService(

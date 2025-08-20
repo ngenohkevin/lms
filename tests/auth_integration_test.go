@@ -175,7 +175,8 @@ func TestAuthenticationFlow(t *testing.T) {
 	}
 	userService.AddStudent(testStudent)
 
-	authHandler := handlers.NewAuthHandler(authService, userService)
+	emailService := &MockEmailService{}
+	authHandler := handlers.NewAuthHandler(authService, userService, emailService)
 	authMiddleware := middleware.NewAuthMiddleware(authService)
 
 	// Setup router

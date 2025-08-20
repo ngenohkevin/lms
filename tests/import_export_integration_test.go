@@ -13,8 +13,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/ngenohkevin/lms/internal/config"
 	"github.com/ngenohkevin/lms/internal/database"
+	"github.com/ngenohkevin/lms/internal/database/queries"
 	"github.com/ngenohkevin/lms/internal/handlers"
 	"github.com/ngenohkevin/lms/internal/models"
 	"github.com/ngenohkevin/lms/internal/services"
@@ -42,10 +44,32 @@ func TestImportExportIntegration(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
+	// Create a test user for foreign key constraints
+	user, err := db.Queries.CreateUser(context.Background(), queries.CreateUserParams{
+		Username:     "admin",
+		Email:        "admin@example.com", 
+		PasswordHash: "hashedpassword",
+		Role:         pgtype.Text{String: "admin", Valid: true},
+	})
+	if err != nil {
+		// If that fails, try a different username
+		user, err = db.Queries.CreateUser(context.Background(), queries.CreateUserParams{
+			Username:     "admin" + fmt.Sprintf("%d", time.Now().Unix()),
+			Email:        "admin" + fmt.Sprintf("%d", time.Now().Unix()) + "@example.com", 
+			PasswordHash: "hashedpassword",
+			Role:         pgtype.Text{String: "admin", Valid: true},
+		})
+		if err != nil {
+			t.Fatalf("Failed to create any user: %v", err)
+		}
+	}
+	testUserID := int(user.ID)
+	t.Logf("Created test user with ID: %d", testUserID)
+	
 	// Initialize services
 	mockCache := &MockCacheService{}
 	bookService := services.NewBookService(db.Queries, mockCache)
-	importExportService := services.NewImportExportService(bookService, "./testdata")
+	importExportService := services.NewImportExportService(bookService, db.Queries, "./testdata")
 
 	// Initialize handlers
 	importExportHandler := handlers.NewImportExportHandler(importExportService)
@@ -53,6 +77,13 @@ func TestImportExportIntegration(t *testing.T) {
 	// Setup Gin router
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
+	
+	// Add middleware to set user_id in context for testing
+	router.Use(func(c *gin.Context) {
+		c.Set("user_id", testUserID)
+		c.Next()
+	})
+	
 	api := router.Group("/api/v1")
 	{
 		api.POST("/books/import", importExportHandler.ImportBooks)
@@ -113,6 +144,11 @@ TEST002,Test Book 2,Test Author 2,978-0-123456-79-6,Test Publisher,2023,Non-Fict
 
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
+
+		// Debug: Print response body if not 200
+		if w.Code != http.StatusOK {
+			t.Logf("Response body: %s", w.Body.String())
+		}
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
@@ -341,13 +377,31 @@ func TestImportExportFileOperations(t *testing.T) {
 		require.NoError(t, err)
 		defer db.Close()
 
+		// Create a test user for foreign key constraints
+		timestamp := time.Now().UnixNano()
+		user, err := db.Queries.CreateUser(context.Background(), queries.CreateUserParams{
+			Username:     fmt.Sprintf("testuser_size_%d", timestamp),
+			Email:        fmt.Sprintf("testuser_size_%d@example.com", timestamp), 
+			PasswordHash: "hashedpassword",
+			Role:         pgtype.Text{String: "admin", Valid: true},
+		})
+		require.NoError(t, err)
+		testUserID := int(user.ID)
+
 		mockCache := &MockCacheService{}
 		bookService := services.NewBookService(db.Queries, mockCache)
-		importExportService := services.NewImportExportService(bookService, "./testdata")
+		importExportService := services.NewImportExportService(bookService, db.Queries, "./testdata")
 		importExportHandler := handlers.NewImportExportHandler(importExportService)
 
 		gin.SetMode(gin.TestMode)
 		router := gin.New()
+		
+		// Add middleware to set user_id in context for testing
+		router.Use(func(c *gin.Context) {
+			c.Set("user_id", testUserID)
+			c.Next()
+		})
+		
 		router.POST("/api/v1/books/import", importExportHandler.ImportBooks)
 
 		// Create a large file (simulating file size limit)
@@ -375,6 +429,9 @@ func TestImportExportFileOperations(t *testing.T) {
 
 		// The request should be processed (though the content is invalid CSV)
 		// This tests that the file upload mechanism works for large files
+		if !(w.Code == http.StatusOK || w.Code == http.StatusBadRequest) {
+			t.Logf("Unexpected status code: %d, response: %s", w.Code, w.Body.String())
+		}
 		assert.True(t, w.Code == http.StatusOK || w.Code == http.StatusBadRequest)
 	})
 
@@ -386,13 +443,31 @@ func TestImportExportFileOperations(t *testing.T) {
 		require.NoError(t, err)
 		defer db.Close()
 
+		// Create a test user for foreign key constraints
+		timestamp := time.Now().UnixNano()
+		user, err := db.Queries.CreateUser(context.Background(), queries.CreateUserParams{
+			Username:     fmt.Sprintf("testuser_empty_%d", timestamp),
+			Email:        fmt.Sprintf("testuser_empty_%d@example.com", timestamp), 
+			PasswordHash: "hashedpassword",
+			Role:         pgtype.Text{String: "admin", Valid: true},
+		})
+		require.NoError(t, err)
+		testUserID := int(user.ID)
+
 		mockCache := &MockCacheService{}
 		bookService := services.NewBookService(db.Queries, mockCache)
-		importExportService := services.NewImportExportService(bookService, "./testdata")
+		importExportService := services.NewImportExportService(bookService, db.Queries, "./testdata")
 		importExportHandler := handlers.NewImportExportHandler(importExportService)
 
 		gin.SetMode(gin.TestMode)
 		router := gin.New()
+		
+		// Add middleware to set user_id in context for testing
+		router.Use(func(c *gin.Context) {
+			c.Set("user_id", testUserID)
+			c.Next()
+		})
+		
 		router.POST("/api/v1/books/import", importExportHandler.ImportBooks)
 
 		// Create empty file
@@ -443,9 +518,20 @@ func TestImportExportPersistence(t *testing.T) {
 		require.NoError(t, err)
 		defer db.Close()
 
+		// Create a test user for foreign key constraints
+		userTimestamp := time.Now().UnixNano()
+		user, err := db.Queries.CreateUser(context.Background(), queries.CreateUserParams{
+			Username:     fmt.Sprintf("testuser_persist_%d", userTimestamp),
+			Email:        fmt.Sprintf("testuser_persist_%d@example.com", userTimestamp), 
+			PasswordHash: "hashedpassword",
+			Role:         pgtype.Text{String: "admin", Valid: true},
+		})
+		require.NoError(t, err)
+		testUserID := int32(user.ID)
+
 		mockCache := &MockCacheService{}
 		bookService := services.NewBookService(db.Queries, mockCache)
-		importExportService := services.NewImportExportService(bookService, "./testdata")
+		importExportService := services.NewImportExportService(bookService, db.Queries, "./testdata")
 
 		// Use a unique book ID and ISBN for each test run to avoid conflicts
 		timestamp := time.Now().Unix()
@@ -471,7 +557,7 @@ func TestImportExportPersistence(t *testing.T) {
 		defer file.Close()
 
 		// Import books
-		result, err := importExportService.ImportBooksFromCSV(context.Background(), file, "test_import.csv")
+		result, err := importExportService.ImportBooksFromCSV(context.Background(), file, "test_import.csv", testUserID)
 		require.NoError(t, err)
 
 		// Debug output

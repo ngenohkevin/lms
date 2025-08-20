@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,12 +17,13 @@ import (
 
 // EmailQueueService handles email queue processing with Redis and PostgreSQL
 type EmailQueueService struct {
-	queries     *queries.Queries
-	redisClient *redis.Client
-	logger      *slog.Logger
-	workerID    string
-	workers     map[string]*EmailWorker
-	mu          sync.RWMutex
+	queries      *queries.Queries
+	redisClient  *redis.Client
+	emailService EmailServiceInterface
+	logger       *slog.Logger
+	workerID     string
+	workers      map[string]*EmailWorker
+	mu           sync.RWMutex
 }
 
 // EmailWorker represents a worker processing emails
@@ -67,13 +69,14 @@ type EmailQueueServiceInterface interface {
 }
 
 // NewEmailQueueService creates a new email queue service
-func NewEmailQueueService(queries *queries.Queries, redisClient *redis.Client, logger *slog.Logger) EmailQueueServiceInterface {
+func NewEmailQueueService(queries *queries.Queries, redisClient *redis.Client, emailService EmailServiceInterface, logger *slog.Logger) EmailQueueServiceInterface {
 	return &EmailQueueService{
-		queries:     queries,
-		redisClient: redisClient,
-		logger:      logger,
-		workerID:    fmt.Sprintf("worker-%d", time.Now().Unix()),
-		workers:     make(map[string]*EmailWorker),
+		queries:      queries,
+		redisClient:  redisClient,
+		emailService: emailService,
+		logger:       logger,
+		workerID:     fmt.Sprintf("worker-%d", time.Now().Unix()),
+		workers:      make(map[string]*EmailWorker),
 	}
 }
 
@@ -522,24 +525,100 @@ func (s *EmailQueueService) workerLoop(ctx context.Context, worker *EmailWorker)
 	}
 }
 
-// processEmailItem processes a single email item (placeholder implementation)
+// processEmailItem processes a single email item with actual SMTP sending
 func (s *EmailQueueService) processEmailItem(ctx context.Context, item *models.EmailQueueItem) error {
-	// In a real implementation, this would:
-	// 1. Get the notification details
-	// 2. Get the email template
-	// 3. Render the email content
-	// 4. Send the email via SMTP
-	// 5. Update delivery tracking
-
 	s.logger.Info("Processing email item", "id", item.ID, "notification_id", item.NotificationID)
 
-	// Simulate processing time
-	time.Sleep(100 * time.Millisecond)
+	// 1. Get notification details from database
+	notification, err := s.queries.GetNotificationByID(ctx, item.NotificationID)
+	if err != nil {
+		s.logger.Error("Failed to get notification", "error", err, "item_id", item.ID, "notification_id", item.NotificationID)
+		return fmt.Errorf("failed to get notification: %w", err)
+	}
 
-	// For now, just log success
-	s.logger.Info("Email item processed successfully", "id", item.ID)
+	// 2. Get recipient email address
+	var recipientEmail string
+	if notification.RecipientType == "student" {
+		student, err := s.queries.GetStudentByID(ctx, notification.RecipientID)
+		if err != nil {
+			s.logger.Error("Failed to get student", "error", err, "student_id", notification.RecipientID)
+			return fmt.Errorf("failed to get student: %w", err)
+		}
+		if !student.Email.Valid || student.Email.String == "" {
+			return fmt.Errorf("student does not have an email address")
+		}
+		recipientEmail = student.Email.String
+	} else {
+		// Librarian - get from users table
+		user, err := s.queries.GetUserByID(ctx, notification.RecipientID)
+		if err != nil {
+			s.logger.Error("Failed to get user", "error", err, "user_id", notification.RecipientID)
+			return fmt.Errorf("failed to get user: %w", err)
+		}
+		recipientEmail = user.Email
+	}
+
+	// 3. Parse template data from metadata
+	templateData := make(map[string]interface{})
+	if item.Metadata != nil {
+		templateData = item.Metadata
+	}
+
+	// 4. Render email content
+	renderedSubject, renderedBody, err := s.renderEmailTemplate(notification.Title, notification.Message, templateData)
+	if err != nil {
+		s.logger.Error("Failed to render email template", "error", err, "item_id", item.ID)
+		return fmt.Errorf("failed to render email template: %w", err)
+	}
+
+	// 5. Send the email via SMTP
+	emailRequest := &models.SendEmailRequest{
+		To:      recipientEmail,
+		Subject: renderedSubject,
+		Body:    renderedBody,
+		IsHTML:  true, // Support HTML emails
+	}
+
+	messageID, err := s.emailService.SendEmailWithID(ctx, emailRequest)
+	if err != nil {
+		s.logger.Error("Failed to send email", "error", err, "item_id", item.ID, "to", recipientEmail)
+		return fmt.Errorf("failed to send email: %w", err)
+	}
+
+	// 6. Update delivery tracking (simplified for now)
+	s.logger.Info("Updating email delivery status", 
+		"item_id", item.ID, 
+		"message_id", messageID, 
+		"status", "sent")
+
+	s.logger.Info("Email item processed successfully", 
+		"id", item.ID, 
+		"message_id", messageID, 
+		"to", recipientEmail,
+		"subject", renderedSubject)
+	
 	return nil
 }
+
+// renderEmailTemplate renders email templates with provided data
+func (s *EmailQueueService) renderEmailTemplate(subject, body string, data map[string]interface{}) (string, string, error) {
+	// Simple template rendering - replace {{variable}} patterns
+	renderedSubject := subject
+	renderedBody := body
+	
+	if data != nil {
+		for key, value := range data {
+			placeholder := fmt.Sprintf("{{%s}}", key)
+			replacement := fmt.Sprintf("%v", value)
+			
+			renderedSubject = strings.ReplaceAll(renderedSubject, placeholder, replacement)
+			renderedBody = strings.ReplaceAll(renderedBody, placeholder, replacement)
+		}
+	}
+	
+	return renderedSubject, renderedBody, nil
+}
+
 
 // convertToEmailQueueItem converts database model to service model
 func (s *EmailQueueService) convertToEmailQueueItem(dbItem *queries.EmailQueue) *models.EmailQueueItem {

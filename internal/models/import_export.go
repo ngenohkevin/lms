@@ -140,3 +140,117 @@ type ErrValidationFailed struct {
 func (e ErrValidationFailed) Error() string {
 	return e.Message
 }
+
+// ImportHistory represents an import/export operation history record
+type ImportHistory struct {
+	ID                 int32      `json:"id" db:"id"`
+	OperationType      string     `json:"operation_type" db:"operation_type"`
+	EntityType         string     `json:"entity_type" db:"entity_type"`
+	Filename           string     `json:"filename" db:"filename"`
+	OriginalFilename   string     `json:"original_filename" db:"original_filename"`
+	FileSize           int64      `json:"file_size" db:"file_size"`
+	TotalRecords       int32      `json:"total_records" db:"total_records"`
+	ProcessedRecords   int32      `json:"processed_records" db:"processed_records"`
+	SuccessfulRecords  int32      `json:"successful_records" db:"successful_records"`
+	FailedRecords      int32      `json:"failed_records" db:"failed_records"`
+	Status             string     `json:"status" db:"status"`
+	ErrorMessage       *string    `json:"error_message,omitempty" db:"error_message"`
+	ErrorDetails       *string    `json:"error_details,omitempty" db:"error_details"` // JSONB as string
+	UserID             int32      `json:"user_id" db:"user_id"`
+	StartedAt          time.Time  `json:"started_at" db:"started_at"`
+	CompletedAt        *time.Time `json:"completed_at,omitempty" db:"completed_at"`
+	ProcessingDuration *int32     `json:"processing_duration,omitempty" db:"processing_duration"` // in seconds
+	CreatedAt          time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at" db:"updated_at"`
+}
+
+// ImportError represents detailed error information for failed import records
+type ImportErrorRecord struct {
+	ID              int32     `json:"id" db:"id"`
+	ImportHistoryID int32     `json:"import_history_id" db:"import_history_id"`
+	RowNumber       int32     `json:"row_number" db:"row_number"`
+	FieldName       *string   `json:"field_name,omitempty" db:"field_name"`
+	ErrorType       string    `json:"error_type" db:"error_type"`
+	ErrorMessage    string    `json:"error_message" db:"error_message"`
+	RowData         *string   `json:"row_data,omitempty" db:"row_data"` // JSONB as string
+	CreatedAt       time.Time `json:"created_at" db:"created_at"`
+}
+
+// ExportFile represents a generated export file
+type ExportFile struct {
+	ID               int32      `json:"id" db:"id"`
+	ImportHistoryID  int32      `json:"import_history_id" db:"import_history_id"`
+	FilePath         string     `json:"file_path" db:"file_path"`
+	FileFormat       string     `json:"file_format" db:"file_format"`
+	DownloadCount    int32      `json:"download_count" db:"download_count"`
+	LastDownloadedAt *time.Time `json:"last_downloaded_at,omitempty" db:"last_downloaded_at"`
+	ExpiresAt        *time.Time `json:"expires_at,omitempty" db:"expires_at"`
+	CreatedAt        time.Time  `json:"created_at" db:"created_at"`
+}
+
+// ImportHistoryStatus represents the possible status values for import/export operations
+type ImportHistoryStatus string
+
+const (
+	ImportStatusPending    ImportHistoryStatus = "pending"
+	ImportStatusProcessing ImportHistoryStatus = "processing"
+	ImportStatusCompleted  ImportHistoryStatus = "completed"
+	ImportStatusFailed     ImportHistoryStatus = "failed"
+	ImportStatusCancelled  ImportHistoryStatus = "cancelled"
+)
+
+// OperationType represents the type of operation (import/export)
+type OperationType string
+
+const (
+	OperationTypeImport OperationType = "import"
+	OperationTypeExport OperationType = "export"
+)
+
+// EntityType represents the type of entity being imported/exported
+type EntityType string
+
+const (
+	EntityTypeBooks    EntityType = "books"
+	EntityTypeStudents EntityType = "students"
+)
+
+// FileFormat represents supported file formats for export
+type FileFormat string
+
+const (
+	FileFormatCSV   FileFormat = "csv"
+	FileFormatExcel FileFormat = "excel"
+	FileFormatJSON  FileFormat = "json"
+	FileFormatPDF   FileFormat = "pdf"
+)
+
+// ImportHistoryListResponse represents a paginated list of import history records
+type ImportHistoryListResponse struct {
+	ImportHistory []ImportHistory `json:"import_history"`
+	Pagination    Pagination      `json:"pagination"`
+}
+
+// IsCompleted checks if the import/export operation is completed
+func (ih *ImportHistory) IsCompleted() bool {
+	return ih.Status == string(ImportStatusCompleted) ||
+		ih.Status == string(ImportStatusFailed) ||
+		ih.Status == string(ImportStatusCancelled)
+}
+
+// CalculateSuccessRate calculates the success rate as a percentage
+func (ih *ImportHistory) CalculateSuccessRate() float64 {
+	if ih.TotalRecords == 0 {
+		return 0.0
+	}
+	return float64(ih.SuccessfulRecords) / float64(ih.TotalRecords) * 100.0
+}
+
+// GetProcessingDurationString returns the processing duration as a human-readable string
+func (ih *ImportHistory) GetProcessingDurationString() string {
+	if ih.ProcessingDuration == nil {
+		return "N/A"
+	}
+	duration := time.Duration(*ih.ProcessingDuration) * time.Second
+	return duration.String()
+}

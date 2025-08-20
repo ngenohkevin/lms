@@ -79,7 +79,8 @@ func (suite *NotificationIntegrationTestSuite) TearDownTest() {
 
 func (suite *NotificationIntegrationTestSuite) cleanupTestData() {
 	// Clean in reverse dependency order
-	_, _ = suite.db.Pool.Exec(suite.ctx, "DELETE FROM notifications WHERE title LIKE 'Test%' OR title LIKE '%Integration Test%'")
+	// Delete all notifications for test students (more comprehensive cleanup)
+	_, _ = suite.db.Pool.Exec(suite.ctx, "DELETE FROM notifications WHERE recipient_id IN (SELECT id FROM students WHERE student_id LIKE 'INT_TEST_%')")
 	_, _ = suite.db.Pool.Exec(suite.ctx, "DELETE FROM reservations WHERE student_id IN (SELECT id FROM students WHERE student_id LIKE 'INT_TEST_%')")
 	_, _ = suite.db.Pool.Exec(suite.ctx, "DELETE FROM transactions WHERE student_id IN (SELECT id FROM students WHERE student_id LIKE 'INT_TEST_%')")
 	_, _ = suite.db.Pool.Exec(suite.ctx, "DELETE FROM books WHERE book_id LIKE 'INT_TEST_%'")
@@ -364,7 +365,7 @@ func (suite *NotificationIntegrationTestSuite) TestPhase7_2_FineNotices() {
 	// Update transaction to have a fine amount (simulate overdue fine calculation)
 	_, err = suite.db.Pool.Exec(suite.ctx,
 		"UPDATE transactions SET fine_amount = $1, fine_paid = false WHERE id = $2",
-		"1500", transaction.ID) // $15.00 fine
+		15.00, transaction.ID) // $15.00 fine
 	require.NoError(suite.T(), err)
 
 	// Store original transaction for cleanup
@@ -498,33 +499,6 @@ func (suite *NotificationIntegrationTestSuite) TestPhase7_2_NotificationStats() 
 	assert.GreaterOrEqual(t, stats.NotificationsByType["overdue_reminder"], int64(1))
 	assert.GreaterOrEqual(t, stats.NotificationsByType["due_soon"], int64(1))
 	assert.GreaterOrEqual(t, stats.NotificationsByType["book_available"], int64(1))
-}
-
-// MockEmailService for testing
-type MockEmailService struct{}
-
-func (m *MockEmailService) SendEmail(ctx context.Context, to, subject, body string, isHTML bool) error {
-	return nil
-}
-
-func (m *MockEmailService) SendTemplatedEmail(ctx context.Context, to string, template *models.EmailTemplate, data map[string]interface{}) error {
-	return nil
-}
-
-func (m *MockEmailService) SendBatchEmails(ctx context.Context, emails []services.EmailRequest) error {
-	return nil
-}
-
-func (m *MockEmailService) ValidateEmail(email string) error {
-	return nil
-}
-
-func (m *MockEmailService) GetDeliveryStatus(ctx context.Context, messageID string) (*services.EmailDeliveryStatus, error) {
-	return &services.EmailDeliveryStatus{Status: "delivered"}, nil
-}
-
-func (m *MockEmailService) TestConnection(ctx context.Context) error {
-	return nil
 }
 
 // MockQueueService for testing

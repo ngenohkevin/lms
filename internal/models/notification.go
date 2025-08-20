@@ -425,6 +425,14 @@ type EmailQueueRequest struct {
 	Metadata       map[string]interface{} `json:"metadata,omitempty"`
 }
 
+// SendEmailRequest represents a request to send an email via SMTP
+type SendEmailRequest struct {
+	To      string `json:"to" validate:"required,email"`
+	Subject string `json:"subject" validate:"required,min=1,max=255"`
+	Body    string `json:"body" validate:"required,min=1"`
+	IsHTML  bool   `json:"is_html"`
+}
+
 // EmailQueueStats represents email queue statistics
 type EmailQueueStats struct {
 	Total                        int       `json:"total"`

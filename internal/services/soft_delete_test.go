@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -160,9 +161,10 @@ func TestSoftDeleteService_RestoreUser(t *testing.T) {
 	ctx := context.Background()
 
 	// Create and soft delete a test user
+	timestamp := time.Now().Unix()
 	user, err := q.CreateUser(ctx, queries.CreateUserParams{
-		Username:     "testuser_restore",
-		Email:        "testuser_restore@example.com",
+		Username:     fmt.Sprintf("testuser_restore_%d", timestamp),
+		Email:        fmt.Sprintf("testuser_restore_%d@example.com", timestamp),
 		PasswordHash: "hashedpassword",
 		Role:         pgtype.Text{String: "librarian", Valid: true},
 	})
@@ -256,9 +258,10 @@ func TestSoftDeleteService_PermanentDeleteUser(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a test user
+	timestamp := time.Now().Unix()
 	user, err := q.CreateUser(ctx, queries.CreateUserParams{
-		Username:     "testuser_permanent_delete",
-		Email:        "testuser_permanent_delete@example.com",
+		Username:     fmt.Sprintf("testuser_perm_del_%d", timestamp),
+		Email:        fmt.Sprintf("testuser_perm_del_%d@example.com", timestamp),
 		PasswordHash: "hashedpassword",
 		Role:         pgtype.Text{String: "librarian", Valid: true},
 	})
@@ -291,9 +294,10 @@ func TestSoftDeleteService_PermanentDeleteUser_TooRecent(t *testing.T) {
 	ctx := context.Background()
 
 	// Create and soft delete a test user
+	timestamp := time.Now().Unix() // Use Unix timestamp instead of UnixNano for shorter ID
 	user, err := q.CreateUser(ctx, queries.CreateUserParams{
-		Username:     "testuser_permanent_delete_recent",
-		Email:        "testuser_permanent_delete_recent@example.com",
+		Username:     fmt.Sprintf("testuser_del_rec_%d", timestamp),
+		Email:        fmt.Sprintf("testuser_del_rec_%d@example.com", timestamp),
 		PasswordHash: "hashedpassword",
 		Role:         pgtype.Text{String: "librarian", Valid: true},
 	})

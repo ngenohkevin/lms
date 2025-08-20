@@ -1,13 +1,19 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
+	"encoding/csv"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/ngenohkevin/lms/internal/models"
+	"github.com/xuri/excelize/v2"
 )
 
 // ReportService interface defines the methods for report operations
@@ -522,23 +528,76 @@ func (rh *ReportHandler) ExportReport(c *gin.Context) {
 		return
 	}
 
-	// Placeholder implementation
-	location, _ := time.LoadLocation("Africa/Nairobi") // EAT timezone
-	expiresAt := time.Now().In(location).Add(24 * time.Hour)
+	// Generate the report data first
+	var reportData interface{}
+	var err error
 
-	exportResult := map[string]interface{}{
-		"report_type":  req.ReportType,
-		"format":       req.Format,
-		"status":       "processing",
-		"download_url": "https://example.com/downloads/report-123.pdf",
-		"expires_at":   expiresAt,
+	ctx := c.Request.Context()
+
+	// Get the report data based on report type
+	switch req.ReportType {
+	case "borrowing_trends":
+		startDate, endDate, _ := extractTrendsParams(req.Parameters)
+		reportData, err = rh.reportService.GetBorrowingTrends(ctx, startDate, endDate, "daily")
+	case "popular_books":
+		limit, startDate, endDate, yearOfStudy := extractPopularBooksParams(req.Parameters)
+		reportData, err = rh.reportService.GetPopularBooks(ctx, startDate, endDate, limit, yearOfStudy)
+	case "overdue_books":
+		yearOfStudy := extractOverdueBooksParams(req.Parameters)
+		reportData, err = rh.reportService.GetOverdueBooks(ctx, yearOfStudy, nil)
+	case "student_activity":
+		limit, startDate, endDate, yearOfStudy := extractStudentActivityParams(req.Parameters)
+		var department *string
+		if yearOfStudy != nil {
+			dept := "Computer Science" // default department, should be extracted from parameters
+			department = &dept
+		}
+		reportData, err = rh.reportService.GetStudentActivity(ctx, &limit, department, startDate, endDate)
+	case "inventory_status":
+		extractInventoryParams(req.Parameters)
+		reportData, err = rh.reportService.GetInventoryStatus(ctx)
+	default:
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INVALID_REPORT_TYPE",
+				Message: "Invalid report type",
+				Details: "Report type must be one of: borrowing_trends, popular_books, overdue_books, student_activity, inventory_status",
+			},
+		})
+		return
 	}
 
-	c.JSON(http.StatusAccepted, SuccessResponse{
-		Success: true,
-		Message: "Report export initiated",
-		Data:    exportResult,
-	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "REPORT_GENERATION_ERROR",
+				Message: "Failed to generate report data",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	// Export the data in the requested format
+	fileName, fileContent, contentType, err := rh.exportReportData(req.ReportType, req.Format, reportData)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "EXPORT_ERROR",
+				Message: "Failed to export report",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	// Set appropriate headers and return the file
+	c.Header("Content-Type", contentType)
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
+	c.Data(http.StatusOK, contentType, fileContent)
 }
 
 // ScheduleReport schedules a report for regular generation (placeholder)
@@ -1035,4 +1094,449 @@ func (rh *ReportHandler) GetDataVisualization(c *gin.Context) {
 		Message: "Data visualization generated successfully",
 		Data:    report,
 	})
+}
+
+// exportReportData exports report data in the specified format
+func (rh *ReportHandler) exportReportData(reportType, format string, data interface{}) (fileName string, content []byte, contentType string, err error) {
+	timestamp := time.Now().Format("2006-01-02_15-04-05")
+	baseFileName := fmt.Sprintf("%s_report_%s", reportType, timestamp)
+
+	switch strings.ToLower(format) {
+	case "csv":
+		return rh.exportToCSV(baseFileName, data)
+	case "pdf":
+		return rh.exportToPDF(baseFileName, reportType, data)
+	case "excel":
+		return rh.exportToExcel(baseFileName, data)
+	default:
+		return "", nil, "", fmt.Errorf("unsupported format: %s", format)
+	}
+}
+
+// exportToCSV exports data to CSV format
+func (rh *ReportHandler) exportToCSV(baseFileName string, data interface{}) (string, []byte, string, error) {
+	var buffer bytes.Buffer
+	writer := csv.NewWriter(&buffer)
+
+	fileName := baseFileName + ".csv"
+	contentType := "text/csv"
+
+	// Convert data to CSV based on its type
+	switch v := data.(type) {
+	case *models.BorrowingTrendsReport:
+		// Write header
+		header := []string{"Period", "Borrow Count", "Return Count", "Overdue Count", "New Students", "Total Students"}
+		writer.Write(header)
+
+		// Write data rows
+		for _, period := range v.Periods {
+			record := []string{
+				period.Period,
+				fmt.Sprintf("%d", period.BorrowCount),
+				fmt.Sprintf("%d", period.ReturnCount),
+				fmt.Sprintf("%d", period.OverdueCount),
+				fmt.Sprintf("%d", period.NewStudents),
+				fmt.Sprintf("%d", period.TotalStudents),
+			}
+			writer.Write(record)
+		}
+
+	case *models.PopularBooksReport:
+		// Write header
+		header := []string{"Book ID", "Title", "Author", "Genre", "Borrow Count", "Unique Users", "Avg Rating"}
+		writer.Write(header)
+
+		// Write data rows
+		for _, book := range v.Books {
+			record := []string{
+				book.BookID,
+				book.Title,
+				book.Author,
+				book.Genre,
+				fmt.Sprintf("%d", book.BorrowCount),
+				fmt.Sprintf("%d", book.UniqueUsers),
+				book.AvgRating,
+			}
+			writer.Write(record)
+		}
+
+	case *models.OverdueBooksReport:
+		// Write header
+		header := []string{"Student ID", "Student Name", "Year of Study", "Department", "Book Title", "Book Author", "Due Date", "Days Overdue"}
+		writer.Write(header)
+
+		// Write data rows
+		for _, book := range v.Books {
+			record := []string{
+				book.StudentID,
+				book.StudentName,
+				fmt.Sprintf("%d", book.YearOfStudy),
+				book.Department,
+				book.BookTitle,
+				book.BookAuthor,
+				book.DueDate.Format("2006-01-02"),
+				fmt.Sprintf("%d", book.DaysOverdue),
+			}
+			writer.Write(record)
+		}
+
+	default:
+		// Fallback: convert to JSON then to CSV (simplified approach)
+		jsonData, err := json.Marshal(data)
+		if err != nil {
+			return "", nil, "", fmt.Errorf("failed to marshal data: %w", err)
+		}
+
+		// Write a simple CSV with JSON data
+		header := []string{"Report Type", "Data"}
+		writer.Write(header)
+		record := []string{baseFileName, string(jsonData)}
+		writer.Write(record)
+	}
+
+	writer.Flush()
+
+	if err := writer.Error(); err != nil {
+		return "", nil, "", fmt.Errorf("failed to write CSV: %w", err)
+	}
+
+	return fileName, buffer.Bytes(), contentType, nil
+}
+
+// exportToPDF exports data to PDF format (simplified implementation)
+func (rh *ReportHandler) exportToPDF(baseFileName, reportType string, data interface{}) (string, []byte, string, error) {
+	fileName := baseFileName + ".pdf"
+	contentType := "application/pdf"
+
+	// Simple PDF content (in a real implementation, you'd use a PDF library like gofpdf)
+	var buffer bytes.Buffer
+	
+	// For now, create a simple text-based PDF-like format
+	// In a production system, you would use a proper PDF library
+	buffer.WriteString("%PDF-1.4\n")
+	buffer.WriteString("1 0 obj\n")
+	buffer.WriteString("<<\n")
+	buffer.WriteString("/Type /Catalog\n")
+	buffer.WriteString("/Pages 2 0 R\n")
+	buffer.WriteString(">>\n")
+	buffer.WriteString("endobj\n")
+	
+	buffer.WriteString("2 0 obj\n")
+	buffer.WriteString("<<\n")
+	buffer.WriteString("/Type /Pages\n")
+	buffer.WriteString("/Kids [3 0 R]\n")
+	buffer.WriteString("/Count 1\n")
+	buffer.WriteString(">>\n")
+	buffer.WriteString("endobj\n")
+	
+	buffer.WriteString("3 0 obj\n")
+	buffer.WriteString("<<\n")
+	buffer.WriteString("/Type /Page\n")
+	buffer.WriteString("/Parent 2 0 R\n")
+	buffer.WriteString("/MediaBox [0 0 612 792]\n")
+	buffer.WriteString("/Contents 4 0 R\n")
+	buffer.WriteString(">>\n")
+	buffer.WriteString("endobj\n")
+	
+	// Convert data to string for PDF content
+	dataJSON, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return "", nil, "", fmt.Errorf("failed to marshal data for PDF: %w", err)
+	}
+	
+	content := fmt.Sprintf("Report Type: %s\\nGenerated: %s\\nData: %s",
+		reportType, time.Now().Format("2006-01-02 15:04:05"), string(dataJSON))
+	
+	buffer.WriteString("4 0 obj\n")
+	buffer.WriteString("<<\n")
+	buffer.WriteString(fmt.Sprintf("/Length %d\n", len(content)))
+	buffer.WriteString(">>\n")
+	buffer.WriteString("stream\n")
+	buffer.WriteString("BT\n")
+	buffer.WriteString("/F1 12 Tf\n")
+	buffer.WriteString("72 720 Td\n")
+	buffer.WriteString(fmt.Sprintf("(%s) Tj\n", content))
+	buffer.WriteString("ET\n")
+	buffer.WriteString("endstream\n")
+	buffer.WriteString("endobj\n")
+	
+	buffer.WriteString("xref\n")
+	buffer.WriteString("0 5\n")
+	buffer.WriteString("0000000000 65535 f \n")
+	buffer.WriteString("0000000009 65535 n \n")
+	buffer.WriteString("0000000074 65535 n \n")
+	buffer.WriteString("0000000120 65535 n \n")
+	buffer.WriteString("0000000179 65535 n \n")
+	buffer.WriteString("trailer\n")
+	buffer.WriteString("<<\n")
+	buffer.WriteString("/Size 5\n")
+	buffer.WriteString("/Root 1 0 R\n")
+	buffer.WriteString(">>\n")
+	buffer.WriteString("startxref\n")
+	buffer.WriteString("492\n")
+	buffer.WriteString("%%EOF\n")
+
+	return fileName, buffer.Bytes(), contentType, nil
+}
+
+// exportToExcel exports data to Excel format using excelize
+func (rh *ReportHandler) exportToExcel(baseFileName string, data interface{}) (string, []byte, string, error) {
+	fileName := baseFileName + ".xlsx"
+	contentType := "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+	// Create a new Excel file
+	f := excelize.NewFile()
+	defer f.Close()
+
+	// Create a sheet
+	sheetName := "Report Data"
+	index, err := f.NewSheet(sheetName)
+	if err != nil {
+		return "", nil, "", fmt.Errorf("failed to create sheet: %w", err)
+	}
+
+	// Set the created sheet as the active sheet
+	f.SetActiveSheet(index)
+
+	// Convert data to Excel format
+	err = rh.writeDataToExcel(f, sheetName, data)
+	if err != nil {
+		return "", nil, "", fmt.Errorf("failed to write data to Excel: %w", err)
+	}
+
+	// Save to buffer
+	var buffer bytes.Buffer
+	if err := f.Write(&buffer); err != nil {
+		return "", nil, "", fmt.Errorf("failed to write Excel file: %w", err)
+	}
+
+	return fileName, buffer.Bytes(), contentType, nil
+}
+
+// writeDataToExcel writes various data types to Excel sheet
+func (rh *ReportHandler) writeDataToExcel(f *excelize.File, sheetName string, data interface{}) error {
+	// Handle different data types
+	switch v := data.(type) {
+	case *models.BorrowingStatisticsReport:
+		return rh.writeBorrowingStatisticsToExcel(f, sheetName, v)
+	case *models.PopularBooksReport:
+		return rh.writePopularBooksToExcel(f, sheetName, v)
+	case *models.OverdueBooksReport:
+		return rh.writeOverdueBooksToExcel(f, sheetName, v)
+	case *models.LibraryOverviewReport:
+		return rh.writeLibraryOverviewToExcel(f, sheetName, v)
+	case *models.StudentActivityReport:
+		return rh.writeStudentActivityToExcel(f, sheetName, v)
+	case *models.InventoryStatusReport:
+		return rh.writeInventoryStatusToExcel(f, sheetName, v)
+	default:
+		// Fallback: convert to JSON and write as text
+		jsonData, err := json.MarshalIndent(data, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal data: %w", err)
+		}
+		return f.SetCellValue(sheetName, "A1", string(jsonData))
+	}
+}
+
+// writeBorrowingStatisticsToExcel writes borrowing statistics to Excel
+func (rh *ReportHandler) writeBorrowingStatisticsToExcel(f *excelize.File, sheetName string, data *models.BorrowingStatisticsReport) error {
+	// Write header
+	headers := []string{"Month", "Total Borrows", "Total Returns", "Total Overdue", "Unique Students"}
+	for i, header := range headers {
+		cell := fmt.Sprintf("%s1", string(rune('A'+i)))
+		f.SetCellValue(sheetName, cell, header)
+	}
+
+	// Write data rows
+	row := 2
+	for _, stat := range data.MonthlyData {
+		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), stat.Month)
+		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), stat.TotalBorrows)
+		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), stat.TotalReturns)
+		f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), stat.TotalOverdue)
+		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), stat.UniqueStudents)
+		row++
+	}
+
+	return nil
+}
+
+// writePopularBooksToExcel writes popular books to Excel
+func (rh *ReportHandler) writePopularBooksToExcel(f *excelize.File, sheetName string, data *models.PopularBooksReport) error {
+	// Write header
+	headers := []string{"Rank", "Book ID", "Title", "Author", "Genre", "Borrow Count", "Unique Users", "Avg Rating"}
+	for i, header := range headers {
+		cell := fmt.Sprintf("%s1", string(rune('A'+i)))
+		f.SetCellValue(sheetName, cell, header)
+	}
+
+	// Write data rows
+	for i, book := range data.Books {
+		row := i + 2
+		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), i+1)
+		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), book.BookID)
+		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), book.Title)
+		f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), book.Author)
+		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), book.Genre)
+		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), book.BorrowCount)
+		f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), book.UniqueUsers)
+		f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), book.AvgRating)
+	}
+
+	return nil
+}
+
+// writeOverdueBooksToExcel writes overdue books to Excel
+func (rh *ReportHandler) writeOverdueBooksToExcel(f *excelize.File, sheetName string, data *models.OverdueBooksReport) error {
+	// Write header
+	headers := []string{"Student ID", "Student Name", "Year", "Department", "Book Title", "Author", "Due Date", "Days Overdue", "Fine Amount"}
+	for i, header := range headers {
+		cell := fmt.Sprintf("%s1", string(rune('A'+i)))
+		f.SetCellValue(sheetName, cell, header)
+	}
+
+	// Write data rows
+	for i, book := range data.Books {
+		row := i + 2
+		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), book.StudentID)
+		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), book.StudentName)
+		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), book.YearOfStudy)
+		f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), book.Department)
+		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), book.BookTitle)
+		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), book.BookAuthor)
+		f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), book.DueDate.Format("2006-01-02"))
+		f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), book.DaysOverdue)
+		f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), book.FineAmount)
+	}
+
+	return nil
+}
+
+// writeLibraryOverviewToExcel writes library overview to Excel
+func (rh *ReportHandler) writeLibraryOverviewToExcel(f *excelize.File, sheetName string, data *models.LibraryOverviewReport) error {
+	// Write key metrics
+	f.SetCellValue(sheetName, "A1", "Metric")
+	f.SetCellValue(sheetName, "B1", "Value")
+	
+	metrics := map[string]interface{}{
+		"Total Books":        data.TotalBooks,
+		"Available Books":    data.AvailableBooks,
+		"Active Borrows":     data.ActiveBorrows,
+		"Total Students":     data.TotalStudents,
+		"Total Borrows":      data.TotalBorrows,
+		"Overdue Books":      data.OverdueBooks,
+		"Total Reservations": data.TotalReservations,
+		"Total Fines":        data.TotalFines,
+	}
+
+	row := 2
+	for metric, value := range metrics {
+		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), metric)
+		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), value)
+		row++
+	}
+
+	return nil
+}
+
+// writeStudentActivityToExcel writes student activity to Excel
+func (rh *ReportHandler) writeStudentActivityToExcel(f *excelize.File, sheetName string, data *models.StudentActivityReport) error {
+	// Write header
+	headers := []string{"Student Name", "Student ID", "Year", "Books Borrowed", "Books Returned", "Overdue Books", "Active Reservations"}
+	for i, header := range headers {
+		cell := fmt.Sprintf("%s1", string(rune('A'+i)))
+		f.SetCellValue(sheetName, cell, header)
+	}
+
+	// Write data rows
+	for i, student := range data.Students {
+		row := i + 2
+		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), student.StudentName)
+		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), student.StudentID)
+		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), student.YearOfStudy)
+		f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), student.TotalBorrows)
+		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), student.TotalReturns)
+		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), student.OverdueBooks)
+		f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), student.CurrentBooks)
+	}
+
+	return nil
+}
+
+// writeInventoryStatusToExcel writes inventory status to Excel
+func (rh *ReportHandler) writeInventoryStatusToExcel(f *excelize.File, sheetName string, data *models.InventoryStatusReport) error {
+	// Write header
+	headers := []string{"Genre", "Total Books", "Available Books", "Borrowed Books", "Reserved Books", "Utilization Rate"}
+	for i, header := range headers {
+		cell := fmt.Sprintf("%s1", string(rune('A'+i)))
+		f.SetCellValue(sheetName, cell, header)
+	}
+
+	// Write data rows
+	for i, genre := range data.Genres {
+		row := i + 2
+		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), genre.Genre)
+		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), genre.TotalBooks)
+		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), genre.AvailableBooks)
+		f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), genre.BorrowedBooks)
+		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), genre.ReservedBooks)
+		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), genre.UtilizationRate)
+	}
+
+	return nil
+}
+
+// Parameter extraction helper functions
+func extractTrendsParams(params map[string]interface{}) (startDate, endDate time.Time, yearOfStudy *int32) {
+	if start, ok := params["start_date"].(string); ok {
+		if parsed, err := time.Parse("2006-01-02", start); err == nil {
+			startDate = parsed
+		}
+	}
+	if end, ok := params["end_date"].(string); ok {
+		if parsed, err := time.Parse("2006-01-02", end); err == nil {
+			endDate = parsed
+		}
+	}
+	if year, ok := params["year_of_study"].(float64); ok {
+		yearInt := int32(year)
+		yearOfStudy = &yearInt
+	}
+	
+	// Default to last 30 days if not specified
+	if startDate.IsZero() {
+		startDate = time.Now().AddDate(0, 0, -30)
+	}
+	if endDate.IsZero() {
+		endDate = time.Now()
+	}
+	
+	return startDate, endDate, yearOfStudy
+}
+
+func extractPopularBooksParams(params map[string]interface{}) (limit int32, startDate, endDate time.Time, yearOfStudy *int32) {
+	limit = 10 // default
+	if l, ok := params["limit"].(float64); ok {
+		limit = int32(l)
+	}
+	
+	startDate, endDate, yearOfStudy = extractTrendsParams(params)
+	return limit, startDate, endDate, yearOfStudy
+}
+
+func extractOverdueBooksParams(params map[string]interface{}) (yearOfStudy *int32) {
+	if year, ok := params["year_of_study"].(float64); ok {
+		yearInt := int32(year)
+		yearOfStudy = &yearInt
+	}
+	return yearOfStudy
+}
+
+func extractStudentActivityParams(params map[string]interface{}) (limit int32, startDate, endDate time.Time, yearOfStudy *int32) {
+	return extractPopularBooksParams(params) // Same parameters
+}
+
+func extractInventoryParams(params map[string]interface{}) () {
+	return // No special parameters needed for inventory status
 }

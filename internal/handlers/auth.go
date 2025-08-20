@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"context"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -11,14 +14,16 @@ import (
 )
 
 type AuthHandler struct {
-	authService *services.AuthService
-	userService services.UserServiceInterface
+	authService  *services.AuthService
+	userService  services.UserServiceInterface
+	emailService services.EmailServiceInterface
 }
 
-func NewAuthHandler(authService *services.AuthService, userService services.UserServiceInterface) *AuthHandler {
+func NewAuthHandler(authService *services.AuthService, userService services.UserServiceInterface, emailService services.EmailServiceInterface) *AuthHandler {
 	return &AuthHandler{
-		authService: authService,
-		userService: userService,
+		authService:  authService,
+		userService:  userService,
+		emailService: emailService,
 	}
 }
 
@@ -474,7 +479,7 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 	}
 
 	// Check if user exists
-	_, err := h.userService.GetUserByEmail(req.Email)
+	user, err := h.userService.GetUserByEmail(req.Email)
 	if err != nil {
 		// Don't reveal whether user exists or not for security
 		c.JSON(http.StatusOK, gin.H{
@@ -497,10 +502,14 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 		return
 	}
 
-	// In a real application, you would send this token via email
-	// For now, we'll just log it (DON'T DO THIS IN PRODUCTION)
-	// You should integrate with an email service like SendGrid, SES, etc.
-	_ = token // TODO: Send via email
+	// Send password reset email
+	if err := h.sendPasswordResetEmail(c.Request.Context(), user, token); err != nil {
+		slog.Error("Failed to send password reset email",
+			"email", req.Email,
+			"error", err)
+		// Don't reveal the error to the user for security reasons
+		// Just log it and continue with the success response
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -584,4 +593,31 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 		"success": true,
 		"message": "Password reset successful",
 	})
+}
+
+// sendPasswordResetEmail sends a password reset email to the user
+func (h *AuthHandler) sendPasswordResetEmail(ctx context.Context, user *models.User, token string) error {
+	// Get the password reset email template
+	template := services.GetDefaultTemplate("password_reset")
+	if template == nil {
+		return fmt.Errorf("password reset email template not found")
+	}
+
+	// Prepare template data
+	data := map[string]interface{}{
+		"UserName":        getUserDisplayName(user),
+		"ResetToken":      token,
+		"ExpirationHours": "24", // Token expires in 24 hours (configurable)
+	}
+
+	// Send templated email
+	return h.emailService.SendTemplatedEmail(ctx, user.Email, template, data)
+}
+
+// getUserDisplayName returns a user-friendly display name
+func getUserDisplayName(user *models.User) string {
+	if user.Username != "" {
+		return user.Username
+	}
+	return user.Email
 }

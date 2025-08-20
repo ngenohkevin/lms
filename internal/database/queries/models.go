@@ -89,6 +89,50 @@ type EmailQueue struct {
 	UpdatedAt     pgtype.Timestamp `db:"updated_at" json:"updated_at"`
 }
 
+type ExportFile struct {
+	ID               int32            `db:"id" json:"id"`
+	ImportHistoryID  int32            `db:"import_history_id" json:"import_history_id"`
+	FilePath         string           `db:"file_path" json:"file_path"`
+	FileFormat       string           `db:"file_format" json:"file_format"`
+	DownloadCount    int32            `db:"download_count" json:"download_count"`
+	LastDownloadedAt pgtype.Timestamp `db:"last_downloaded_at" json:"last_downloaded_at"`
+	ExpiresAt        pgtype.Timestamp `db:"expires_at" json:"expires_at"`
+	CreatedAt        pgtype.Timestamp `db:"created_at" json:"created_at"`
+}
+
+type ImportError struct {
+	ID              int32            `db:"id" json:"id"`
+	ImportHistoryID int32            `db:"import_history_id" json:"import_history_id"`
+	RowNumber       int32            `db:"row_number" json:"row_number"`
+	FieldName       pgtype.Text      `db:"field_name" json:"field_name"`
+	ErrorType       string           `db:"error_type" json:"error_type"`
+	ErrorMessage    string           `db:"error_message" json:"error_message"`
+	RowData         []byte           `db:"row_data" json:"row_data"`
+	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
+}
+
+type ImportHistory struct {
+	ID                 int32            `db:"id" json:"id"`
+	OperationType      string           `db:"operation_type" json:"operation_type"`
+	EntityType         string           `db:"entity_type" json:"entity_type"`
+	Filename           string           `db:"filename" json:"filename"`
+	OriginalFilename   string           `db:"original_filename" json:"original_filename"`
+	FileSize           int64            `db:"file_size" json:"file_size"`
+	TotalRecords       int32            `db:"total_records" json:"total_records"`
+	ProcessedRecords   int32            `db:"processed_records" json:"processed_records"`
+	SuccessfulRecords  int32            `db:"successful_records" json:"successful_records"`
+	FailedRecords      int32            `db:"failed_records" json:"failed_records"`
+	Status             string           `db:"status" json:"status"`
+	ErrorMessage       pgtype.Text      `db:"error_message" json:"error_message"`
+	ErrorDetails       []byte           `db:"error_details" json:"error_details"`
+	UserID             int32            `db:"user_id" json:"user_id"`
+	StartedAt          pgtype.Timestamp `db:"started_at" json:"started_at"`
+	CompletedAt        pgtype.Timestamp `db:"completed_at" json:"completed_at"`
+	ProcessingDuration pgtype.Int4      `db:"processing_duration" json:"processing_duration"`
+	CreatedAt          pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt          pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+}
+
 type Notification struct {
 	ID            int32            `db:"id" json:"id"`
 	RecipientID   int32            `db:"recipient_id" json:"recipient_id"`

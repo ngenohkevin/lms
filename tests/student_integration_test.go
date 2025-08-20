@@ -195,6 +195,12 @@ func (suite *StudentIntegrationTestSuite) cleanDatabase() {
 	suite.db.Pool.Exec(ctx, "DELETE FROM reservations")
 	suite.db.Pool.Exec(ctx, "DELETE FROM students")
 	suite.db.Pool.Exec(ctx, "DELETE FROM books")
+	suite.db.Pool.Exec(ctx, "DELETE FROM notifications")
+	suite.db.Pool.Exec(ctx, "DELETE FROM email_deliveries")
+	suite.db.Pool.Exec(ctx, "DELETE FROM email_queue")
+	suite.db.Pool.Exec(ctx, "DELETE FROM export_files")
+	suite.db.Pool.Exec(ctx, "DELETE FROM import_errors")
+	suite.db.Pool.Exec(ctx, "DELETE FROM import_history")
 	suite.db.Pool.Exec(ctx, "DELETE FROM users")
 
 	// Reset sequences

@@ -15,6 +15,7 @@ import (
 // EmailServiceInterface defines the interface for email service operations
 type EmailServiceInterface interface {
 	SendEmail(ctx context.Context, to, subject, body string, isHTML bool) error
+	SendEmailWithID(ctx context.Context, request *models.SendEmailRequest) (string, error)
 	SendTemplatedEmail(ctx context.Context, to string, template *models.EmailTemplate, data map[string]interface{}) error
 	SendBatchEmails(ctx context.Context, emails []EmailRequest) error
 	ValidateEmail(email string) error
@@ -110,6 +111,51 @@ func (s *EmailService) SendTemplatedEmail(ctx context.Context, to string, templa
 
 	// Send email
 	return s.SendEmail(ctx, to, subject, body, template.IsHTML)
+}
+
+// SendEmailWithID sends an email from a request and returns message ID
+func (s *EmailService) SendEmailWithID(ctx context.Context, request *models.SendEmailRequest) (string, error) {
+	if request == nil {
+		return "", fmt.Errorf("request cannot be nil")
+	}
+	
+	if err := s.ValidateEmail(request.To); err != nil {
+		return "", fmt.Errorf("invalid recipient email: %w", err)
+	}
+
+	// Create message
+	message := s.buildMessage(s.config.FromEmail, request.To, request.Subject, request.Body, request.IsHTML)
+
+	// Send email via SMTP
+	if err := s.sendSMTP(request.To, message); err != nil {
+		s.logger.Error("Failed to send email",
+			"to", request.To,
+			"subject", request.Subject,
+			"error", err)
+		return "", fmt.Errorf("failed to send email: %w", err)
+	}
+
+	// Generate a unique message ID for tracking
+	messageID := s.generateMessageID()
+	
+	s.logger.Info("Email sent successfully",
+		"to", request.To,
+		"subject", request.Subject,
+		"message_id", messageID)
+
+	return messageID, nil
+}
+
+// generateMessageID generates a unique message ID for email tracking
+func (s *EmailService) generateMessageID() string {
+	// Generate a unique message ID using timestamp and random string
+	timestamp := time.Now().Unix()
+	randomBytes := make([]byte, 8)
+	// Use a simple approach for generating random bytes
+	for i := range randomBytes {
+		randomBytes[i] = byte(timestamp + int64(i))
+	}
+	return fmt.Sprintf("%d-%x", timestamp, randomBytes)
 }
 
 // SendBatchEmails sends multiple emails
@@ -479,6 +525,14 @@ var defaultTemplates = map[string]*models.EmailTemplate{
 		Body:      "Dear {{.StudentName}},\n\nYou have an outstanding fine for the book \"{{.BookTitle}}\".\n\nFine Amount: {{.FineAmount}}\nReason: {{.FineReason}}\n\nPlease settle this fine at your earliest convenience.\n\nThank you,\nLibrary Management System",
 		IsHTML:    false,
 		Variables: []string{"BookTitle", "StudentName", "FineAmount", "FineReason"},
+		IsActive:  true,
+	},
+	"password_reset": {
+		Name:      "password_reset",
+		Subject:   "Password Reset Request - Library Management System",
+		Body:      "Dear {{.UserName}},\n\nYou have requested a password reset for your Library Management System account.\n\nPlease use the following reset token: {{.ResetToken}}\n\nIf you did not request this password reset, please ignore this email.\n\nFor security reasons, this token will expire in {{.ExpirationHours}} hours.\n\nThank you,\nLibrary Management System",
+		IsHTML:    false,
+		Variables: []string{"UserName", "ResetToken", "ExpirationHours"},
 		IsActive:  true,
 	},
 }

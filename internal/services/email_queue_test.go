@@ -23,6 +23,10 @@ func (m *mockEmailServiceQueue) SendEmail(ctx context.Context, to, subject, body
 	return nil
 }
 
+func (m *mockEmailServiceQueue) SendEmailWithID(ctx context.Context, request *models.SendEmailRequest) (string, error) {
+	return "mock-message-id", nil
+}
+
 func (m *mockEmailServiceQueue) SendTemplatedEmail(ctx context.Context, to string, template *models.EmailTemplate, data map[string]interface{}) error {
 	return nil
 }
@@ -109,8 +113,11 @@ func setupEmailQueueTest(t *testing.T) (*EmailQueueService, func()) {
 		Level: slog.LevelError, // Reduce noise in tests
 	}))
 
+	// Create mock email service
+	mockEmail := &mockEmailServiceQueue{}
+
 	// Create service
-	service := NewEmailQueueService(db.Queries, redisClient, logger).(*EmailQueueService)
+	service := NewEmailQueueService(db.Queries, redisClient, mockEmail, logger).(*EmailQueueService)
 
 	// Cleanup function
 	cleanup := func() {

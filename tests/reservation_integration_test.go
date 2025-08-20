@@ -28,14 +28,14 @@ func TestReservationIntegration_CompleteWorkflow(t *testing.T) {
 	ctx := context.Background()
 
 	// Create test data
-	student1 := createTestStudent(t, querier, "John", "Doe", "STU001")
-	student2 := createTestStudent(t, querier, "Jane", "Smith", "STU002")
-	student3 := createTestStudent(t, querier, "Bob", "Johnson", "STU003")
+	student1 := createTestStudent(t, querier, "John", "Doe", "STU_COMP_001")
+	student2 := createTestStudent(t, querier, "Jane", "Smith", "STU_COMP_002")
+	student3 := createTestStudent(t, querier, "Bob", "Johnson", "STU_COMP_003")
 
 	// Create a librarian for the borrowing transactions
 	librarian := createTestLibrarian(t, querier, "test_librarian_complete", "test.librarian.complete@example.com")
 
-	book := createTestBook(t, querier, "Test Book", "Test Author", "BK001", 1) // Only 1 copy
+	book := createTestBook(t, querier, "Test Book", "Test Author", "BK_COMPLETE_001", 1) // Only 1 copy
 
 	// Initially set available copies to 1 so student1 can borrow it
 	err := querier.UpdateBookAvailability(ctx, queries.UpdateBookAvailabilityParams{
@@ -166,7 +166,7 @@ func TestReservationIntegration_ExpiredReservations(t *testing.T) {
 
 	// Create test data
 	student := createTestStudent(t, querier, "John", "Doe", "STU_EXP001")
-	book := createTestBook(t, querier, "Test Book Exp", "Test Author", "BK_EXP001", 0) // No copies available
+	book := createTestBook(t, querier, "Test Book Exp", "Test Author", "BK_EXP_UNIQ_001", 0) // No copies available
 
 	// Create an expired reservation manually
 	expiredReservation, err := querier.CreateReservation(ctx, queries.CreateReservationParams{
@@ -221,11 +221,11 @@ func TestReservationIntegration_ValidationScenarios(t *testing.T) {
 	ctx := context.Background()
 
 	// Create test data
-	activeStudent := createTestStudent(t, querier, "Active", "Student", "STU001")
-	inactiveStudent := createTestStudentWithStatus(t, querier, "Inactive", "Student", "STU002", false)
-	availableBook := createTestBook(t, querier, "Available Book", "Author", "BK001", 1)
-	unavailableBook := createTestBook(t, querier, "Unavailable Book", "Author", "BK002", 0)
-	inactiveBook := createTestBookWithStatus(t, querier, "Inactive Book", "Author", "BK003", 0, false)
+	activeStudent := createTestStudent(t, querier, "Active", "Student", "STU_VAL_001")
+	inactiveStudent := createTestStudentWithStatus(t, querier, "Inactive", "Student", "STU_VAL_002", false)
+	availableBook := createTestBook(t, querier, "Available Book", "Author", "BK_VAL_001", 1)
+	unavailableBook := createTestBook(t, querier, "Unavailable Book", "Author", "BK_VAL_002", 0)
+	inactiveBook := createTestBookWithStatus(t, querier, "Inactive Book", "Author", "BK_VAL_003", 0, false)
 
 	// Test 1: Active student tries to reserve available book (should fail)
 	t.Run("CannotReserveAvailableBook", func(t *testing.T) {
@@ -253,7 +253,7 @@ func TestReservationIntegration_ValidationScenarios(t *testing.T) {
 		// Create 5 unavailable books
 		books := make([]queries.Book, 5)
 		for i := 0; i < 5; i++ {
-			books[i] = createTestBook(t, querier, "Book"+string(rune(i+65)), "Author", "BK00"+string(rune(i+52)), 0)
+			books[i] = createTestBook(t, querier, "Book"+string(rune(i+65)), "Author", "BK_MAX_"+string(rune(i+65)), 0)
 		}
 
 		// Reserve all 5 books (should work)
@@ -263,7 +263,7 @@ func TestReservationIntegration_ValidationScenarios(t *testing.T) {
 		}
 
 		// Try to reserve a 6th book (should fail)
-		sixthBook := createTestBook(t, querier, "Sixth Book", "Author", "BK006", 0)
+		sixthBook := createTestBook(t, querier, "Sixth Book", "Author", "BK_MAX_SIXTH", 0)
 		_, err := reservationService.ReserveBook(ctx, activeStudent.ID, sixthBook.ID)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "student has reached the maximum number of reservations")
@@ -271,8 +271,8 @@ func TestReservationIntegration_ValidationScenarios(t *testing.T) {
 
 	// Test 5: Test duplicate reservation
 	t.Run("CannotDuplicateReservation", func(t *testing.T) {
-		student := createTestStudent(t, querier, "New", "Student", "STU003")
-		book := createTestBook(t, querier, "New Book", "Author", "BK007", 0)
+		student := createTestStudent(t, querier, "New", "Student", "STU_DUP_001")
+		book := createTestBook(t, querier, "New Book", "Author", "BK_MAX_NEW", 0)
 
 		// First reservation should work
 		_, err := reservationService.ReserveBook(ctx, student.ID, book.ID)
@@ -298,7 +298,7 @@ func TestReservationIntegration_CancellationWorkflow(t *testing.T) {
 	// Create test data
 	student1 := createTestStudent(t, querier, "John", "Doe", "STU_CAN001")
 	student2 := createTestStudent(t, querier, "Jane", "Smith", "STU_CAN002")
-	book := createTestBook(t, querier, "Test Book Cancel", "Test Author", "BK_CAN001", 0)
+	book := createTestBook(t, querier, "Test Book Cancel", "Test Author", "BK_CANCEL_001", 0)
 
 	// Create two reservations
 	reservation1, err := reservationService.ReserveBook(ctx, student1.ID, book.ID)
