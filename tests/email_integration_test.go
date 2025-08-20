@@ -46,7 +46,7 @@ func (suite *EmailIntegrationTestSuite) SetupSuite() {
 	cfg.Database.Password = os.Getenv("LMS_DATABASE_PASSWORD")
 	cfg.Database.Name = os.Getenv("LMS_DATABASE_NAME")
 	cfg.Database.SSLMode = "disable"
-	
+
 	// Fallback to defaults if environment variables are not set
 	if cfg.Database.User == "" {
 		cfg.Database.User = "lms_test_user"

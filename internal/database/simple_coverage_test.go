@@ -18,7 +18,7 @@ func TestDatabaseCoverageSimple(t *testing.T) {
 	testUser := os.Getenv("LMS_DATABASE_USER")
 	testPassword := os.Getenv("LMS_DATABASE_PASSWORD")
 	testName := os.Getenv("LMS_DATABASE_NAME")
-	
+
 	if testUser == "" {
 		testUser = "lms_test_user"
 	}
@@ -438,7 +438,7 @@ func TestDatabaseConnectionWithoutURL(t *testing.T) {
 	testUser := os.Getenv("LMS_DATABASE_USER")
 	testPassword := os.Getenv("LMS_DATABASE_PASSWORD")
 	testName := os.Getenv("LMS_DATABASE_NAME")
-	
+
 	if testUser == "" {
 		testUser = "lms_test_user"
 	}
