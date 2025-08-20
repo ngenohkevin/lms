@@ -45,135 +45,113 @@ func TestReservationIntegration_CompleteWorkflow(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test 1: Student 1 borrows the book
-	t.Run("Student1_BorrowsBook", func(t *testing.T) {
-		transaction, err := transactionService.BorrowBook(ctx, student1.ID, book.ID, librarian.ID, "Initial borrow")
-		require.NoError(t, err)
-		assert.NotNil(t, transaction)
-		assert.Equal(t, student1.ID, transaction.StudentID)
-		assert.Equal(t, book.ID, transaction.BookID)
-		assert.Equal(t, "borrow", transaction.TransactionType)
-	})
+	transaction, err := transactionService.BorrowBook(ctx, student1.ID, book.ID, librarian.ID, "Initial borrow")
+	require.NoError(t, err)
+	assert.NotNil(t, transaction)
+	assert.Equal(t, student1.ID, transaction.StudentID)
+	assert.Equal(t, book.ID, transaction.BookID)
+	assert.Equal(t, "borrow", transaction.TransactionType)
 
 	// Test 2: Student 2 tries to borrow the same book (should fail - not available)
-	t.Run("Student2_CannotBorrow_BookNotAvailable", func(t *testing.T) {
-		_, err := transactionService.BorrowBook(ctx, student2.ID, book.ID, librarian.ID, "Should fail")
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "book not available")
-	})
+	_, err = transactionService.BorrowBook(ctx, student2.ID, book.ID, librarian.ID, "Should fail")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "book not available")
 
 	// Test 3: Student 2 reserves the book
 	var student2ReservationID int32
-	t.Run("Student2_ReservesBook", func(t *testing.T) {
-		reservation, err := reservationService.ReserveBook(ctx, student2.ID, book.ID)
-		require.NoError(t, err)
-		assert.NotNil(t, reservation)
-		assert.Equal(t, student2.ID, reservation.StudentID)
-		assert.Equal(t, book.ID, reservation.BookID)
-		assert.Equal(t, "active", reservation.Status)
-		assert.Equal(t, 1, reservation.QueuePosition)
-		student2ReservationID = reservation.ID // Store the ID for later use
-	})
+	reservation, err := reservationService.ReserveBook(ctx, student2.ID, book.ID)
+	require.NoError(t, err)
+	assert.NotNil(t, reservation)
+	assert.Equal(t, student2.ID, reservation.StudentID)
+	assert.Equal(t, book.ID, reservation.BookID)
+	assert.Equal(t, "active", reservation.Status)
+	assert.Equal(t, 1, reservation.QueuePosition)
+	student2ReservationID = reservation.ID // Store the ID for later use
 
 	// Test 4: Student 3 reserves the book (should be second in queue)
-	t.Run("Student3_ReservesBook_SecondInQueue", func(t *testing.T) {
-		reservation, err := reservationService.ReserveBook(ctx, student3.ID, book.ID)
-		require.NoError(t, err)
-		assert.NotNil(t, reservation)
-		assert.Equal(t, student3.ID, reservation.StudentID)
-		assert.Equal(t, book.ID, reservation.BookID)
-		assert.Equal(t, "active", reservation.Status)
-		assert.Equal(t, 2, reservation.QueuePosition)
-	})
+	reservation2, err := reservationService.ReserveBook(ctx, student3.ID, book.ID)
+	require.NoError(t, err)
+	assert.NotNil(t, reservation2)
+	assert.Equal(t, student3.ID, reservation2.StudentID)
+	assert.Equal(t, book.ID, reservation2.BookID)
+	assert.Equal(t, "active", reservation2.Status)
+	assert.Equal(t, 2, reservation2.QueuePosition)
 
 	// Test 5: Check book reservations queue
-	t.Run("CheckReservationQueue", func(t *testing.T) {
-		reservations, err := reservationService.GetBookReservations(ctx, book.ID)
-		require.NoError(t, err)
-		assert.Len(t, reservations, 2)
+	reservations, err := reservationService.GetBookReservations(ctx, book.ID)
+	require.NoError(t, err)
+	assert.Len(t, reservations, 2)
 
-		// Should be in FIFO order
-		assert.Equal(t, student2.ID, reservations[0].StudentID)
-		assert.Equal(t, 1, reservations[0].QueuePosition)
-		assert.Equal(t, student3.ID, reservations[1].StudentID)
-		assert.Equal(t, 2, reservations[1].QueuePosition)
-	})
+	// Should be in FIFO order
+	assert.Equal(t, student2.ID, reservations[0].StudentID)
+	assert.Equal(t, 1, reservations[0].QueuePosition)
+	assert.Equal(t, student3.ID, reservations[1].StudentID)
+	assert.Equal(t, 2, reservations[1].QueuePosition)
 
 	// Test 6: Get next reservation for book
-	t.Run("GetNextReservation", func(t *testing.T) {
-		nextReservation, err := reservationService.GetNextReservationForBook(ctx, book.ID)
-		require.NoError(t, err)
-		assert.NotNil(t, nextReservation)
-		assert.Equal(t, student2.ID, nextReservation.StudentID)
-		assert.Equal(t, 1, nextReservation.QueuePosition)
-	})
+	nextReservation, err := reservationService.GetNextReservationForBook(ctx, book.ID)
+	require.NoError(t, err)
+	assert.NotNil(t, nextReservation)
+	assert.Equal(t, student2.ID, nextReservation.StudentID)
+	assert.Equal(t, 1, nextReservation.QueuePosition)
 
 	// Test 7: Student 1 returns the book (should automatically fulfill Student 2's reservation)
-	t.Run("Student1_ReturnsBook_AutoFulfillsReservation", func(t *testing.T) {
-		// Get the transaction first
-		transactions, err := transactionService.GetTransactionHistory(ctx, student1.ID, 10, 0)
-		require.NoError(t, err)
-		require.Len(t, transactions, 1)
+	// Get the transaction first
+	transactions, err := transactionService.GetTransactionHistory(ctx, student1.ID, 10, 0)
+	require.NoError(t, err)
+	require.Len(t, transactions, 1)
 
-		transactionID := transactions[0].ID
+	transactionID := transactions[0].ID
 
-		// Return the book using enhanced service
-		returnedTransaction, err := enhancedTransactionService.ReturnBookWithReservationHandling(ctx, transactionID, "good", "Book returned in good condition")
-		require.NoError(t, err)
-		assert.NotNil(t, returnedTransaction)
-		assert.NotNil(t, returnedTransaction.ReturnedDate)
+	// Return the book using enhanced service
+	returnedTransaction, err := enhancedTransactionService.ReturnBookWithReservationHandling(ctx, transactionID, "good", "Book returned in good condition")
+	require.NoError(t, err)
+	assert.NotNil(t, returnedTransaction)
+	assert.NotNil(t, returnedTransaction.ReturnedDate)
 
-		// Give some time for the background goroutine to process
-		time.Sleep(100 * time.Millisecond)
+	// Give some time for the background goroutine to process
+	time.Sleep(100 * time.Millisecond)
 
-		// Check that Student 2's reservation is fulfilled
-		updatedReservation, err := reservationService.GetReservationByID(ctx, student2ReservationID)
-		require.NoError(t, err)
-		assert.Equal(t, "fulfilled", updatedReservation.Status)
-		assert.NotNil(t, updatedReservation.FulfilledAt)
-	})
+	// Check that Student 2's reservation is fulfilled
+	updatedReservation, err := reservationService.GetReservationByID(ctx, student2ReservationID)
+	require.NoError(t, err)
+	assert.Equal(t, "fulfilled", updatedReservation.Status)
+	assert.NotNil(t, updatedReservation.FulfilledAt)
 
 	// Test 8: Student 2 can now borrow the book (their reservation is fulfilled)
-	t.Run("Student2_CanBorrowWithFulfilledReservation", func(t *testing.T) {
-		// Check eligibility first
-		eligibility, err := enhancedTransactionService.CanStudentBorrowBook(ctx, student2.ID, book.ID)
-		require.NoError(t, err)
-		assert.True(t, eligibility.CanBorrow)
-		assert.True(t, eligibility.HasReservationForStudent)
+	// Check eligibility first
+	eligibility, err := enhancedTransactionService.CanStudentBorrowBook(ctx, student2.ID, book.ID)
+	require.NoError(t, err)
+	assert.True(t, eligibility.CanBorrow)
+	assert.True(t, eligibility.HasReservationForStudent)
 
-		// Borrow the book
-		transaction, err := enhancedTransactionService.BorrowBookWithReservationCheck(ctx, student2.ID, book.ID, librarian.ID, "Borrowing with reservation")
-		require.NoError(t, err)
-		assert.NotNil(t, transaction)
-		assert.Equal(t, student2.ID, transaction.StudentID)
-		assert.Equal(t, book.ID, transaction.BookID)
-	})
+	// Borrow the book
+	transaction2, err := enhancedTransactionService.BorrowBookWithReservationCheck(ctx, student2.ID, book.ID, librarian.ID, "Borrowing with reservation")
+	require.NoError(t, err)
+	assert.NotNil(t, transaction2)
+	assert.Equal(t, student2.ID, transaction2.StudentID)
+	assert.Equal(t, book.ID, transaction2.BookID)
 
 	// Test 9: Student 3 cannot borrow (Student 2 has it)
-	t.Run("Student3_CannotBorrowWhileStudent2Has", func(t *testing.T) {
-		eligibility, err := enhancedTransactionService.CanStudentBorrowBook(ctx, student3.ID, book.ID)
-		require.NoError(t, err)
-		assert.False(t, eligibility.CanBorrow)
-		assert.Contains(t, eligibility.Reasons, "book not available")
-	})
+	eligibility2, err := enhancedTransactionService.CanStudentBorrowBook(ctx, student3.ID, book.ID)
+	require.NoError(t, err)
+	assert.False(t, eligibility2.CanBorrow)
+	assert.Contains(t, eligibility2.Reasons, "book not available")
 
 	// Test 10: Check Student 3's reservation is now first in queue
-	t.Run("Student3_NowFirstInQueue", func(t *testing.T) {
-		nextReservation, err := reservationService.GetNextReservationForBook(ctx, book.ID)
-		require.NoError(t, err)
-		assert.NotNil(t, nextReservation)
-		assert.Equal(t, student3.ID, nextReservation.StudentID)
-		assert.Equal(t, 1, nextReservation.QueuePosition)
-	})
+	nextReservation2, err := reservationService.GetNextReservationForBook(ctx, book.ID)
+	require.NoError(t, err)
+	assert.NotNil(t, nextReservation2)
+	assert.Equal(t, student3.ID, nextReservation2.StudentID)
+	assert.Equal(t, 1, nextReservation2.QueuePosition)
 
 	// Test 11: Test availability status
-	t.Run("CheckBookAvailabilityStatus", func(t *testing.T) {
-		status, err := enhancedTransactionService.GetBookAvailabilityStatus(ctx, book.ID)
-		require.NoError(t, err)
-		assert.False(t, status.IsAvailable)
-		assert.True(t, status.HasReservations)
-		assert.NotNil(t, status.NextReservationStudentID)
-		assert.Equal(t, student3.ID, *status.NextReservationStudentID)
-	})
+	status, err := enhancedTransactionService.GetBookAvailabilityStatus(ctx, book.ID)
+	require.NoError(t, err)
+	assert.False(t, status.IsAvailable)
+	assert.True(t, status.HasReservations)
+	assert.NotNil(t, status.NextReservationStudentID)
+	assert.Equal(t, student3.ID, *status.NextReservationStudentID)
 }
 
 func TestReservationIntegration_ExpiredReservations(t *testing.T) {

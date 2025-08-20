@@ -410,9 +410,18 @@ func TestEmailDeliveryService_GetPendingDeliveries(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Create a test notification directly without dependencies
+	// Create a test student first to satisfy foreign key constraint
+	student, err := service.queries.CreateStudent(ctx, queries.CreateStudentParams{
+		StudentID:   "TEST_STUDENT_001",
+		FirstName:   "Test",
+		LastName:    "Student",
+		YearOfStudy: 1,
+	})
+	require.NoError(t, err)
+
+	// Create a test notification with valid recipient ID
 	notification, err := service.queries.CreateNotification(ctx, queries.CreateNotificationParams{
-		RecipientID:   1,
+		RecipientID:   student.ID,
 		RecipientType: "student",
 		Type:          "overdue_reminder",
 		Title:         "Test Notification",
@@ -460,9 +469,18 @@ func TestEmailDeliveryService_GetFailedDeliveries(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Create a test notification directly without dependencies
+	// Create a test student first to satisfy foreign key constraint
+	student, err := service.queries.CreateStudent(ctx, queries.CreateStudentParams{
+		StudentID:   "TEST_STUDENT_002",
+		FirstName:   "Test",
+		LastName:    "Student",
+		YearOfStudy: 1,
+	})
+	require.NoError(t, err)
+
+	// Create a test notification with valid recipient ID
 	notification, err := service.queries.CreateNotification(ctx, queries.CreateNotificationParams{
-		RecipientID:   1,
+		RecipientID:   student.ID,
 		RecipientType: "student",
 		Type:          "overdue_reminder",
 		Title:         "Test Notification",
@@ -500,7 +518,7 @@ func TestEmailDeliveryService_GetFailedDeliveries(t *testing.T) {
 			}
 		}
 
-		assert.NotNil(t, foundDelivery)
+		require.NotNil(t, foundDelivery, "Expected to find a failed delivery with email 'failed@example.com'")
 		assert.Equal(t, models.EmailDeliveryStatusFailed, foundDelivery.Status)
 		assert.Less(t, foundDelivery.RetryCount, foundDelivery.MaxRetries)
 	})
