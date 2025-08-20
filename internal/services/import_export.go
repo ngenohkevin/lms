@@ -102,10 +102,10 @@ func (s *ImportExportService) processImport(ctx context.Context, importData []mo
 	// Create initial import history record
 	var startedAtTimestamp pgtype.Timestamp
 	startedAtTimestamp.Scan(startTime)
-	
+
 	historyParams := queries.CreateImportHistoryParams{
 		OperationType:     "import",
-		EntityType:        "books", 
+		EntityType:        "books",
 		Filename:          fileName,
 		OriginalFilename:  fileName,
 		FileSize:          1, // Placeholder size to satisfy constraint
@@ -113,9 +113,9 @@ func (s *ImportExportService) processImport(ctx context.Context, importData []mo
 		ProcessedRecords:  0,
 		SuccessfulRecords: 0,
 		FailedRecords:     0,
-		Status:           "processing",
-		UserID:           userID,
-		StartedAt:        startedAtTimestamp,
+		Status:            "processing",
+		UserID:            userID,
+		StartedAt:         startedAtTimestamp,
 	}
 
 	var historyID int32
@@ -150,9 +150,9 @@ func (s *ImportExportService) processImport(ctx context.Context, importData []mo
 			if s.queries != nil {
 				errorParams := queries.CreateImportErrorParams{
 					ImportHistoryID: historyID,
-					RowNumber:      int32(rowNum),
-					ErrorType:      "validation",
-					ErrorMessage:   err.Error(),
+					RowNumber:       int32(rowNum),
+					ErrorType:       "validation",
+					ErrorMessage:    err.Error(),
 				}
 				_, _ = s.queries.CreateImportError(ctx, errorParams)
 			}
@@ -195,9 +195,9 @@ func (s *ImportExportService) processImport(ctx context.Context, importData []mo
 			if s.queries != nil {
 				errorParams := queries.CreateImportErrorParams{
 					ImportHistoryID: historyID,
-					RowNumber:      int32(rowNum),
-					ErrorType:      errorType,
-					ErrorMessage:   err.Error(),
+					RowNumber:       int32(rowNum),
+					ErrorType:       errorType,
+					ErrorMessage:    err.Error(),
 				}
 				_, _ = s.queries.CreateImportError(ctx, errorParams)
 			}
@@ -222,7 +222,7 @@ func (s *ImportExportService) processImport(ctx context.Context, importData []mo
 	processingTime := time.Since(startTime)
 	processingDurationSec := int32(processingTime.Seconds())
 	completedAt := time.Now()
-	
+
 	// Final status
 	status := "completed"
 	if result.FailureCount == result.TotalRecords {
@@ -231,28 +231,28 @@ func (s *ImportExportService) processImport(ctx context.Context, importData []mo
 
 	// Update history record with final results
 	var processedRecordsPg pgtype.Int4
-	var successfulRecordsPg pgtype.Int4 
+	var successfulRecordsPg pgtype.Int4
 	var failedRecordsPg pgtype.Int4
 	var statusPg pgtype.Text
 	var completedAtPg pgtype.Timestamp
 	var processingDurationPg pgtype.Int4
-	
+
 	processedRecordsPg.Scan(int32(result.TotalRecords))
 	successfulRecordsPg.Scan(int32(result.SuccessCount))
 	failedRecordsPg.Scan(int32(result.FailureCount))
 	statusPg.Scan(status)
 	completedAtPg.Scan(completedAt)
 	processingDurationPg.Scan(processingDurationSec)
-	
+
 	// Update import history (if queries available)
 	if s.queries != nil {
 		updateParams := queries.UpdateImportHistoryParams{
-			ID:                historyID,
-			ProcessedRecords:  processedRecordsPg,
-			SuccessfulRecords: successfulRecordsPg,
-			FailedRecords:     failedRecordsPg,
-			Status:           statusPg,
-			CompletedAt:      completedAtPg,
+			ID:                 historyID,
+			ProcessedRecords:   processedRecordsPg,
+			SuccessfulRecords:  successfulRecordsPg,
+			FailedRecords:      failedRecordsPg,
+			Status:             statusPg,
+			CompletedAt:        completedAtPg,
 			ProcessingDuration: processingDurationPg,
 		}
 
@@ -279,10 +279,10 @@ func (s *ImportExportService) ExportBooksToCSV(ctx context.Context, req models.E
 	if s.queries != nil {
 		var startedAtTimestamp pgtype.Timestamp
 		startedAtTimestamp.Scan(startTime)
-		
+
 		historyParams := queries.CreateImportHistoryParams{
 			OperationType:     "export",
-			EntityType:        "books", 
+			EntityType:        "books",
 			Filename:          fileName,
 			OriginalFilename:  fileName,
 			FileSize:          1, // Placeholder size to satisfy constraint
@@ -290,9 +290,9 @@ func (s *ImportExportService) ExportBooksToCSV(ctx context.Context, req models.E
 			ProcessedRecords:  0,
 			SuccessfulRecords: 0,
 			FailedRecords:     0,
-			Status:           "processing",
-			UserID:           userID,
-			StartedAt:        startedAtTimestamp,
+			Status:            "processing",
+			UserID:            userID,
+			StartedAt:         startedAtTimestamp,
 		}
 
 		history, err = s.queries.CreateImportHistory(ctx, historyParams)
@@ -307,8 +307,8 @@ func (s *ImportExportService) ExportBooksToCSV(ctx context.Context, req models.E
 		// Update history with failure status if queries is available
 		if s.queries != nil {
 			updateParams := queries.UpdateImportHistoryParams{
-				ID: history.ID,
-				Status: pgtype.Text{String: "failed", Valid: true},
+				ID:           history.ID,
+				Status:       pgtype.Text{String: "failed", Valid: true},
 				ErrorMessage: pgtype.Text{String: err.Error(), Valid: true},
 			}
 			s.queries.UpdateImportHistory(ctx, updateParams)
@@ -328,8 +328,8 @@ func (s *ImportExportService) ExportBooksToCSV(ctx context.Context, req models.E
 		// Update history with failure status if queries is available
 		if s.queries != nil {
 			updateParams := queries.UpdateImportHistoryParams{
-				ID: history.ID,
-				Status: pgtype.Text{String: "failed", Valid: true},
+				ID:           history.ID,
+				Status:       pgtype.Text{String: "failed", Valid: true},
 				ErrorMessage: pgtype.Text{String: err.Error(), Valid: true},
 			}
 			s.queries.UpdateImportHistory(ctx, updateParams)
@@ -343,8 +343,8 @@ func (s *ImportExportService) ExportBooksToCSV(ctx context.Context, req models.E
 		// Update history with failure status if queries is available
 		if s.queries != nil {
 			updateParams := queries.UpdateImportHistoryParams{
-				ID: history.ID,
-				Status: pgtype.Text{String: "failed", Valid: true},
+				ID:           history.ID,
+				Status:       pgtype.Text{String: "failed", Valid: true},
 				ErrorMessage: pgtype.Text{String: err.Error(), Valid: true},
 			}
 			s.queries.UpdateImportHistory(ctx, updateParams)
@@ -362,16 +362,16 @@ func (s *ImportExportService) ExportBooksToCSV(ctx context.Context, req models.E
 	processingTime := time.Since(startTime)
 	processingDurationSec := int32(processingTime.Seconds())
 	completedAt := time.Now()
-	
+
 	// Update history record with success
 	updateParams := queries.UpdateImportHistoryParams{
-		ID:                history.ID,
-		TotalRecords:      pgtype.Int4{Int32: int32(len(exportData)), Valid: true},
-		ProcessedRecords:  pgtype.Int4{Int32: int32(len(exportData)), Valid: true},
-		SuccessfulRecords: pgtype.Int4{Int32: int32(len(exportData)), Valid: true},
-		FailedRecords:     pgtype.Int4{Int32: 0, Valid: true},
-		Status:           pgtype.Text{String: "completed", Valid: true},
-		CompletedAt:      pgtype.Timestamp{Time: completedAt, Valid: true},
+		ID:                 history.ID,
+		TotalRecords:       pgtype.Int4{Int32: int32(len(exportData)), Valid: true},
+		ProcessedRecords:   pgtype.Int4{Int32: int32(len(exportData)), Valid: true},
+		SuccessfulRecords:  pgtype.Int4{Int32: int32(len(exportData)), Valid: true},
+		FailedRecords:      pgtype.Int4{Int32: 0, Valid: true},
+		Status:             pgtype.Text{String: "completed", Valid: true},
+		CompletedAt:        pgtype.Timestamp{Time: completedAt, Valid: true},
 		ProcessingDuration: pgtype.Int4{Int32: processingDurationSec, Valid: true},
 	}
 	if s.queries != nil {
@@ -386,9 +386,9 @@ func (s *ImportExportService) ExportBooksToCSV(ctx context.Context, req models.E
 	if s.queries != nil {
 		_, err = s.queries.CreateExportFile(ctx, queries.CreateExportFileParams{
 			ImportHistoryID: history.ID,
-			FilePath:       filePath,
-			FileFormat:     "csv",
-			DownloadCount:  0,
+			FilePath:        filePath,
+			FileFormat:      "csv",
+			DownloadCount:   0,
 		})
 		if err != nil {
 			// Log error but don't fail the export
@@ -415,14 +415,14 @@ func (s *ImportExportService) ExportBooksToExcel(ctx context.Context, req models
 	// Create initial export history record (skip if queries is nil for testing)
 	var history *queries.ImportHistory
 	fileName := s.generateFileName(req.FileName, "xlsx")
-	
+
 	if s.queries != nil {
 		var startedAtTimestamp pgtype.Timestamp
 		startedAtTimestamp.Scan(startTime)
-		
+
 		historyParams := queries.CreateImportHistoryParams{
 			OperationType:     "export",
-			EntityType:        "books", 
+			EntityType:        "books",
 			Filename:          fileName,
 			OriginalFilename:  fileName,
 			FileSize:          1, // Placeholder size to satisfy constraint
@@ -430,9 +430,9 @@ func (s *ImportExportService) ExportBooksToExcel(ctx context.Context, req models
 			ProcessedRecords:  0,
 			SuccessfulRecords: 0,
 			FailedRecords:     0,
-			Status:           "processing",
-			UserID:           userID,
-			StartedAt:        startedAtTimestamp,
+			Status:            "processing",
+			UserID:            userID,
+			StartedAt:         startedAtTimestamp,
 		}
 
 		historyRecord, err := s.queries.CreateImportHistory(ctx, historyParams)
@@ -448,8 +448,8 @@ func (s *ImportExportService) ExportBooksToExcel(ctx context.Context, req models
 		// Update history with failure status (if available)
 		if s.queries != nil && history != nil {
 			updateParams := queries.UpdateImportHistoryParams{
-				ID: history.ID,
-				Status: pgtype.Text{String: "failed", Valid: true},
+				ID:           history.ID,
+				Status:       pgtype.Text{String: "failed", Valid: true},
 				ErrorMessage: pgtype.Text{String: err.Error(), Valid: true},
 			}
 			s.queries.UpdateImportHistory(ctx, updateParams)
@@ -502,8 +502,8 @@ func (s *ImportExportService) ExportBooksToExcel(ctx context.Context, req models
 		// Update history with failure status (if available)
 		if s.queries != nil && history != nil {
 			updateParams := queries.UpdateImportHistoryParams{
-				ID: history.ID,
-				Status: pgtype.Text{String: "failed", Valid: true},
+				ID:           history.ID,
+				Status:       pgtype.Text{String: "failed", Valid: true},
 				ErrorMessage: pgtype.Text{String: err.Error(), Valid: true},
 			}
 			s.queries.UpdateImportHistory(ctx, updateParams)
@@ -519,20 +519,20 @@ func (s *ImportExportService) ExportBooksToExcel(ctx context.Context, req models
 
 	// Calculate processing time and mark as completed
 	processingTime := time.Since(startTime)
-	
+
 	// Update history record with success (if available)
 	if s.queries != nil && history != nil {
 		processingDurationSec := int32(processingTime.Seconds())
 		completedAt := time.Now()
-		
+
 		updateParams := queries.UpdateImportHistoryParams{
-			ID:                history.ID,
-			TotalRecords:      pgtype.Int4{Int32: int32(len(exportData)), Valid: true},
-			ProcessedRecords:  pgtype.Int4{Int32: int32(len(exportData)), Valid: true},
-			SuccessfulRecords: pgtype.Int4{Int32: int32(len(exportData)), Valid: true},
-			FailedRecords:     pgtype.Int4{Int32: 0, Valid: true},
-			Status:           pgtype.Text{String: "completed", Valid: true},
-			CompletedAt:      pgtype.Timestamp{Time: completedAt, Valid: true},
+			ID:                 history.ID,
+			TotalRecords:       pgtype.Int4{Int32: int32(len(exportData)), Valid: true},
+			ProcessedRecords:   pgtype.Int4{Int32: int32(len(exportData)), Valid: true},
+			SuccessfulRecords:  pgtype.Int4{Int32: int32(len(exportData)), Valid: true},
+			FailedRecords:      pgtype.Int4{Int32: 0, Valid: true},
+			Status:             pgtype.Text{String: "completed", Valid: true},
+			CompletedAt:        pgtype.Timestamp{Time: completedAt, Valid: true},
 			ProcessingDuration: pgtype.Int4{Int32: processingDurationSec, Valid: true},
 		}
 
@@ -545,9 +545,9 @@ func (s *ImportExportService) ExportBooksToExcel(ctx context.Context, req models
 		// Create export file record
 		_, err = s.queries.CreateExportFile(ctx, queries.CreateExportFileParams{
 			ImportHistoryID: history.ID,
-			FilePath:       filePath,
-			FileFormat:     "excel",
-			DownloadCount:  0,
+			FilePath:        filePath,
+			FileFormat:      "excel",
+			DownloadCount:   0,
 		})
 		if err != nil {
 			// Log error but don't fail the export
@@ -904,35 +904,35 @@ func (s *ImportExportService) GetImportHistory(ctx context.Context, userID int32
 			ProcessedRecords:  dbRecord.ProcessedRecords,
 			SuccessfulRecords: dbRecord.SuccessfulRecords,
 			FailedRecords:     dbRecord.FailedRecords,
-			Status:           dbRecord.Status,
-			UserID:          dbRecord.UserID,
+			Status:            dbRecord.Status,
+			UserID:            dbRecord.UserID,
 		}
-		
+
 		// Handle nullable/optional fields with pgtype conversion
 		if dbRecord.ErrorMessage.Valid {
 			historyRecord.ErrorMessage = &dbRecord.ErrorMessage.String
 		}
-		
+
 		if dbRecord.StartedAt.Valid {
 			historyRecord.StartedAt = dbRecord.StartedAt.Time
 		}
-		
+
 		if dbRecord.CompletedAt.Valid {
 			historyRecord.CompletedAt = &dbRecord.CompletedAt.Time
 		}
-		
+
 		if dbRecord.ProcessingDuration.Valid {
 			historyRecord.ProcessingDuration = &dbRecord.ProcessingDuration.Int32
 		}
-		
+
 		if dbRecord.CreatedAt.Valid {
 			historyRecord.CreatedAt = dbRecord.CreatedAt.Time
 		}
-		
+
 		if dbRecord.UpdatedAt.Valid {
 			historyRecord.UpdatedAt = dbRecord.UpdatedAt.Time
 		}
-		
+
 		history = append(history, historyRecord)
 	}
 

@@ -47,7 +47,7 @@ func TestImportExportIntegration(t *testing.T) {
 	// Create a test user for foreign key constraints
 	user, err := db.Queries.CreateUser(context.Background(), queries.CreateUserParams{
 		Username:     "admin",
-		Email:        "admin@example.com", 
+		Email:        "admin@example.com",
 		PasswordHash: "hashedpassword",
 		Role:         pgtype.Text{String: "admin", Valid: true},
 	})
@@ -55,7 +55,7 @@ func TestImportExportIntegration(t *testing.T) {
 		// If that fails, try a different username
 		user, err = db.Queries.CreateUser(context.Background(), queries.CreateUserParams{
 			Username:     "admin" + fmt.Sprintf("%d", time.Now().Unix()),
-			Email:        "admin" + fmt.Sprintf("%d", time.Now().Unix()) + "@example.com", 
+			Email:        "admin" + fmt.Sprintf("%d", time.Now().Unix()) + "@example.com",
 			PasswordHash: "hashedpassword",
 			Role:         pgtype.Text{String: "admin", Valid: true},
 		})
@@ -65,7 +65,7 @@ func TestImportExportIntegration(t *testing.T) {
 	}
 	testUserID := int(user.ID)
 	t.Logf("Created test user with ID: %d", testUserID)
-	
+
 	// Initialize services
 	mockCache := &MockCacheService{}
 	bookService := services.NewBookService(db.Queries, mockCache)
@@ -77,13 +77,13 @@ func TestImportExportIntegration(t *testing.T) {
 	// Setup Gin router
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	
+
 	// Add middleware to set user_id in context for testing
 	router.Use(func(c *gin.Context) {
 		c.Set("user_id", testUserID)
 		c.Next()
 	})
-	
+
 	api := router.Group("/api/v1")
 	{
 		api.POST("/books/import", importExportHandler.ImportBooks)
@@ -381,7 +381,7 @@ func TestImportExportFileOperations(t *testing.T) {
 		timestamp := time.Now().UnixNano()
 		user, err := db.Queries.CreateUser(context.Background(), queries.CreateUserParams{
 			Username:     fmt.Sprintf("testuser_size_%d", timestamp),
-			Email:        fmt.Sprintf("testuser_size_%d@example.com", timestamp), 
+			Email:        fmt.Sprintf("testuser_size_%d@example.com", timestamp),
 			PasswordHash: "hashedpassword",
 			Role:         pgtype.Text{String: "admin", Valid: true},
 		})
@@ -395,13 +395,13 @@ func TestImportExportFileOperations(t *testing.T) {
 
 		gin.SetMode(gin.TestMode)
 		router := gin.New()
-		
+
 		// Add middleware to set user_id in context for testing
 		router.Use(func(c *gin.Context) {
 			c.Set("user_id", testUserID)
 			c.Next()
 		})
-		
+
 		router.POST("/api/v1/books/import", importExportHandler.ImportBooks)
 
 		// Create a large file (simulating file size limit)
@@ -447,7 +447,7 @@ func TestImportExportFileOperations(t *testing.T) {
 		timestamp := time.Now().UnixNano()
 		user, err := db.Queries.CreateUser(context.Background(), queries.CreateUserParams{
 			Username:     fmt.Sprintf("testuser_empty_%d", timestamp),
-			Email:        fmt.Sprintf("testuser_empty_%d@example.com", timestamp), 
+			Email:        fmt.Sprintf("testuser_empty_%d@example.com", timestamp),
 			PasswordHash: "hashedpassword",
 			Role:         pgtype.Text{String: "admin", Valid: true},
 		})
@@ -461,13 +461,13 @@ func TestImportExportFileOperations(t *testing.T) {
 
 		gin.SetMode(gin.TestMode)
 		router := gin.New()
-		
+
 		// Add middleware to set user_id in context for testing
 		router.Use(func(c *gin.Context) {
 			c.Set("user_id", testUserID)
 			c.Next()
 		})
-		
+
 		router.POST("/api/v1/books/import", importExportHandler.ImportBooks)
 
 		// Create empty file
@@ -522,7 +522,7 @@ func TestImportExportPersistence(t *testing.T) {
 		userTimestamp := time.Now().UnixNano()
 		user, err := db.Queries.CreateUser(context.Background(), queries.CreateUserParams{
 			Username:     fmt.Sprintf("testuser_persist_%d", userTimestamp),
-			Email:        fmt.Sprintf("testuser_persist_%d@example.com", userTimestamp), 
+			Email:        fmt.Sprintf("testuser_persist_%d@example.com", userTimestamp),
 			PasswordHash: "hashedpassword",
 			Role:         pgtype.Text{String: "admin", Valid: true},
 		})

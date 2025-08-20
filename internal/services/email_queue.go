@@ -586,17 +586,17 @@ func (s *EmailQueueService) processEmailItem(ctx context.Context, item *models.E
 	}
 
 	// 6. Update delivery tracking (simplified for now)
-	s.logger.Info("Updating email delivery status", 
-		"item_id", item.ID, 
-		"message_id", messageID, 
+	s.logger.Info("Updating email delivery status",
+		"item_id", item.ID,
+		"message_id", messageID,
 		"status", "sent")
 
-	s.logger.Info("Email item processed successfully", 
-		"id", item.ID, 
-		"message_id", messageID, 
+	s.logger.Info("Email item processed successfully",
+		"id", item.ID,
+		"message_id", messageID,
 		"to", recipientEmail,
 		"subject", renderedSubject)
-	
+
 	return nil
 }
 
@@ -605,20 +605,19 @@ func (s *EmailQueueService) renderEmailTemplate(subject, body string, data map[s
 	// Simple template rendering - replace {{variable}} patterns
 	renderedSubject := subject
 	renderedBody := body
-	
+
 	if data != nil {
 		for key, value := range data {
 			placeholder := fmt.Sprintf("{{%s}}", key)
 			replacement := fmt.Sprintf("%v", value)
-			
+
 			renderedSubject = strings.ReplaceAll(renderedSubject, placeholder, replacement)
 			renderedBody = strings.ReplaceAll(renderedBody, placeholder, replacement)
 		}
 	}
-	
+
 	return renderedSubject, renderedBody, nil
 }
-
 
 // convertToEmailQueueItem converts database model to service model
 func (s *EmailQueueService) convertToEmailQueueItem(dbItem *queries.EmailQueue) *models.EmailQueueItem {
