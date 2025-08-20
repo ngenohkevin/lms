@@ -519,8 +519,8 @@ func TestGenerateAPIKey(t *testing.T) {
 	assert.NoError(t, err2)
 	assert.NotEmpty(t, key1)
 	assert.NotEmpty(t, key2)
-	assert.NotEqual(t, key1, key2) // Keys should be unique
-	assert.True(t, len(key1) > 32) // Should be reasonably long
+	assert.NotEqual(t, key1, key2)   // Keys should be unique
+	assert.True(t, len(key1) > 32)   // Should be reasonably long
 	assert.Contains(t, key1, "lms_") // Should have prefix
 	assert.Contains(t, key2, "lms_") // Should have prefix
 }

@@ -121,3 +121,26 @@ func (r *RedisClient) Exists(ctx context.Context, key string) (bool, error) {
 	result, err := r.Client.Exists(ctx, key).Result()
 	return result > 0, err
 }
+
+// ZAdd adds a member to a sorted set
+func (r *RedisClient) ZAdd(ctx context.Context, key string, score float64, member interface{}) error {
+	return r.Client.ZAdd(ctx, key, redis.Z{Score: score, Member: member}).Err()
+}
+
+// ZRangeByScore returns members in a sorted set by score range
+func (r *RedisClient) ZRangeByScore(ctx context.Context, key string, min, max string) ([]string, error) {
+	return r.Client.ZRangeByScore(ctx, key, &redis.ZRangeBy{
+		Min: min,
+		Max: max,
+	}).Result()
+}
+
+// ZRemRangeByScore removes members from a sorted set by score range
+func (r *RedisClient) ZRemRangeByScore(ctx context.Context, key string, min, max string) error {
+	return r.Client.ZRemRangeByScore(ctx, key, min, max).Err()
+}
+
+// ZCard returns the number of elements in a sorted set
+func (r *RedisClient) ZCard(ctx context.Context, key string) (int64, error) {
+	return r.Client.ZCard(ctx, key).Result()
+}

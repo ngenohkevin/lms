@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -106,6 +107,18 @@ func cleanTestDatabase(t *testing.T, db *database.Database) {
 	db.Pool.Exec(ctx, "ALTER SEQUENCE users_id_seq RESTART WITH 1")
 }
 
+// cleanWorkflowTestData removes only workflow test data from the database
+func cleanWorkflowTestData(t *testing.T, pool *pgxpool.Pool) {
+	ctx := context.Background()
+
+	// Delete workflow test data using year 2023 to avoid conflicts with database tests using 2024
+	_, _ = pool.Exec(ctx, "DELETE FROM audit_logs WHERE table_name = 'students' AND record_id IN (SELECT id FROM students WHERE student_id LIKE 'STU2023%')")
+	_, _ = pool.Exec(ctx, "DELETE FROM transactions WHERE student_id IN (SELECT id FROM students WHERE student_id LIKE 'STU2023%')")
+	_, _ = pool.Exec(ctx, "DELETE FROM reservations WHERE student_id IN (SELECT id FROM students WHERE student_id LIKE 'STU2023%')")
+	_, _ = pool.Exec(ctx, "DELETE FROM students WHERE student_id LIKE 'STU2023%'")
+	_, _ = pool.Exec(ctx, "DELETE FROM users WHERE username LIKE 'test_workflow_%'")
+}
+
 // TestStudentAccountWorkflow tests the complete student account creation workflow
 // This is an integration test that covers Phase 5.4 requirements
 func TestStudentAccountWorkflow(t *testing.T) {
@@ -113,12 +126,15 @@ func TestStudentAccountWorkflow(t *testing.T) {
 	defer db.Close()
 	ctx := context.Background()
 
+	// Clean up any existing workflow test data to avoid conflicts
+	cleanWorkflowTestData(t, db.Pool)
+
 	t.Run("complete account creation workflow", func(t *testing.T) {
 		// Step 1: Generate a student ID for the current year
-		studentID, err := studentService.GenerateNextStudentID(ctx, 2024)
+		studentID, err := studentService.GenerateNextStudentID(ctx, 2023)
 		require.NoError(t, err)
 		require.NotEmpty(t, studentID)
-		assert.Contains(t, studentID, "STU2024")
+		assert.Contains(t, studentID, "STU2023")
 
 		// Step 2: Create a student account with minimal required information
 		createReq := &models.CreateStudentRequest{
@@ -182,8 +198,10 @@ func TestStudentAccountWorkflow(t *testing.T) {
 	})
 
 	t.Run("quick account creation with full information", func(t *testing.T) {
+		// Clean up workflow test data to avoid conflicts
+		cleanWorkflowTestData(t, db.Pool)
 		// Generate student ID
-		studentID, err := studentService.GenerateNextStudentID(ctx, 2024)
+		studentID, err := studentService.GenerateNextStudentID(ctx, 2023)
 		require.NoError(t, err)
 
 		// Create student with comprehensive information
@@ -225,10 +243,12 @@ func TestStudentAccountWorkflow(t *testing.T) {
 	})
 
 	t.Run("bulk account creation workflow", func(t *testing.T) {
+		// Clean up workflow test data to avoid conflicts
+		cleanWorkflowTestData(t, db.Pool)
 		// Prepare bulk import data
 		bulkRequests := []models.BulkImportStudentRequest{
 			{
-				StudentID:   "STU2024100",
+				StudentID:   "STU2023100",
 				FirstName:   "Alice",
 				LastName:    "Johnson",
 				Email:       "alice.johnson@university.edu",
@@ -236,7 +256,7 @@ func TestStudentAccountWorkflow(t *testing.T) {
 				Department:  "Mathematics",
 			},
 			{
-				StudentID:   "STU2024101",
+				StudentID:   "STU2023101",
 				FirstName:   "Bob",
 				LastName:    "Smith",
 				Email:       "bob.smith@university.edu",
@@ -244,7 +264,7 @@ func TestStudentAccountWorkflow(t *testing.T) {
 				Department:  "Physics",
 			},
 			{
-				StudentID:   "STU2024102",
+				StudentID:   "STU2023102",
 				FirstName:   "Carol",
 				LastName:    "Wilson",
 				Email:       "carol.wilson@university.edu",
@@ -285,8 +305,10 @@ func TestStudentAccountWorkflow(t *testing.T) {
 	})
 
 	t.Run("account creation validation workflow", func(t *testing.T) {
+		// Clean up workflow test data to avoid conflicts
+		cleanWorkflowTestData(t, db.Pool)
 		// Test duplicate student ID validation
-		studentID := "STU2024500"
+		studentID := "STU2023500"
 
 		// Create first student
 		createReq1 := &models.CreateStudentRequest{
@@ -329,7 +351,7 @@ func TestStudentAccountWorkflow(t *testing.T) {
 
 		// Try to create new student with same email
 		createReq3 := &models.CreateStudentRequest{
-			StudentID:   "STU2024501",
+			StudentID:   "STU2023501",
 			FirstName:   "Third",
 			LastName:    "Student",
 			Email:       email, // Same email
@@ -347,8 +369,10 @@ func TestStudentAccountWorkflow(t *testing.T) {
 	})
 
 	t.Run("librarian workflow for student account management", func(t *testing.T) {
+		// Clean up workflow test data to avoid conflicts
+		cleanWorkflowTestData(t, db.Pool)
 		// Generate student ID for new student
-		studentID, err := studentService.GenerateNextStudentID(ctx, 2024)
+		studentID, err := studentService.GenerateNextStudentID(ctx, 2023)
 		require.NoError(t, err)
 
 		// Step 1: Librarian creates student account quickly

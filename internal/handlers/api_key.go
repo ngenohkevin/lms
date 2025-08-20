@@ -32,14 +32,14 @@ type CreateAPIKeyRequest struct {
 
 // APIKeyResponse represents the API key response
 type APIKeyResponse struct {
-	ID          string                     `json:"id"`
-	Name        string                     `json:"name"`
-	Permissions []string                   `json:"permissions"`
-	CreatedAt   time.Time                  `json:"created_at"`
-	LastUsed    *time.Time                 `json:"last_used,omitempty"`
-	ExpiresAt   *time.Time                 `json:"expires_at,omitempty"`
-	IsActive    bool                       `json:"is_active"`
-	KeyPrefix   string                     `json:"key_prefix"` // Only first 8 characters for identification
+	ID          string     `json:"id"`
+	Name        string     `json:"name"`
+	Permissions []string   `json:"permissions"`
+	CreatedAt   time.Time  `json:"created_at"`
+	LastUsed    *time.Time `json:"last_used,omitempty"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	IsActive    bool       `json:"is_active"`
+	KeyPrefix   string     `json:"key_prefix"` // Only first 8 characters for identification
 }
 
 // CreateAPIKeyResponse includes the full key only on creation
@@ -450,9 +450,9 @@ func (h *APIKeyHandler) RevokeAPIKey(c *gin.Context) {
 
 	// Log the revocation
 	if auditLogger, exists := middleware.GetAuditLoggerFromContext(c); exists {
-		auditLogger.LogUpdate(c.Request.Context(), "api_keys", 0, 
-			map[string]interface{}{"is_active": true}, 
-			map[string]interface{}{"is_active": false, "revoked_at": time.Now()}, 
+		auditLogger.LogUpdate(c.Request.Context(), "api_keys", 0,
+			map[string]interface{}{"is_active": true},
+			map[string]interface{}{"is_active": false, "revoked_at": time.Now()},
 			getUserIDFromContext(c), "librarian", getClientIP(c), c.GetHeader("User-Agent"))
 	}
 
