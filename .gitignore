@@ -99,3 +99,6 @@ excalidraw.log
 # Claude files
 .claude/
 
+# Disabled test files that may contain sensitive test data
+*.disabled
+

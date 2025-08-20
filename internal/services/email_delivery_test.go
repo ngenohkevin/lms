@@ -23,6 +23,10 @@ func (m *mockEmailService) SendEmail(ctx context.Context, to, subject, body stri
 	return nil
 }
 
+func (m *mockEmailService) SendEmailWithID(ctx context.Context, request *models.SendEmailRequest) (string, error) {
+	return "mock-message-id", nil
+}
+
 func (m *mockEmailService) SendTemplatedEmail(ctx context.Context, to string, template *models.EmailTemplate, data map[string]interface{}) error {
 	return nil
 }
@@ -488,19 +492,19 @@ func TestEmailDeliveryService_GetFailedDeliveries(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Create a failed delivery that can be retried
+	// Create a pending delivery first
 	req := &models.EmailDeliveryRequest{
 		NotificationID: notification.ID,
 		EmailAddress:   "failed@example.com",
-		Status:         models.EmailDeliveryStatusFailed,
-		RetryCount:     1,
+		Status:         models.EmailDeliveryStatusPending,
+		RetryCount:     0,
 		MaxRetries:     3,
 	}
 
 	created, err := service.CreateDelivery(ctx, req)
 	require.NoError(t, err)
 
-	// Update it to failed status
+	// Update it to failed status via error method
 	_, err = service.UpdateDeliveryError(ctx, created.ID, "Test error")
 	require.NoError(t, err)
 
@@ -530,9 +534,18 @@ func TestEmailDeliveryService_GetDeliveryStats(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Create a test notification directly without dependencies
+	// Create a test student first to satisfy foreign key constraint
+	student, err := service.queries.CreateStudent(ctx, queries.CreateStudentParams{
+		StudentID:   "TEST_STUDENT_003",
+		FirstName:   "Test",
+		LastName:    "Student",
+		YearOfStudy: 1,
+	})
+	require.NoError(t, err)
+
+	// Create a test notification with valid recipient ID
 	notification, err := service.queries.CreateNotification(ctx, queries.CreateNotificationParams{
-		RecipientID:   1,
+		RecipientID:   student.ID,
 		RecipientType: "student",
 		Type:          "overdue_reminder",
 		Title:         "Test Notification",
@@ -593,15 +606,22 @@ func TestEmailDeliveryService_UpdateProviderInfo(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Create a test delivery first
-	notificationService := NewNotificationService(service.queries, &mockEmailService{}, &mockQueueService{}, service.logger)
-	notification, err := notificationService.CreateNotification(ctx, &models.NotificationRequest{
-		RecipientID:   1,
-		RecipientType: models.RecipientTypeStudent,
-		Type:          models.NotificationTypeOverdueReminder,
+	// Create a test student first to satisfy foreign key constraint
+	student, err := service.queries.CreateStudent(ctx, queries.CreateStudentParams{
+		StudentID:   "TEST_STUDENT_004",
+		FirstName:   "Test",
+		LastName:    "Student",
+		YearOfStudy: 1,
+	})
+	require.NoError(t, err)
+
+	// Create a test notification with valid recipient ID
+	notification, err := service.queries.CreateNotification(ctx, queries.CreateNotificationParams{
+		RecipientID:   student.ID,
+		RecipientType: "student",
+		Type:          "overdue_reminder",
 		Title:         "Test Notification",
 		Message:       "Test message",
-		Priority:      models.NotificationPriorityMedium,
 	})
 	require.NoError(t, err)
 
@@ -624,9 +644,9 @@ func TestEmailDeliveryService_UpdateProviderInfo(t *testing.T) {
 		}
 
 		delivery, err := service.UpdateProviderInfo(ctx, created.ID, messageID, metadata)
-		assert.NoError(t, err)
-		assert.NotNil(t, delivery)
-		assert.NotNil(t, delivery.ProviderMessageID)
+		require.NoError(t, err)
+		require.NotNil(t, delivery)
+		require.NotNil(t, delivery.ProviderMessageID)
 		assert.Equal(t, messageID, *delivery.ProviderMessageID)
 		assert.NotNil(t, delivery.Metadata)
 		assert.Equal(t, "sendgrid", delivery.Metadata["provider"])

@@ -24,32 +24,32 @@ type MockImportExportService struct {
 	mock.Mock
 }
 
-func (m *MockImportExportService) ImportBooksFromCSV(ctx context.Context, reader io.Reader, fileName string) (*models.ImportResult, error) {
-	args := m.Called(ctx, reader, fileName)
+func (m *MockImportExportService) ImportBooksFromCSV(ctx context.Context, reader io.Reader, fileName string, userID int32) (*models.ImportResult, error) {
+	args := m.Called(ctx, reader, fileName, userID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*models.ImportResult), args.Error(1)
 }
 
-func (m *MockImportExportService) ImportBooksFromExcel(ctx context.Context, reader io.Reader, fileName string) (*models.ImportResult, error) {
-	args := m.Called(ctx, reader, fileName)
+func (m *MockImportExportService) ImportBooksFromExcel(ctx context.Context, reader io.Reader, fileName string, userID int32) (*models.ImportResult, error) {
+	args := m.Called(ctx, reader, fileName, userID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*models.ImportResult), args.Error(1)
 }
 
-func (m *MockImportExportService) ExportBooksToCSV(ctx context.Context, req models.ExportRequest) (*models.ExportResult, error) {
-	args := m.Called(ctx, req)
+func (m *MockImportExportService) ExportBooksToCSV(ctx context.Context, req models.ExportRequest, userID int32) (*models.ExportResult, error) {
+	args := m.Called(ctx, req, userID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*models.ExportResult), args.Error(1)
 }
 
-func (m *MockImportExportService) ExportBooksToExcel(ctx context.Context, req models.ExportRequest) (*models.ExportResult, error) {
-	args := m.Called(ctx, req)
+func (m *MockImportExportService) ExportBooksToExcel(ctx context.Context, req models.ExportRequest, userID int32) (*models.ExportResult, error) {
+	args := m.Called(ctx, req, userID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -62,6 +62,14 @@ func (m *MockImportExportService) GenerateImportTemplate(format string) (*models
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*models.ImportTemplate), args.Error(1)
+}
+
+func (m *MockImportExportService) GetImportHistory(ctx context.Context, userID int32, page, limit int, operationType, entityType, status string) ([]models.ImportHistory, models.Pagination, error) {
+	args := m.Called(ctx, userID, page, limit, operationType, entityType, status)
+	if args.Get(0) == nil {
+		return nil, models.Pagination{}, args.Error(2)
+	}
+	return args.Get(0).([]models.ImportHistory), args.Get(1).(models.Pagination), args.Error(2)
 }
 
 func (m *MockImportExportService) ExportBooksToCSVContent(ctx context.Context, req models.ExportRequest) (string, string, error) {
@@ -123,7 +131,7 @@ func TestImportExportHandler_ImportBooks(t *testing.T) {
 						FileName: "test.csv",
 					},
 				}
-				m.On("ImportBooksFromCSV", mock.Anything, mock.Anything, "test.csv").Return(result, nil)
+				m.On("ImportBooksFromCSV", mock.Anything, mock.Anything, "test.csv", mock.Anything).Return(result, nil)
 			},
 			expectedStatus: http.StatusOK,
 			expectedBody: func(t *testing.T, resp *httptest.ResponseRecorder) {

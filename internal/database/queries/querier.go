@@ -14,6 +14,7 @@ type Querier interface {
 	BulkUpdateStudentStatus(ctx context.Context, arg BulkUpdateStudentStatusParams) error
 	CancelQueueItem(ctx context.Context, id int32) (EmailQueue, error)
 	CancelReservation(ctx context.Context, id int32) (Reservation, error)
+	CleanupExpiredExportFiles(ctx context.Context) ([]ExportFile, error)
 	CompleteQueueItem(ctx context.Context, id int32) (EmailQueue, error)
 	CountActiveReservationsByBook(ctx context.Context, bookID int32) (int64, error)
 	CountActiveReservationsByStudent(ctx context.Context, studentID int32) (int64, error)
@@ -21,6 +22,7 @@ type Querier interface {
 	CountAuditLogsByTable(ctx context.Context, tableName string) (int64, error)
 	CountAvailableBooks(ctx context.Context) (int64, error)
 	CountBooks(ctx context.Context) (int64, error)
+	CountImportHistoryByFilters(ctx context.Context, arg CountImportHistoryByFiltersParams) (int64, error)
 	CountNotificationsByType(ctx context.Context, type_ string) (int64, error)
 	CountOverdueTransactions(ctx context.Context) (int64, error)
 	// Renewal-related queries for Phase 6.7
@@ -39,6 +41,9 @@ type Querier interface {
 	// Email Queue Queries
 	// Phase 7.4: Email Integration - Queue Processing
 	CreateEmailQueueItem(ctx context.Context, arg CreateEmailQueueItemParams) (EmailQueue, error)
+	CreateExportFile(ctx context.Context, arg CreateExportFileParams) (ExportFile, error)
+	CreateImportError(ctx context.Context, arg CreateImportErrorParams) (ImportError, error)
+	CreateImportHistory(ctx context.Context, arg CreateImportHistoryParams) (ImportHistory, error)
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) (Notification, error)
 	CreateReservation(ctx context.Context, arg CreateReservationParams) (Reservation, error)
 	CreateStudent(ctx context.Context, arg CreateStudentParams) (Student, error)
@@ -50,6 +55,7 @@ type Querier interface {
 	DeleteOldNotifications(ctx context.Context, createdAt pgtype.Timestamp) error
 	DeleteOldQueueItems(ctx context.Context, createdAt pgtype.Timestamp) error
 	GetAcademicYearAnalytics(ctx context.Context, arg GetAcademicYearAnalyticsParams) (GetAcademicYearAnalyticsRow, error)
+	GetActiveExportFiles(ctx context.Context) ([]ExportFile, error)
 	GetBookByBookID(ctx context.Context, bookID string) (Book, error)
 	GetBookByID(ctx context.Context, id int32) (Book, error)
 	GetBookByISBN(ctx context.Context, isbn pgtype.Text) (Book, error)
@@ -66,9 +72,15 @@ type Querier interface {
 	GetEmailDeliveryHistory(ctx context.Context, arg GetEmailDeliveryHistoryParams) ([]GetEmailDeliveryHistoryRow, error)
 	GetEmailDeliveryStats(ctx context.Context, arg GetEmailDeliveryStatsParams) (GetEmailDeliveryStatsRow, error)
 	GetEmailQueueItem(ctx context.Context, id int32) (EmailQueue, error)
+	GetExportFilesByHistoryID(ctx context.Context, importHistoryID int32) ([]ExportFile, error)
 	GetFailedEmailDeliveries(ctx context.Context, limit int32) ([]EmailDelivery, error)
 	GetFineStatistics(ctx context.Context, arg GetFineStatisticsParams) (GetFineStatisticsRow, error)
 	GetGenrePopularity(ctx context.Context, arg GetGenrePopularityParams) ([]GetGenrePopularityRow, error)
+	GetImportErrorsByHistoryID(ctx context.Context, importHistoryID int32) ([]ImportError, error)
+	GetImportHistoryByFilters(ctx context.Context, arg GetImportHistoryByFiltersParams) ([]ImportHistory, error)
+	GetImportHistoryByID(ctx context.Context, id int32) (ImportHistory, error)
+	GetImportHistoryByUserID(ctx context.Context, arg GetImportHistoryByUserIDParams) ([]ImportHistory, error)
+	GetImportHistoryStats(ctx context.Context, userID int32) (GetImportHistoryStatsRow, error)
 	GetInventoryStatus(ctx context.Context) ([]GetInventoryStatusRow, error)
 	GetLibraryOverview(ctx context.Context) (GetLibraryOverviewRow, error)
 	GetMonthlyTrends(ctx context.Context, arg GetMonthlyTrendsParams) ([]GetMonthlyTrendsRow, error)
@@ -163,6 +175,8 @@ type Querier interface {
 	UpdateEmailDeliveryToDelivered(ctx context.Context, id int32) (EmailDelivery, error)
 	UpdateEmailDeliveryToFailed(ctx context.Context, id int32) (EmailDelivery, error)
 	UpdateEmailDeliveryToSent(ctx context.Context, id int32) (EmailDelivery, error)
+	UpdateExportFileDownload(ctx context.Context, id int32) (ExportFile, error)
+	UpdateImportHistory(ctx context.Context, arg UpdateImportHistoryParams) (ImportHistory, error)
 	UpdateQueueItemError(ctx context.Context, arg UpdateQueueItemErrorParams) (EmailQueue, error)
 	// Items processing longer than threshold
 	UpdateQueueItemStatus(ctx context.Context, arg UpdateQueueItemStatusParams) (EmailQueue, error)

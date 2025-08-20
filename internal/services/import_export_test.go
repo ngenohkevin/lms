@@ -92,6 +92,7 @@ func (m *MockBookService) UpdateBookAvailability(ctx context.Context, bookID int
 	return args.Error(0)
 }
 
+
 func TestImportExportService(t *testing.T) {
 	// Create temporary directory for test files
 	tmpDir, err := os.MkdirTemp("", "import_export_test")
@@ -102,7 +103,9 @@ func TestImportExportService(t *testing.T) {
 	mockBookService := &MockBookService{}
 
 	// Create import/export service
-	service := NewImportExportService(mockBookService, tmpDir)
+	// For testing, we'll need to use a real queries instance or refactor to use interfaces
+	// For now, create service with nil queries - this will test non-history functionality
+	service := NewImportExportService(mockBookService, nil, tmpDir)
 
 	t.Run("NewImportExportService", func(t *testing.T) {
 		assert.NotNil(t, service)
@@ -160,8 +163,10 @@ TEST002,Test Book 2,Test Author 2,978-0-123456-79-6,Test Publisher,2023,Non-Fict
 			return req.BookID == "TEST002"
 		})).Return(models.BookResponse{ID: 2, BookID: "TEST002", Title: "Test Book 2"}, nil)
 
+		// Note: History tracking will be skipped in this test since queries is nil
+
 		// Test import
-		result, err := service.ImportBooksFromCSV(context.Background(), file, "test.csv")
+		result, err := service.ImportBooksFromCSV(context.Background(), file, "test.csv", 1)
 		require.NoError(t, err)
 
 		assert.Equal(t, 2, result.TotalRecords)
@@ -196,7 +201,7 @@ TEST003,,,978-0-123456-79-6,Test Publisher,2023,Non-Fiction,Test Description 2,3
 		defer file.Close()
 
 		// Test import
-		result, err := service.ImportBooksFromCSV(context.Background(), file, "test_invalid.csv")
+		result, err := service.ImportBooksFromCSV(context.Background(), file, "test_invalid.csv", 1)
 		require.NoError(t, err)
 
 		assert.Equal(t, 2, result.TotalRecords)
@@ -223,7 +228,7 @@ TEST003,,,978-0-123456-79-6,Test Publisher,2023,Non-Fiction,Test Description 2,3
 		defer file.Close()
 
 		// Test import
-		_, err = service.ImportBooksFromCSV(context.Background(), file, "test_empty.csv")
+		_, err = service.ImportBooksFromCSV(context.Background(), file, "test_empty.csv", 1)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "empty csv file given")
 	})
@@ -248,7 +253,7 @@ this is not a valid csv file`
 		defer file.Close()
 
 		// Test import - this should succeed but fail during validation
-		result, err := service.ImportBooksFromCSV(context.Background(), file, "test_invalid_csv.csv")
+		result, err := service.ImportBooksFromCSV(context.Background(), file, "test_invalid_csv.csv", 1)
 		// CSV parser is lenient, so this may not fail at parse time
 		// Instead it should fail during book creation
 		if err != nil {
@@ -285,6 +290,8 @@ this is not a valid csv file`
 
 		mockBookService.On("SearchBooks", mock.Anything, mock.AnythingOfType("models.BookSearchRequest")).Return(expectedBooks, nil)
 
+		// Note: History tracking will be skipped in this test since queries is nil
+
 		// Create export request
 		req := models.ExportRequest{
 			Format:   "csv",
@@ -293,7 +300,7 @@ this is not a valid csv file`
 		}
 
 		// Test export
-		result, err := service.ExportBooksToCSV(context.Background(), req)
+		result, err := service.ExportBooksToCSV(context.Background(), req, 1)
 		require.NoError(t, err)
 		defer os.Remove(result.FilePath)
 
@@ -330,6 +337,8 @@ this is not a valid csv file`
 
 		mockBookService.On("SearchBooks", mock.Anything, mock.AnythingOfType("models.BookSearchRequest")).Return(expectedBooks, nil)
 
+		// Note: History tracking will be skipped in this test since queries is nil
+
 		// Create export request
 		req := models.ExportRequest{
 			Format:   "excel",
@@ -338,7 +347,7 @@ this is not a valid csv file`
 		}
 
 		// Test export
-		result, err := service.ExportBooksToExcel(context.Background(), req)
+		result, err := service.ExportBooksToExcel(context.Background(), req, 1)
 		require.NoError(t, err)
 		defer os.Remove(result.FilePath)
 

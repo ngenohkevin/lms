@@ -118,6 +118,11 @@ func (m *MockEmailService) SendEmail(ctx context.Context, to, subject, body stri
 	return args.Error(0)
 }
 
+func (m *MockEmailService) SendEmailWithID(ctx context.Context, request *models.SendEmailRequest) (string, error) {
+	args := m.Called(ctx, request)
+	return args.String(0), args.Error(1)
+}
+
 func (m *MockEmailService) SendTemplatedEmail(ctx context.Context, to string, template *models.EmailTemplate, data map[string]interface{}) error {
 	args := m.Called(ctx, to, template, data)
 	return args.Error(0)

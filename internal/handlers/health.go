@@ -2,9 +2,12 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"os"
 	"runtime"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -76,6 +79,14 @@ type RequestMetrics struct {
 	Success int64   `json:"success"`
 	Error   int64   `json:"error"`
 	Rate    float64 `json:"rate"` // requests per second
+}
+
+type DiskSpaceInfo struct {
+	Path        string  `json:"path"`
+	Total       uint64  `json:"total_bytes"`
+	Free        uint64  `json:"free_bytes"`
+	Used        uint64  `json:"used_bytes"`
+	UsedPercent float64 `json:"used_percent"`
 }
 
 var (
@@ -263,12 +274,76 @@ func (h *HealthHandler) checkCache(ctx context.Context) func() HealthCheck {
 }
 
 func (h *HealthHandler) checkDiskSpace() HealthCheck {
-	// Simple disk space check (would need OS-specific implementation for production)
-	// This is a placeholder implementation
+	// Get current working directory for disk space check
+	wd, err := os.Getwd()
+	if err != nil {
+		return HealthCheck{
+			Status:  "unhealthy",
+			Message: fmt.Sprintf("Failed to get working directory: %v", err),
+		}
+	}
+
+	diskInfo, err := getDiskSpaceInfo(wd)
+	if err != nil {
+		return HealthCheck{
+			Status:  "unhealthy",
+			Message: fmt.Sprintf("Failed to get disk space info: %v", err),
+		}
+	}
+
+	// Define thresholds
+	const (
+		warningThreshold  = 80.0 // 80% disk usage
+		criticalThreshold = 90.0 // 90% disk usage
+	)
+
+	message := fmt.Sprintf("Disk usage: %.1f%% (%.2f GB used of %.2f GB total)",
+		diskInfo.UsedPercent,
+		float64(diskInfo.Used)/(1024*1024*1024),
+		float64(diskInfo.Total)/(1024*1024*1024))
+
+	if diskInfo.UsedPercent >= criticalThreshold {
+		return HealthCheck{
+			Status:  "unhealthy",
+			Message: fmt.Sprintf("Critical disk space usage: %s", message),
+		}
+	} else if diskInfo.UsedPercent >= warningThreshold {
+		return HealthCheck{
+			Status:  "degraded",
+			Message: fmt.Sprintf("High disk space usage: %s", message),
+		}
+	}
+
 	return HealthCheck{
 		Status:  "healthy",
-		Message: "Disk space check not implemented",
+		Message: message,
 	}
+}
+
+// getDiskSpaceInfo gets disk space information for the given path
+func getDiskSpaceInfo(path string) (*DiskSpaceInfo, error) {
+	var stat syscall.Statfs_t
+	err := syscall.Statfs(path, &stat)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get filesystem stats: %w", err)
+	}
+
+	// Calculate disk space metrics
+	total := stat.Blocks * uint64(stat.Bsize)
+	free := stat.Bavail * uint64(stat.Bsize)
+	used := total - free
+	usedPercent := 0.0
+	if total > 0 {
+		usedPercent = float64(used) / float64(total) * 100.0
+	}
+
+	return &DiskSpaceInfo{
+		Path:        path,
+		Total:       total,
+		Free:        free,
+		Used:        used,
+		UsedPercent: usedPercent,
+	}, nil
 }
 
 func (h *HealthHandler) checkMemoryUsage() HealthCheck {

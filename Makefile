@@ -41,7 +41,7 @@ test:
 	@echo "$(GREEN)Setting up test environment...$(NC)"
 	@bash -c "set -a; [ -f .env.test ] && source .env.test; set +a; ./scripts/test_db_setup_simple.sh > /dev/null 2>&1 || true"
 	@echo "$(GREEN)Running tests...$(NC)"
-	@bash -c "set -a; [ -f .env.test ] && source .env.test; set +a; go test -v ./..."
+	@bash -c "set -a; [ -f .env.test ] && source .env.test; set +a; go test -v -timeout=600s ./..."
 
 # Run tests with database
 test-db:
