@@ -331,6 +331,260 @@ func TestBackupService_CalculateChecksum(t *testing.T) {
 	assert.NotEqual(t, checksum1, checksum3)
 }
 
+// Tests for Enhanced Backup System (Phase 9.3)
+
+func (s *BackupServiceTestSuite) TestScheduleBackups() {
+	schedule := "*/5 * * * * *" // Every 5 seconds for testing
+
+	// Test scheduling backups
+	err := s.backupService.ScheduleBackups(s.ctx, schedule)
+	s.NoError(err)
+
+	// Get backup status to verify scheduler is enabled
+	status, err := s.backupService.GetBackupStatus(s.ctx)
+	s.NoError(err)
+	s.True(status.SchedulerEnabled)
+
+	// Stop the scheduler
+	err = s.backupService.StopScheduler()
+	s.NoError(err)
+
+	// Verify scheduler is disabled
+	status, err = s.backupService.GetBackupStatus(s.ctx)
+	s.NoError(err)
+	s.False(status.SchedulerEnabled)
+}
+
+func (s *BackupServiceTestSuite) TestGetBackupStatus() {
+	// Create some mock backups first
+	backupPath := filepath.Join(s.tempDir, "status_test.sql.gz")
+	err := s.createMockGzipFile(backupPath, "-- Status test backup")
+	s.NoError(err)
+
+	// Get backup status
+	status, err := s.backupService.GetBackupStatus(s.ctx)
+	s.NoError(err)
+
+	s.NotNil(status)
+	s.GreaterOrEqual(status.TotalBackups, 1)
+	s.GreaterOrEqual(status.DiskUsage, int64(0))
+	s.NotEmpty(status.HealthStatus)
+	s.NotNil(status.ActiveJobs)
+	s.NotNil(status.RecentErrors)
+}
+
+func (s *BackupServiceTestSuite) TestDisasterRecoveryTests() {
+	// Create a test backup first
+	backupPath := filepath.Join(s.tempDir, "dr_test.sql.gz")
+	err := s.createMockGzipFile(backupPath, "-- Disaster recovery test backup")
+	s.NoError(err)
+
+	testTypes := []DisasterRecoveryTestType{
+		DRTestBasicRestore,
+		DRTestFullRecovery,
+		DRTestPointInTime,
+		DRTestCorruption,
+		DRTestPerformance,
+	}
+
+	for _, testType := range testTypes {
+		result, err := s.backupService.TestDisasterRecovery(s.ctx, testType)
+		s.NoError(err, "Test type: %s", testType)
+		s.NotNil(result)
+		s.Equal(testType, result.TestType)
+		s.True(result.Duration > 0)
+		s.NotNil(result.Issues)
+		s.NotNil(result.Recommendations)
+		s.NotNil(result.BackupsUsed)
+	}
+}
+
+func (s *BackupServiceTestSuite) TestValidateBackupIntegrity() {
+	// Create a valid backup
+	validBackupPath := filepath.Join(s.tempDir, "integrity_test.sql.gz")
+	err := s.createMockGzipFile(validBackupPath, "-- Integrity test backup")
+	s.NoError(err)
+
+	// Test integrity validation
+	result, err := s.backupService.ValidateBackupIntegrity(s.ctx, validBackupPath)
+	s.NoError(err)
+	s.NotNil(result)
+	s.True(result.ChecksumValid)
+	s.True(result.StructureValid)
+	s.True(result.DataConsistent)
+	s.False(result.CorruptionFound)
+	s.True(result.Duration > 0)
+	s.NotNil(result.Issues)
+	s.NotNil(result.Warnings)
+	s.NotNil(result.DetailedResults)
+
+	// Test with non-existent backup
+	result, err = s.backupService.ValidateBackupIntegrity(s.ctx, "/nonexistent/path.sql.gz")
+	s.NoError(err) // Should not error, but should report issues
+	s.False(result.IsValid)
+	s.Greater(len(result.Issues), 0)
+}
+
+func (s *BackupServiceTestSuite) TestMonitorBackupHealth() {
+	// Create some test backups
+	backups := []string{
+		"health_test_1.sql.gz",
+		"health_test_2.sql.gz",
+		"health_test_3.sql.gz",
+	}
+
+	for _, backup := range backups {
+		backupPath := filepath.Join(s.tempDir, backup)
+		err := s.createMockGzipFile(backupPath, "-- Health test backup content")
+		s.NoError(err)
+	}
+
+	// Monitor backup health
+	health, err := s.backupService.MonitorBackupHealth(s.ctx)
+	s.NoError(err)
+	s.NotNil(health)
+
+	s.NotEmpty(health.Overall)
+	s.NotNil(health.DiskSpace)
+	s.GreaterOrEqual(health.DiskSpace.Used, int64(0))
+	s.GreaterOrEqual(health.DiskSpace.Available, int64(0))
+	s.GreaterOrEqual(health.DiskSpace.Total, int64(0))
+	s.GreaterOrEqual(health.DiskSpace.Percentage, float64(0))
+	s.NotEmpty(health.DiskSpace.Status)
+
+	s.NotNil(health.RecentBackups)
+	s.NotEmpty(health.SchedulerHealth)
+	s.NotNil(health.AlertsActive)
+	s.NotNil(health.Recommendations)
+	s.False(health.LastHealthCheck.IsZero())
+}
+
+func (s *BackupServiceTestSuite) TestIncrementalBackup() {
+	// This test will use the PerformIncrementalBackup method
+	// which internally calls CreateBackup with BackupTypeIncremental
+	backup, err := s.backupService.PerformIncrementalBackup(s.ctx)
+
+	// The method will fail in test environment due to missing pg_dump
+	// but we can test that it returns appropriate error handling
+	s.Error(err) // Expected to fail in test environment
+
+	// The backup object might still be returned with failure status
+	if backup != nil {
+		s.Equal("failed", backup.Status)
+		s.Equal(BackupTypeIncremental, backup.Type)
+	}
+}
+
+func (s *BackupServiceTestSuite) TestBackupServiceWithConfig() {
+	config := BackupServiceConfig{
+		BackupDir:       s.tempDir,
+		RetentionDays:   7,
+		Encryption:      true,
+		EncryptionKey:   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", // 64 hex chars = 32 bytes
+		RemoteStorage:   false,
+		MaxBackups:      5,
+		BackupTimeout:   1800,
+		HealthCheckURL:  "http://localhost:8080/health",
+		NotifyOnFailure: true,
+	}
+
+	service := NewBackupServiceWithConfig(s.db, config)
+	s.NotNil(service)
+
+	// Test that we can get status from the configured service
+	status, err := service.GetBackupStatus(s.ctx)
+	s.NoError(err)
+	s.NotNil(status)
+}
+
+// Unit tests for specific enhanced functionality
+
+func TestBackupServiceConfig(t *testing.T) {
+	tempDir := t.TempDir()
+	db := &database.Database{}
+
+	config := BackupServiceConfig{
+		BackupDir:       tempDir,
+		RetentionDays:   14,
+		Encryption:      true,
+		EncryptionKey:   "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789", // Invalid - 63 chars
+		RemoteStorage:   true,
+		MaxBackups:      20,
+		BackupTimeout:   7200,
+		HealthCheckURL:  "https://example.com/health",
+		NotifyOnFailure: false,
+	}
+
+	service := NewBackupServiceWithConfig(db, config)
+	assert.NotNil(t, service)
+
+	// Verify directory was created
+	_, err := os.Stat(tempDir)
+	assert.NoError(t, err)
+}
+
+func TestDisasterRecoveryTestTypes(t *testing.T) {
+	tests := []struct {
+		testType DisasterRecoveryTestType
+		expected string
+	}{
+		{DRTestBasicRestore, "basic_restore"},
+		{DRTestFullRecovery, "full_recovery"},
+		{DRTestPointInTime, "point_in_time"},
+		{DRTestCorruption, "corruption_test"},
+		{DRTestPerformance, "performance_test"},
+	}
+
+	for _, test := range tests {
+		assert.Equal(t, test.expected, string(test.testType))
+	}
+}
+
+func TestBackupHealthStatusCalculation(t *testing.T) {
+	tempDir := t.TempDir()
+	db := &database.Database{}
+
+	service := &BackupService{
+		db:        db,
+		backupDir: tempDir,
+	}
+
+	// Test healthy status
+	status := service.calculateHealthStatus(10, 1)
+	assert.Equal(t, "healthy", status)
+
+	// Test degraded status
+	status = service.calculateHealthStatus(10, 2)
+	assert.Equal(t, "degraded", status)
+
+	// Test critical status
+	status = service.calculateHealthStatus(10, 4)
+	assert.Equal(t, "critical", status)
+
+	// Test no backups
+	status = service.calculateHealthStatus(0, 0)
+	assert.Equal(t, "no_backups", status)
+}
+
+func TestBackupHealthAssessment(t *testing.T) {
+	service := &BackupService{}
+
+	tests := []struct {
+		backup   BackupInfo
+		expected string
+	}{
+		{BackupInfo{Status: "failed"}, "failed"},
+		{BackupInfo{Status: "completed_with_warnings"}, "warning"},
+		{BackupInfo{Status: "completed", Size: 500}, "suspicious"},
+		{BackupInfo{Status: "completed", Size: 1048576}, "healthy"},
+	}
+
+	for _, test := range tests {
+		result := service.assessBackupHealth(test.backup)
+		assert.Equal(t, test.expected, result)
+	}
+}
+
 // Benchmark tests
 
 func BenchmarkBackupService_CalculateChecksum(b *testing.B) {

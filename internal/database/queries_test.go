@@ -39,6 +39,9 @@ func TestQueries_UserOperations(t *testing.T) {
 
 	ctx := context.Background()
 
+	// Clean up any existing test data to avoid conflicts
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM users WHERE username = 'testuser_queries' OR email = 'testqueries@example.com'")
+
 	// Test CreateUser
 	user, err := q.CreateUser(ctx, queries.CreateUserParams{
 		Username:     "testuser_queries",
@@ -116,6 +119,13 @@ func TestQueries_StudentOperations(t *testing.T) {
 	defer db.Close()
 
 	ctx := context.Background()
+
+	// Clean up any existing test data to avoid conflicts
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM transactions WHERE student_id IN (SELECT id FROM students WHERE student_id = 'STU2024001')")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM reservations WHERE student_id IN (SELECT id FROM students WHERE student_id = 'STU2024001')")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM students WHERE student_id = 'STU2024001'")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM books WHERE book_id = 'BOOK001'")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM users WHERE username LIKE 'testuser_queries%'")
 
 	// Test CreateStudent
 	student, err := q.CreateStudent(ctx, queries.CreateStudentParams{
