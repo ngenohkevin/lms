@@ -42,10 +42,21 @@ func (suite *EmailIntegrationTestSuite) SetupSuite() {
 	// Override database configuration for tests
 	cfg.Database.Host = "localhost"
 	cfg.Database.Port = 5432
-	cfg.Database.User = "lms_test_user"
-	cfg.Database.Password = "lms_test_password"
-	cfg.Database.Name = "lms_test_db"
+	cfg.Database.User = os.Getenv("LMS_DATABASE_USER")
+	cfg.Database.Password = os.Getenv("LMS_DATABASE_PASSWORD")
+	cfg.Database.Name = os.Getenv("LMS_DATABASE_NAME")
 	cfg.Database.SSLMode = "disable"
+	
+	// Fallback to defaults if environment variables are not set
+	if cfg.Database.User == "" {
+		cfg.Database.User = "lms_test_user"
+	}
+	if cfg.Database.Password == "" {
+		cfg.Database.Password = "lms_test_password"
+	}
+	if cfg.Database.Name == "" {
+		cfg.Database.Name = "lms_test_db"
+	}
 
 	// Create logger
 	suite.logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
