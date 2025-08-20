@@ -109,7 +109,7 @@ func main() {
 		"FromEmail", cfg.Email.FromEmail,
 		"FromName", cfg.Email.FromName,
 	)
-	
+
 	emailConfig := &models.EmailConfig{
 		SMTPHost:     cfg.Email.SMTPHost,
 		SMTPPort:     cfg.Email.SMTPPort,
