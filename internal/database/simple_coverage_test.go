@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -13,13 +14,28 @@ import (
 )
 
 func TestDatabaseCoverageSimple(t *testing.T) {
+	// Get test database credentials from environment variables
+	testUser := os.Getenv("LMS_DATABASE_USER")
+	testPassword := os.Getenv("LMS_DATABASE_PASSWORD")
+	testName := os.Getenv("LMS_DATABASE_NAME")
+	
+	if testUser == "" {
+		testUser = "lms_test_user"
+	}
+	if testPassword == "" {
+		testPassword = "lms_test_password"
+	}
+	if testName == "" {
+		testName = "lms_test_db"
+	}
+
 	cfg := &config.Config{
 		Database: config.DatabaseConfig{
 			Host:     "localhost",
 			Port:     5432,
-			User:     "lms_test_user",
-			Password: "lms_test_password",
-			Name:     "lms_test_db",
+			User:     testUser,
+			Password: testPassword,
+			Name:     testName,
 			SSLMode:  "disable",
 		},
 	}
@@ -418,13 +434,28 @@ func TestDatabaseCoverageSimple(t *testing.T) {
 }
 
 func TestDatabaseConnectionWithoutURL(t *testing.T) {
+	// Get test database credentials from environment variables
+	testUser := os.Getenv("LMS_DATABASE_USER")
+	testPassword := os.Getenv("LMS_DATABASE_PASSWORD")
+	testName := os.Getenv("LMS_DATABASE_NAME")
+	
+	if testUser == "" {
+		testUser = "lms_test_user"
+	}
+	if testPassword == "" {
+		testPassword = "lms_test_password"
+	}
+	if testName == "" {
+		testName = "lms_test_db"
+	}
+
 	cfg := &config.Config{
 		Database: config.DatabaseConfig{
 			Host:     "localhost",
 			Port:     5432,
-			User:     "lms_test_user",
-			Password: "lms_test_password",
-			Name:     "lms_test_db",
+			User:     testUser,
+			Password: testPassword,
+			Name:     testName,
 			SSLMode:  "disable",
 		},
 	}

@@ -118,7 +118,7 @@ func (s *EmailService) SendEmailWithID(ctx context.Context, request *models.Send
 	if request == nil {
 		return "", fmt.Errorf("request cannot be nil")
 	}
-	
+
 	if err := s.ValidateEmail(request.To); err != nil {
 		return "", fmt.Errorf("invalid recipient email: %w", err)
 	}
@@ -137,7 +137,7 @@ func (s *EmailService) SendEmailWithID(ctx context.Context, request *models.Send
 
 	// Generate a unique message ID for tracking
 	messageID := s.generateMessageID()
-	
+
 	s.logger.Info("Email sent successfully",
 		"to", request.To,
 		"subject", request.Subject,

@@ -1210,7 +1210,7 @@ func (rh *ReportHandler) exportToPDF(baseFileName, reportType string, data inter
 
 	// Simple PDF content (in a real implementation, you'd use a PDF library like gofpdf)
 	var buffer bytes.Buffer
-	
+
 	// For now, create a simple text-based PDF-like format
 	// In a production system, you would use a proper PDF library
 	buffer.WriteString("%PDF-1.4\n")
@@ -1220,7 +1220,7 @@ func (rh *ReportHandler) exportToPDF(baseFileName, reportType string, data inter
 	buffer.WriteString("/Pages 2 0 R\n")
 	buffer.WriteString(">>\n")
 	buffer.WriteString("endobj\n")
-	
+
 	buffer.WriteString("2 0 obj\n")
 	buffer.WriteString("<<\n")
 	buffer.WriteString("/Type /Pages\n")
@@ -1228,7 +1228,7 @@ func (rh *ReportHandler) exportToPDF(baseFileName, reportType string, data inter
 	buffer.WriteString("/Count 1\n")
 	buffer.WriteString(">>\n")
 	buffer.WriteString("endobj\n")
-	
+
 	buffer.WriteString("3 0 obj\n")
 	buffer.WriteString("<<\n")
 	buffer.WriteString("/Type /Page\n")
@@ -1237,16 +1237,16 @@ func (rh *ReportHandler) exportToPDF(baseFileName, reportType string, data inter
 	buffer.WriteString("/Contents 4 0 R\n")
 	buffer.WriteString(">>\n")
 	buffer.WriteString("endobj\n")
-	
+
 	// Convert data to string for PDF content
 	dataJSON, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return "", nil, "", fmt.Errorf("failed to marshal data for PDF: %w", err)
 	}
-	
+
 	content := fmt.Sprintf("Report Type: %s\\nGenerated: %s\\nData: %s",
 		reportType, time.Now().Format("2006-01-02 15:04:05"), string(dataJSON))
-	
+
 	buffer.WriteString("4 0 obj\n")
 	buffer.WriteString("<<\n")
 	buffer.WriteString(fmt.Sprintf("/Length %d\n", len(content)))
@@ -1259,7 +1259,7 @@ func (rh *ReportHandler) exportToPDF(baseFileName, reportType string, data inter
 	buffer.WriteString("ET\n")
 	buffer.WriteString("endstream\n")
 	buffer.WriteString("endobj\n")
-	
+
 	buffer.WriteString("xref\n")
 	buffer.WriteString("0 5\n")
 	buffer.WriteString("0000000000 65535 f \n")
@@ -1418,7 +1418,7 @@ func (rh *ReportHandler) writeLibraryOverviewToExcel(f *excelize.File, sheetName
 	// Write key metrics
 	f.SetCellValue(sheetName, "A1", "Metric")
 	f.SetCellValue(sheetName, "B1", "Value")
-	
+
 	metrics := map[string]interface{}{
 		"Total Books":        data.TotalBooks,
 		"Available Books":    data.AvailableBooks,
@@ -1503,7 +1503,7 @@ func extractTrendsParams(params map[string]interface{}) (startDate, endDate time
 		yearInt := int32(year)
 		yearOfStudy = &yearInt
 	}
-	
+
 	// Default to last 30 days if not specified
 	if startDate.IsZero() {
 		startDate = time.Now().AddDate(0, 0, -30)
@@ -1511,7 +1511,7 @@ func extractTrendsParams(params map[string]interface{}) (startDate, endDate time
 	if endDate.IsZero() {
 		endDate = time.Now()
 	}
-	
+
 	return startDate, endDate, yearOfStudy
 }
 
@@ -1520,7 +1520,7 @@ func extractPopularBooksParams(params map[string]interface{}) (limit int32, star
 	if l, ok := params["limit"].(float64); ok {
 		limit = int32(l)
 	}
-	
+
 	startDate, endDate, yearOfStudy = extractTrendsParams(params)
 	return limit, startDate, endDate, yearOfStudy
 }
@@ -1537,6 +1537,6 @@ func extractStudentActivityParams(params map[string]interface{}) (limit int32, s
 	return extractPopularBooksParams(params) // Same parameters
 }
 
-func extractInventoryParams(params map[string]interface{}) () {
+func extractInventoryParams(params map[string]interface{}) {
 	return // No special parameters needed for inventory status
 }
