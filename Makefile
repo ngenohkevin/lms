@@ -41,7 +41,7 @@ test:
 	@echo "$(GREEN)Setting up test environment...$(NC)"
 	@bash -c "set -a; [ -f .env.test ] && source .env.test; set +a; ./scripts/test_db_setup_simple.sh > /dev/null 2>&1 || true"
 	@echo "$(GREEN)Running tests...$(NC)"
-	@bash -c "set -a; [ -f .env.test ] && source .env.test; set +a; go test -v -timeout=600s ./..."
+	@bash -c "set -a; [ -f .env.test ] && source .env.test; [ -f .env ] && source .env; export DATABASE_URL='postgres://lms_test_user:lms_test_password@localhost:5432/lms_test_db?sslmode=disable'; set +a; go test -p 1 -timeout=120s ./..."
 
 # Run tests with database
 test-db:
@@ -62,7 +62,7 @@ test-cover:
 	@echo "$(GREEN)Setting up test environment...$(NC)"
 	@bash -c "set -a; [ -f .env.test ] && source .env.test; set +a; ./scripts/test_db_setup_simple.sh > /dev/null 2>&1 || true"
 	@echo "$(GREEN)Running tests with coverage...$(NC)"
-	@bash -c "set -a; [ -f .env.test ] && source .env.test; set +a; go test -v -coverprofile=coverage.out ./..."
+	@bash -c "set -a; [ -f .env.test ] && source .env.test; [ -f .env ] && source .env; export DATABASE_URL='postgres://lms_test_user:lms_test_password@localhost:5432/lms_test_db?sslmode=disable'; set +a; go test -p 1 -coverprofile=coverage.out ./..."
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "$(GREEN)Coverage report generated: coverage.html$(NC)"
 
