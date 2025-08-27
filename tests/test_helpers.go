@@ -63,7 +63,7 @@ func cleanupTestData(t *testing.T, pool *pgxpool.Pool) {
 	_, _ = pool.Exec(ctx, "DELETE FROM transactions WHERE id > 1000000 OR student_id IN (SELECT id FROM students WHERE student_id LIKE 'TEST_%' OR student_id LIKE 'STU%')")
 	_, _ = pool.Exec(ctx, "DELETE FROM books WHERE book_id LIKE 'TEST_%' OR book_id LIKE 'BK%'")
 	_, _ = pool.Exec(ctx, "DELETE FROM students WHERE student_id LIKE 'TEST_%' OR student_id LIKE 'STU%'")
-	// Preserve 'testuser' for security tests, but clean other test users  
+	// Preserve 'testuser' for security tests, but clean other test users
 	_, _ = pool.Exec(ctx, "DELETE FROM users WHERE username LIKE 'test%' AND username != 'testuser'")
 }
 
