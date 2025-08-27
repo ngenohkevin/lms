@@ -1,0 +1,67 @@
+./cmd/server/main.go:	port := os.Getenv("PORT")
+./tests/transaction_integration_test.go:	if os.Getenv("DATABASE_URL") == "" {
+./tests/import_export_integration_test.go:	if os.Getenv("DATABASE_URL") == "" {
+./tests/import_export_integration_test.go:	if os.Getenv("DATABASE_URL") == "" {
+./tests/import_export_integration_test.go:	if os.Getenv("DATABASE_URL") == "" {
+./tests/database_integration_test.go:	if os.Getenv("DATABASE_URL") == "" {
+./tests/database_integration_test.go:	if os.Getenv("DATABASE_URL") == "" {
+./tests/database_integration_test.go:	if os.Getenv("DATABASE_URL") == "" {
+./tests/notification_integration_test.go:	if os.Getenv("DATABASE_URL") == "" {
+./tests/email_integration_test.go:	cfg.Database.User = os.Getenv("LMS_DATABASE_USER")
+./tests/email_integration_test.go:	cfg.Database.Password = os.Getenv("LMS_DATABASE_PASSWORD")
+./tests/email_integration_test.go:	cfg.Database.Name = os.Getenv("LMS_DATABASE_NAME")
+./tests/student_integration_test.go:	testUsername := os.Getenv("LMS_TEST_USER_USERNAME")
+./tests/student_integration_test.go:	testEmail := os.Getenv("LMS_TEST_USER_EMAIL")
+./tests/student_integration_test.go:	testPassword := os.Getenv("LMS_TEST_USER_PASSWORD")
+./tests/integration_test.go:	if os.Getenv("DATABASE_URL") == "" {
+./tests/integration_test.go:	if os.Getenv("REDIS_URL") == "" {
+./tests/student_account_workflow_test.go:	if os.Getenv("DATABASE_URL") == "" {
+./tests/test_helpers.go:	if os.Getenv("DATABASE_URL") == "" {
+./internal/middleware/audit_test.go:	if os.Getenv("DATABASE_URL") == "" {
+./internal/middleware/audit_test.go:	if os.Getenv("DATABASE_URL") == "" {
+./internal/database/queries_test.go:	if os.Getenv("DATABASE_URL") == "" {
+./internal/database/queries_test.go:	if os.Getenv("DATABASE_URL") == "" {
+./internal/database/simple_coverage_test.go:	testUser := os.Getenv("LMS_DATABASE_USER")
+./internal/database/simple_coverage_test.go:	testPassword := os.Getenv("LMS_DATABASE_PASSWORD")
+./internal/database/simple_coverage_test.go:	testName := os.Getenv("LMS_DATABASE_NAME")
+./internal/database/simple_coverage_test.go:	testUser := os.Getenv("LMS_DATABASE_USER")
+./internal/database/simple_coverage_test.go:	testPassword := os.Getenv("LMS_DATABASE_PASSWORD")
+./internal/database/simple_coverage_test.go:	testName := os.Getenv("LMS_DATABASE_NAME")
+./internal/database/connection_test.go:	if value := os.Getenv(key); value != "" {
+./internal/database/connection_test.go:	if os.Getenv("LMS_DATABASE_PASSWORD") == "" {
+./internal/database/connection_test.go:			oldDBURL := os.Getenv("DATABASE_URL")
+./internal/database/redis.go:	if redisURL := os.Getenv("REDIS_URL"); redisURL != "" {
+./internal/database/connection.go:	if envURL := os.Getenv("DATABASE_URL"); envURL != "" {
+./internal/config/config.go:			if os.Getenv("GO_ENV") != "test" {
+./internal/config/config.go:	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
+./internal/config/config.go:	if redisURL := os.Getenv("REDIS_URL"); redisURL != "" {
+./internal/config/config.go:	if smtpHost := os.Getenv("LMS_EMAIL_SMTP_HOST"); smtpHost != "" {
+./internal/config/config.go:	if smtpUsername := os.Getenv("LMS_EMAIL_SMTP_USERNAME"); smtpUsername != "" {
+./internal/config/config.go:	if smtpPassword := os.Getenv("LMS_EMAIL_SMTP_PASSWORD"); smtpPassword != "" {
+./internal/config/config.go:	if fromEmail := os.Getenv("LMS_EMAIL_FROM_EMAIL"); fromEmail != "" {
+./internal/config/config.go:	if fromName := os.Getenv("LMS_EMAIL_FROM_NAME"); fromName != "" {
+./internal/config/config_test.go:		savedEnv[env] = os.Getenv(env)
+./internal/handlers/upload.go:	uploadDir := os.Getenv("UPLOAD_DIR")
+./internal/handlers/upload.go:	baseURL := os.Getenv("BASE_URL")
+./internal/services/email_delivery_test.go:	cfg.Database.User = os.Getenv("LMS_DATABASE_USER")
+./internal/services/email_delivery_test.go:	cfg.Database.Password = os.Getenv("LMS_DATABASE_PASSWORD")
+./internal/services/email_delivery_test.go:	cfg.Database.Name = os.Getenv("LMS_DATABASE_NAME")
+./internal/services/email_config_test.go:		"LMS_EMAIL_SMTP_HOST":     os.Getenv("LMS_EMAIL_SMTP_HOST"),
+./internal/services/email_config_test.go:		"LMS_EMAIL_SMTP_PORT":     os.Getenv("LMS_EMAIL_SMTP_PORT"),
+./internal/services/email_config_test.go:		"LMS_EMAIL_SMTP_USERNAME": os.Getenv("LMS_EMAIL_SMTP_USERNAME"),
+./internal/services/email_config_test.go:		"LMS_EMAIL_SMTP_PASSWORD": os.Getenv("LMS_EMAIL_SMTP_PASSWORD"),
+./internal/services/email_config_test.go:		"LMS_EMAIL_FROM_EMAIL":    os.Getenv("LMS_EMAIL_FROM_EMAIL"),
+./internal/services/email_config_test.go:		"LMS_EMAIL_FROM_NAME":     os.Getenv("LMS_EMAIL_FROM_NAME"),
+./internal/services/email_config_test.go:		"LMS_EMAIL_USE_TLS":       os.Getenv("LMS_EMAIL_USE_TLS"),
+./internal/services/email_config_test.go:		"LMS_EMAIL_USE_SSL":       os.Getenv("LMS_EMAIL_USE_SSL"),
+./internal/services/email_config_test.go:		SMTPUsername: os.Getenv("LMS_EMAIL_SMTP_USERNAME"),
+./internal/services/email_config_test.go:		SMTPPassword: os.Getenv("LMS_EMAIL_SMTP_PASSWORD"),
+./internal/services/email_config_test.go:		FromEmail:    os.Getenv("LMS_EMAIL_FROM_EMAIL"),
+./internal/services/email_config_test.go:	if portStr := os.Getenv("LMS_EMAIL_SMTP_PORT"); portStr != "" {
+./internal/services/email_config_test.go:	if value := os.Getenv(key); value != "" {
+./internal/services/email_config_test.go:	value := os.Getenv(key)
+./internal/services/soft_delete_test.go:	if os.Getenv("DATABASE_URL") == "" {
+./internal/services/soft_delete_test.go:	if os.Getenv("DATABASE_URL") == "" {
+./internal/services/email_queue_test.go:	cfg.Database.User = os.Getenv("LMS_DATABASE_USER")
+./internal/services/email_queue_test.go:	cfg.Database.Password = os.Getenv("LMS_DATABASE_PASSWORD")
+./internal/services/email_queue_test.go:	cfg.Database.Name = os.Getenv("LMS_DATABASE_NAME")

@@ -1,0 +1,86 @@
+# Logging Configuration for LMS Backend
+logging:
+  # Log level: trace, debug, info, warn, error, fatal, panic
+  level: info
+  
+  # Log format: text, json
+  format: json
+  
+  # Enable file logging
+  file:
+    enabled: true
+    path: /var/log/lms/application.log
+    max_size: 100MB
+    max_age: 30    # days
+    max_backups: 10
+    compress: true
+  
+  # Enable console logging
+  console:
+    enabled: true
+    format: text  # Use text format for console, json for file
+  
+  # Log rotation
+  rotation:
+    enabled: true
+    size: 100MB
+    time: daily
+    count: 30
+  
+  # Structured logging fields
+  fields:
+    service: lms-backend
+    version: "1.0.0"
+    environment: production
+  
+  # Request logging
+  request_logging:
+    enabled: true
+    include_body: false      # Don't log request bodies for security
+    include_response: false  # Don't log response bodies for performance
+    max_body_size: 1KB      # Max body size to log if enabled
+    skip_paths:
+      - /health
+      - /metrics
+      - /favicon.ico
+  
+  # Error logging
+  error_logging:
+    enabled: true
+    include_stack_trace: true
+    include_request_context: true
+  
+  # Performance logging
+  performance_logging:
+    enabled: true
+    slow_query_threshold: 1s
+    slow_request_threshold: 2s
+  
+  # Security logging
+  security_logging:
+    enabled: true
+    log_failed_auth: true
+    log_permission_denied: true
+    log_suspicious_activity: true
+  
+  # Business logic logging
+  business_logging:
+    enabled: true
+    log_transactions: true
+    log_reservations: true
+    log_notifications: true
+    log_fines: true
+  
+  # Database logging
+  database_logging:
+    enabled: false  # Only enable in development
+    log_queries: false
+    log_slow_queries: true
+    slow_query_threshold: 1s
+  
+  # Cache logging
+  cache_logging:
+    enabled: false  # Only enable for debugging
+    log_hits: false
+    log_misses: false
+    log_evictions: true

@@ -5,7 +5,10 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
+	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -25,6 +28,25 @@ import (
 )
 
 func main() {
+	// Parse command line flags
+	healthCheck := flag.Bool("health-check", false, "Perform health check and exit")
+	version := flag.Bool("version", false, "Show version information and exit")
+	flag.Parse()
+
+	// Handle version flag
+	if *version {
+		fmt.Println("LMS Backend v1.0.0")
+		fmt.Println("Built with Go", strings.TrimPrefix(os.Getenv("GO_VERSION"), "go"))
+		fmt.Println("Environment:", getEnvironment())
+		os.Exit(0)
+	}
+
+	// Handle health check flag for Docker/Kubernetes
+	if *healthCheck {
+		performHealthCheck()
+		return
+	}
+
 	// Initialize structured logger
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
@@ -160,8 +182,14 @@ func main() {
 	// Initialize rate limiter
 	rateLimiter := middleware.NewRateLimiter(redis.Client)
 
-	// Initialize middleware
-	authMiddleware := middleware.NewAuthMiddleware(authService)
+	// Initialize middleware with database access for role verification
+	authMiddleware := middleware.NewAuthMiddleware(
+		authService,
+		db.Queries,
+		studentService,
+		redis.Client,
+		logger,
+	)
 
 	// Add global middleware with enhanced security
 	r.Use(middleware.Logger())
@@ -643,6 +671,20 @@ func main() {
 	slog.Info("Server exited")
 }
 
+// getEnvironment returns the environment name
+func getEnvironment() string {
+	if env := os.Getenv("ENVIRONMENT"); env != "" {
+		return env
+	}
+	if env := os.Getenv("LMS_ENVIRONMENT"); env != "" {
+		return env
+	}
+	if mode := os.Getenv("LMS_SERVER_MODE"); mode != "" {
+		return mode
+	}
+	return "development"
+}
+
 // generateDevelopmentRSAKey generates a temporary RSA private key for development
 // In production, proper RSA keys must be provided via configuration
 func generateDevelopmentRSAKey() string {
@@ -688,4 +730,67 @@ func parseVersionFromString(versionStr string) *middleware.APIVersion {
 	}
 
 	return &middleware.APIVersion{Major: major, Minor: minor, Patch: patch}
+}
+
+// performHealthCheck performs a lightweight health check for Docker/Kubernetes
+func performHealthCheck() {
+	// Get the port to check
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = os.Getenv("LMS_SERVER_PORT")
+	}
+	if port == "" {
+		port = "8080"
+	}
+
+	// Create a simple HTTP client with timeout
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	// Try to reach the health endpoint
+	healthURL := fmt.Sprintf("http://localhost:%s/health", port)
+
+	resp, err := client.Get(healthURL)
+	if err != nil {
+		fmt.Printf("Health check failed: %v\n", err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+
+	// Check status code
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		fmt.Printf("Health check failed: HTTP %d\n", resp.StatusCode)
+		os.Exit(1)
+	}
+
+	// Try to parse the response
+	var healthResp map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&healthResp); err != nil {
+		fmt.Printf("Health check failed: invalid response format: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Check the status in the response
+	status, ok := healthResp["status"].(string)
+	if !ok {
+		fmt.Printf("Health check failed: no status in response\n")
+		os.Exit(1)
+	}
+
+	switch status {
+	case "healthy":
+		fmt.Printf("Health check passed: %s\n", status)
+		os.Exit(0)
+	case "degraded":
+		fmt.Printf("Health check warning: %s\n", status)
+		// Exit with 0 for degraded state in production to avoid unnecessary restarts
+		os.Exit(0)
+	case "unhealthy":
+		fmt.Printf("Health check failed: %s\n", status)
+		os.Exit(1)
+	default:
+		fmt.Printf("Health check failed: unknown status: %s\n", status)
+		os.Exit(1)
+	}
 }

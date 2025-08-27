@@ -1,0 +1,3 @@
+Potential SQL injection pattern: ".*DELETE.*" \+ 
+./internal/services/soft_delete_test.go:368:			StudentID:   "STU_DELETED_" + string(rune(i+'1')),
+./internal/services/soft_delete_test.go:402:			BookID: "DELETED_BOOK_" + string(rune(i+'1')),

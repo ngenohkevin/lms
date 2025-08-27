@@ -200,6 +200,11 @@ func (s *AuthService) VerifyPassword(hashedPassword, password string) (bool, err
 func (s *AuthService) GenerateTokens(user *models.User, userType string) (string, string, error) {
 	now := time.Now()
 
+	// Add a unique nonce to ensure tokens are always different
+	nonce := make([]byte, 16)
+	_, _ = rand.Read(nonce)
+	jti := base64.RawStdEncoding.EncodeToString(nonce)
+
 	// Generate access token
 	accessClaims := &models.JWTClaims{
 		UserID:   user.ID,
@@ -211,6 +216,7 @@ func (s *AuthService) GenerateTokens(user *models.User, userType string) (string
 			IssuedAt:  jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now),
 			Subject:   fmt.Sprintf("user_%d", user.ID),
+			ID:        jti, // Add unique ID to token
 		},
 	}
 
@@ -220,7 +226,11 @@ func (s *AuthService) GenerateTokens(user *models.User, userType string) (string
 		return "", "", err
 	}
 
-	// Generate refresh token
+	// Generate refresh token with different nonce
+	refreshNonce := make([]byte, 16)
+	_, _ = rand.Read(refreshNonce)
+	refreshJti := base64.RawStdEncoding.EncodeToString(refreshNonce)
+
 	refreshClaims := &models.RefreshTokenClaims{
 		UserID:   user.ID,
 		Username: user.Username,
@@ -230,6 +240,7 @@ func (s *AuthService) GenerateTokens(user *models.User, userType string) (string
 			IssuedAt:  jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now),
 			Subject:   fmt.Sprintf("user_%d", user.ID),
+			ID:        refreshJti, // Add unique ID to refresh token
 		},
 	}
 
@@ -245,6 +256,11 @@ func (s *AuthService) GenerateTokens(user *models.User, userType string) (string
 func (s *AuthService) GenerateStudentTokens(student *models.Student) (string, string, error) {
 	now := time.Now()
 
+	// Add a unique nonce to ensure tokens are always different
+	nonce := make([]byte, 16)
+	_, _ = rand.Read(nonce)
+	jti := base64.RawStdEncoding.EncodeToString(nonce)
+
 	// Generate access token
 	accessClaims := &models.JWTClaims{
 		UserID:   student.ID,
@@ -256,6 +272,7 @@ func (s *AuthService) GenerateStudentTokens(student *models.Student) (string, st
 			IssuedAt:  jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now),
 			Subject:   fmt.Sprintf("student_%d", student.ID),
+			ID:        jti, // Add unique ID to token
 		},
 	}
 
@@ -265,7 +282,11 @@ func (s *AuthService) GenerateStudentTokens(student *models.Student) (string, st
 		return "", "", err
 	}
 
-	// Generate refresh token
+	// Generate refresh token with different nonce
+	refreshNonce := make([]byte, 16)
+	_, _ = rand.Read(refreshNonce)
+	refreshJti := base64.RawStdEncoding.EncodeToString(refreshNonce)
+
 	refreshClaims := &models.RefreshTokenClaims{
 		UserID:   student.ID,
 		Username: student.StudentID,
@@ -275,6 +296,7 @@ func (s *AuthService) GenerateStudentTokens(student *models.Student) (string, st
 			IssuedAt:  jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now),
 			Subject:   fmt.Sprintf("student_%d", student.ID),
+			ID:        refreshJti, // Add unique ID to refresh token
 		},
 	}
 

@@ -1,0 +1,198 @@
+# Prometheus Alert Rules for LMS Backend
+groups:
+  - name: lms_backend_alerts
+    rules:
+      # Application Health
+      - alert: LMSBackendDown
+        expr: up{job="lms-backend"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          service: lms-backend
+        annotations:
+          summary: "LMS Backend is down"
+          description: "LMS Backend has been down for more than 30 seconds"
+
+      # High Response Time
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="lms-backend"}[5m])) > 2
+        for: 2m
+        labels:
+          severity: warning
+          service: lms-backend
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is {{ $value }}s for more than 2 minutes"
+
+      # High Error Rate
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{job="lms-backend",status=~"5.."}[5m]) / rate(http_requests_total{job="lms-backend"}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: lms-backend
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} for more than 5 minutes"
+
+      # High CPU Usage
+      - alert: HighCPUUsage
+        expr: rate(process_cpu_seconds_total{job="lms-backend"}[5m]) * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+          service: lms-backend
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}% for more than 10 minutes"
+
+      # High Memory Usage
+      - alert: HighMemoryUsage
+        expr: (process_resident_memory_bytes{job="lms-backend"} / (1024*1024*1024)) > 1
+        for: 10m
+        labels:
+          severity: warning
+          service: lms-backend
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}GB for more than 10 minutes"
+
+  - name: database_alerts
+    rules:
+      # Database Connection Issues
+      - alert: DatabaseConnectionFailed
+        expr: lms_database_connections_failed_total > 10
+        for: 1m
+        labels:
+          severity: critical
+          service: database
+        annotations:
+          summary: "Database connection failures"
+          description: "{{ $value }} database connections have failed in the last minute"
+
+      # High Database Response Time
+      - alert: DatabaseSlowQueries
+        expr: histogram_quantile(0.95, rate(lms_database_query_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "Slow database queries"
+          description: "95th percentile query time is {{ $value }}s"
+
+      # Database Connection Pool Exhaustion
+      - alert: DatabasePoolExhaustion
+        expr: (lms_database_connections_active / lms_database_connections_max) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "Database connection pool near exhaustion"
+          description: "Database connection pool is {{ $value | humanizePercentage }} full"
+
+  - name: redis_alerts
+    rules:
+      # Redis Connection Issues
+      - alert: RedisConnectionFailed
+        expr: lms_redis_connections_failed_total > 5
+        for: 1m
+        labels:
+          severity: critical
+          service: redis
+        annotations:
+          summary: "Redis connection failures"
+          description: "{{ $value }} Redis connections have failed in the last minute"
+
+      # High Redis Memory Usage
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 10m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis memory usage is {{ $value | humanizePercentage }}"
+
+  - name: system_alerts
+    rules:
+      # High Disk Usage
+      - alert: HighDiskUsage
+        expr: (node_filesystem_size_bytes - node_filesystem_avail_bytes) / node_filesystem_size_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High disk usage"
+          description: "Disk usage is {{ $value | humanizePercentage }} on {{ $labels.mountpoint }}"
+
+      # High System Load
+      - alert: HighSystemLoad
+        expr: node_load15 > 2
+        for: 10m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High system load"
+          description: "System load is {{ $value }} for more than 10 minutes"
+
+      # Out of Memory
+      - alert: OutOfMemory
+        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) < 0.1
+        for: 5m
+        labels:
+          severity: critical
+          service: system
+        annotations:
+          summary: "System running out of memory"
+          description: "Available memory is {{ $value | humanizePercentage }}"
+
+  - name: business_logic_alerts
+    rules:
+      # High Overdue Books
+      - alert: HighOverdueBooks
+        expr: lms_books_overdue_total > 100
+        for: 1h
+        labels:
+          severity: warning
+          service: lms-backend
+        annotations:
+          summary: "High number of overdue books"
+          description: "{{ $value }} books are currently overdue"
+
+      # Failed Notifications
+      - alert: FailedNotifications
+        expr: increase(lms_notifications_failed_total[1h]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: lms-backend
+        annotations:
+          summary: "High notification failure rate"
+          description: "{{ $value }} notifications have failed in the last hour"
+
+      # Failed Email Deliveries
+      - alert: FailedEmailDeliveries
+        expr: increase(lms_email_delivery_failed_total[1h]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: lms-backend
+        annotations:
+          summary: "High email delivery failure rate"
+          description: "{{ $value }} emails have failed to deliver in the last hour"
+
+      # High Fine Amounts
+      - alert: HighFineAmounts
+        expr: lms_fines_total_amount > 1000
+        for: 24h
+        labels:
+          severity: info
+          service: lms-backend
+        annotations:
+          summary: "High total fine amounts"
+          description: "Total outstanding fines: ${{ $value }}"

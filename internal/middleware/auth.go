@@ -1,21 +1,44 @@
 package middleware
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ngenohkevin/lms/internal/database/queries"
 	"github.com/ngenohkevin/lms/internal/models"
 	"github.com/ngenohkevin/lms/internal/services"
+	"github.com/redis/go-redis/v9"
+	"log/slog"
 )
 
 type AuthMiddleware struct {
-	authService *services.AuthService
+	authService    *services.AuthService
+	db             *queries.Queries
+	studentService *services.StudentService
+	redisClient    *redis.Client
+	logger         *slog.Logger
+	roleCacheTTL   time.Duration
 }
 
-func NewAuthMiddleware(authService *services.AuthService) *AuthMiddleware {
+func NewAuthMiddleware(
+	authService *services.AuthService,
+	db *queries.Queries,
+	studentService *services.StudentService,
+	redisClient *redis.Client,
+	logger *slog.Logger,
+) *AuthMiddleware {
 	return &AuthMiddleware{
-		authService: authService,
+		authService:    authService,
+		db:             db,
+		studentService: studentService,
+		redisClient:    redisClient,
+		logger:         logger,
+		roleCacheTTL:   5 * time.Minute, // Cache role for 5 minutes
 	}
 }
 
@@ -61,12 +84,53 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 			return
 		}
 
-		// Set user information in context
+		// SECURITY FIX: Verify the actual role from the database
+		// Never trust the role claim in the JWT token alone
+		actualRole, err := m.verifyUserRole(c.Request.Context(), claims.UserID, claims.UserType)
+		if err != nil {
+			m.logger.Error("Failed to verify user role",
+				"user_id", claims.UserID,
+				"claimed_role", claims.Role,
+				"error", err)
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"error": gin.H{
+					"code":    "ROLE_VERIFICATION_FAILED",
+					"message": "Failed to verify user permissions",
+				},
+			})
+			c.Abort()
+			return
+		}
+
+		// If actualRole is empty (test mode without database), use the claims role
+		// WARNING: This is only safe for tests
+		if actualRole == "" && m.db == nil {
+			actualRole = claims.Role
+		} else if claims.UserType == "librarian" && string(actualRole) != string(claims.Role) {
+			// Check for role tampering only when we have a database
+			m.logger.Warn("Potential role tampering detected",
+				"user_id", claims.UserID,
+				"claimed_role", claims.Role,
+				"actual_role", actualRole)
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"error": gin.H{
+					"code":    "ROLE_MISMATCH",
+					"message": "Token contains invalid role claims",
+				},
+			})
+			c.Abort()
+			return
+		}
+
+		// Set user information in context with VERIFIED role (or claims role in test mode)
 		c.Set("user_id", claims.UserID)
 		c.Set("username", claims.Username)
-		c.Set("user_role", claims.Role)
+		c.Set("user_role", actualRole) // Use verified role from database
 		c.Set("user_type", claims.UserType)
 		c.Set("claims", claims)
+		c.Set("token", tokenString) // Store token for blacklisting if needed
 
 		c.Next()
 	}
@@ -260,3 +324,83 @@ func GetUserType(c *gin.Context) string {
 
 	return ""
 }
+
+// verifyUserRole fetches the actual role from the database
+// This prevents JWT role manipulation attacks
+func (m *AuthMiddleware) verifyUserRole(ctx context.Context, userID int, userType string) (models.UserRole, error) {
+	// If database is not available (in simple tests), trust the token claims
+	// WARNING: This is only safe for tests, never use in production
+	if m.db == nil {
+		// In test mode without database, we can't verify roles
+		// This should only happen in unit tests
+		return "", nil // Return empty to skip verification
+	}
+
+	// Try to get role from cache first
+	if m.redisClient != nil {
+		cacheKey := getCacheKey(userID, userType)
+		cachedRole, err := m.redisClient.Get(ctx, cacheKey).Result()
+		if err == nil && cachedRole != "" {
+			return models.UserRole(cachedRole), nil
+		}
+	}
+
+	var role models.UserRole
+	var err error
+
+	if userType == "student" {
+		// For students, the role is always "student"
+		role = models.UserRole("student")
+	} else {
+		// For librarians/admin/staff, fetch from database
+		user, err := m.db.GetUserByID(ctx, int32(userID))
+		if err != nil {
+			return "", err
+		}
+
+		if !user.IsActive.Bool {
+			return "", ErrUserInactive
+		}
+
+		// Check if user is soft deleted
+		if user.DeletedAt.Valid {
+			return "", ErrUserDeleted
+		}
+
+		if user.Role.Valid {
+			role = models.UserRole(user.Role.String)
+		} else {
+			// Default role if not set
+			role = models.RoleLibrarian
+		}
+	}
+
+	// Cache the role
+	if m.redisClient != nil && err == nil {
+		cacheKey := getCacheKey(userID, userType)
+		_ = m.redisClient.Set(ctx, cacheKey, string(role), m.roleCacheTTL).Err()
+	}
+
+	return role, nil
+}
+
+// invalidateUserRoleCache invalidates the cached role for a user
+// Should be called when a user's role is updated
+func (m *AuthMiddleware) InvalidateUserRoleCache(ctx context.Context, userID int, userType string) error {
+	if m.redisClient == nil {
+		return nil
+	}
+
+	cacheKey := getCacheKey(userID, userType)
+	return m.redisClient.Del(ctx, cacheKey).Err()
+}
+
+// getCacheKey generates a cache key for user role
+func getCacheKey(userID int, userType string) string {
+	return fmt.Sprintf("user_role:%s:%d", userType, userID)
+}
+
+var (
+	ErrUserInactive = errors.New("user account is inactive")
+	ErrUserDeleted  = errors.New("user account has been deleted")
+)

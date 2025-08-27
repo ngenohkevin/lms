@@ -29,15 +29,37 @@ func NewAuthHandler(authService *services.AuthService, userService services.User
 
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req models.LoginRequest
+
+	// Always return same error for invalid credentials to prevent timing attacks
+	invalidCredentialsResponse := gin.H{
+		"success": false,
+		"error": gin.H{
+			"code":    "INVALID_CREDENTIALS",
+			"message": "Invalid username or password",
+		},
+	}
+
+	// Parse JSON but handle validation errors securely
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    "VALIDATION_ERROR",
-				"message": "Invalid request data",
-				"details": err.Error(),
-			},
-		})
+		// Perform dummy password verification to maintain consistent timing
+		dummyHash := "$argon2id$v=19$m=65536,t=3,p=2$wST4GhL1dnC5T2ZYRsn+Rg$FLCDqu8e9OL9XtJDkMVWRxMXUjr5b4KVG+VZYsEDr8g"
+		_, _ = h.authService.VerifyPassword(dummyHash, "dummy")
+		// Return unauthorized instead of bad request to prevent information leakage
+		c.JSON(http.StatusUnauthorized, invalidCredentialsResponse)
+		return
+	}
+
+	// Handle empty username/password consistently
+	if req.Username == "" || req.Password == "" {
+		// Perform dummy password verification to maintain consistent timing
+		// Use a more realistic dummy hash and the actual password provided for timing consistency
+		dummyHash := "$argon2id$v=19$m=65536,t=3,p=2$wST4GhL1dnC5T2ZYRsn+Rg$FLCDqu8e9OL9XtJDkMVWRxMXUjr5b4KVG+VZYsEDr8g"
+		if req.Password != "" {
+			_, _ = h.authService.VerifyPassword(dummyHash, req.Password)
+		} else {
+			_, _ = h.authService.VerifyPassword(dummyHash, "dummy")
+		}
+		c.JSON(http.StatusUnauthorized, invalidCredentialsResponse)
 		return
 	}
 
@@ -47,25 +69,14 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		// Verify password
 		isValid, err := h.authService.VerifyPassword(user.PasswordHash, req.Password)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"error": gin.H{
-					"code":    "INTERNAL_ERROR",
-					"message": "Error verifying password",
-				},
-			})
+			// Password verification error (e.g., corrupted hash) should be treated as invalid credentials
+			// This prevents information leakage about user existence vs password hash corruption
+			c.JSON(http.StatusUnauthorized, invalidCredentialsResponse)
 			return
-
 		}
 
 		if !isValid {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"success": false,
-				"error": gin.H{
-					"code":    "INVALID_CREDENTIALS",
-					"message": "Invalid username or password",
-				},
-			})
+			c.JSON(http.StatusUnauthorized, invalidCredentialsResponse)
 			return
 		}
 
@@ -118,13 +129,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// Try to authenticate as student
 	student, err := h.userService.GetStudentByStudentID(req.Username)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"success": false,
-			"error": gin.H{
-				"code":    "INVALID_CREDENTIALS",
-				"message": "Invalid username or password",
-			},
-		})
+		// Perform dummy password verification to maintain consistent timing
+		// Use a realistic dummy hash to ensure similar timing characteristics
+		dummyHash := "$argon2id$v=19$m=65536,t=3,p=2$wST4GhL1dnC5T2ZYRsn+Rg$FLCDqu8e9OL9XtJDkMVWRxMXUjr5b4KVG+VZYsEDr8g"
+		_, _ = h.authService.VerifyPassword(dummyHash, req.Password)
+		c.JSON(http.StatusUnauthorized, invalidCredentialsResponse)
 		return
 	}
 
@@ -144,11 +153,13 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		// Verify password
 		isValid, err := h.authService.VerifyPassword(*student.PasswordHash, req.Password)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
+			// Password verification error (e.g., corrupted hash) should be treated as invalid credentials
+			// This prevents information leakage about user existence vs password hash corruption
+			c.JSON(http.StatusUnauthorized, gin.H{
 				"success": false,
 				"error": gin.H{
-					"code":    "INTERNAL_ERROR",
-					"message": "Error verifying password",
+					"code":    "INVALID_CREDENTIALS",
+					"message": "Invalid username or password",
 				},
 			})
 			return
