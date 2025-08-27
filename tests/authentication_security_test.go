@@ -200,14 +200,14 @@ func (suite *AuthenticationSecurityTestSuite) createTestUser() {
 		} else {
 			suite.T().Logf("Failed to create testuser (attempt %d): %v", i+1, err)
 		}
-		
+
 		// Wait before retry
 		time.Sleep(100 * time.Millisecond)
-		
+
 		// Clean up any partial state before retry
 		_, _ = suite.db.Pool.Exec(ctx, "DELETE FROM users WHERE username = $1", "testuser")
 	}
-	
+
 	require.NoError(suite.T(), err, "Failed to create testuser after %d attempts", maxRetries)
 }
 
