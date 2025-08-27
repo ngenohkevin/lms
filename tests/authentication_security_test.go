@@ -110,7 +110,7 @@ func (suite *AuthenticationSecurityTestSuite) SetupTest() {
 		ctx := context.Background()
 		suite.redisClient.FlushDB(ctx)
 	}
-	
+
 	// Ensure test user exists before each test
 	suite.createTestUser()
 }
