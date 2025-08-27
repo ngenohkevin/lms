@@ -54,7 +54,8 @@ func TestAuthMiddleware_RequireAuth(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	authService := createTestAuthService()
-	middleware := NewAuthMiddleware(authService)
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	middleware := NewAuthMiddleware(authService, nil, nil, nil, logger)
 
 	// Create a test user
 	user := &models.User{
@@ -159,7 +160,8 @@ func TestAuthMiddleware_RequireRole(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	authService := createTestAuthService()
-	middleware := NewAuthMiddleware(authService)
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	middleware := NewAuthMiddleware(authService, nil, nil, nil, logger)
 
 	tests := []struct {
 		name           string
@@ -239,7 +241,8 @@ func TestAuthMiddleware_RequireLibrarian(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	authService := createTestAuthService()
-	middleware := NewAuthMiddleware(authService)
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	middleware := NewAuthMiddleware(authService, nil, nil, nil, logger)
 
 	tests := []struct {
 		name           string
@@ -302,7 +305,8 @@ func TestAuthMiddleware_RequireStudentOrLibrarian(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	authService := createTestAuthService()
-	middleware := NewAuthMiddleware(authService)
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	middleware := NewAuthMiddleware(authService, nil, nil, nil, logger)
 
 	tests := []struct {
 		name           string
@@ -414,7 +418,8 @@ func TestAuthMiddleware_MissingUserContext(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	authService := createTestAuthService()
-	middleware := NewAuthMiddleware(authService)
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	middleware := NewAuthMiddleware(authService, nil, nil, nil, logger)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)

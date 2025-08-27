@@ -10,7 +10,7 @@ GREEN=\033[0;32m
 YELLOW=\033[1;33m
 NC=\033[0m # No Color
 
-.PHONY: all build run clean test test-watch test-cover lint fmt help deps migrate-up migrate-down migrate-create docker-build docker-run docker-services docker-stop setup-env
+.PHONY: all build run clean test test-watch test-cover test-security test-auth test-input test-sql test-penetration security-scan lint fmt help deps migrate-up migrate-down migrate-create docker-build docker-run docker-services docker-stop setup-env
 
 # Default target
 all: clean deps fmt lint test build
@@ -143,7 +143,37 @@ generate:
 	@echo "$(GREEN)Generating code...$(NC)"
 	@go generate ./...
 
-# Security check
+# Security testing targets
+test-security:
+	@echo "$(GREEN)Running comprehensive security tests...$(NC)"
+	@bash -c "set -a; [ -f .env.test ] && source .env.test; set +a; ./scripts/test_db_setup_simple.sh > /dev/null 2>&1 || true"
+	@bash -c "set -a; [ -f .env.test ] && source .env.test; [ -f .env ] && source .env; export DATABASE_URL='postgres://lms_test_user:lms_test_password@localhost:5432/lms_test_db?sslmode=disable'; set +a; go test -v -run 'Security' ./tests/"
+
+test-auth:
+	@echo "$(GREEN)Running authentication security tests...$(NC)"
+	@bash -c "set -a; [ -f .env.test ] && source .env.test; set +a; ./scripts/test_db_setup_simple.sh > /dev/null 2>&1 || true"
+	@bash -c "set -a; [ -f .env.test ] && source .env.test; [ -f .env ] && source .env; export DATABASE_URL='postgres://lms_test_user:lms_test_password@localhost:5432/lms_test_db?sslmode=disable'; set +a; go test -v -run 'AuthenticationSecurity' ./tests/"
+
+test-input:
+	@echo "$(GREEN)Running input validation security tests...$(NC)"
+	@bash -c "set -a; [ -f .env.test ] && source .env.test; set +a; ./scripts/test_db_setup_simple.sh > /dev/null 2>&1 || true"
+	@bash -c "set -a; [ -f .env.test ] && source .env.test; [ -f .env ] && source .env; export DATABASE_URL='postgres://lms_test_user:lms_test_password@localhost:5432/lms_test_db?sslmode=disable'; set +a; go test -v -run 'InputValidationSecurity' ./tests/"
+
+test-sql:
+	@echo "$(GREEN)Running SQL injection security tests...$(NC)"
+	@bash -c "set -a; [ -f .env.test ] && source .env.test; set +a; ./scripts/test_db_setup_simple.sh > /dev/null 2>&1 || true"
+	@bash -c "set -a; [ -f .env.test ] && source .env.test; [ -f .env ] && source .env; export DATABASE_URL='postgres://lms_test_user:lms_test_password@localhost:5432/lms_test_db?sslmode=disable'; set +a; go test -v -run 'SQLInjectionSecurity' ./tests/"
+
+test-penetration:
+	@echo "$(GREEN)Running penetration tests...$(NC)"
+	@bash -c "set -a; [ -f .env.test ] && source .env.test; set +a; ./scripts/test_db_setup_simple.sh > /dev/null 2>&1 || true"
+	@bash -c "set -a; [ -f .env.test ] && source .env.test; [ -f .env ] && source .env; export DATABASE_URL='postgres://lms_test_user:lms_test_password@localhost:5432/lms_test_db?sslmode=disable'; set +a; go test -v -run 'Penetration' ./tests/"
+
+security-scan:
+	@echo "$(GREEN)Running security vulnerability scan...$(NC)"
+	@./scripts/security_scan.sh
+
+# Legacy security check (keeping for backwards compatibility)
 security:
 	@echo "$(GREEN)Running security checks...$(NC)"
 	@gosec ./...
@@ -171,6 +201,12 @@ help:
 	@echo "  $(YELLOW)test-unit$(NC)      - Run unit tests only"
 	@echo "  $(YELLOW)test-integration$(NC) - Run integration tests only"
 	@echo "  $(YELLOW)test-db$(NC)        - Run tests with test database"
+	@echo "  $(YELLOW)test-security$(NC)  - Run all security tests"
+	@echo "  $(YELLOW)test-auth$(NC)      - Run authentication security tests"
+	@echo "  $(YELLOW)test-input$(NC)     - Run input validation security tests"
+	@echo "  $(YELLOW)test-sql$(NC)       - Run SQL injection security tests"
+	@echo "  $(YELLOW)test-penetration$(NC) - Run penetration tests"
+	@echo "  $(YELLOW)security-scan$(NC)  - Run security vulnerability scan"
 	@echo "  $(YELLOW)lint$(NC)           - Run linting"
 	@echo "  $(YELLOW)fmt$(NC)            - Format code"
 	@echo "  $(YELLOW)deps$(NC)           - Install dependencies"

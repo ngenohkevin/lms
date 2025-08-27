@@ -201,6 +201,11 @@ func SecurityHeaders(config *SecurityConfig) gin.HandlerFunc {
 			c.Header(header, value)
 		}
 
+		// Cache control headers for security
+		c.Header("Cache-Control", "no-cache, no-store, must-revalidate, private")
+		c.Header("Pragma", "no-cache")
+		c.Header("Expires", "0")
+
 		c.Next()
 	}
 }

@@ -1,0 +1,460 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: lms-postgres-production
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${LMS_DATABASE_NAME:-lms_production}
+      POSTGRES_USER: ${LMS_DATABASE_USER:-lms_user}
+      POSTGRES_PASSWORD: ${LMS_DATABASE_PASSWORD:?Database password is required}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+    ports:
+      - "127.0.0.1:5432:5432"  # Bind to localhost only
+    volumes:
+      - postgres_production_data:/var/lib/postgresql/data
+      - ./configs/postgres/postgresql.production.conf:/etc/postgresql/postgresql.conf:ro
+      - ./configs/postgres/pg_hba.production.conf:/etc/postgresql/pg_hba.conf:ro
+      - /opt/lms-backend/backups/postgres:/backups
+    command: >
+      postgres 
+      -c config_file=/etc/postgresql/postgresql.conf
+      -c hba_file=/etc/postgresql/pg_hba.conf
+      -c log_min_duration_statement=5000
+      -c shared_preload_libraries=pg_stat_statements
+      -c max_connections=100
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c work_mem=4MB
+      -c maintenance_work_mem=64MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${LMS_DATABASE_USER:-lms_user} -d ${LMS_DATABASE_NAME:-lms_production}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - lms_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+    labels:
+      - "com.lms.service=database"
+      - "com.lms.environment=production"
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: lms-redis-production
+    restart: unless-stopped
+    command: >
+      redis-server 
+      --requirepass ${REDIS_PASSWORD:?Redis password is required}
+      --appendonly yes
+      --appendfsync everysec
+      --auto-aof-rewrite-percentage 100
+      --auto-aof-rewrite-min-size 64mb
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --tcp-keepalive 60
+      --timeout 300
+    ports:
+      - "127.0.0.1:6379:6379"  # Bind to localhost only
+    volumes:
+      - redis_production_data:/data
+      - ./configs/redis/redis.production.conf:/usr/local/etc/redis/redis.conf:ro
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - lms_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    labels:
+      - "com.lms.service=cache"
+      - "com.lms.environment=production"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+
+  # LMS Backend Application
+  app:
+    image: ghcr.io/${GITHUB_REPOSITORY:-lms/backend}:main
+    container_name: lms-backend-production
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"  # Bind to localhost only
+    environment:
+      # Server Configuration
+      - LMS_SERVER_MODE=release
+      - LMS_SERVER_PORT=8080
+      - LMS_SERVER_HOST=0.0.0.0
+      
+      # Database Configuration
+      - DATABASE_URL=postgres://${LMS_DATABASE_USER:-lms_user}:${LMS_DATABASE_PASSWORD:?Database password is required}@postgres:5432/${LMS_DATABASE_NAME:-lms_production}?sslmode=require
+      - LMS_DATABASE_MAX_CONNECTIONS=25
+      - LMS_DATABASE_MAX_IDLE_CONNECTIONS=5
+      - LMS_DATABASE_CONNECTION_MAX_LIFETIME=5m
+      
+      # Redis Configuration
+      - REDIS_URL=redis://:${REDIS_PASSWORD:?Redis password is required}@redis:6379/0
+      - LMS_REDIS_MAX_RETRIES=3
+      - LMS_REDIS_POOL_SIZE=20
+      
+      # JWT Configuration
+      - LMS_JWT_SECRET=${LMS_JWT_SECRET:?JWT secret is required}
+      - LMS_JWT_REFRESH_SECRET=${LMS_JWT_REFRESH_SECRET:?JWT refresh secret is required}
+      - LMS_JWT_EXPIRATION=15m
+      - LMS_JWT_REFRESH_EXPIRATION=168h
+      
+      # Email Configuration
+      - LMS_EMAIL_SMTP_HOST=${LMS_EMAIL_SMTP_HOST:?SMTP host is required}
+      - LMS_EMAIL_SMTP_PORT=${LMS_EMAIL_SMTP_PORT:-587}
+      - LMS_EMAIL_SMTP_USERNAME=${LMS_EMAIL_SMTP_USERNAME:?SMTP username is required}
+      - LMS_EMAIL_SMTP_PASSWORD=${LMS_EMAIL_SMTP_PASSWORD:?SMTP password is required}
+      - LMS_EMAIL_FROM_EMAIL=${LMS_EMAIL_FROM_EMAIL:?From email is required}
+      - LMS_EMAIL_FROM_NAME=${LMS_EMAIL_FROM_NAME:-Library Management System}
+      - LMS_EMAIL_USE_TLS=true
+      - LMS_EMAIL_USE_SSL=false
+      - LMS_EMAIL_TIMEOUT=30s
+      
+      # Logging Configuration
+      - LMS_LOG_LEVEL=info
+      - LMS_LOG_FORMAT=json
+      - LMS_LOG_FILE_ENABLED=true
+      - LMS_LOG_FILE_PATH=/var/log/lms/application.log
+      - LMS_LOG_MAX_SIZE=100MB
+      - LMS_LOG_MAX_BACKUPS=10
+      - LMS_LOG_MAX_AGE=30
+      - LMS_LOG_COMPRESS=true
+      
+      # Security Configuration
+      - LMS_CORS_ALLOWED_ORIGINS=${LMS_CORS_ALLOWED_ORIGINS:?CORS origins are required}
+      - LMS_SECURITY_HEADERS_ENABLED=true
+      - LMS_RATE_LIMIT_ENABLED=true
+      - LMS_RATE_LIMIT_AUTH_REQUESTS=5
+      - LMS_RATE_LIMIT_API_REQUESTS=100
+      - LMS_RATE_LIMIT_SEARCH_REQUESTS=30
+      
+      # Cache Configuration
+      - LMS_CACHE_ENABLED=true
+      - LMS_CACHE_DEFAULT_TTL=15m
+      - LMS_CACHE_BOOK_CATALOG_TTL=30m
+      - LMS_CACHE_STUDENT_PROFILE_TTL=15m
+      - LMS_CACHE_POPULAR_BOOKS_TTL=1h
+      - LMS_CACHE_SEARCH_RESULTS_TTL=5m
+      
+      # Monitoring Configuration
+      - LMS_METRICS_ENABLED=true
+      - LMS_HEALTH_CHECK_ENABLED=true
+      
+      # Business Configuration
+      - LMS_BORROWING_PERIOD_DAYS=14
+      - LMS_MAX_BOOKS_PER_STUDENT=5
+      - LMS_RENEWAL_LIMIT=2
+      - LMS_FINE_PER_DAY=0.50
+      - LMS_RESERVATION_EXPIRY_HOURS=24
+      - LMS_MAX_RESERVATIONS_PER_STUDENT=5
+      
+      # Backup Configuration
+      - LMS_BACKUP_ENABLED=true
+      - LMS_BACKUP_INTERVAL=24h
+      - LMS_BACKUP_RETENTION_DAYS=30
+      - LMS_BACKUP_PATH=/backups
+      
+      # Feature Flags
+      - LMS_FEATURE_RESERVATIONS_ENABLED=true
+      - LMS_FEATURE_EMAIL_NOTIFICATIONS_ENABLED=true
+      - LMS_FEATURE_AUDIT_LOGGING_ENABLED=true
+      - LMS_FEATURE_SOFT_DELETE_ENABLED=true
+      - LMS_FEATURE_CACHE_ENABLED=true
+      - LMS_FEATURE_RATE_LIMITING_ENABLED=true
+      
+      # Environment
+      - ENVIRONMENT=production
+      - TZ=UTC
+    volumes:
+      - ./uploads:/app/uploads
+      - production_logs:/var/log/lms
+      - /opt/lms-backend/backups:/backups
+    healthcheck:
+      test: ["CMD", "/app/main", "-health-check"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - lms_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "10"
+    labels:
+      - "com.lms.service=backend"
+      - "com.lms.environment=production"
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+      replicas: 2  # High availability
+      update_config:
+        parallelism: 1
+        delay: 30s
+        failure_action: rollback
+        monitor: 60s
+      rollback_config:
+        parallelism: 1
+        delay: 0s
+        failure_action: pause
+        monitor: 60s
+      restart_policy:
+        condition: any
+        delay: 30s
+        max_attempts: 3
+        window: 120s
+
+  # Nginx Reverse Proxy with SSL
+  nginx:
+    image: nginx:alpine
+    container_name: lms-nginx-production
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./configs/nginx/production.conf:/etc/nginx/nginx.conf:ro
+      - ./configs/nginx/ssl:/etc/nginx/ssl:ro
+      - ./configs/nginx/dhparam.pem:/etc/nginx/dhparam.pem:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - nginx_logs:/var/log/nginx
+    networks:
+      - lms_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+    labels:
+      - "com.lms.service=proxy"
+      - "com.lms.environment=production"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # Prometheus for Metrics (Production-grade)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: lms-prometheus-production
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./configs/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./configs/monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus_production_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=90d'
+      - '--storage.tsdb.retention.size=10GB'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.external-url=https://monitoring.yourdomain.com/prometheus'
+      - '--web.route-prefix=/'
+    networks:
+      - lms_network
+    labels:
+      - "com.lms.service=monitoring"
+      - "com.lms.environment=production"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+  # Grafana for Visualization (Production-grade)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: lms-grafana-production
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?Grafana admin password is required}
+      - GF_SECURITY_SECRET_KEY=${GRAFANA_SECRET_KEY:?Grafana secret key is required}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_SMTP_ENABLED=true
+      - GF_SMTP_HOST=${LMS_EMAIL_SMTP_HOST}:${LMS_EMAIL_SMTP_PORT}
+      - GF_SMTP_USER=${LMS_EMAIL_SMTP_USERNAME}
+      - GF_SMTP_PASSWORD=${LMS_EMAIL_SMTP_PASSWORD}
+      - GF_SMTP_FROM_ADDRESS=${LMS_EMAIL_FROM_EMAIL}
+      - GF_SMTP_FROM_NAME=LMS Grafana
+      - GF_SERVER_ROOT_URL=https://monitoring.yourdomain.com/grafana
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel,grafana-worldmap-panel
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+    volumes:
+      - grafana_production_data:/var/lib/grafana
+      - ./configs/monitoring/grafana:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    networks:
+      - lms_network
+    labels:
+      - "com.lms.service=visualization"
+      - "com.lms.environment=production"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+
+  # Alertmanager for Alert Handling
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: lms-alertmanager-production
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ./configs/monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_production_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=https://monitoring.yourdomain.com/alertmanager'
+      - '--web.route-prefix=/'
+    networks:
+      - lms_network
+    labels:
+      - "com.lms.service=alerting"
+      - "com.lms.environment=production"
+
+  # Log Aggregation with Fluentd
+  fluentd:
+    image: fluent/fluentd:latest
+    container_name: lms-fluentd-production
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:24224:24224"
+      - "127.0.0.1:24231:24231"
+    volumes:
+      - ./configs/logging/fluentd.conf:/fluentd/etc/fluent.conf:ro
+      - production_logs:/var/log/lms:ro
+      - fluentd_buffer:/var/log/fluentd/buffer
+    environment:
+      - FLUENTD_CONF=fluent.conf
+      - ENVIRONMENT=production
+    depends_on:
+      - app
+    networks:
+      - lms_network
+    labels:
+      - "com.lms.service=logging"
+      - "com.lms.environment=production"
+
+volumes:
+  postgres_production_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/lms-backend/data/postgres
+  redis_production_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/lms-backend/data/redis
+  prometheus_production_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/lms-backend/data/prometheus
+  grafana_production_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/lms-backend/data/grafana
+  alertmanager_production_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/lms-backend/data/alertmanager
+  production_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/log/lms
+  nginx_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/log/nginx
+  fluentd_buffer:
+    driver: local
+
+networks:
+  lms_network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: lms-bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+          gateway: 172.21.0.1

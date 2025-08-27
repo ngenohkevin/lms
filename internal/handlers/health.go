@@ -487,7 +487,14 @@ func (h *HealthHandler) Metrics(c *gin.Context) {
 }
 
 func getEnvironment() string {
-	// This would typically come from environment variables
-	// For now, return a default value
+	if env := os.Getenv("ENVIRONMENT"); env != "" {
+		return env
+	}
+	if env := os.Getenv("LMS_ENVIRONMENT"); env != "" {
+		return env
+	}
+	if mode := os.Getenv("LMS_SERVER_MODE"); mode != "" {
+		return mode
+	}
 	return "development"
 }

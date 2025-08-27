@@ -1,0 +1,442 @@
+# Production Security Hardening Configuration
+# This file contains security hardening settings for production deployment
+
+# Application Security
+application:
+  security:
+    # Force HTTPS in production
+    force_ssl: true
+    
+    # Security Headers Configuration
+    security_headers:
+      enabled: true
+      hsts:
+        enabled: true
+        max_age: 31536000  # 1 year
+        include_subdomains: true
+        preload: true
+      
+      content_security_policy:
+        enabled: true
+        policy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'"
+      
+      frame_options: "DENY"
+      content_type_options: "nosniff"
+      referrer_policy: "strict-origin-when-cross-origin"
+      permissions_policy: "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), cross-origin-isolated=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), navigation-override=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()"
+
+    # CORS Security (Production)
+    cors:
+      enabled: true
+      allowed_origins: []  # Must be set via environment variables
+      allowed_methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+      allowed_headers: ["Content-Type", "Authorization", "X-Requested-With", "X-API-Version"]
+      allow_credentials: true
+      max_age: 86400  # 24 hours
+
+    # Rate Limiting (Strict for Production)
+    rate_limiting:
+      enabled: true
+      
+      # Authentication endpoints
+      auth_endpoints:
+        requests_per_minute: 5
+        burst_size: 10
+        block_duration: "15m"
+      
+      # General API endpoints
+      api_endpoints:
+        requests_per_minute: 100
+        burst_size: 200
+        block_duration: "5m"
+      
+      # Search endpoints
+      search_endpoints:
+        requests_per_minute: 30
+        burst_size: 60
+        block_duration: "2m"
+      
+      # File upload endpoints
+      upload_endpoints:
+        requests_per_minute: 10
+        burst_size: 20
+        block_duration: "10m"
+
+    # IP Security
+    ip_security:
+      # IP Whitelisting for admin endpoints
+      admin_whitelist:
+        enabled: false  # Enable via environment variable
+        allowed_ips: []  # Set via environment variables
+        
+      # IP Blacklisting
+      blacklist:
+        enabled: true
+        blocked_ips: []  # Set via environment variables
+        
+      # Geoblocking
+      geoblocking:
+        enabled: false  # Enable via environment variable
+        blocked_countries: []  # Set via environment variables
+
+    # Request Security
+    request_security:
+      max_request_size: "5MB"
+      max_header_size: "8KB"
+      request_timeout: "30s"
+      read_timeout: "10s"
+      write_timeout: "10s"
+      idle_timeout: "60s"
+
+    # Session Security
+    session:
+      secure_cookies: true
+      http_only_cookies: true
+      same_site: "Strict"
+      session_timeout: "15m"
+      max_sessions_per_user: 3
+
+# Database Security
+database:
+  security:
+    # Connection Security
+    ssl:
+      mode: "require"
+      cert_path: "/etc/ssl/certs/postgresql-client.crt"
+      key_path: "/etc/ssl/private/postgresql-client.key"
+      ca_path: "/etc/ssl/certs/ca-certificates.crt"
+    
+    # Connection Pooling Security
+    pool:
+      max_connections: 25
+      max_idle_connections: 5
+      connection_max_lifetime: "5m"
+      connection_max_idle_time: "10m"
+    
+    # Query Security
+    query_timeout: "30s"
+    prepared_statements: true
+    
+    # Backup Security
+    backup:
+      encryption: true
+      compression: true
+      retention_days: 30
+      
+# Redis Security
+redis:
+  security:
+    # Authentication
+    auth:
+      enabled: true
+      password: ""  # Set via environment variable
+      
+    # Connection Security
+    tls:
+      enabled: false  # Enable via environment variable
+      cert_path: "/etc/ssl/certs/redis-client.crt"
+      key_path: "/etc/ssl/private/redis-client.key"
+      ca_path: "/etc/ssl/certs/ca-certificates.crt"
+      
+    # Configuration Security
+    config:
+      protected_mode: true
+      bind_address: "127.0.0.1"
+      max_clients: 100
+      timeout: 300
+      
+    # Command Security
+    disabled_commands:
+      - "FLUSHDB"
+      - "FLUSHALL"
+      - "KEYS"
+      - "CONFIG"
+      - "EVAL"
+      - "DEBUG"
+
+# File Upload Security
+file_upload:
+  security:
+    max_file_size: "5MB"
+    allowed_extensions: [".jpg", ".jpeg", ".png", ".gif", ".webp"]
+    allowed_mime_types: ["image/jpeg", "image/png", "image/gif", "image/webp"]
+    
+    # Virus Scanning
+    virus_scan:
+      enabled: false  # Enable via environment variable
+      quarantine_path: "/var/quarantine"
+      
+    # File Validation
+    validation:
+      check_file_headers: true
+      validate_image_integrity: true
+      max_image_dimensions: "4096x4096"
+      
+    # Storage Security
+    storage:
+      path: "/app/uploads"
+      url_prefix: "/uploads"
+      direct_access: false
+      cdn_enabled: false
+
+# API Security
+api:
+  security:
+    # API Versioning
+    versioning:
+      strategy: "header"  # header, path, query
+      header_name: "X-API-Version"
+      default_version: "v1"
+      deprecated_versions: []
+      
+    # Request Validation
+    validation:
+      strict_mode: true
+      validate_content_type: true
+      validate_json_syntax: true
+      max_json_depth: 10
+      
+    # Response Security
+    response:
+      hide_server_info: true
+      remove_x_powered_by: true
+      add_security_headers: true
+      
+    # API Keys (for third-party integrations)
+    api_keys:
+      enabled: false  # Enable via environment variable
+      header_name: "X-API-Key"
+      rotation_enabled: true
+      rotation_interval: "30d"
+
+# Logging Security
+logging:
+  security:
+    # Log Sanitization
+    sanitization:
+      enabled: true
+      sensitive_fields: ["password", "token", "secret", "key", "authorization"]
+      replacement_text: "[REDACTED]"
+      
+    # Log Storage Security
+    storage:
+      path: "/var/log/lms"
+      file_permissions: "0640"
+      directory_permissions: "0750"
+      
+    # Log Retention
+    retention:
+      application_logs: "30d"
+      access_logs: "90d"
+      security_logs: "365d"
+      audit_logs: "2555d"  # 7 years for compliance
+      
+    # Log Monitoring
+    monitoring:
+      failed_login_threshold: 5
+      error_rate_threshold: 0.05  # 5%
+      unusual_activity_detection: true
+
+# Container Security
+container:
+  security:
+    # Runtime Security
+    runtime:
+      read_only_root_filesystem: true
+      no_new_privileges: true
+      drop_capabilities: ["ALL"]
+      add_capabilities: ["NET_BIND_SERVICE"]
+      
+    # User Security
+    user:
+      run_as_non_root: true
+      run_as_user: 1000
+      run_as_group: 1000
+      fs_group: 1000
+      
+    # Resource Limits
+    resources:
+      memory_limit: "1Gi"
+      cpu_limit: "1000m"
+      memory_request: "512Mi"
+      cpu_request: "500m"
+      
+    # Security Context
+    security_context:
+      allow_privilege_escalation: false
+      seccomp_profile: "runtime/default"
+      apparmor_profile: "runtime/default"
+
+# Network Security
+network:
+  security:
+    # TLS Configuration
+    tls:
+      min_version: "1.2"
+      max_version: "1.3"
+      cipher_suites:
+        - "TLS_AES_256_GCM_SHA384"
+        - "TLS_CHACHA20_POLY1305_SHA256"
+        - "TLS_AES_128_GCM_SHA256"
+        - "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+        - "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305"
+        - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+      
+    # Certificate Management
+    certificates:
+      auto_renewal: true
+      renewal_threshold: "30d"
+      backup_enabled: true
+      
+    # Network Policies
+    policies:
+      ingress_whitelist: []  # Set via environment variables
+      egress_restrictions: true
+      internal_communication_only: true
+
+# Monitoring Security
+monitoring:
+  security:
+    # Metrics Security
+    metrics:
+      authentication_required: true
+      sensitive_metrics_filtering: true
+      
+    # Health Check Security
+    health_checks:
+      authentication_required: false  # For container orchestration
+      detailed_info_auth_required: true
+      
+    # Alerting Security
+    alerting:
+      webhook_authentication: true
+      sensitive_data_filtering: true
+
+# Backup Security
+backup:
+  security:
+    # Encryption
+    encryption:
+      enabled: true
+      algorithm: "AES-256-GCM"
+      key_rotation_interval: "90d"
+      
+    # Access Control
+    access_control:
+      backup_user_permissions: "0600"
+      backup_directory_permissions: "0700"
+      
+    # Verification
+    verification:
+      enabled: true
+      integrity_checks: true
+      restore_testing: true
+      test_interval: "7d"
+
+# Compliance Security
+compliance:
+  # Data Protection
+  data_protection:
+    gdpr_compliance: true
+    data_retention_policies: true
+    right_to_be_forgotten: true
+    data_portability: true
+    
+  # Audit Requirements
+  audit:
+    comprehensive_logging: true
+    immutable_audit_trail: true
+    log_integrity_verification: true
+    
+  # Privacy
+  privacy:
+    data_anonymization: true
+    consent_management: true
+    privacy_by_design: true
+
+# Security Scanning
+security_scanning:
+  # Container Scanning
+  container:
+    enabled: true
+    scan_on_build: true
+    scan_schedule: "daily"
+    critical_vulnerability_threshold: 0
+    high_vulnerability_threshold: 5
+    
+  # Dependency Scanning
+  dependency:
+    enabled: true
+    scan_schedule: "weekly"
+    auto_update_security_patches: true
+    
+  # Static Code Analysis
+  static_analysis:
+    enabled: true
+    scan_on_commit: true
+    security_rules_enabled: true
+    
+  # Dynamic Security Testing
+  dynamic_testing:
+    enabled: false  # Enable for staging environment
+    penetration_testing_schedule: "quarterly"
+    vulnerability_assessment_schedule: "monthly"
+
+# Incident Response
+incident_response:
+  # Detection
+  detection:
+    automated_threat_detection: true
+    anomaly_detection: true
+    real_time_monitoring: true
+    
+  # Response
+  response:
+    automated_blocking: true
+    incident_escalation: true
+    forensic_logging: true
+    
+  # Recovery
+  recovery:
+    automated_rollback: true
+    disaster_recovery_plan: true
+    business_continuity_plan: true
+
+# Environment-Specific Overrides
+environments:
+  production:
+    # Strictest security settings
+    rate_limiting:
+      auth_endpoints:
+        requests_per_minute: 3
+        block_duration: "30m"
+    
+    security_headers:
+      hsts:
+        max_age: 63072000  # 2 years
+    
+    session:
+      session_timeout: "10m"
+      
+  staging:
+    # Moderate security for testing
+    rate_limiting:
+      auth_endpoints:
+        requests_per_minute: 10
+        block_duration: "10m"
+    
+    logging:
+      retention:
+        application_logs: "14d"
+        
+  development:
+    # Relaxed security for development
+    security_headers:
+      enabled: false
+      
+    rate_limiting:
+      enabled: false
+      
+    logging:
+      retention:
+        application_logs: "7d"

@@ -1,0 +1,269 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: lms-postgres-staging
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${LMS_DATABASE_NAME:-lms_staging}
+      POSTGRES_USER: ${LMS_DATABASE_USER:-lms_user}
+      POSTGRES_PASSWORD: ${LMS_DATABASE_PASSWORD:?Database password is required}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_staging_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d/migrations:ro
+      - ./configs/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./configs/postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    command: >
+      postgres 
+      -c config_file=/etc/postgresql/postgresql.conf
+      -c hba_file=/etc/postgresql/pg_hba.conf
+      -c log_statement=all
+      -c log_min_duration_statement=1000
+      -c shared_preload_libraries=pg_stat_statements
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${LMS_DATABASE_USER:-lms_user} -d ${LMS_DATABASE_NAME:-lms_staging}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lms_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "com.lms.service=database"
+      - "com.lms.environment=staging"
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: lms-redis-staging
+    restart: unless-stopped
+    command: >
+      redis-server 
+      --requirepass ${REDIS_PASSWORD:-}
+      --appendonly yes
+      --appendfsync everysec
+      --auto-aof-rewrite-percentage 100
+      --auto-aof-rewrite-min-size 64mb
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_staging_data:/data
+      - ./configs/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - lms_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "com.lms.service=cache"
+      - "com.lms.environment=staging"
+
+  # LMS Backend Application
+  app:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    image: lms-backend:staging
+    container_name: lms-backend-staging
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      # Server Configuration
+      - LMS_SERVER_MODE=release
+      - LMS_SERVER_PORT=8080
+      - LMS_SERVER_HOST=0.0.0.0
+      
+      # Database Configuration
+      - DATABASE_URL=postgres://${LMS_DATABASE_USER:-lms_user}:${LMS_DATABASE_PASSWORD:?Database password is required}@postgres:5432/${LMS_DATABASE_NAME:-lms_staging}?sslmode=disable
+      - LMS_DATABASE_MAX_CONNECTIONS=20
+      - LMS_DATABASE_MAX_IDLE_CONNECTIONS=5
+      - LMS_DATABASE_CONNECTION_MAX_LIFETIME=5m
+      
+      # Redis Configuration
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-}@redis:6379/0
+      - LMS_REDIS_MAX_RETRIES=3
+      - LMS_REDIS_POOL_SIZE=10
+      
+      # JWT Configuration
+      - LMS_JWT_SECRET=${LMS_JWT_SECRET:?JWT secret is required}
+      - LMS_JWT_REFRESH_SECRET=${LMS_JWT_REFRESH_SECRET:?JWT refresh secret is required}
+      - LMS_JWT_EXPIRATION=15m
+      - LMS_JWT_REFRESH_EXPIRATION=168h
+      
+      # Email Configuration
+      - LMS_EMAIL_SMTP_HOST=${LMS_EMAIL_SMTP_HOST:-smtp.gmail.com}
+      - LMS_EMAIL_SMTP_PORT=${LMS_EMAIL_SMTP_PORT:-587}
+      - LMS_EMAIL_SMTP_USERNAME=${LMS_EMAIL_SMTP_USERNAME:-test@example.com}
+      - LMS_EMAIL_SMTP_PASSWORD=${LMS_EMAIL_SMTP_PASSWORD:-test-password}
+      - LMS_EMAIL_FROM_EMAIL=${LMS_EMAIL_FROM_EMAIL:-noreply@staging-library.com}
+      - LMS_EMAIL_FROM_NAME=${LMS_EMAIL_FROM_NAME:-LMS Staging}
+      - LMS_EMAIL_USE_TLS=${LMS_EMAIL_USE_TLS:-true}
+      - LMS_EMAIL_USE_SSL=${LMS_EMAIL_USE_SSL:-false}
+      
+      # Logging Configuration
+      - LMS_LOG_LEVEL=info
+      - LMS_LOG_FORMAT=json
+      - LMS_LOG_FILE_ENABLED=true
+      - LMS_LOG_FILE_PATH=/var/log/lms/application.log
+      
+      # Security Configuration
+      - LMS_CORS_ALLOWED_ORIGINS=${LMS_CORS_ALLOWED_ORIGINS:-http://localhost:3000,https://staging-library.netlify.app}
+      - LMS_SECURITY_HEADERS_ENABLED=true
+      - LMS_RATE_LIMIT_ENABLED=true
+      
+      # Cache Configuration
+      - LMS_CACHE_ENABLED=true
+      - LMS_CACHE_DEFAULT_TTL=15m
+      
+      # Feature Flags
+      - LMS_FEATURE_RESERVATIONS_ENABLED=true
+      - LMS_FEATURE_EMAIL_NOTIFICATIONS_ENABLED=true
+      - LMS_FEATURE_AUDIT_LOGGING_ENABLED=true
+      
+      # Environment
+      - ENVIRONMENT=staging
+    volumes:
+      - ./uploads:/app/uploads
+      - staging_logs:/var/log/lms
+    healthcheck:
+      test: ["CMD", "/app/main", "-health-check"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - lms_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    labels:
+      - "com.lms.service=backend"
+      - "com.lms.environment=staging"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: lms-nginx-staging
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./configs/nginx/staging.conf:/etc/nginx/nginx.conf:ro
+      - ./configs/nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    networks:
+      - lms_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "com.lms.service=proxy"
+      - "com.lms.environment=staging"
+
+  # Prometheus for Metrics
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: lms-prometheus-staging
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./configs/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./configs/monitoring/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus_staging_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    networks:
+      - lms_network
+    labels:
+      - "com.lms.service=monitoring"
+      - "com.lms.environment=staging"
+
+  # Grafana for Visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: lms-grafana-staging
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin123}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - grafana_staging_data:/var/lib/grafana
+      - ./configs/monitoring/grafana:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    networks:
+      - lms_network
+    labels:
+      - "com.lms.service=visualization"
+      - "com.lms.environment=staging"
+
+volumes:
+  postgres_staging_data:
+    driver: local
+  redis_staging_data:
+    driver: local
+  prometheus_staging_data:
+    driver: local
+  grafana_staging_data:
+    driver: local
+  staging_logs:
+    driver: local
+  nginx_logs:
+    driver: local
+
+networks:
+  lms_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

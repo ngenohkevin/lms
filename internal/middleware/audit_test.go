@@ -3,10 +3,12 @@ package middleware
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -33,14 +35,17 @@ func setupTestAuditLogger(t *testing.T) (*AuditLogger, *database.Database, int32
 
 	auditLogger := NewAuditLogger(db.Pool)
 
-	// Create a test user for foreign key constraints
+	// Create a test user for foreign key constraints with unique username
 	ctx := context.Background()
+	testUsername := fmt.Sprintf("audit_test_user_%d", time.Now().UnixNano())
+	testEmail := fmt.Sprintf("audit_%d@example.com", time.Now().UnixNano())
+
 	var userID int32
 	err = db.Pool.QueryRow(ctx, `
 		INSERT INTO users (username, email, password_hash, role) 
 		VALUES ($1, $2, $3, $4) 
 		RETURNING id
-	`, "testuser", "test@example.com", "hashed_password", "librarian").Scan(&userID)
+	`, testUsername, testEmail, "hashed_password", "librarian").Scan(&userID)
 	require.NoError(t, err)
 
 	return auditLogger, db, userID

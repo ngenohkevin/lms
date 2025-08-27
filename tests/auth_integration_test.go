@@ -10,33 +10,13 @@ import (
 	"testing"
 	"time"
 
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
 	"github.com/gin-gonic/gin"
 	"github.com/ngenohkevin/lms/internal/handlers"
-	"github.com/ngenohkevin/lms/internal/middleware"
 	"github.com/ngenohkevin/lms/internal/models"
 	"github.com/ngenohkevin/lms/internal/services"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// generateTestRSAKey generates a test RSA private key
-func generateTestRSAKey() string {
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		panic(err)
-	}
-
-	privateKeyPEM := &pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
-	}
-
-	return string(pem.EncodeToMemory(privateKeyPEM))
-}
 
 // MockUserService provides a mock implementation for testing
 type MockUserService struct {
@@ -177,7 +157,7 @@ func TestAuthenticationFlow(t *testing.T) {
 
 	emailService := &MockEmailService{}
 	authHandler := handlers.NewAuthHandler(authService, userService, emailService)
-	authMiddleware := middleware.NewAuthMiddleware(authService)
+	authMiddleware := createSimpleTestAuthMiddleware(authService)
 
 	// Setup router
 	router := gin.New()

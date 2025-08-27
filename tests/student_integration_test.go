@@ -135,7 +135,8 @@ func (suite *StudentIntegrationTestSuite) setupStudentRoutes(api *gin.RouterGrou
 	studentHandler := handlers.NewStudentHandler(studentService)
 
 	// Set up authentication middleware
-	authMiddleware := middleware.NewAuthMiddleware(suite.authService)
+	// For this test, we don't have Redis so use simple middleware
+	authMiddleware := createSimpleTestAuthMiddleware(suite.authService)
 
 	// Student routes with auth middleware
 	students := api.Group("/students")
