@@ -110,6 +110,9 @@ func (suite *AuthenticationSecurityTestSuite) SetupTest() {
 		ctx := context.Background()
 		suite.redisClient.FlushDB(ctx)
 	}
+	
+	// Ensure test user exists before each test
+	suite.createTestUser()
 }
 
 func (suite *AuthenticationSecurityTestSuite) setupRouter() {
@@ -188,7 +191,11 @@ func (suite *AuthenticationSecurityTestSuite) createTestUser() {
 		PasswordHash: hashedPassword,
 		Role:         role,
 	})
-	require.NoError(suite.T(), err)
+	if err != nil {
+		// Log the error for debugging but don't fail the test immediately
+		suite.T().Logf("Failed to create test user: %v", err)
+		require.NoError(suite.T(), err, "Failed to create test user in createTestUser")
+	}
 }
 
 // Test: Brute force attack protection

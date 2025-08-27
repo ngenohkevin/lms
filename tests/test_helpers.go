@@ -56,13 +56,15 @@ func cleanupTestData(t *testing.T, pool *pgxpool.Pool) {
 	ctx := context.Background()
 
 	// Clean test data in reverse dependency order
-	_, _ = pool.Exec(ctx, "DELETE FROM audit_logs WHERE table_name LIKE 'test_%' OR user_id IN (SELECT id FROM users WHERE username LIKE 'test%')")
+	// Note: We preserve 'testuser' for security tests, but clean other test users
+	_, _ = pool.Exec(ctx, "DELETE FROM audit_logs WHERE table_name LIKE 'test_%' OR user_id IN (SELECT id FROM users WHERE username LIKE 'test%' AND username != 'testuser')")
 	_, _ = pool.Exec(ctx, "DELETE FROM notifications WHERE title LIKE 'Test%'")
 	_, _ = pool.Exec(ctx, "DELETE FROM reservations WHERE id > 1000000 OR student_id IN (SELECT id FROM students WHERE student_id LIKE 'TEST_%' OR student_id LIKE 'STU%')")
 	_, _ = pool.Exec(ctx, "DELETE FROM transactions WHERE id > 1000000 OR student_id IN (SELECT id FROM students WHERE student_id LIKE 'TEST_%' OR student_id LIKE 'STU%')")
 	_, _ = pool.Exec(ctx, "DELETE FROM books WHERE book_id LIKE 'TEST_%' OR book_id LIKE 'BK%'")
 	_, _ = pool.Exec(ctx, "DELETE FROM students WHERE student_id LIKE 'TEST_%' OR student_id LIKE 'STU%'")
-	_, _ = pool.Exec(ctx, "DELETE FROM users WHERE username LIKE 'test%'")
+	// Preserve 'testuser' for security tests, but clean other test users  
+	_, _ = pool.Exec(ctx, "DELETE FROM users WHERE username LIKE 'test%' AND username != 'testuser'")
 }
 
 // testLogger creates a test logger
