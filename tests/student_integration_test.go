@@ -111,9 +111,19 @@ func (suite *StudentIntegrationTestSuite) SetupSuite() {
 	suite.userService = services.NewUserService(suite.db.Pool, slog.Default())
 
 	// Set up router with middleware
+	testCfg := &config.Config{
+		Server: config.ServerConfig{
+			AllowedOrigins: []string{
+				"http://localhost:3000",
+				"http://localhost:3001",
+				"http://127.0.0.1:3000",
+			},
+		},
+	}
+	
 	suite.router = gin.New()
 	suite.router.Use(middleware.Logger())
-	suite.router.Use(middleware.CORS())
+	suite.router.Use(middleware.CORS(testCfg))
 	suite.router.Use(middleware.SecurityHeaders(middleware.DefaultSecurityConfig()))
 
 	// Set up API routes (students endpoints will be added by the test)

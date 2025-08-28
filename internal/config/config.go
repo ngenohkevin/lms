@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/ngenohkevin/lms/internal/models"
 	"github.com/spf13/viper"
@@ -19,8 +20,9 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Port string `mapstructure:"port"`
-	Mode string `mapstructure:"mode"`
+	Port            string   `mapstructure:"port"`
+	Mode            string   `mapstructure:"mode"`
+	AllowedOrigins  []string `mapstructure:"allowed_origins"`
 }
 
 type DatabaseConfig struct {
@@ -91,6 +93,11 @@ func Load() (*Config, error) {
 	// Set default values
 	viper.SetDefault("server.port", "8080")
 	viper.SetDefault("server.mode", "debug")
+	viper.SetDefault("server.allowed_origins", []string{
+		"http://localhost:3000",
+		"http://localhost:3001",
+		"http://127.0.0.1:3000",
+	})
 	viper.SetDefault("database.host", "localhost")
 	viper.SetDefault("database.port", 5432)
 	viper.SetDefault("database.ssl_mode", "disable")
@@ -135,6 +142,15 @@ func Load() (*Config, error) {
 
 	if redisURL := os.Getenv("REDIS_URL"); redisURL != "" {
 		viper.Set("redis.url", redisURL)
+	}
+
+	// CORS configuration from environment
+	if allowedOrigins := os.Getenv("LMS_ALLOWED_ORIGINS"); allowedOrigins != "" {
+		origins := strings.Split(allowedOrigins, ",")
+		for i, origin := range origins {
+			origins[i] = strings.TrimSpace(origin)
+		}
+		viper.Set("server.allowed_origins", origins)
 	}
 
 	// Email configuration from environment

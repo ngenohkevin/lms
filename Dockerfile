@@ -22,6 +22,9 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -a -installsuffix cgo \
     -o main cmd/server/main.go
 
+# Create uploads directory in builder stage
+RUN mkdir -p uploads
+
 # Security scan the binary (optional but good practice)
 RUN echo "Binary built successfully: $(file main)"
 
@@ -42,8 +45,8 @@ COPY --from=builder /app/main .
 # Note: distroless doesn't have shell, so we use builder stage for directory creation
 COPY --from=builder --chown=65532:65532 /tmp /tmp
 
-# Create uploads directory in builder and copy
-COPY --from=builder /app/uploads ./uploads 2>/dev/null || mkdir -p uploads
+# Copy uploads directory from builder
+COPY --from=builder /app/uploads ./uploads
 
 # Use non-root user (nonroot user is built into distroless)
 USER 65532:65532

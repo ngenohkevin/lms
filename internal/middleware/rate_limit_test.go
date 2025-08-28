@@ -112,7 +112,8 @@ func TestRateLimiter_Limit(t *testing.T) {
 }
 
 func TestRateLimiter_AuthLimit(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	gin.SetMode(gin.ReleaseMode)
+	defer gin.SetMode(gin.TestMode)
 
 	redisClient := setupRedisClient(t)
 	if redisClient == nil {
@@ -196,7 +197,8 @@ func TestRateLimiter_APILimit(t *testing.T) {
 }
 
 func TestRateLimiter_SearchLimit(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	gin.SetMode(gin.ReleaseMode)
+	defer gin.SetMode(gin.TestMode)
 
 	redisClient := setupRedisClient(t)
 	if redisClient == nil {

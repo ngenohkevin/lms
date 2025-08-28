@@ -135,7 +135,12 @@ func (suite *AuthenticationSecurityTestSuite) setupRouter() {
 		// Apply auth-specific rate limiting to login endpoint if Redis is available
 		if suite.redisClient != nil {
 			rateLimiter := middleware.NewRateLimiter(suite.redisClient)
-			auth.POST("/login", rateLimiter.AuthLimit(), authHandler.Login)
+			// Use production limits for security testing (5 requests per minute)
+			prodAuthLimit := rateLimiter.Limit(middleware.RateLimit{
+				Requests: 5,
+				Window:   time.Minute,
+			})
+			auth.POST("/login", prodAuthLimit, authHandler.Login)
 		} else {
 			auth.POST("/login", authHandler.Login)
 		}
