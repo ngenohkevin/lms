@@ -95,6 +95,7 @@ excalidraw.log
 # All markdown files except README.md
 *.md
 !README.md
+!docs/**/*.md
 
 # Claude files
 .claude/
