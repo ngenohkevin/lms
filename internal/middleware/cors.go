@@ -23,7 +23,7 @@ func CORS(cfg *config.Config) gin.HandlerFunc {
 		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		AllowHeaders: []string{
 			"Content-Type",
-			"Content-Length", 
+			"Content-Length",
 			"Accept-Encoding",
 			"Authorization",
 			"X-CSRF-Token",
@@ -44,10 +44,10 @@ func CORS(cfg *config.Config) gin.HandlerFunc {
 		// Add additional development origins if not already included
 		devOrigins := []string{
 			"http://localhost:3000",
-			"http://localhost:3001", 
+			"http://localhost:3001",
 			"http://127.0.0.1:3000",
 		}
-		
+
 		// Create a map to avoid duplicates
 		originMap := make(map[string]bool)
 		for _, origin := range allowedOrigins {
@@ -56,13 +56,13 @@ func CORS(cfg *config.Config) gin.HandlerFunc {
 		for _, origin := range devOrigins {
 			originMap[origin] = true
 		}
-		
+
 		// Convert back to slice
 		var finalOrigins []string
 		for origin := range originMap {
 			finalOrigins = append(finalOrigins, origin)
 		}
-		
+
 		corsConfig.AllowOrigins = finalOrigins
 	}
 

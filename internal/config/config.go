@@ -20,9 +20,9 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Port            string   `mapstructure:"port"`
-	Mode            string   `mapstructure:"mode"`
-	AllowedOrigins  []string `mapstructure:"allowed_origins"`
+	Port           string   `mapstructure:"port"`
+	Mode           string   `mapstructure:"mode"`
+	AllowedOrigins []string `mapstructure:"allowed_origins"`
 }
 
 type DatabaseConfig struct {

@@ -120,7 +120,7 @@ func (suite *StudentIntegrationTestSuite) SetupSuite() {
 			},
 		},
 	}
-	
+
 	suite.router = gin.New()
 	suite.router.Use(middleware.Logger())
 	suite.router.Use(middleware.CORS(testCfg))

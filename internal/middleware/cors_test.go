@@ -82,7 +82,7 @@ func TestCORS(t *testing.T) {
 				// This is the correct behavior according to CORS specification
 				corsOrigin := w.Header().Get("Access-Control-Allow-Origin")
 				corsCredentials := w.Header().Get("Access-Control-Allow-Credentials")
-				
+
 				// Requests without Origin header shouldn't trigger CORS headers
 				if corsOrigin != "" {
 					t.Logf("CORS Origin header present: %s", corsOrigin)
@@ -90,7 +90,7 @@ func TestCORS(t *testing.T) {
 				if corsCredentials != "" {
 					t.Logf("CORS Credentials header present: %s", corsCredentials)
 				}
-				
+
 				// The important thing is that the request succeeds
 				// CORS headers are only relevant for cross-origin requests
 			}
@@ -177,7 +177,7 @@ func TestCORSWithOrigin(t *testing.T) {
 				if actualOrigin != tt.expectedOrigin {
 					t.Errorf("Expected Access-Control-Allow-Origin: %s, got: %s", tt.expectedOrigin, actualOrigin)
 				}
-				
+
 				// Check that credentials header is set
 				if w.Header().Get("Access-Control-Allow-Credentials") != "true" {
 					t.Errorf("Expected Access-Control-Allow-Credentials to be true")

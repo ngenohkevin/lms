@@ -97,11 +97,11 @@ func (rl *RateLimiter) AuthLimit() gin.HandlerFunc {
 	// In development mode, be much more lenient with rate limiting
 	if gin.Mode() != gin.ReleaseMode {
 		return rl.Limit(RateLimit{
-			Requests: 1000,  // 1000 requests per minute in dev
+			Requests: 1000, // 1000 requests per minute in dev
 			Window:   time.Minute,
 		})
 	}
-	
+
 	// Production settings
 	return rl.Limit(RateLimit{
 		Requests: 5,
@@ -113,11 +113,11 @@ func (rl *RateLimiter) APILimit() gin.HandlerFunc {
 	// In development mode, be much more lenient with rate limiting
 	if gin.Mode() != gin.ReleaseMode {
 		return rl.Limit(RateLimit{
-			Requests: 10000,  // 10000 requests per minute in dev
+			Requests: 10000, // 10000 requests per minute in dev
 			Window:   time.Minute,
 		})
 	}
-	
+
 	// Production settings
 	return rl.Limit(RateLimit{
 		Requests: 100,
@@ -129,11 +129,11 @@ func (rl *RateLimiter) SearchLimit() gin.HandlerFunc {
 	// In development mode, be much more lenient with rate limiting
 	if gin.Mode() != gin.ReleaseMode {
 		return rl.Limit(RateLimit{
-			Requests: 5000,  // 5000 requests per minute in dev
+			Requests: 5000, // 5000 requests per minute in dev
 			Window:   time.Minute,
 		})
 	}
-	
+
 	// Production settings
 	return rl.Limit(RateLimit{
 		Requests: 30,

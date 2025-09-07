@@ -118,6 +118,73 @@ type BookStats struct {
 	BorrowedBooks  int64 `json:"borrowed_books"`
 }
 
+// ISBNBookInfo represents book information fetched from external APIs
+type ISBNBookInfo struct {
+	ISBN          string `json:"isbn"`
+	Title         string `json:"title"`
+	Authors       string `json:"authors"`
+	Publisher     string `json:"publisher"`
+	PublishedYear int    `json:"published_year"`
+	Genre         string `json:"genre"`
+	Description   string `json:"description"`
+	CoverImageURL string `json:"cover_image_url"`
+	Language      string `json:"language"`
+	PageCount     int    `json:"page_count"`
+}
+
+// ISBNFetchRequest represents a request to fetch book info by ISBN
+type ISBNFetchRequest struct {
+	ISBN string `json:"isbn" binding:"required,min=10,max=20"`
+}
+
+// BarcodeScanRequest represents a request to scan a barcode
+type BarcodeScanRequest struct {
+	Barcode string `json:"barcode" binding:"required"`
+	Type    string `json:"type" binding:"required,oneof=isbn ean upc"`
+}
+
+// RichTextContent represents rich text content with metadata
+type RichTextContent struct {
+	HTML       string `json:"html"`
+	PlainText  string `json:"plain_text"`
+	WordCount  int    `json:"word_count"`
+	IsRichText bool   `json:"is_rich_text"`
+}
+
+// RichTextDescriptionRequest represents a request to update book description with rich text
+type RichTextDescriptionRequest struct {
+	BookID      string `json:"book_id" binding:"required"`
+	Description string `json:"description" binding:"required"`
+	IsRichText  bool   `json:"is_rich_text"`
+}
+
+// BookRecommendation represents a recommended book with reasoning
+type BookRecommendation struct {
+	Book   BookResponse `json:"book"`
+	Score  float64      `json:"score"`  // Recommendation strength (0.0 - 1.0)
+	Reason string       `json:"reason"` // Why this book is recommended
+}
+
+// BookRecommendationsResponse represents a list of book recommendations
+type BookRecommendationsResponse struct {
+	Recommendations []BookRecommendation   `json:"recommendations"`
+	Strategy        string                 `json:"strategy"` // Recommendation strategy used
+	StudentID       *int32                 `json:"student_id,omitempty"`
+	SourceBook      *BookResponse          `json:"source_book,omitempty"`
+	Filters         map[string]interface{} `json:"filters,omitempty"`
+	Count           int                    `json:"count"`
+}
+
+// RecommendationRequest represents a request for book recommendations
+type RecommendationRequest struct {
+	StudentID *int32  `json:"student_id" form:"student_id"`
+	Genre     *string `json:"genre" form:"genre"`
+	Author    *string `json:"author" form:"author"`
+	Timeframe string  `json:"timeframe" form:"timeframe,default=month" binding:"oneof=week month year all"`
+	Limit     int     `json:"limit" form:"limit,default=10" binding:"min=1,max=50"`
+	Strategy  string  `json:"strategy" form:"strategy,default=auto" binding:"oneof=auto personalized genre popularity similarity recent"`
+}
+
 // Pagination represents pagination information
 type Pagination struct {
 	Page       int   `json:"page"`

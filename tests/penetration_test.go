@@ -107,7 +107,7 @@ func (suite *PenetrationTestSuite) setupRouter(testRedis *database.RedisClient) 
 	emailService := &mockEmailService{}
 
 	authHandler := handlers.NewAuthHandler(suite.authService, suite.userService, emailService)
-	bookHandler := handlers.NewBookHandler(suite.bookService)
+	bookHandler := handlers.NewBookHandler(suite.bookService, nil, nil)
 	studentHandler := handlers.NewStudentHandler(suite.studentService)
 
 	// Auth routes
