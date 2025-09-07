@@ -86,12 +86,21 @@ func (m *MockBookService) UpdateBookAvailability(ctx context.Context, bookID int
 	return args.Error(0)
 }
 
+func (m *MockBookService) ProcessRichTextDescription(ctx context.Context, req models.RichTextDescriptionRequest) (*models.RichTextContent, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.RichTextContent), args.Error(1)
+}
+
 func setupBookTestRouter(mockService *MockBookService) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 
 	// Use the mock service with interface-based dependency injection
-	handler := NewBookHandler(mockService)
+	// For tests, we'll use nil for the additional services since we're only testing basic CRUD
+	handler := NewBookHandler(mockService, nil, nil)
 
 	v1 := router.Group("/api/v1")
 	{

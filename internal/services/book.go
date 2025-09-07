@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -39,19 +40,22 @@ type BookServiceInterface interface {
 	SearchBooks(ctx context.Context, req models.BookSearchRequest) (*models.BookListResponse, error)
 	UpdateBookAvailability(ctx context.Context, bookID int32, availableCopies int32) error
 	GetBookStats(ctx context.Context) (*models.BookStats, error)
+	ProcessRichTextDescription(ctx context.Context, req models.RichTextDescriptionRequest) (*models.RichTextContent, error)
 }
 
 // BookService handles book-related business logic
 type BookService struct {
-	querier      BookQuerier
-	cacheService CacheServiceInterface
+	querier         BookQuerier
+	cacheService    CacheServiceInterface
+	richTextService RichTextServiceInterface
 }
 
 // NewBookService creates a new book service
 func NewBookService(querier BookQuerier, cacheService CacheServiceInterface) *BookService {
 	return &BookService{
-		querier:      querier,
-		cacheService: cacheService,
+		querier:         querier,
+		cacheService:    cacheService,
+		richTextService: NewRichTextService(),
 	}
 }
 
@@ -98,7 +102,12 @@ func (s *BookService) CreateBook(ctx context.Context, req models.CreateBookReque
 		params.Genre = pgtype.Text{String: *req.Genre, Valid: true}
 	}
 	if req.Description != nil && *req.Description != "" {
-		params.Description = pgtype.Text{String: *req.Description, Valid: true}
+		// Sanitize rich text content for security
+		sanitizedDescription := s.richTextService.SanitizeHTML(*req.Description)
+		if err := s.richTextService.ValidateHTML(sanitizedDescription); err != nil {
+			return nil, fmt.Errorf("invalid description content: %w", err)
+		}
+		params.Description = pgtype.Text{String: sanitizedDescription, Valid: true}
 	}
 	if req.CoverImageURL != nil && *req.CoverImageURL != "" {
 		params.CoverImageUrl = pgtype.Text{String: *req.CoverImageURL, Valid: true}
@@ -249,7 +258,12 @@ func (s *BookService) UpdateBook(ctx context.Context, id int32, req models.Updat
 		if *req.Description == "" {
 			params.Description = pgtype.Text{Valid: false}
 		} else {
-			params.Description = pgtype.Text{String: *req.Description, Valid: true}
+			// Sanitize rich text content for security
+			sanitizedDescription := s.richTextService.SanitizeHTML(*req.Description)
+			if err := s.richTextService.ValidateHTML(sanitizedDescription); err != nil {
+				return nil, fmt.Errorf("invalid description content: %w", err)
+			}
+			params.Description = pgtype.Text{String: sanitizedDescription, Valid: true}
 		}
 	}
 	if req.CoverImageURL != nil {
@@ -540,4 +554,57 @@ func (s *BookService) GetBookStats(ctx context.Context) (*models.BookStats, erro
 		AvailableBooks: availableBooks,
 		BorrowedBooks:  totalBooks - availableBooks,
 	}, nil
+}
+
+// ProcessRichTextDescription processes and sanitizes rich text description
+func (s *BookService) ProcessRichTextDescription(ctx context.Context, req models.RichTextDescriptionRequest) (*models.RichTextContent, error) {
+	// Validate input
+	if req.BookID == "" {
+		return nil, fmt.Errorf("book_id is required")
+	}
+	if req.Description == "" {
+		return nil, fmt.Errorf("description is required")
+	}
+
+	// Check if the book exists
+	_, err := s.querier.GetBookByBookID(ctx, req.BookID)
+	if err != nil {
+		return nil, fmt.Errorf("book not found: %w", err)
+	}
+
+	var processedContent *models.RichTextContent
+
+	if req.IsRichText {
+		// Process as rich text
+		sanitizedHTML := s.richTextService.SanitizeHTML(req.Description)
+		if err := s.richTextService.ValidateHTML(sanitizedHTML); err != nil {
+			return nil, fmt.Errorf("invalid rich text content: %w", err)
+		}
+
+		plainText := s.richTextService.ExtractPlainText(sanitizedHTML)
+		wordCount := len(strings.Fields(plainText))
+
+		processedContent = &models.RichTextContent{
+			HTML:       sanitizedHTML,
+			PlainText:  plainText,
+			WordCount:  wordCount,
+			IsRichText: true,
+		}
+	} else {
+		// Process as plain text
+		plainText := strings.TrimSpace(req.Description)
+		wordCount := len(strings.Fields(plainText))
+
+		// Escape HTML entities for safety
+		escapedText := html.EscapeString(plainText)
+
+		processedContent = &models.RichTextContent{
+			HTML:       escapedText,
+			PlainText:  plainText,
+			WordCount:  wordCount,
+			IsRichText: false,
+		}
+	}
+
+	return processedContent, nil
 }

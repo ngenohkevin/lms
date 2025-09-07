@@ -92,6 +92,15 @@ func (m *MockBookService) UpdateBookAvailability(ctx context.Context, bookID int
 	return args.Error(0)
 }
 
+func (m *MockBookService) ProcessRichTextDescription(ctx context.Context, req models.RichTextDescriptionRequest) (*models.RichTextContent, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	content := args.Get(0).(models.RichTextContent)
+	return &content, args.Error(1)
+}
+
 func TestImportExportService(t *testing.T) {
 	// Create temporary directory for test files
 	tmpDir, err := os.MkdirTemp("", "import_export_test")

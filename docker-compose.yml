@@ -44,6 +44,7 @@ services:
       - DATABASE_URL=postgres://${LMS_DATABASE_USER:-lms_user}:${LMS_DATABASE_PASSWORD:?Database password is required}@postgres:5432/${LMS_DATABASE_NAME:-lms_dev}?sslmode=disable
       - REDIS_URL=redis://redis:6379/0
       - LMS_SERVER_MODE=${LMS_SERVER_MODE:-debug}
+      - LMS_ALLOWED_ORIGINS=${LMS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000}
       - LMS_JWT_SECRET=${LMS_JWT_SECRET:?JWT secret is required}
       - LMS_JWT_REFRESH_SECRET=${LMS_JWT_REFRESH_SECRET:?JWT refresh secret is required}
       - LMS_EMAIL_SMTP_HOST=${LMS_EMAIL_SMTP_HOST:-smtp.gmail.com}

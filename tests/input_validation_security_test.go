@@ -72,7 +72,8 @@ func (suite *InputValidationSecurityTestSuite) setupRouter() {
 	// Create email service (use mock for tests)
 	emailService := &mockEmailService{}
 
-	bookHandler := handlers.NewBookHandler(suite.bookService)
+	// For security tests, we don't need the full functionality, use nil for additional services
+	bookHandler := handlers.NewBookHandler(suite.bookService, nil, nil)
 	authHandler := handlers.NewAuthHandler(suite.authService, suite.userService, emailService)
 
 	// Routes
