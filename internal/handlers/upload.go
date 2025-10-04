@@ -260,30 +260,59 @@ func (h *UploadHandler) DeleteBookCover(c *gin.Context) {
 		return
 	}
 
-	// Remove the cover image URL from the book
-	emptyURL := ""
-	updateReq := models.UpdateBookRequest{
-		CoverImageURL: &emptyURL,
+	// Store the old cover URL before updating
+	oldCoverURL := *book.CoverImageURL
+
+	// Log the current state
+	fmt.Printf("[DEBUG] DeleteBookCover - Book ID: %d, Current Cover URL: %s\n", bookID, oldCoverURL)
+
+	// Delete the physical file FIRST before updating database
+	// This ensures if file deletion fails, we don't lose the database reference
+	filename := extractFilenameFromURL(oldCoverURL)
+	if filename != "" {
+		uploadDir := getUploadDir()
+		filePath := filepath.Join(uploadDir, filename)
+
+		// Check if file exists before attempting deletion
+		if _, err := os.Stat(filePath); err == nil {
+			if err := os.Remove(filePath); err != nil {
+				fmt.Printf("[DEBUG] DeleteBookCover - Warning: Failed to delete file %s: %v\n", filePath, err)
+				// Continue with database update even if file deletion fails
+			} else {
+				fmt.Printf("[DEBUG] DeleteBookCover - Successfully deleted file: %s\n", filePath)
+			}
+		} else {
+			fmt.Printf("[DEBUG] DeleteBookCover - File doesn't exist: %s\n", filePath)
+		}
 	}
+
+	// Now update the database to remove the cover image URL
+	// Pass an empty string which will be converted to NULL by the service
+	emptyStr := ""
+	updateReq := models.UpdateBookRequest{
+		CoverImageURL: &emptyStr,
+	}
+
+	fmt.Printf("[DEBUG] DeleteBookCover - Updating database to set cover_image_url to NULL\n")
 
 	updatedBook, err := h.bookService.UpdateBook(c.Request.Context(), int32(bookID), updateReq)
 	if err != nil {
+		fmt.Printf("[DEBUG] DeleteBookCover - Database update failed: %v\n", err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Success: false,
 			Error: ErrorDetail{
 				Code:    "INTERNAL_ERROR",
-				Message: "Failed to update book",
+				Message: "Failed to update book in database",
 			},
 		})
 		return
 	}
 
-	// Delete the physical file
-	filename := extractFilenameFromURL(*book.CoverImageURL)
-	if filename != "" {
-		uploadDir := getUploadDir()
-		filePath := filepath.Join(uploadDir, filename)
-		os.Remove(filePath) // Ignore error if file doesn't exist
+	// Log the updated state
+	if updatedBook.CoverImageURL == nil {
+		fmt.Printf("[DEBUG] DeleteBookCover - Database updated successfully, cover_image_url is now NULL\n")
+	} else {
+		fmt.Printf("[DEBUG] DeleteBookCover - WARNING: Database updated but cover_image_url is still: %s\n", *updatedBook.CoverImageURL)
 	}
 
 	c.JSON(http.StatusOK, SuccessResponse{

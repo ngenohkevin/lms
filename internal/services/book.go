@@ -268,8 +268,10 @@ func (s *BookService) UpdateBook(ctx context.Context, id int32, req models.Updat
 	}
 	if req.CoverImageURL != nil {
 		if *req.CoverImageURL == "" {
+			fmt.Printf("[DEBUG] UpdateBook - Setting CoverImageUrl to NULL (Valid: false) for book ID: %d\n", id)
 			params.CoverImageUrl = pgtype.Text{Valid: false}
 		} else {
+			fmt.Printf("[DEBUG] UpdateBook - Setting CoverImageUrl to: %s for book ID: %d\n", *req.CoverImageURL, id)
 			params.CoverImageUrl = pgtype.Text{String: *req.CoverImageURL, Valid: true}
 		}
 	}
@@ -291,6 +293,15 @@ func (s *BookService) UpdateBook(ctx context.Context, id int32, req models.Updat
 	book, err := s.querier.UpdateBook(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update book: %w", err)
+	}
+
+	// Debug log the result
+	if req.CoverImageURL != nil && *req.CoverImageURL == "" {
+		if book.CoverImageUrl.Valid {
+			fmt.Printf("[DEBUG] UpdateBook - WARNING: After update, CoverImageUrl.Valid is still true with value: %s\n", book.CoverImageUrl.String)
+		} else {
+			fmt.Printf("[DEBUG] UpdateBook - SUCCESS: CoverImageUrl.Valid is false (NULL in database)\n")
+		}
 	}
 
 	// Invalidate book-related caches after successful update
