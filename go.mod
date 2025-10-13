@@ -1,6 +1,6 @@
 module github.com/ngenohkevin/lms
 
-go 1.23.5
+go 1.24.0
 
 require (
 	github.com/gin-contrib/cors v1.7.6
@@ -18,7 +18,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/tealeg/xlsx/v3 v3.3.13
 	github.com/xuri/excelize/v2 v2.9.1
-	golang.org/x/crypto v0.39.0
+	golang.org/x/crypto v0.43.0
 )
 
 require (
@@ -72,10 +72,10 @@ require (
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
 	golang.org/x/arch v0.18.0 // indirect
-	golang.org/x/net v0.41.0 // indirect
-	golang.org/x/sync v0.15.0 // indirect
-	golang.org/x/sys v0.33.0 // indirect
-	golang.org/x/text v0.26.0 // indirect
+	golang.org/x/net v0.45.0 // indirect
+	golang.org/x/sync v0.17.0 // indirect
+	golang.org/x/sys v0.37.0 // indirect
+	golang.org/x/text v0.30.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
