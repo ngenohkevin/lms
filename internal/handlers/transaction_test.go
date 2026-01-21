@@ -83,6 +83,22 @@ func (m *MockTransactionService) GetRenewalStatistics(ctx context.Context, stude
 	return args.Get(0).(*queries.GetRenewalStatisticsByStudentRow), args.Error(1)
 }
 
+func (m *MockTransactionService) ListAllTransactions(ctx context.Context, page, limit int32) (*services.TransactionListResponse, error) {
+	args := m.Called(ctx, page, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*services.TransactionListResponse), args.Error(1)
+}
+
+func (m *MockTransactionService) GetTransactionStats(ctx context.Context) (*services.TransactionStatsResponse, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*services.TransactionStatsResponse), args.Error(1)
+}
+
 // Test helper functions
 func setupTransactionRouter() (*gin.Engine, *MockTransactionService) {
 	gin.SetMode(gin.TestMode)
