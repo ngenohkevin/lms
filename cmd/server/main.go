@@ -352,7 +352,7 @@ func setupRoutes(
 			// Notification routes
 			notifications := protected.Group("/notifications")
 			{
-				notifications.GET("", notificationHandler.GetUserNotifications)
+				notifications.GET("", notificationHandler.ListNotifications)
 				notifications.GET("/stats", notificationHandler.GetNotificationStats)
 				notifications.GET("/:id", notificationHandler.GetNotification)
 				notifications.PUT("/:id/read", notificationHandler.MarkNotificationAsRead)
