@@ -102,3 +102,4 @@ excalidraw.log
 # Disabled test files that may contain sensitive test data
 *.disabled
 
+bin/
