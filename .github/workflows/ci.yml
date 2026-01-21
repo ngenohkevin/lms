@@ -8,6 +8,8 @@ on:
 
 env:
   GO_VERSION: '1.24'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   lint:
@@ -67,7 +69,7 @@ jobs:
           name: coverage-unit
           path: coverage-unit.out
 
-  integration-and-security-tests:
+  integration-tests:
     name: Integration & Security Tests
     runs-on: ubuntu-latest
     needs: lint
@@ -150,10 +152,13 @@ jobs:
           name: coverage-integration
           path: coverage-integration.out
 
-  build:
-    name: Build
+  build-and-deploy:
+    name: Build & Deploy
     runs-on: ubuntu-latest
-    needs: [unit-tests, integration-and-security-tests]
+    needs: [unit-tests, integration-tests]
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - uses: actions/checkout@v4
@@ -177,10 +182,44 @@ jobs:
           name: lms-server-linux-amd64
           path: lms-server
 
+      - name: Log in to GitHub Container Registry
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Deploy to Dokploy
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "https://dokploy.iopulse.cloud/api/trpc/application.deploy" \
+            -H "accept: application/json" \
+            -H "x-api-key: ${{ secrets.DOKPLOY_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"json":{"applicationId":"${{ secrets.DOKPLOY_APP_ID }}"}}')
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "✅ Deployment triggered successfully!"
+          else
+            echo "❌ Deployment failed with HTTP $HTTP_CODE"
+            echo "$RESPONSE"
+            exit 1
+          fi
+
   coverage-report:
     name: Coverage Report
     runs-on: ubuntu-latest
-    needs: [unit-tests, integration-and-security-tests]
+    needs: [unit-tests, integration-tests]
     if: github.event_name == 'pull_request'
 
     steps:
