@@ -85,9 +85,9 @@ docker-compose.override.yml
 # Local development
 local/
 
-# Build files
-main
-server
+# Build files (binaries in root)
+/main
+/server
 
 # Miscellaneous
 excalidraw.log
