@@ -237,11 +237,8 @@ jobs:
           TEST_DB_PASSWORD: postgres
         run: |
           go test -v -race -coverprofile=coverage-security.out \
-            ./tests/authentication_security_test.go \
-            ./tests/input_validation_security_test.go \
-            ./tests/security_vulnerability_test.go \
-            ./tests/sql_injection_security_test.go \
-            ./tests/penetration_test.go
+            -run 'Test(Authentication|InputValidation|SecurityVulnerability|SQLInjection|Penetration)' \
+            ./tests/...
 
       - name: Upload security test coverage
         uses: actions/upload-artifact@v4
