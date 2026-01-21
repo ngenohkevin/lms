@@ -54,9 +54,9 @@ USER 65532:65532
 # Expose port
 EXPOSE 8080
 
-# Health check - note: distroless doesn't have wget, so we'll check port directly
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-    CMD ["/app/main", "-health-check"] || exit 1
+# Health check disabled - distroless has no shell/curl/wget
+# Dokploy/Traefik handles health checks via HTTP endpoint
+# HEALTHCHECK NONE
 
 # Labels for metadata
 LABEL maintainer="LMS Development Team" \
