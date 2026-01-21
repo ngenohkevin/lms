@@ -95,16 +95,16 @@ func cleanTestDatabase(t *testing.T, db *database.Database) {
 	ctx := context.Background()
 
 	// Delete in reverse order of dependencies
-	db.Pool.Exec(ctx, "DELETE FROM audit_logs")
-	db.Pool.Exec(ctx, "DELETE FROM transactions")
-	db.Pool.Exec(ctx, "DELETE FROM reservations")
-	db.Pool.Exec(ctx, "DELETE FROM students")
-	db.Pool.Exec(ctx, "DELETE FROM books")
-	db.Pool.Exec(ctx, "DELETE FROM users")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM audit_logs")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM transactions")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM reservations")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM students")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM books")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM users")
 
 	// Reset sequences
-	db.Pool.Exec(ctx, "ALTER SEQUENCE students_id_seq RESTART WITH 1")
-	db.Pool.Exec(ctx, "ALTER SEQUENCE users_id_seq RESTART WITH 1")
+	_, _ = db.Pool.Exec(ctx, "ALTER SEQUENCE students_id_seq RESTART WITH 1")
+	_, _ = db.Pool.Exec(ctx, "ALTER SEQUENCE users_id_seq RESTART WITH 1")
 }
 
 // cleanWorkflowTestData removes only workflow test data from the database

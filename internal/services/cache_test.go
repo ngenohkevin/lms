@@ -180,12 +180,12 @@ func (s *CacheServiceTestSuite) TestSearchResultsCaching() {
 func (s *CacheServiceTestSuite) TestCacheStats() {
 	// Set some test data first
 	books := map[string]string{"test": "data"}
-	s.cacheService.SetBookCatalog(s.ctx, books)
-	s.cacheService.GetBookCatalog(s.ctx)
+	_ = s.cacheService.SetBookCatalog(s.ctx, books)
+	_, _ = s.cacheService.GetBookCatalog(s.ctx)
 
 	profile := map[string]string{"student": "data"}
-	s.cacheService.SetStudentProfile(s.ctx, 1, profile)
-	s.cacheService.GetStudentProfile(s.ctx, 1)
+	_ = s.cacheService.SetStudentProfile(s.ctx, 1, profile)
+	_, _ = s.cacheService.GetStudentProfile(s.ctx, 1)
 
 	// Test getting cache statistics
 	stats, err := s.cacheService.GetCacheStats(s.ctx)
@@ -198,15 +198,15 @@ func (s *CacheServiceTestSuite) TestCacheStats() {
 func (s *CacheServiceTestSuite) TestHitRatioCalculation() {
 	// Generate some hits and misses
 	books := map[string]string{"test": "data"}
-	s.cacheService.SetBookCatalog(s.ctx, books)
+	_ = s.cacheService.SetBookCatalog(s.ctx, books)
 
 	// Generate hits
-	s.cacheService.GetBookCatalog(s.ctx) // hit 1
-	s.cacheService.GetBookCatalog(s.ctx) // hit 2
+	_, _ = s.cacheService.GetBookCatalog(s.ctx) // hit 1
+	_, _ = s.cacheService.GetBookCatalog(s.ctx) // hit 2
 
 	// Generate misses by trying to get non-existent data
-	s.cacheService.GetStudentProfile(s.ctx, 999) // miss 1
-	s.cacheService.GetStudentProfile(s.ctx, 998) // miss 2
+	_, _ = s.cacheService.GetStudentProfile(s.ctx, 999) // miss 1
+	_, _ = s.cacheService.GetStudentProfile(s.ctx, 998) // miss 2
 
 	// Test book cache hit ratio
 	bookRatio, err := s.cacheService.GetHitRatio(s.ctx, "books")
@@ -227,12 +227,12 @@ func (s *CacheServiceTestSuite) TestInvalidateByPattern() {
 	// Set multiple student profiles
 	for i := 1; i <= 3; i++ {
 		profile := map[string]interface{}{"id": i, "name": "Student " + string(rune(i))}
-		s.cacheService.SetStudentProfile(s.ctx, i, profile)
+		_ = s.cacheService.SetStudentProfile(s.ctx, i, profile)
 	}
 
 	// Set some other cache entries
 	books := map[string]string{"test": "data"}
-	s.cacheService.SetBookCatalog(s.ctx, books)
+	_ = s.cacheService.SetBookCatalog(s.ctx, books)
 
 	// Invalidate all student profiles by pattern
 	err := s.cacheService.InvalidateByPattern(s.ctx, "cache:student:*")

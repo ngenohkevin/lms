@@ -101,7 +101,7 @@ func (s *ImportExportService) ImportBooksFromExcel(ctx context.Context, reader i
 func (s *ImportExportService) processImport(ctx context.Context, importData []models.BookImportRequest, fileName string, userID int32, startTime time.Time) (*models.ImportResult, error) {
 	// Create initial import history record
 	var startedAtTimestamp pgtype.Timestamp
-	startedAtTimestamp.Scan(startTime)
+	_ = startedAtTimestamp.Scan(startTime) // pgtype.Scan only fails on incompatible types
 
 	historyParams := queries.CreateImportHistoryParams{
 		OperationType:     "import",
@@ -237,12 +237,12 @@ func (s *ImportExportService) processImport(ctx context.Context, importData []mo
 	var completedAtPg pgtype.Timestamp
 	var processingDurationPg pgtype.Int4
 
-	processedRecordsPg.Scan(int32(result.TotalRecords))
-	successfulRecordsPg.Scan(int32(result.SuccessCount))
-	failedRecordsPg.Scan(int32(result.FailureCount))
-	statusPg.Scan(status)
-	completedAtPg.Scan(completedAt)
-	processingDurationPg.Scan(processingDurationSec)
+	_ = processedRecordsPg.Scan(int32(result.TotalRecords))    // pgtype.Scan only fails on incompatible types
+	_ = successfulRecordsPg.Scan(int32(result.SuccessCount))   // pgtype.Scan only fails on incompatible types
+	_ = failedRecordsPg.Scan(int32(result.FailureCount))       // pgtype.Scan only fails on incompatible types
+	_ = statusPg.Scan(status)                                  // pgtype.Scan only fails on incompatible types
+	_ = completedAtPg.Scan(completedAt)                        // pgtype.Scan only fails on incompatible types
+	_ = processingDurationPg.Scan(processingDurationSec)       // pgtype.Scan only fails on incompatible types
 
 	// Update import history (if queries available)
 	if s.queries != nil {
@@ -278,7 +278,7 @@ func (s *ImportExportService) ExportBooksToCSV(ctx context.Context, req models.E
 
 	if s.queries != nil {
 		var startedAtTimestamp pgtype.Timestamp
-		startedAtTimestamp.Scan(startTime)
+		_ = startedAtTimestamp.Scan(startTime) // pgtype.Scan only fails on incompatible types
 
 		historyParams := queries.CreateImportHistoryParams{
 			OperationType:     "export",
@@ -311,7 +311,7 @@ func (s *ImportExportService) ExportBooksToCSV(ctx context.Context, req models.E
 				Status:       pgtype.Text{String: "failed", Valid: true},
 				ErrorMessage: pgtype.Text{String: err.Error(), Valid: true},
 			}
-			s.queries.UpdateImportHistory(ctx, updateParams)
+			_, _ = s.queries.UpdateImportHistory(ctx, updateParams) // Non-critical cleanup operation
 		}
 		return nil, fmt.Errorf("failed to get books for export: %w", err)
 	}
@@ -332,7 +332,7 @@ func (s *ImportExportService) ExportBooksToCSV(ctx context.Context, req models.E
 				Status:       pgtype.Text{String: "failed", Valid: true},
 				ErrorMessage: pgtype.Text{String: err.Error(), Valid: true},
 			}
-			s.queries.UpdateImportHistory(ctx, updateParams)
+			_, _ = s.queries.UpdateImportHistory(ctx, updateParams) // Non-critical cleanup operation
 		}
 		return nil, fmt.Errorf("failed to create CSV file: %w", err)
 	}
@@ -347,7 +347,7 @@ func (s *ImportExportService) ExportBooksToCSV(ctx context.Context, req models.E
 				Status:       pgtype.Text{String: "failed", Valid: true},
 				ErrorMessage: pgtype.Text{String: err.Error(), Valid: true},
 			}
-			s.queries.UpdateImportHistory(ctx, updateParams)
+			_, _ = s.queries.UpdateImportHistory(ctx, updateParams) // Non-critical cleanup operation
 		}
 		return nil, fmt.Errorf("failed to write CSV data: %w", err)
 	}
@@ -418,7 +418,7 @@ func (s *ImportExportService) ExportBooksToExcel(ctx context.Context, req models
 
 	if s.queries != nil {
 		var startedAtTimestamp pgtype.Timestamp
-		startedAtTimestamp.Scan(startTime)
+		_ = startedAtTimestamp.Scan(startTime) // pgtype.Scan only fails on incompatible types
 
 		historyParams := queries.CreateImportHistoryParams{
 			OperationType:     "export",
@@ -452,7 +452,7 @@ func (s *ImportExportService) ExportBooksToExcel(ctx context.Context, req models
 				Status:       pgtype.Text{String: "failed", Valid: true},
 				ErrorMessage: pgtype.Text{String: err.Error(), Valid: true},
 			}
-			s.queries.UpdateImportHistory(ctx, updateParams)
+			_, _ = s.queries.UpdateImportHistory(ctx, updateParams) // Non-critical cleanup operation
 		}
 		return nil, fmt.Errorf("failed to get books for export: %w", err)
 	}
@@ -473,26 +473,26 @@ func (s *ImportExportService) ExportBooksToExcel(ctx context.Context, req models
 
 	for i, header := range headers {
 		cell := fmt.Sprintf("%s1", string(rune('A'+i)))
-		f.SetCellValue("Sheet1", cell, header)
+		_ = f.SetCellValue("Sheet1", cell, header) // Excel SetCellValue errors are non-critical
 	}
 
 	// Add data rows
 	for i, book := range exportData {
 		row := i + 2
-		f.SetCellValue("Sheet1", fmt.Sprintf("A%d", row), book.BookID)
-		f.SetCellValue("Sheet1", fmt.Sprintf("B%d", row), book.Title)
-		f.SetCellValue("Sheet1", fmt.Sprintf("C%d", row), book.Author)
-		f.SetCellValue("Sheet1", fmt.Sprintf("D%d", row), book.ISBN)
-		f.SetCellValue("Sheet1", fmt.Sprintf("E%d", row), book.Publisher)
-		f.SetCellValue("Sheet1", fmt.Sprintf("F%d", row), book.PublishedYear)
-		f.SetCellValue("Sheet1", fmt.Sprintf("G%d", row), book.Genre)
-		f.SetCellValue("Sheet1", fmt.Sprintf("H%d", row), book.Description)
-		f.SetCellValue("Sheet1", fmt.Sprintf("I%d", row), book.TotalCopies)
-		f.SetCellValue("Sheet1", fmt.Sprintf("J%d", row), book.AvailableCopies)
-		f.SetCellValue("Sheet1", fmt.Sprintf("K%d", row), book.ShelfLocation)
-		f.SetCellValue("Sheet1", fmt.Sprintf("L%d", row), book.Status)
-		f.SetCellValue("Sheet1", fmt.Sprintf("M%d", row), book.CreatedAt.Format("2006-01-02 15:04:05"))
-		f.SetCellValue("Sheet1", fmt.Sprintf("N%d", row), book.UpdatedAt.Format("2006-01-02 15:04:05"))
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("A%d", row), book.BookID)        // Excel SetCellValue errors are non-critical
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("B%d", row), book.Title)         // Excel SetCellValue errors are non-critical
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("C%d", row), book.Author)        // Excel SetCellValue errors are non-critical
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("D%d", row), book.ISBN)          // Excel SetCellValue errors are non-critical
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("E%d", row), book.Publisher)     // Excel SetCellValue errors are non-critical
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("F%d", row), book.PublishedYear) // Excel SetCellValue errors are non-critical
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("G%d", row), book.Genre)         // Excel SetCellValue errors are non-critical
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("H%d", row), book.Description)   // Excel SetCellValue errors are non-critical
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("I%d", row), book.TotalCopies)   // Excel SetCellValue errors are non-critical
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("J%d", row), book.AvailableCopies)
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("K%d", row), book.ShelfLocation)
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("L%d", row), book.Status)
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("M%d", row), book.CreatedAt.Format("2006-01-02 15:04:05"))
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("N%d", row), book.UpdatedAt.Format("2006-01-02 15:04:05"))
 	}
 
 	// Generate file path and save
@@ -506,7 +506,7 @@ func (s *ImportExportService) ExportBooksToExcel(ctx context.Context, req models
 				Status:       pgtype.Text{String: "failed", Valid: true},
 				ErrorMessage: pgtype.Text{String: err.Error(), Valid: true},
 			}
-			s.queries.UpdateImportHistory(ctx, updateParams)
+			_, _ = s.queries.UpdateImportHistory(ctx, updateParams) // Non-critical cleanup operation
 		}
 		return nil, fmt.Errorf("failed to save Excel file: %w", err)
 	}
@@ -811,26 +811,26 @@ func (s *ImportExportService) ExportBooksToExcelContent(ctx context.Context, req
 
 	for i, header := range headers {
 		cell := fmt.Sprintf("%s1", string(rune('A'+i)))
-		f.SetCellValue("Sheet1", cell, header)
+		_ = f.SetCellValue("Sheet1", cell, header) // Excel SetCellValue errors are non-critical
 	}
 
 	// Add data rows
 	for i, book := range exportData {
 		row := i + 2
-		f.SetCellValue("Sheet1", fmt.Sprintf("A%d", row), book.BookID)
-		f.SetCellValue("Sheet1", fmt.Sprintf("B%d", row), book.Title)
-		f.SetCellValue("Sheet1", fmt.Sprintf("C%d", row), book.Author)
-		f.SetCellValue("Sheet1", fmt.Sprintf("D%d", row), book.ISBN)
-		f.SetCellValue("Sheet1", fmt.Sprintf("E%d", row), book.Publisher)
-		f.SetCellValue("Sheet1", fmt.Sprintf("F%d", row), book.PublishedYear)
-		f.SetCellValue("Sheet1", fmt.Sprintf("G%d", row), book.Genre)
-		f.SetCellValue("Sheet1", fmt.Sprintf("H%d", row), book.Description)
-		f.SetCellValue("Sheet1", fmt.Sprintf("I%d", row), book.TotalCopies)
-		f.SetCellValue("Sheet1", fmt.Sprintf("J%d", row), book.AvailableCopies)
-		f.SetCellValue("Sheet1", fmt.Sprintf("K%d", row), book.ShelfLocation)
-		f.SetCellValue("Sheet1", fmt.Sprintf("L%d", row), book.Status)
-		f.SetCellValue("Sheet1", fmt.Sprintf("M%d", row), book.CreatedAt.Format("2006-01-02 15:04:05"))
-		f.SetCellValue("Sheet1", fmt.Sprintf("N%d", row), book.UpdatedAt.Format("2006-01-02 15:04:05"))
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("A%d", row), book.BookID)
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("B%d", row), book.Title)
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("C%d", row), book.Author)
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("D%d", row), book.ISBN)
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("E%d", row), book.Publisher)
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("F%d", row), book.PublishedYear)
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("G%d", row), book.Genre)
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("H%d", row), book.Description)
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("I%d", row), book.TotalCopies)
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("J%d", row), book.AvailableCopies)
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("K%d", row), book.ShelfLocation)
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("L%d", row), book.Status)
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("M%d", row), book.CreatedAt.Format("2006-01-02 15:04:05"))
+		_ = f.SetCellValue("Sheet1", fmt.Sprintf("N%d", row), book.UpdatedAt.Format("2006-01-02 15:04:05"))
 	}
 
 	// Write to buffer

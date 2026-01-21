@@ -188,7 +188,7 @@ func (s *QueueService) ProcessQueue(ctx context.Context, queueName string, batch
 		}
 
 		// Remove from processing queue
-		s.removeFromProcessing(ctx, &job)
+		_ = s.removeFromProcessing(ctx, &job) // Non-critical cleanup operation
 	}
 
 	s.logger.Info("Queue processing completed",

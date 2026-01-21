@@ -156,7 +156,7 @@ func (rs *ReportService) GetPopularBooks(ctx context.Context, startDate, endDate
 
 	// Cache the report for future requests
 	if rs.cacheService != nil {
-		rs.cacheService.SetPopularBooks(ctx, report)
+		_ = rs.cacheService.SetPopularBooks(ctx, report) // Non-critical cache operation
 	}
 
 	return report, nil

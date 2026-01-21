@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"runtime"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -114,7 +113,6 @@ type PerformanceMonitor struct {
 	alertService AlertingServiceInterface
 	logService   LogAggregationServiceInterface
 	config       PerformanceMonitorConfig
-	mu           sync.RWMutex
 }
 
 // PerformanceMonitorInterface defines the performance monitor interface
@@ -186,7 +184,8 @@ func (pm *PerformanceMonitor) RecordResponseTime(ctx context.Context, service, e
 		if err := pm.alertService.SendAlert(ctx, alert); err != nil {
 			// Log the error but don't fail the metric recording
 			if pm.logService != nil {
-				pm.logService.LogError(ctx, "performance-monitor", "Failed to send response time alert", "alert-sender",
+				// Explicitly ignore error as logging failure should not affect metric recording
+				_ = pm.logService.LogError(ctx, "performance-monitor", "Failed to send response time alert", "alert-sender",
 					map[string]string{"alert_id": alert.ID}, map[string]interface{}{"error": err.Error()})
 			}
 		}
@@ -233,7 +232,8 @@ func (pm *PerformanceMonitor) RecordMemoryUsage(ctx context.Context, service str
 		}
 
 		if pm.alertService != nil {
-			pm.alertService.SendAlert(ctx, alert)
+			// Explicitly ignore error as alert failure should not affect metric recording
+			_ = pm.alertService.SendAlert(ctx, alert)
 		}
 	}
 
@@ -283,7 +283,8 @@ func (pm *PerformanceMonitor) RecordCPUUsage(ctx context.Context, service string
 		}
 
 		if pm.alertService != nil {
-			pm.alertService.SendAlert(ctx, alert)
+			// Explicitly ignore error as alert failure should not affect metric recording
+			_ = pm.alertService.SendAlert(ctx, alert)
 		}
 	}
 
@@ -333,7 +334,8 @@ func (pm *PerformanceMonitor) RecordErrorRate(ctx context.Context, service strin
 		}
 
 		if pm.alertService != nil {
-			pm.alertService.SendAlert(ctx, alert)
+			// Explicitly ignore error as alert failure should not affect metric recording
+			_ = pm.alertService.SendAlert(ctx, alert)
 		}
 	}
 
@@ -523,7 +525,8 @@ func (pm *PerformanceMonitor) StartMonitoring(ctx context.Context) error {
 	// This would typically start a goroutine that periodically collects system metrics
 	// For now, we'll just record initial metrics
 	if pm.logService != nil {
-		pm.logService.LogInfo(ctx, "performance-monitor", "Performance monitoring started", "monitor", nil, nil)
+		// Explicitly ignore error as logging failure should not prevent monitoring from starting
+		_ = pm.logService.LogInfo(ctx, "performance-monitor", "Performance monitoring started", "monitor", nil, nil)
 	}
 
 	return nil

@@ -224,14 +224,10 @@ func SecureJSON() gin.HandlerFunc {
 }
 
 // APIKeyManagerMiddleware provides API key management endpoints
-func APIKeyManagerMiddleware(config *SecurityConfig) gin.HandlerFunc {
+// Note: API key management is handled by specific handler functions
+// for creating, listing, and revoking API keys
+func APIKeyManagerMiddleware(_ *SecurityConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Only allow API key management for admin endpoints
-		if strings.HasPrefix(c.Request.URL.Path, "/api/admin/keys") {
-			// This would be handled by specific handler functions
-			// for creating, listing, revoking API keys
-		}
-
 		c.Next()
 	}
 }

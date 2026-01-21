@@ -431,12 +431,10 @@ func (s *NotificationService) convertToResponse(notification queries.Notificatio
 func (s *NotificationService) processMessageTemplate(template string, data map[string]interface{}) (string, error) {
 	// Simple template processing - in production, use a proper template engine
 	message := template
-	if data != nil {
-		for key, value := range data {
-			placeholder := fmt.Sprintf("{{.%s}}", key)
-			replacement := fmt.Sprintf("%v", value)
-			message = strings.ReplaceAll(message, placeholder, replacement)
-		}
+	for key, value := range data {
+		placeholder := fmt.Sprintf("{{.%s}}", key)
+		replacement := fmt.Sprintf("%v", value)
+		message = strings.ReplaceAll(message, placeholder, replacement)
 	}
 	return message, nil
 }
@@ -520,7 +518,7 @@ func (s *NotificationService) SendDueSoonReminders(ctx context.Context) error {
 	var successCount, failureCount int
 	for _, transaction := range dueSoonTransactions {
 		// Calculate days until due
-		daysUntilDue := int(transaction.DueDate.Time.Sub(time.Now()).Hours() / 24)
+		daysUntilDue := int(time.Until(transaction.DueDate.Time).Hours() / 24)
 
 		// Create personalized notification
 		title := fmt.Sprintf("Book Due Soon: %s", transaction.Title)

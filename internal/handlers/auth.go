@@ -104,11 +104,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			return
 		}
 
-		// Update last login
-		err = h.userService.UpdateLastLogin(user.ID)
-		if err != nil {
-			// Log error but don't fail the login
-		}
+		// Update last login (non-critical - don't fail login if this fails)
+		_ = h.userService.UpdateLastLogin(user.ID)
 
 		response := models.LoginResponse{
 			User:         user,
@@ -280,11 +277,8 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 
 	tokenString := parts[1]
 
-	// Blacklist the access token
-	if err := h.authService.BlacklistToken(tokenString); err != nil {
-		// Log error but don't fail the logout
-		// User should still be logged out on the client side
-	}
+	// Blacklist the access token (non-critical - user is logged out client-side regardless)
+	_ = h.authService.BlacklistToken(tokenString)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -594,11 +588,8 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 
-	// Invalidate the reset token
-	err = h.authService.InvalidatePasswordResetToken(req.Token)
-	if err != nil {
-		// Log error but don't fail the request
-	}
+	// Invalidate the reset token (non-critical - password already reset successfully)
+	_ = h.authService.InvalidatePasswordResetToken(req.Token)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

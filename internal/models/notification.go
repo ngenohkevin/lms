@@ -104,9 +104,15 @@ func (nr *NotificationRequest) Validate() error {
 	validate := validator.New()
 
 	// Register custom validators
-	validate.RegisterValidation("notification_type", validateNotificationType)
-	validate.RegisterValidation("recipient_type", validateRecipientType)
-	validate.RegisterValidation("notification_priority", validateNotificationPriority)
+	if err := validate.RegisterValidation("notification_type", validateNotificationType); err != nil {
+		panic(fmt.Sprintf("failed to register notification_type validation: %v", err))
+	}
+	if err := validate.RegisterValidation("recipient_type", validateRecipientType); err != nil {
+		panic(fmt.Sprintf("failed to register recipient_type validation: %v", err))
+	}
+	if err := validate.RegisterValidation("notification_priority", validateNotificationPriority); err != nil {
+		panic(fmt.Sprintf("failed to register notification_priority validation: %v", err))
+	}
 
 	if err := validate.Struct(nr); err != nil {
 		return err
@@ -458,12 +464,4 @@ func validateRecipientType(fl validator.FieldLevel) bool {
 
 func validateNotificationPriority(fl validator.FieldLevel) bool {
 	return NotificationPriority(fl.Field().String()).IsValid()
-}
-
-func validateEmailDeliveryStatus(fl validator.FieldLevel) bool {
-	return EmailDeliveryStatus(fl.Field().String()).IsValid()
-}
-
-func validateEmailQueueStatus(fl validator.FieldLevel) bool {
-	return EmailQueueStatus(fl.Field().String()).IsValid()
 }

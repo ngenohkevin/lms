@@ -505,7 +505,7 @@ func (suite *InputValidationSecurityTestSuite) getValidToken() string {
 	}
 
 	var response map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &response)
+	_ = json.Unmarshal(w.Body.Bytes(), &response)
 
 	return response["access_token"].(string)
 }

@@ -94,11 +94,8 @@ type BackupScheduler struct {
 	cronExpr    string
 	backupTypes []BackupType
 	isEnabled   bool
-	lastRun     time.Time
-	nextRun     time.Time
 	runCount    int
 	errorCount  int
-	mu          sync.RWMutex
 }
 
 type BackupStatus struct {
@@ -215,7 +212,9 @@ func NewBackupService(db *database.Database, backupDir string, retentionPeriod t
 	}
 
 	// Ensure backup directory exists
-	os.MkdirAll(backupDir, 0755)
+	if err := os.MkdirAll(backupDir, 0755); err != nil {
+		log.Printf("Warning: failed to create backup directory %s: %v", backupDir, err)
+	}
 
 	return &BackupService{
 		db:              db,
@@ -232,7 +231,9 @@ func NewBackupService(db *database.Database, backupDir string, retentionPeriod t
 // NewBackupServiceWithConfig creates a backup service with configuration
 func NewBackupServiceWithConfig(db *database.Database, config BackupServiceConfig) BackupServiceInterface {
 	// Ensure backup directory exists
-	os.MkdirAll(config.BackupDir, 0755)
+	if err := os.MkdirAll(config.BackupDir, 0755); err != nil {
+		log.Printf("Warning: failed to create backup directory %s: %v", config.BackupDir, err)
+	}
 
 	bs := &BackupService{
 		db:              db,

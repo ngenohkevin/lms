@@ -134,10 +134,10 @@ func (s *BookService) CreateBook(ctx context.Context, req models.CreateBookReque
 
 	// Invalidate book-related caches after successful creation
 	if s.cacheService != nil {
-		// Invalidate book catalog and search results
-		s.cacheService.InvalidateByPattern(ctx, "books:list:*")
-		s.cacheService.InvalidateByPattern(ctx, "search:*")
-		s.cacheService.InvalidateBookCatalog(ctx)
+		// Invalidate book catalog and search results - errors are non-critical for cache invalidation
+		_ = s.cacheService.InvalidateByPattern(ctx, "books:list:*")
+		_ = s.cacheService.InvalidateByPattern(ctx, "search:*")
+		_ = s.cacheService.InvalidateBookCatalog(ctx)
 	}
 
 	// Convert to response model
@@ -306,10 +306,10 @@ func (s *BookService) UpdateBook(ctx context.Context, id int32, req models.Updat
 
 	// Invalidate book-related caches after successful update
 	if s.cacheService != nil {
-		// Invalidate book catalog and search results
-		s.cacheService.InvalidateByPattern(ctx, "books:list:*")
-		s.cacheService.InvalidateByPattern(ctx, "search:*")
-		s.cacheService.InvalidateBookCatalog(ctx)
+		// Invalidate book catalog and search results - errors are non-critical for cache invalidation
+		_ = s.cacheService.InvalidateByPattern(ctx, "books:list:*")
+		_ = s.cacheService.InvalidateByPattern(ctx, "search:*")
+		_ = s.cacheService.InvalidateBookCatalog(ctx)
 	}
 
 	response := book.ToResponse()
@@ -332,10 +332,10 @@ func (s *BookService) DeleteBook(ctx context.Context, id int32) error {
 
 	// Invalidate book-related caches after successful deletion
 	if s.cacheService != nil {
-		// Invalidate book catalog and search results
-		s.cacheService.InvalidateByPattern(ctx, "books:list:*")
-		s.cacheService.InvalidateByPattern(ctx, "search:*")
-		s.cacheService.InvalidateBookCatalog(ctx)
+		// Invalidate book catalog and search results - errors are non-critical for cache invalidation
+		_ = s.cacheService.InvalidateByPattern(ctx, "books:list:*")
+		_ = s.cacheService.InvalidateByPattern(ctx, "search:*")
+		_ = s.cacheService.InvalidateBookCatalog(ctx)
 	}
 
 	return nil
@@ -394,9 +394,9 @@ func (s *BookService) ListBooks(ctx context.Context, page, limit int) (*models.B
 		},
 	}
 
-	// Cache the response for future requests
+	// Cache the response for future requests - errors are non-critical for caching
 	if s.cacheService != nil {
-		s.cacheService.SetSearchResults(ctx, cacheKey, response)
+		_ = s.cacheService.SetSearchResults(ctx, cacheKey, response)
 	}
 
 	return response, nil
@@ -527,9 +527,9 @@ func (s *BookService) SearchBooks(ctx context.Context, req models.BookSearchRequ
 		},
 	}
 
-	// Cache the search results for future requests
+	// Cache the search results for future requests - errors are non-critical for caching
 	if s.cacheService != nil {
-		s.cacheService.SetSearchResults(ctx, cacheKey, response)
+		_ = s.cacheService.SetSearchResults(ctx, cacheKey, response)
 	}
 
 	return response, nil

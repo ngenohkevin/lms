@@ -119,14 +119,14 @@ func setupEmailDeliveryTest(t *testing.T) (*EmailDeliveryService, func()) {
 		// Clean up test data
 		ctx := context.Background()
 		// Delete all test data in reverse order of dependencies
-		db.Pool.Exec(ctx, "DELETE FROM email_deliveries")
-		db.Pool.Exec(ctx, "DELETE FROM email_queue")
-		db.Pool.Exec(ctx, "DELETE FROM notifications")
-		db.Pool.Exec(ctx, "DELETE FROM transactions")
-		db.Pool.Exec(ctx, "DELETE FROM reservations")
-		db.Pool.Exec(ctx, "DELETE FROM books")
-		db.Pool.Exec(ctx, "DELETE FROM students")
-		db.Pool.Exec(ctx, "DELETE FROM users")
+		_, _ = db.Pool.Exec(ctx, "DELETE FROM email_deliveries")
+		_, _ = db.Pool.Exec(ctx, "DELETE FROM email_queue")
+		_, _ = db.Pool.Exec(ctx, "DELETE FROM notifications")
+		_, _ = db.Pool.Exec(ctx, "DELETE FROM transactions")
+		_, _ = db.Pool.Exec(ctx, "DELETE FROM reservations")
+		_, _ = db.Pool.Exec(ctx, "DELETE FROM books")
+		_, _ = db.Pool.Exec(ctx, "DELETE FROM students")
+		_, _ = db.Pool.Exec(ctx, "DELETE FROM users")
 		db.Close()
 	}
 

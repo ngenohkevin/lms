@@ -13,6 +13,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/tealeg/xlsx/v3"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 
 	"github.com/ngenohkevin/lms/internal/database/queries"
 	"github.com/ngenohkevin/lms/internal/models"
@@ -141,9 +143,9 @@ func (s *StudentService) CreateStudent(ctx context.Context, req *models.CreateSt
 
 	// Invalidate student-related caches after successful creation
 	if s.cacheService != nil {
-		// Invalidate student lists and search results
-		s.cacheService.InvalidateByPattern(ctx, "students:*")
-		s.cacheService.InvalidateByPattern(ctx, "student_search:*")
+		// Invalidate student lists and search results - errors are non-critical for cache invalidation
+		_ = s.cacheService.InvalidateByPattern(ctx, "students:*")
+		_ = s.cacheService.InvalidateByPattern(ctx, "student_search:*")
 	}
 
 	return studentDB, nil
@@ -184,9 +186,9 @@ func (s *StudentService) GetStudentByID(ctx context.Context, id int32) (*models.
 		UpdatedAt:      student.UpdatedAt,
 	}
 
-	// Cache the student profile for future requests
+	// Cache the student profile for future requests - errors are non-critical for caching
 	if s.cacheService != nil {
-		s.cacheService.SetStudentProfile(ctx, int(id), studentDB)
+		_ = s.cacheService.SetStudentProfile(ctx, int(id), studentDB)
 	}
 
 	return studentDB, nil
@@ -1558,9 +1560,10 @@ func (s *StudentService) exportToXLSX(students []models.StudentResponse, filePat
 
 	// Create header row
 	headerRow := sheet.AddRow()
+	caser := cases.Title(language.English)
 	for _, field := range exportFields {
 		cell := headerRow.AddCell()
-		cell.Value = strings.Title(strings.ReplaceAll(field, "_", " "))
+		cell.Value = caser.String(strings.ReplaceAll(field, "_", " "))
 	}
 
 	// Add data rows

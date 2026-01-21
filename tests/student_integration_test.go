@@ -73,9 +73,8 @@ type StudentIntegrationTestSuite struct {
 	authService *services.AuthService
 
 	// Test data
-	testUser    *models.User
-	authToken   string
-	testStudent *queries.Student
+	testUser  *models.User
+	authToken string
 }
 
 // SetupSuite runs once before all tests in the suite
@@ -201,22 +200,22 @@ func (suite *StudentIntegrationTestSuite) cleanDatabase() {
 	ctx := context.Background()
 
 	// Delete in reverse order of dependencies
-	suite.db.Pool.Exec(ctx, "DELETE FROM audit_logs")
-	suite.db.Pool.Exec(ctx, "DELETE FROM transactions")
-	suite.db.Pool.Exec(ctx, "DELETE FROM reservations")
-	suite.db.Pool.Exec(ctx, "DELETE FROM students")
-	suite.db.Pool.Exec(ctx, "DELETE FROM books")
-	suite.db.Pool.Exec(ctx, "DELETE FROM notifications")
-	suite.db.Pool.Exec(ctx, "DELETE FROM email_deliveries")
-	suite.db.Pool.Exec(ctx, "DELETE FROM email_queue")
-	suite.db.Pool.Exec(ctx, "DELETE FROM export_files")
-	suite.db.Pool.Exec(ctx, "DELETE FROM import_errors")
-	suite.db.Pool.Exec(ctx, "DELETE FROM import_history")
-	suite.db.Pool.Exec(ctx, "DELETE FROM users")
+	_, _ = suite.db.Pool.Exec(ctx, "DELETE FROM audit_logs")
+	_, _ = suite.db.Pool.Exec(ctx, "DELETE FROM transactions")
+	_, _ = suite.db.Pool.Exec(ctx, "DELETE FROM reservations")
+	_, _ = suite.db.Pool.Exec(ctx, "DELETE FROM students")
+	_, _ = suite.db.Pool.Exec(ctx, "DELETE FROM books")
+	_, _ = suite.db.Pool.Exec(ctx, "DELETE FROM notifications")
+	_, _ = suite.db.Pool.Exec(ctx, "DELETE FROM email_deliveries")
+	_, _ = suite.db.Pool.Exec(ctx, "DELETE FROM email_queue")
+	_, _ = suite.db.Pool.Exec(ctx, "DELETE FROM export_files")
+	_, _ = suite.db.Pool.Exec(ctx, "DELETE FROM import_errors")
+	_, _ = suite.db.Pool.Exec(ctx, "DELETE FROM import_history")
+	_, _ = suite.db.Pool.Exec(ctx, "DELETE FROM users")
 
 	// Reset sequences
-	suite.db.Pool.Exec(ctx, "ALTER SEQUENCE students_id_seq RESTART WITH 1")
-	suite.db.Pool.Exec(ctx, "ALTER SEQUENCE users_id_seq RESTART WITH 1")
+	_, _ = suite.db.Pool.Exec(ctx, "ALTER SEQUENCE students_id_seq RESTART WITH 1")
+	_, _ = suite.db.Pool.Exec(ctx, "ALTER SEQUENCE users_id_seq RESTART WITH 1")
 }
 
 // createTestUser creates a test librarian user
@@ -245,7 +244,7 @@ func (suite *StudentIntegrationTestSuite) createTestUser() {
 
 	// Create pgtype values
 	role := pgtype.Text{}
-	role.Scan("librarian")
+	_ = role.Scan("librarian")
 
 	userParams := queries.CreateUserParams{
 		Username:     testUsername,
@@ -273,12 +272,6 @@ func (suite *StudentIntegrationTestSuite) generateAuthToken() {
 	suite.authToken = token
 }
 
-// authenticateTestUser authenticates the test user and gets an auth token
-// NOTE: This function is no longer needed as we use generateAuthToken() directly
-func (suite *StudentIntegrationTestSuite) authenticateTestUser() {
-	// Authentication is now handled by generateAuthToken() which creates JWT tokens directly
-	// This function is kept for backward compatibility but is not used
-}
 
 // makeAuthenticatedRequest creates an authenticated HTTP request with authorization header
 func (suite *StudentIntegrationTestSuite) makeAuthenticatedRequest(method, url string, body []byte) *http.Request {

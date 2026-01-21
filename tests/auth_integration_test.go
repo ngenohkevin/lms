@@ -294,7 +294,7 @@ func TestAuthenticationFlow(t *testing.T) {
 		router.ServeHTTP(w, req)
 
 		var loginResp map[string]interface{}
-		json.Unmarshal(w.Body.Bytes(), &loginResp)
+		_ = json.Unmarshal(w.Body.Bytes(), &loginResp)
 		accessToken := loginResp["data"].(map[string]interface{})["access_token"].(string)
 
 		// Change password

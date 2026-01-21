@@ -75,7 +75,6 @@ type LogAggregationService struct {
 	storage LogStorage
 	config  LogAggregationConfig
 	buffer  []LogEntry
-	mu      sync.Mutex
 }
 
 // LogAggregationServiceInterface defines the log aggregation service interface

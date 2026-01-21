@@ -103,11 +103,11 @@ func (c *CacheService) SetBookCatalog(ctx context.Context, books interface{}) er
 func (c *CacheService) GetBookCatalog(ctx context.Context) (string, error) {
 	result, err := c.redis.Get(ctx, BookCatalogPrefix)
 	if err != nil {
-		c.IncrementMiss(ctx, "books")
+		_ = c.IncrementMiss(ctx, "books") // Stats tracking errors are non-critical
 		return "", err
 	}
 
-	c.IncrementHit(ctx, "books")
+	_ = c.IncrementHit(ctx, "books") // Stats tracking errors are non-critical
 	return result, nil
 }
 
@@ -136,11 +136,11 @@ func (c *CacheService) GetStudentProfile(ctx context.Context, studentID int) (st
 	key := fmt.Sprintf("%s%d", StudentProfilePrefix, studentID)
 	result, err := c.redis.Get(ctx, key)
 	if err != nil {
-		c.IncrementMiss(ctx, "students")
+		_ = c.IncrementMiss(ctx, "students") // Stats tracking errors are non-critical
 		return "", err
 	}
 
-	c.IncrementHit(ctx, "students")
+	_ = c.IncrementHit(ctx, "students") // Stats tracking errors are non-critical
 	return result, nil
 }
 
@@ -168,11 +168,11 @@ func (c *CacheService) SetPopularBooks(ctx context.Context, report interface{}) 
 func (c *CacheService) GetPopularBooks(ctx context.Context) (string, error) {
 	result, err := c.redis.Get(ctx, PopularBooksPrefix)
 	if err != nil {
-		c.IncrementMiss(ctx, "reports")
+		_ = c.IncrementMiss(ctx, "reports") // Stats tracking errors are non-critical
 		return "", err
 	}
 
-	c.IncrementHit(ctx, "reports")
+	_ = c.IncrementHit(ctx, "reports") // Stats tracking errors are non-critical
 	return result, nil
 }
 
@@ -201,11 +201,11 @@ func (c *CacheService) GetSearchResults(ctx context.Context, query string) (stri
 	key := fmt.Sprintf("%s%s", SearchResultsPrefix, query)
 	result, err := c.redis.Get(ctx, key)
 	if err != nil {
-		c.IncrementMiss(ctx, "search")
+		_ = c.IncrementMiss(ctx, "search") // Stats tracking errors are non-critical
 		return "", err
 	}
 
-	c.IncrementHit(ctx, "search")
+	_ = c.IncrementHit(ctx, "search") // Stats tracking errors are non-critical
 	return result, nil
 }
 
@@ -319,7 +319,7 @@ func (c *CacheService) WarmCache(ctx context.Context) error {
 // Helper methods
 func (c *CacheService) updateCacheTimestamp(ctx context.Context, cacheType string) {
 	key := fmt.Sprintf("%stimestamp:%s", StatsPrefix, cacheType)
-	c.redis.Set(ctx, key, time.Now().Unix(), 24*time.Hour)
+	_ = c.redis.Set(ctx, key, time.Now().Unix(), 24*time.Hour) // Timestamp update errors are non-critical
 }
 
 func (c *CacheService) parseInfoValue(info, key string) string {

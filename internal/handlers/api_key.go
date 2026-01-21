@@ -140,9 +140,9 @@ func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 	// Add to security config
 	h.securityConfig.AddAPIKey(key, keyInfo)
 
-	// Log the creation
+	// Log the creation (audit logging errors are non-critical and intentionally ignored)
 	if auditLogger, exists := middleware.GetAuditLoggerFromContext(c); exists {
-		auditLogger.LogCreate(c.Request.Context(), "api_keys", 0, map[string]interface{}{
+		_ = auditLogger.LogCreate(c.Request.Context(), "api_keys", 0, map[string]interface{}{
 			"name":        req.Name,
 			"permissions": req.Permissions,
 			"key_prefix":  key[:8],
@@ -377,14 +377,14 @@ func (h *APIKeyHandler) UpdateAPIKey(c *gin.Context) {
 	// Update in security config
 	h.securityConfig.APIKeys[foundKey] = keyInfo
 
-	// Log the update
+	// Log the update (audit logging errors are non-critical and intentionally ignored)
 	if auditLogger, exists := middleware.GetAuditLoggerFromContext(c); exists {
 		newValues := map[string]interface{}{
 			"name":        keyInfo.Name,
 			"permissions": keyInfo.Permissions,
 			"is_active":   keyInfo.IsActive,
 		}
-		auditLogger.LogUpdate(c.Request.Context(), "api_keys", 0, oldValues, newValues, getUserIDFromContext(c), "librarian", getClientIP(c), c.GetHeader("User-Agent"))
+		_ = auditLogger.LogUpdate(c.Request.Context(), "api_keys", 0, oldValues, newValues, getUserIDFromContext(c), "librarian", getClientIP(c), c.GetHeader("User-Agent"))
 	}
 
 	// Check if key has expired
@@ -448,9 +448,9 @@ func (h *APIKeyHandler) RevokeAPIKey(c *gin.Context) {
 	// Revoke the key
 	h.securityConfig.RevokeAPIKey(foundKey)
 
-	// Log the revocation
+	// Log the revocation (audit logging errors are non-critical and intentionally ignored)
 	if auditLogger, exists := middleware.GetAuditLoggerFromContext(c); exists {
-		auditLogger.LogUpdate(c.Request.Context(), "api_keys", 0,
+		_ = auditLogger.LogUpdate(c.Request.Context(), "api_keys", 0,
 			map[string]interface{}{"is_active": true},
 			map[string]interface{}{"is_active": false, "revoked_at": time.Now()},
 			getUserIDFromContext(c), "librarian", getClientIP(c), c.GetHeader("User-Agent"))
@@ -505,9 +505,9 @@ func (h *APIKeyHandler) DeleteAPIKey(c *gin.Context) {
 	// Delete the key
 	delete(h.securityConfig.APIKeys, foundKey)
 
-	// Log the deletion
+	// Log the deletion (audit logging errors are non-critical and intentionally ignored)
 	if auditLogger, exists := middleware.GetAuditLoggerFromContext(c); exists {
-		auditLogger.LogDelete(c.Request.Context(), "api_keys", 0, map[string]interface{}{
+		_ = auditLogger.LogDelete(c.Request.Context(), "api_keys", 0, map[string]interface{}{
 			"name":        keyInfo.Name,
 			"permissions": keyInfo.Permissions,
 			"key_prefix":  foundKey[:8],

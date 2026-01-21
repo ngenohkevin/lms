@@ -85,8 +85,8 @@ func generateTestRSAKey() string {
 	return string(pem.EncodeToMemory(privateKeyPEM))
 }
 
-// setupTestEnvironment creates test database and redis connections
-func setupTestEnvironment() (*queries.Queries, *database.RedisClient, func()) {
+// SetupTestEnvironment creates test database and redis connections
+func SetupTestEnvironment() (*queries.Queries, *database.RedisClient, func()) {
 	if os.Getenv("DATABASE_URL") == "" {
 		panic("DATABASE_URL not set for tests")
 	}

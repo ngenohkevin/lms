@@ -449,12 +449,10 @@ func (m *EmailTemplateManager) validateTemplateSyntax(template *models.EmailTemp
 func (m *EmailTemplateManager) processTemplateString(template string, data map[string]interface{}) (string, error) {
 	result := template
 
-	if data != nil {
-		for key, value := range data {
-			placeholder := fmt.Sprintf("{{.%s}}", key)
-			replacement := fmt.Sprintf("%v", value)
-			result = strings.ReplaceAll(result, placeholder, replacement)
-		}
+	for key, value := range data {
+		placeholder := fmt.Sprintf("{{.%s}}", key)
+		replacement := fmt.Sprintf("%v", value)
+		result = strings.ReplaceAll(result, placeholder, replacement)
 	}
 
 	return result, nil

@@ -261,12 +261,10 @@ func (s *EmailService) buildMessage(from, to, subject, body string, isHTML bool)
 func (s *EmailService) processTemplate(template string, data map[string]interface{}) (string, error) {
 	result := template
 
-	if data != nil {
-		for key, value := range data {
-			placeholder := fmt.Sprintf("{{.%s}}", key)
-			replacement := fmt.Sprintf("%v", value)
-			result = strings.ReplaceAll(result, placeholder, replacement)
-		}
+	for key, value := range data {
+		placeholder := fmt.Sprintf("{{.%s}}", key)
+		replacement := fmt.Sprintf("%v", value)
+		result = strings.ReplaceAll(result, placeholder, replacement)
 	}
 
 	return result, nil
@@ -321,7 +319,7 @@ func (s *EmailService) sendWithSSL(addr string, auth smtp.Auth, from string, to 
 	if err != nil {
 		return err
 	}
-	defer client.Quit()
+	defer func() { _ = client.Quit() }() // Cleanup, error doesn't affect operation
 
 	if auth != nil {
 		if err = client.Auth(auth); err != nil {
@@ -430,7 +428,7 @@ func (s *EmailService) testTLSConnection(addr string, auth smtp.Auth) error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to SMTP server: %w", err)
 	}
-	defer client.Quit()
+	defer func() { _ = client.Quit() }() // Cleanup, error doesn't affect operation
 
 	// Start TLS
 	if err := client.StartTLS(&tls.Config{ServerName: s.config.SMTPHost}); err != nil {
@@ -463,7 +461,7 @@ func (s *EmailService) testSSLConnection(addr string, auth smtp.Auth) error {
 	if err != nil {
 		return fmt.Errorf("failed to create SMTP client: %w", err)
 	}
-	defer client.Quit()
+	defer func() { _ = client.Quit() }() // Cleanup, error doesn't affect operation
 
 	// Test authentication
 	if auth != nil {
@@ -481,7 +479,7 @@ func (s *EmailService) testPlainConnection(addr string, auth smtp.Auth) error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to SMTP server: %w", err)
 	}
-	defer client.Quit()
+	defer func() { _ = client.Quit() }() // Cleanup, error doesn't affect operation
 
 	// Test authentication
 	if auth != nil {

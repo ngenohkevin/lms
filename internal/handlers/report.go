@@ -1126,7 +1126,9 @@ func (rh *ReportHandler) exportToCSV(baseFileName string, data interface{}) (str
 	case *models.BorrowingTrendsReport:
 		// Write header
 		header := []string{"Period", "Borrow Count", "Return Count", "Overdue Count", "New Students", "Total Students"}
-		writer.Write(header)
+		if err := writer.Write(header); err != nil {
+			return "", nil, "", fmt.Errorf("failed to write CSV header: %w", err)
+		}
 
 		// Write data rows
 		for _, period := range v.Periods {
@@ -1138,13 +1140,17 @@ func (rh *ReportHandler) exportToCSV(baseFileName string, data interface{}) (str
 				fmt.Sprintf("%d", period.NewStudents),
 				fmt.Sprintf("%d", period.TotalStudents),
 			}
-			writer.Write(record)
+			if err := writer.Write(record); err != nil {
+				return "", nil, "", fmt.Errorf("failed to write CSV record: %w", err)
+			}
 		}
 
 	case *models.PopularBooksReport:
 		// Write header
 		header := []string{"Book ID", "Title", "Author", "Genre", "Borrow Count", "Unique Users", "Avg Rating"}
-		writer.Write(header)
+		if err := writer.Write(header); err != nil {
+			return "", nil, "", fmt.Errorf("failed to write CSV header: %w", err)
+		}
 
 		// Write data rows
 		for _, book := range v.Books {
@@ -1157,13 +1163,17 @@ func (rh *ReportHandler) exportToCSV(baseFileName string, data interface{}) (str
 				fmt.Sprintf("%d", book.UniqueUsers),
 				book.AvgRating,
 			}
-			writer.Write(record)
+			if err := writer.Write(record); err != nil {
+				return "", nil, "", fmt.Errorf("failed to write CSV record: %w", err)
+			}
 		}
 
 	case *models.OverdueBooksReport:
 		// Write header
 		header := []string{"Student ID", "Student Name", "Year of Study", "Department", "Book Title", "Book Author", "Due Date", "Days Overdue"}
-		writer.Write(header)
+		if err := writer.Write(header); err != nil {
+			return "", nil, "", fmt.Errorf("failed to write CSV header: %w", err)
+		}
 
 		// Write data rows
 		for _, book := range v.Books {
@@ -1177,7 +1187,9 @@ func (rh *ReportHandler) exportToCSV(baseFileName string, data interface{}) (str
 				book.DueDate.Format("2006-01-02"),
 				fmt.Sprintf("%d", book.DaysOverdue),
 			}
-			writer.Write(record)
+			if err := writer.Write(record); err != nil {
+				return "", nil, "", fmt.Errorf("failed to write CSV record: %w", err)
+			}
 		}
 
 	default:
@@ -1189,9 +1201,13 @@ func (rh *ReportHandler) exportToCSV(baseFileName string, data interface{}) (str
 
 		// Write a simple CSV with JSON data
 		header := []string{"Report Type", "Data"}
-		writer.Write(header)
+		if err := writer.Write(header); err != nil {
+			return "", nil, "", fmt.Errorf("failed to write CSV header: %w", err)
+		}
 		record := []string{baseFileName, string(jsonData)}
-		writer.Write(record)
+		if err := writer.Write(record); err != nil {
+			return "", nil, "", fmt.Errorf("failed to write CSV record: %w", err)
+		}
 	}
 
 	writer.Flush()
@@ -1335,7 +1351,10 @@ func (rh *ReportHandler) writeDataToExcel(f *excelize.File, sheetName string, da
 		if err != nil {
 			return fmt.Errorf("failed to marshal data: %w", err)
 		}
-		return f.SetCellValue(sheetName, "A1", string(jsonData))
+		if err := f.SetCellValue(sheetName, "A1", string(jsonData)); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		return nil
 	}
 }
 
@@ -1345,17 +1364,29 @@ func (rh *ReportHandler) writeBorrowingStatisticsToExcel(f *excelize.File, sheet
 	headers := []string{"Month", "Total Borrows", "Total Returns", "Total Overdue", "Unique Students"}
 	for i, header := range headers {
 		cell := fmt.Sprintf("%s1", string(rune('A'+i)))
-		f.SetCellValue(sheetName, cell, header)
+		if err := f.SetCellValue(sheetName, cell, header); err != nil {
+			return fmt.Errorf("failed to set header cell value: %w", err)
+		}
 	}
 
 	// Write data rows
 	row := 2
 	for _, stat := range data.MonthlyData {
-		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), stat.Month)
-		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), stat.TotalBorrows)
-		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), stat.TotalReturns)
-		f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), stat.TotalOverdue)
-		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), stat.UniqueStudents)
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), stat.Month); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), stat.TotalBorrows); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), stat.TotalReturns); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), stat.TotalOverdue); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), stat.UniqueStudents); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
 		row++
 	}
 
@@ -1368,20 +1399,38 @@ func (rh *ReportHandler) writePopularBooksToExcel(f *excelize.File, sheetName st
 	headers := []string{"Rank", "Book ID", "Title", "Author", "Genre", "Borrow Count", "Unique Users", "Avg Rating"}
 	for i, header := range headers {
 		cell := fmt.Sprintf("%s1", string(rune('A'+i)))
-		f.SetCellValue(sheetName, cell, header)
+		if err := f.SetCellValue(sheetName, cell, header); err != nil {
+			return fmt.Errorf("failed to set header cell value: %w", err)
+		}
 	}
 
 	// Write data rows
 	for i, book := range data.Books {
 		row := i + 2
-		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), i+1)
-		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), book.BookID)
-		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), book.Title)
-		f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), book.Author)
-		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), book.Genre)
-		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), book.BorrowCount)
-		f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), book.UniqueUsers)
-		f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), book.AvgRating)
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), i+1); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), book.BookID); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), book.Title); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), book.Author); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), book.Genre); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), book.BorrowCount); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), book.UniqueUsers); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), book.AvgRating); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
 	}
 
 	return nil
@@ -1393,21 +1442,41 @@ func (rh *ReportHandler) writeOverdueBooksToExcel(f *excelize.File, sheetName st
 	headers := []string{"Student ID", "Student Name", "Year", "Department", "Book Title", "Author", "Due Date", "Days Overdue", "Fine Amount"}
 	for i, header := range headers {
 		cell := fmt.Sprintf("%s1", string(rune('A'+i)))
-		f.SetCellValue(sheetName, cell, header)
+		if err := f.SetCellValue(sheetName, cell, header); err != nil {
+			return fmt.Errorf("failed to set header cell value: %w", err)
+		}
 	}
 
 	// Write data rows
 	for i, book := range data.Books {
 		row := i + 2
-		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), book.StudentID)
-		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), book.StudentName)
-		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), book.YearOfStudy)
-		f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), book.Department)
-		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), book.BookTitle)
-		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), book.BookAuthor)
-		f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), book.DueDate.Format("2006-01-02"))
-		f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), book.DaysOverdue)
-		f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), book.FineAmount)
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), book.StudentID); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), book.StudentName); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), book.YearOfStudy); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), book.Department); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), book.BookTitle); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), book.BookAuthor); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), book.DueDate.Format("2006-01-02")); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), book.DaysOverdue); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), book.FineAmount); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
 	}
 
 	return nil
@@ -1416,8 +1485,12 @@ func (rh *ReportHandler) writeOverdueBooksToExcel(f *excelize.File, sheetName st
 // writeLibraryOverviewToExcel writes library overview to Excel
 func (rh *ReportHandler) writeLibraryOverviewToExcel(f *excelize.File, sheetName string, data *models.LibraryOverviewReport) error {
 	// Write key metrics
-	f.SetCellValue(sheetName, "A1", "Metric")
-	f.SetCellValue(sheetName, "B1", "Value")
+	if err := f.SetCellValue(sheetName, "A1", "Metric"); err != nil {
+		return fmt.Errorf("failed to set cell value: %w", err)
+	}
+	if err := f.SetCellValue(sheetName, "B1", "Value"); err != nil {
+		return fmt.Errorf("failed to set cell value: %w", err)
+	}
 
 	metrics := map[string]interface{}{
 		"Total Books":        data.TotalBooks,
@@ -1432,8 +1505,12 @@ func (rh *ReportHandler) writeLibraryOverviewToExcel(f *excelize.File, sheetName
 
 	row := 2
 	for metric, value := range metrics {
-		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), metric)
-		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), value)
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), metric); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), value); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
 		row++
 	}
 
@@ -1446,19 +1523,35 @@ func (rh *ReportHandler) writeStudentActivityToExcel(f *excelize.File, sheetName
 	headers := []string{"Student Name", "Student ID", "Year", "Books Borrowed", "Books Returned", "Overdue Books", "Active Reservations"}
 	for i, header := range headers {
 		cell := fmt.Sprintf("%s1", string(rune('A'+i)))
-		f.SetCellValue(sheetName, cell, header)
+		if err := f.SetCellValue(sheetName, cell, header); err != nil {
+			return fmt.Errorf("failed to set header cell value: %w", err)
+		}
 	}
 
 	// Write data rows
 	for i, student := range data.Students {
 		row := i + 2
-		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), student.StudentName)
-		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), student.StudentID)
-		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), student.YearOfStudy)
-		f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), student.TotalBorrows)
-		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), student.TotalReturns)
-		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), student.OverdueBooks)
-		f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), student.CurrentBooks)
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), student.StudentName); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), student.StudentID); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), student.YearOfStudy); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), student.TotalBorrows); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), student.TotalReturns); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), student.OverdueBooks); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), student.CurrentBooks); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
 	}
 
 	return nil
@@ -1470,18 +1563,32 @@ func (rh *ReportHandler) writeInventoryStatusToExcel(f *excelize.File, sheetName
 	headers := []string{"Genre", "Total Books", "Available Books", "Borrowed Books", "Reserved Books", "Utilization Rate"}
 	for i, header := range headers {
 		cell := fmt.Sprintf("%s1", string(rune('A'+i)))
-		f.SetCellValue(sheetName, cell, header)
+		if err := f.SetCellValue(sheetName, cell, header); err != nil {
+			return fmt.Errorf("failed to set header cell value: %w", err)
+		}
 	}
 
 	// Write data rows
 	for i, genre := range data.Genres {
 		row := i + 2
-		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), genre.Genre)
-		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), genre.TotalBooks)
-		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), genre.AvailableBooks)
-		f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), genre.BorrowedBooks)
-		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), genre.ReservedBooks)
-		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), genre.UtilizationRate)
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), genre.Genre); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), genre.TotalBooks); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), genre.AvailableBooks); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), genre.BorrowedBooks); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), genre.ReservedBooks); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), genre.UtilizationRate); err != nil {
+			return fmt.Errorf("failed to set cell value: %w", err)
+		}
 	}
 
 	return nil
@@ -1537,6 +1644,6 @@ func extractStudentActivityParams(params map[string]interface{}) (limit int32, s
 	return extractPopularBooksParams(params) // Same parameters
 }
 
-func extractInventoryParams(params map[string]interface{}) {
-	return // No special parameters needed for inventory status
+func extractInventoryParams(_ map[string]interface{}) {
+	// No special parameters needed for inventory status
 }

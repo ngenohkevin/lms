@@ -656,11 +656,12 @@ func (h *VersionManagementHandler) UsageStatisticsMiddleware() gin.HandlerFunc {
 		endpoint := c.Request.URL.Path
 
 		// Update statistics asynchronously to avoid slowing down the response
+		// Error is intentionally ignored as this is a background operation
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			h.versionService.UpdateUsageStatistics(ctx, version, endpoint, responseTime, success)
+			_ = h.versionService.UpdateUsageStatistics(ctx, version, endpoint, responseTime, success)
 		}()
 	}
 }

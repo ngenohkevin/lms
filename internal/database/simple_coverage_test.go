@@ -48,13 +48,13 @@ func TestDatabaseCoverageSimple(t *testing.T) {
 	q := queries.New(db.Pool)
 
 	// Clean up test data
-	db.Pool.Exec(ctx, "DELETE FROM transactions")
-	db.Pool.Exec(ctx, "DELETE FROM reservations")
-	db.Pool.Exec(ctx, "DELETE FROM notifications")
-	db.Pool.Exec(ctx, "DELETE FROM books WHERE book_id LIKE 'COVTEST%'")
-	db.Pool.Exec(ctx, "DELETE FROM students WHERE student_id LIKE 'COVTEST%'")
-	db.Pool.Exec(ctx, "DELETE FROM users WHERE username LIKE 'covtest_%'")
-	db.Pool.Exec(ctx, "DELETE FROM audit_logs")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM transactions")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM reservations")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM notifications")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM books WHERE book_id LIKE 'COVTEST%'")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM students WHERE student_id LIKE 'COVTEST%'")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM users WHERE username LIKE 'covtest_%'")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM audit_logs")
 
 	// Test User operations
 	t.Run("UserCRUD", func(t *testing.T) {
@@ -424,13 +424,13 @@ func TestDatabaseCoverageSimple(t *testing.T) {
 	})
 
 	// Clean up
-	db.Pool.Exec(ctx, "DELETE FROM transactions")
-	db.Pool.Exec(ctx, "DELETE FROM reservations")
-	db.Pool.Exec(ctx, "DELETE FROM notifications")
-	db.Pool.Exec(ctx, "DELETE FROM books WHERE book_id LIKE 'COVTEST%'")
-	db.Pool.Exec(ctx, "DELETE FROM students WHERE student_id LIKE 'COVTEST%'")
-	db.Pool.Exec(ctx, "DELETE FROM users WHERE username LIKE 'covtest_%'")
-	db.Pool.Exec(ctx, "DELETE FROM audit_logs")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM transactions")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM reservations")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM notifications")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM books WHERE book_id LIKE 'COVTEST%'")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM students WHERE student_id LIKE 'COVTEST%'")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM users WHERE username LIKE 'covtest_%'")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM audit_logs")
 }
 
 func TestDatabaseConnectionWithoutURL(t *testing.T) {
@@ -474,18 +474,22 @@ func TestDatabaseConnectionWithoutURL(t *testing.T) {
 	assert.GreaterOrEqual(t, stats.MaxConns(), int32(1))
 }
 
-func _TestDatabaseInvalidConnection(t *testing.T) { // Disabled - connection fallback logic makes this test unreliable
-	cfg := &config.Config{
-		Database: config.DatabaseConfig{
-			Host:     "this-host-does-not-exist.invalid",
-			Port:     9999,
-			User:     "invalid",
-			Password: "invalid",
-			Name:     "invalid",
-			SSLMode:  "disable",
-		},
-	}
-
-	_, err := New(cfg)
-	assert.Error(t, err)
-}
+// NOTE: TestDatabaseInvalidConnection is disabled because connection fallback logic makes this test unreliable.
+// The test would verify that New() returns an error for invalid connection parameters.
+// To re-enable, uncomment and rename to TestDatabaseInvalidConnection.
+//
+// func TestDatabaseInvalidConnection(t *testing.T) {
+// 	cfg := &config.Config{
+// 		Database: config.DatabaseConfig{
+// 			Host:     "this-host-does-not-exist.invalid",
+// 			Port:     9999,
+// 			User:     "invalid",
+// 			Password: "invalid",
+// 			Name:     "invalid",
+// 			SSLMode:  "disable",
+// 		},
+// 	}
+//
+// 	_, err := New(cfg)
+// 	assert.Error(t, err)
+// }

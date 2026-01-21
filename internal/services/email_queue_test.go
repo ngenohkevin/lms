@@ -139,14 +139,14 @@ func setupEmailQueueTest(t *testing.T) (*EmailQueueService, func()) {
 
 		// Clean up test data
 		// Delete all test data in reverse order of dependencies
-		db.Pool.Exec(ctx, "DELETE FROM email_deliveries")
-		db.Pool.Exec(ctx, "DELETE FROM email_queue")
-		db.Pool.Exec(ctx, "DELETE FROM notifications")
-		db.Pool.Exec(ctx, "DELETE FROM transactions")
-		db.Pool.Exec(ctx, "DELETE FROM reservations")
-		db.Pool.Exec(ctx, "DELETE FROM books")
-		db.Pool.Exec(ctx, "DELETE FROM students")
-		db.Pool.Exec(ctx, "DELETE FROM users")
+		_, _ = db.Pool.Exec(ctx, "DELETE FROM email_deliveries")
+		_, _ = db.Pool.Exec(ctx, "DELETE FROM email_queue")
+		_, _ = db.Pool.Exec(ctx, "DELETE FROM notifications")
+		_, _ = db.Pool.Exec(ctx, "DELETE FROM transactions")
+		_, _ = db.Pool.Exec(ctx, "DELETE FROM reservations")
+		_, _ = db.Pool.Exec(ctx, "DELETE FROM books")
+		_, _ = db.Pool.Exec(ctx, "DELETE FROM students")
+		_, _ = db.Pool.Exec(ctx, "DELETE FROM users")
 		db.Close()
 	}
 
@@ -610,7 +610,7 @@ func TestEmailQueueService_RedisOperations(t *testing.T) {
 
 		// Pop from Redis (note: this will fail because the item doesn't exist in database)
 		// But we can test the Redis operation
-		_, err = service.PopFromRedisQueue(ctx)
+		_, _ = service.PopFromRedisQueue(ctx)
 		// This will error because the database lookup will fail, but that's expected
 		// The Redis pop operation itself worked
 	})
@@ -665,7 +665,7 @@ func TestEmailQueueService_GetQueueStats(t *testing.T) {
 			case models.EmailQueueStatusCancelled:
 				_, err = service.CancelQueueItem(ctx, created.ID)
 			case models.EmailQueueStatusFailed:
-				_, err = service.FailQueueItem(ctx, created.ID, "Test error")
+				_, _ = service.FailQueueItem(ctx, created.ID, "Test error")
 				// Set to failed manually since our logic might set it to pending for retry
 				_, err = service.UpdateQueueItemStatus(ctx, created.ID, models.EmailQueueStatusFailed, "")
 			case models.EmailQueueStatusProcessing:

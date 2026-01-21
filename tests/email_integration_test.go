@@ -21,7 +21,6 @@ import (
 type EmailIntegrationTestSuite struct {
 	suite.Suite
 	db                   *database.Database
-	notificationService  *services.NotificationService
 	emailService         *services.EmailService
 	templateManager      *services.EmailTemplateManager
 	emailDeliveryService *services.EmailDeliveryService

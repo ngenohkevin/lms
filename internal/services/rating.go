@@ -89,11 +89,11 @@ func (s *RatingService) CreateRating(ctx context.Context, req models.CreateRatin
 	if s.cacheService != nil {
 		key := fmt.Sprintf("rating:%d", ratingID)
 		data, _ := json.Marshal(rating)
-		s.cacheService.SetSearchResults(ctx, key, string(data))
+		_ = s.cacheService.SetSearchResults(ctx, key, string(data)) // Non-critical cache operation
 
 		// Store in book-student index
 		indexKey := fmt.Sprintf("rating:book:%d:student:%d", req.BookID, req.StudentID)
-		s.cacheService.SetSearchResults(ctx, indexKey, fmt.Sprintf("%d", ratingID))
+		_ = s.cacheService.SetSearchResults(ctx, indexKey, fmt.Sprintf("%d", ratingID)) // Non-critical cache operation
 
 		// Invalidate book ratings summary
 		s.invalidateBookRatingsSummary(ctx, req.BookID)
@@ -158,7 +158,7 @@ func (s *RatingService) UpdateRating(ctx context.Context, ratingID int32, req mo
 	if s.cacheService != nil {
 		key := fmt.Sprintf("rating:%d", ratingID)
 		data, _ := json.Marshal(rating)
-		s.cacheService.SetSearchResults(ctx, key, string(data))
+		_ = s.cacheService.SetSearchResults(ctx, key, string(data)) // Non-critical cache operation
 
 		// Invalidate book ratings summary
 		s.invalidateBookRatingsSummary(ctx, rating.BookID)
@@ -178,11 +178,11 @@ func (s *RatingService) DeleteRating(ctx context.Context, ratingID int32) error 
 	if s.cacheService != nil {
 		// Delete rating
 		key := fmt.Sprintf("rating:%d", ratingID)
-		s.cacheService.InvalidateSearchResults(ctx, key)
+		_ = s.cacheService.InvalidateSearchResults(ctx, key) // Non-critical cache operation
 
 		// Delete index
 		indexKey := fmt.Sprintf("rating:book:%d:student:%d", rating.BookID, rating.StudentID)
-		s.cacheService.InvalidateSearchResults(ctx, indexKey)
+		_ = s.cacheService.InvalidateSearchResults(ctx, indexKey) // Non-critical cache operation
 
 		// Invalidate book ratings summary
 		s.invalidateBookRatingsSummary(ctx, rating.BookID)
@@ -261,7 +261,7 @@ func (s *RatingService) CreateReview(ctx context.Context, req models.CreateRevie
 	if s.cacheService != nil {
 		key := fmt.Sprintf("review:%d", reviewID)
 		data, _ := json.Marshal(review)
-		s.cacheService.SetSearchResults(ctx, key, string(data))
+		_ = s.cacheService.SetSearchResults(ctx, key, string(data)) // Non-critical cache operation
 
 		// Invalidate book ratings summary
 		s.invalidateBookRatingsSummary(ctx, req.BookID)
@@ -314,7 +314,7 @@ func (s *RatingService) UpdateReview(ctx context.Context, reviewID int32, req mo
 	if s.cacheService != nil {
 		key := fmt.Sprintf("review:%d", reviewID)
 		data, _ := json.Marshal(review)
-		s.cacheService.SetSearchResults(ctx, key, string(data))
+		_ = s.cacheService.SetSearchResults(ctx, key, string(data)) // Non-critical cache operation
 
 		// Invalidate book ratings summary
 		s.invalidateBookRatingsSummary(ctx, review.BookID)
@@ -334,7 +334,7 @@ func (s *RatingService) DeleteReview(ctx context.Context, reviewID int32) error 
 	if s.cacheService != nil {
 		// Delete review
 		key := fmt.Sprintf("review:%d", reviewID)
-		s.cacheService.InvalidateSearchResults(ctx, key)
+		_ = s.cacheService.InvalidateSearchResults(ctx, key) // Non-critical cache operation
 
 		// Invalidate book ratings summary
 		s.invalidateBookRatingsSummary(ctx, review.BookID)
@@ -377,7 +377,7 @@ func (s *RatingService) MarkReviewHelpful(ctx context.Context, req models.MarkRe
 	if s.cacheService != nil {
 		key := fmt.Sprintf("review:%d", req.ReviewID)
 		data, _ := json.Marshal(review)
-		s.cacheService.SetSearchResults(ctx, key, string(data))
+		_ = s.cacheService.SetSearchResults(ctx, key, string(data)) // Non-critical cache operation
 	}
 
 	return nil
@@ -411,7 +411,7 @@ func (s *RatingService) GetBookRatingsSummary(ctx context.Context, bookID int32)
 	if s.cacheService != nil {
 		key := fmt.Sprintf("book:ratings:summary:%d", bookID)
 		data, _ := json.Marshal(summary)
-		s.cacheService.SetSearchResults(ctx, key, string(data))
+		_ = s.cacheService.SetSearchResults(ctx, key, string(data)) // Non-critical cache operation
 	}
 
 	return summary, nil
@@ -427,6 +427,6 @@ func (s *RatingService) generateID() int32 {
 func (s *RatingService) invalidateBookRatingsSummary(ctx context.Context, bookID int32) {
 	if s.cacheService != nil {
 		key := fmt.Sprintf("book:ratings:summary:%d", bookID)
-		s.cacheService.InvalidateSearchResults(ctx, key)
+		_ = s.cacheService.InvalidateSearchResults(ctx, key) // Non-critical cache operation
 	}
 }

@@ -606,14 +606,12 @@ func (s *EmailQueueService) renderEmailTemplate(subject, body string, data map[s
 	renderedSubject := subject
 	renderedBody := body
 
-	if data != nil {
-		for key, value := range data {
-			placeholder := fmt.Sprintf("{{%s}}", key)
-			replacement := fmt.Sprintf("%v", value)
+	for key, value := range data {
+		placeholder := fmt.Sprintf("{{%s}}", key)
+		replacement := fmt.Sprintf("%v", value)
 
-			renderedSubject = strings.ReplaceAll(renderedSubject, placeholder, replacement)
-			renderedBody = strings.ReplaceAll(renderedBody, placeholder, replacement)
-		}
+		renderedSubject = strings.ReplaceAll(renderedSubject, placeholder, replacement)
+		renderedBody = strings.ReplaceAll(renderedBody, placeholder, replacement)
 	}
 
 	return renderedSubject, renderedBody, nil

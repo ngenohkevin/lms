@@ -186,7 +186,7 @@ func (s *BackupServiceTestSuite) TestCleanupOldBackups() {
 
 	// Set file modification time to 2 hours ago
 	oldTime := time.Now().Add(-2 * time.Hour)
-	os.Chtimes(oldBackupPath, oldTime, oldTime)
+	_ = os.Chtimes(oldBackupPath, oldTime, oldTime)
 
 	// Create recent backup
 	recentBackupPath := filepath.Join(s.tempDir, "recent_full_20240101_140000_1704117600.sql.gz")
@@ -629,7 +629,7 @@ func BenchmarkBackupService_ListBackups(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		file.WriteString("-- Mock backup content")
+		_, _ = file.WriteString("-- Mock backup content")
 		file.Close()
 	}
 
