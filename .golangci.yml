@@ -1,0 +1,45 @@
+run:
+  timeout: 5m
+  skip-dirs:
+    - vendor
+    - tests
+
+linters:
+  enable:
+    - gofmt
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+    - gosimple
+  disable:
+    - errcheck  # Too many existing unchecked errors, enable later
+
+linters-settings:
+  govet:
+    enable-all: false
+    enable:
+      - assign
+      - bools
+      - buildtag
+      - copylocks
+      - httpresponse
+      - loopclosure
+      - lostcancel
+      - printf
+      - shift
+      - unreachable
+      - unusedresult
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
+        - govet
+    - path: tests/
+      linters:
+        - errcheck
+        - govet
+  max-issues-per-linter: 50
+  max-same-issues: 10

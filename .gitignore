@@ -61,7 +61,6 @@ coverage.out
 coverage.html
 
 .mcp.json
-.golangci.yml
 .air.toml
 
 # Uploads
