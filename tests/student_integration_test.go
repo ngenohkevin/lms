@@ -272,7 +272,6 @@ func (suite *StudentIntegrationTestSuite) generateAuthToken() {
 	suite.authToken = token
 }
 
-
 // makeAuthenticatedRequest creates an authenticated HTTP request with authorization header
 func (suite *StudentIntegrationTestSuite) makeAuthenticatedRequest(method, url string, body []byte) *http.Request {
 	var req *http.Request

@@ -237,12 +237,12 @@ func (s *ImportExportService) processImport(ctx context.Context, importData []mo
 	var completedAtPg pgtype.Timestamp
 	var processingDurationPg pgtype.Int4
 
-	_ = processedRecordsPg.Scan(int32(result.TotalRecords))    // pgtype.Scan only fails on incompatible types
-	_ = successfulRecordsPg.Scan(int32(result.SuccessCount))   // pgtype.Scan only fails on incompatible types
-	_ = failedRecordsPg.Scan(int32(result.FailureCount))       // pgtype.Scan only fails on incompatible types
-	_ = statusPg.Scan(status)                                  // pgtype.Scan only fails on incompatible types
-	_ = completedAtPg.Scan(completedAt)                        // pgtype.Scan only fails on incompatible types
-	_ = processingDurationPg.Scan(processingDurationSec)       // pgtype.Scan only fails on incompatible types
+	_ = processedRecordsPg.Scan(int32(result.TotalRecords))  // pgtype.Scan only fails on incompatible types
+	_ = successfulRecordsPg.Scan(int32(result.SuccessCount)) // pgtype.Scan only fails on incompatible types
+	_ = failedRecordsPg.Scan(int32(result.FailureCount))     // pgtype.Scan only fails on incompatible types
+	_ = statusPg.Scan(status)                                // pgtype.Scan only fails on incompatible types
+	_ = completedAtPg.Scan(completedAt)                      // pgtype.Scan only fails on incompatible types
+	_ = processingDurationPg.Scan(processingDurationSec)     // pgtype.Scan only fails on incompatible types
 
 	// Update import history (if queries available)
 	if s.queries != nil {
