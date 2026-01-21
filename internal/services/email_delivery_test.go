@@ -79,6 +79,9 @@ func (m *mockQueueService) ProcessScheduledNotifications(ctx context.Context) er
 }
 
 func setupEmailDeliveryTest(t *testing.T) (*EmailDeliveryService, func()) {
+	if testing.Short() {
+		t.Skip("Skipping email delivery integration test in short mode")
+	}
 	// Load test configuration
 	cfg, err := config.Load()
 	require.NoError(t, err)

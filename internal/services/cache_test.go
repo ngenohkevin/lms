@@ -20,6 +20,9 @@ type CacheServiceTestSuite struct {
 }
 
 func TestCacheServiceTestSuite(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping cache integration tests in short mode")
+	}
 	suite.Run(t, new(CacheServiceTestSuite))
 }
 
@@ -315,6 +318,9 @@ func (s *CacheServiceTestSuite) TestCachePerformance() {
 
 // Unit tests for specific methods
 func TestCacheService_IncrementHit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping cache integration test in short mode")
+	}
 	client := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
 		DB:   1,
@@ -345,6 +351,9 @@ func TestCacheService_IncrementHit(t *testing.T) {
 }
 
 func TestCacheService_IncrementMiss(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping cache integration test in short mode")
+	}
 	client := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
 		DB:   1,
