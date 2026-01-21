@@ -1,15 +1,87 @@
-name: CI/CD Pipeline
+name: CI Pipeline
 
 on:
   push:
-    branches: [ main, develop, 'phase-*' ]
+    branches: [main, develop, 'phase-*']
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
 
 jobs:
-  test:
+  lint:
+    name: Lint & Format
     runs-on: ubuntu-latest
-    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Check formatting
+        run: |
+          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+            echo "Go code is not formatted:"
+            gofmt -s -l .
+            exit 1
+          fi
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+          args: --timeout=5m
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: lint
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Run unit tests
+        env:
+          LMS_SERVER_MODE: test
+          LMS_JWT_SECRET: test-secret-key-for-ci-pipeline
+          LMS_JWT_REFRESH_SECRET: test-refresh-secret-for-ci
+        run: |
+          go test -v -race -short -coverprofile=coverage-unit.out \
+            ./internal/config/... \
+            ./internal/middleware/... \
+            ./internal/models/... \
+            ./internal/services/...
+
+      - name: Upload unit test coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-unit
+          path: coverage-unit.out
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: lint
+
     services:
       postgres:
         image: postgres:15
@@ -24,7 +96,7 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
-          
+
       redis:
         image: redis:7
         options: >-
@@ -36,60 +108,209 @@ jobs:
           - 6379:6379
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.23'
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
 
-    - name: Cache Go modules
-      uses: actions/cache@v4
-      with:
-        path: ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
 
-    - name: Install dependencies
-      run: go mod download
+      - name: Install dependencies
+        run: go mod download
 
-    - name: Install golang-migrate
-      run: |
-        curl -L https://github.com/golang-migrate/migrate/releases/download/v4.16.2/migrate.linux-amd64.tar.gz | tar xvz
-        sudo mv migrate /usr/local/bin/
+      - name: Install golang-migrate
+        run: |
+          curl -L https://github.com/golang-migrate/migrate/releases/download/v4.16.2/migrate.linux-amd64.tar.gz | tar xvz
+          sudo mv migrate /usr/local/bin/
 
-    - name: Run database migrations
-      env:
-        DATABASE_URL: postgres://postgres:postgres@localhost:5432/lms_test?sslmode=disable
-      run: |
-        migrate -path migrations -database $DATABASE_URL up
+      - name: Run database migrations
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/lms_test?sslmode=disable
+        run: migrate -path migrations -database $DATABASE_URL up
 
-    - name: Run go fmt
-      run: |
-        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
-          echo "Go code is not formatted:"
-          gofmt -s -l .
-          exit 1
-        fi
+      - name: Run integration tests
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/lms_test?sslmode=disable
+          REDIS_URL: redis://localhost:6379/0
+          LMS_SERVER_MODE: test
+          LMS_JWT_SECRET: test-secret-key-for-ci-pipeline
+          LMS_JWT_REFRESH_SECRET: test-refresh-secret-for-ci
+          LMS_DATABASE_HOST: localhost
+          LMS_DATABASE_PORT: 5432
+          LMS_DATABASE_USER: postgres
+          LMS_DATABASE_PASSWORD: postgres
+          LMS_DATABASE_NAME: lms_test
+          LMS_DATABASE_SSL_MODE: disable
+          TEST_DB_PASSWORD: postgres
+        run: |
+          go test -v -race -coverprofile=coverage-integration.out \
+            ./internal/database/... \
+            ./internal/handlers/... \
+            ./tests/...
 
-    - name: Run go vet
-      run: go vet ./...
+      - name: Upload integration test coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-integration
+          path: coverage-integration.out
 
-    - name: Run tests
-      env:
-        DATABASE_URL: postgres://postgres:postgres@localhost:5432/lms_test?sslmode=disable
-        REDIS_URL: redis://localhost:6379/0
-        LMS_SERVER_MODE: test
-        LMS_JWT_SECRET: test-secret-key
-        LMS_JWT_REFRESH_SECRET: test-refresh-secret
-        LMS_DATABASE_HOST: localhost
-        LMS_DATABASE_PORT: 5432
-        LMS_DATABASE_USER: postgres
-        LMS_DATABASE_PASSWORD: postgres
-        LMS_DATABASE_NAME: lms_test
-        LMS_DATABASE_SSL_MODE: disable
-        TEST_DB_PASSWORD: postgres
-      run: |
-        go test -v -race -coverprofile=coverage.out ./...
+  security-tests:
+    name: Security Tests
+    runs-on: ubuntu-latest
+    needs: lint
 
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: lms_security
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Install golang-migrate
+        run: |
+          curl -L https://github.com/golang-migrate/migrate/releases/download/v4.16.2/migrate.linux-amd64.tar.gz | tar xvz
+          sudo mv migrate /usr/local/bin/
+
+      - name: Run database migrations
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/lms_security?sslmode=disable
+        run: migrate -path migrations -database $DATABASE_URL up
+
+      - name: Run security tests
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/lms_security?sslmode=disable
+          REDIS_URL: redis://localhost:6379/0
+          LMS_SERVER_MODE: test
+          LMS_JWT_SECRET: test-secret-key-for-ci-pipeline
+          LMS_JWT_REFRESH_SECRET: test-refresh-secret-for-ci
+          LMS_DATABASE_HOST: localhost
+          LMS_DATABASE_PORT: 5432
+          LMS_DATABASE_USER: postgres
+          LMS_DATABASE_PASSWORD: postgres
+          LMS_DATABASE_NAME: lms_security
+          LMS_DATABASE_SSL_MODE: disable
+          TEST_DB_PASSWORD: postgres
+        run: |
+          go test -v -race -coverprofile=coverage-security.out \
+            ./tests/authentication_security_test.go \
+            ./tests/input_validation_security_test.go \
+            ./tests/security_vulnerability_test.go \
+            ./tests/sql_injection_security_test.go \
+            ./tests/penetration_test.go
+
+      - name: Upload security test coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-security
+          path: coverage-security.out
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Build binary
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+            -ldflags='-w -s -extldflags "-static"' \
+            -a -installsuffix cgo \
+            -o lms-server cmd/server/main.go
+
+      - name: Build Docker image
+        run: docker build -t lms-backend:test .
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lms-server-linux-amd64
+          path: lms-server
+
+  coverage-report:
+    name: Coverage Report
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests, security-tests]
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-*
+          merge-multiple: true
+
+      - name: Merge coverage files
+        run: |
+          go install github.com/wadey/gocovmerge@latest
+          gocovmerge coverage-*.out > coverage-merged.out
+
+      - name: Generate coverage report
+        run: go tool cover -func=coverage-merged.out
+
+      - name: Check coverage threshold
+        run: |
+          COVERAGE=$(go tool cover -func=coverage-merged.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "Total coverage: ${COVERAGE}%"
+          if (( $(echo "$COVERAGE < 50" | bc -l) )); then
+            echo "Coverage is below 50%"
+            exit 1
+          fi

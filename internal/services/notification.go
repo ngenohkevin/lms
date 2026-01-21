@@ -435,7 +435,7 @@ func (s *NotificationService) processMessageTemplate(template string, data map[s
 		for key, value := range data {
 			placeholder := fmt.Sprintf("{{.%s}}", key)
 			replacement := fmt.Sprintf("%v", value)
-			message = fmt.Sprintf(strings.ReplaceAll(message, placeholder, replacement))
+			message = strings.ReplaceAll(message, placeholder, replacement)
 		}
 	}
 	return message, nil

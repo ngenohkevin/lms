@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -701,7 +702,7 @@ func TestReservationHandler_ErrorCodeMapping(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			status, code := handler.getErrorCodeAndStatus(fmt.Errorf(tc.errorMessage))
+			status, code := handler.getErrorCodeAndStatus(errors.New(tc.errorMessage))
 			assert.Equal(t, tc.expectedStatus, status)
 			assert.Equal(t, tc.expectedCode, code)
 		})
