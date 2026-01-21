@@ -672,11 +672,11 @@ type PaginationInfo struct {
 
 // TransactionStatsResponse represents transaction statistics
 type TransactionStatsResponse struct {
-	TotalActive       int64           `json:"total_active"`
-	TotalOverdue      int64           `json:"total_overdue"`
-	TotalBorrowedToday int64          `json:"total_borrowed_today"`
-	TotalUnpaidFines  decimal.Decimal `json:"total_unpaid_fines"`
-	TotalTransactions int64           `json:"total_transactions"`
+	TotalActive        int64           `json:"total_active"`
+	TotalOverdue       int64           `json:"total_overdue"`
+	TotalBorrowedToday int64           `json:"total_borrowed_today"`
+	TotalUnpaidFines   decimal.Decimal `json:"total_unpaid_fines"`
+	TotalTransactions  int64           `json:"total_transactions"`
 }
 
 // ListAllTransactions returns all transactions with pagination
