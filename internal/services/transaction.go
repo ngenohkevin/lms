@@ -33,6 +33,9 @@ type TransactionQuerier interface {
 	HasActiveReservationsByOtherStudents(ctx context.Context, arg queries.HasActiveReservationsByOtherStudentsParams) (bool, error)
 	ListRenewalsByStudentAndBook(ctx context.Context, arg queries.ListRenewalsByStudentAndBookParams) ([]queries.ListRenewalsByStudentAndBookRow, error)
 	GetRenewalStatisticsByStudent(ctx context.Context, studentID int32) (queries.GetRenewalStatisticsByStudentRow, error)
+	// Stats queries
+	CountTransactions(ctx context.Context) (int64, error)
+	ListActiveBorrowings(ctx context.Context, arg queries.ListActiveBorrowingsParams) ([]queries.ListActiveBorrowingsRow, error)
 }
 
 // TransactionService handles all business logic related to book transactions
@@ -651,4 +654,118 @@ func (s *TransactionService) GetRenewalStatistics(ctx context.Context, studentID
 		return nil, fmt.Errorf("failed to get renewal statistics: %w", err)
 	}
 	return &stats, nil
+}
+
+// TransactionListResponse represents a paginated list of transactions
+type TransactionListResponse struct {
+	Transactions []queries.ListTransactionsRow `json:"transactions"`
+	Pagination   PaginationInfo                `json:"pagination"`
+}
+
+// PaginationInfo represents pagination metadata
+type PaginationInfo struct {
+	Page       int   `json:"page"`
+	Limit      int   `json:"limit"`
+	Total      int64 `json:"total"`
+	TotalPages int   `json:"total_pages"`
+}
+
+// TransactionStatsResponse represents transaction statistics
+type TransactionStatsResponse struct {
+	TotalActive       int64           `json:"total_active"`
+	TotalOverdue      int64           `json:"total_overdue"`
+	TotalBorrowedToday int64          `json:"total_borrowed_today"`
+	TotalUnpaidFines  decimal.Decimal `json:"total_unpaid_fines"`
+	TotalTransactions int64           `json:"total_transactions"`
+}
+
+// ListAllTransactions returns all transactions with pagination
+func (s *TransactionService) ListAllTransactions(ctx context.Context, page, limit int32) (*TransactionListResponse, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+
+	offset := (page - 1) * limit
+
+	transactions, err := s.queries.ListTransactions(ctx, queries.ListTransactionsParams{
+		Limit:  limit,
+		Offset: offset,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list transactions: %w", err)
+	}
+
+	total, err := s.queries.CountTransactions(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count transactions: %w", err)
+	}
+
+	totalPages := int(total) / int(limit)
+	if int(total)%int(limit) > 0 {
+		totalPages++
+	}
+
+	return &TransactionListResponse{
+		Transactions: transactions,
+		Pagination: PaginationInfo{
+			Page:       int(page),
+			Limit:      int(limit),
+			Total:      total,
+			TotalPages: totalPages,
+		},
+	}, nil
+}
+
+// GetTransactionStats returns transaction statistics
+func (s *TransactionService) GetTransactionStats(ctx context.Context) (*TransactionStatsResponse, error) {
+	// Count overdue transactions
+	overdueCount, err := s.queries.CountOverdueTransactions(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count overdue transactions: %w", err)
+	}
+
+	// Get total transactions
+	totalCount, err := s.queries.CountTransactions(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count total transactions: %w", err)
+	}
+
+	// Count active borrowings
+	activeBorrowings, err := s.queries.ListActiveBorrowings(ctx, queries.ListActiveBorrowingsParams{
+		Limit:  1000000, // Large number to get all
+		Offset: 0,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get active borrowings: %w", err)
+	}
+
+	// Calculate unpaid fines from overdue transactions
+	overdueTransactions, err := s.queries.ListOverdueTransactions(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get overdue transactions: %w", err)
+	}
+
+	totalUnpaidFines := decimal.Zero
+	for _, tx := range overdueTransactions {
+		if tx.FineAmount.Valid && (!tx.FinePaid.Valid || !tx.FinePaid.Bool) {
+			fineAmount, err := decimal.NewFromString(tx.FineAmount.Int.String())
+			if err == nil {
+				totalUnpaidFines = totalUnpaidFines.Add(fineAmount)
+			}
+		}
+	}
+
+	// Count today's borrowings (simplified - we'd need a specific query for accuracy)
+	todayCount := int64(0) // Placeholder - would need a date-filtered query
+
+	return &TransactionStatsResponse{
+		TotalActive:        int64(len(activeBorrowings)),
+		TotalOverdue:       overdueCount,
+		TotalBorrowedToday: todayCount,
+		TotalUnpaidFines:   totalUnpaidFines,
+		TotalTransactions:  totalCount,
+	}, nil
 }

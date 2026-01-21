@@ -26,6 +26,9 @@ type TransactionServiceInterface interface {
 	CanBookBeRenewed(ctx context.Context, transactionID int32) (bool, string, error)
 	GetRenewalHistory(ctx context.Context, studentID, bookID int32) ([]queries.ListRenewalsByStudentAndBookRow, error)
 	GetRenewalStatistics(ctx context.Context, studentID int32) (*queries.GetRenewalStatisticsByStudentRow, error)
+	// List and stats methods
+	ListAllTransactions(ctx context.Context, page, limit int32) (*services.TransactionListResponse, error)
+	GetTransactionStats(ctx context.Context) (*services.TransactionStatsResponse, error)
 }
 
 // TransactionHandler handles transaction-related HTTP requests
@@ -607,5 +610,80 @@ func (h *TransactionHandler) GetRenewalStatistics(c *gin.Context) {
 		Success: true,
 		Data:    stats,
 		Message: "Renewal statistics retrieved successfully",
+	})
+}
+
+// ListTransactions lists all transactions with pagination
+// @Summary List all transactions
+// @Description Get a paginated list of all transactions
+// @Tags transactions
+// @Produce json
+// @Param page query int false "Page number" default(1)
+// @Param limit query int false "Items per page" default(20)
+// @Success 200 {object} SuccessResponse{data=services.TransactionListResponse}
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/transactions [get]
+func (h *TransactionHandler) ListTransactions(c *gin.Context) {
+	page := 1
+	limit := 20
+
+	if pageStr := c.Query("page"); pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
+			limit = l
+		}
+	}
+
+	result, err := h.transactionService.ListAllTransactions(c.Request.Context(), int32(page), int32(limit))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to list transactions",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    result,
+		Message: "Transactions retrieved successfully",
+	})
+}
+
+// GetTransactionStats gets transaction statistics
+// @Summary Get transaction statistics
+// @Description Get overall transaction statistics including active, overdue, and fines
+// @Tags transactions
+// @Produce json
+// @Success 200 {object} SuccessResponse{data=services.TransactionStatsResponse}
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/transactions/stats [get]
+func (h *TransactionHandler) GetTransactionStats(c *gin.Context) {
+	stats, err := h.transactionService.GetTransactionStats(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to get transaction statistics",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    stats,
+		Message: "Transaction statistics retrieved successfully",
 	})
 }

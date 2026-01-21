@@ -322,6 +322,8 @@ func setupRoutes(
 			// Transaction routes
 			transactions := protected.Group("/transactions")
 			{
+				transactions.GET("", transactionHandler.ListTransactions)
+				transactions.GET("/stats", authMiddleware.RequireLibrarian(), transactionHandler.GetTransactionStats)
 				transactions.GET("/overdue", authMiddleware.RequireLibrarian(), transactionHandler.GetOverdueTransactions)
 				transactions.GET("/history/:studentId", transactionHandler.GetTransactionHistory)
 				transactions.GET("/renewal-history", transactionHandler.GetRenewalHistory)
