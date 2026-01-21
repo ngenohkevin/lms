@@ -61,7 +61,8 @@ func main() {
 
 	// Initialize router
 	router := gin.New()
-	router.Use(gin.Recovery())
+	router.Use(middleware.Logger())
+	router.Use(middleware.Recovery())
 
 	// Setup CORS
 	corsConfig := cors.Config{
