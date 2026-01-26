@@ -25,6 +25,7 @@ type Querier interface {
 	CountAvailableBooks(ctx context.Context) (int64, error)
 	CountBooks(ctx context.Context) (int64, error)
 	CountCategories(ctx context.Context) (int64, error)
+	CountFines(ctx context.Context, arg CountFinesParams) (int64, error)
 	CountImportHistoryByFilters(ctx context.Context, arg CountImportHistoryByFiltersParams) (int64, error)
 	CountNotificationsByType(ctx context.Context, type_ string) (int64, error)
 	CountOverdueTransactions(ctx context.Context) (int64, error)
@@ -33,6 +34,10 @@ type Querier interface {
 	CountStudents(ctx context.Context) (int64, error)
 	CountStudentsByStatus(ctx context.Context, isActive pgtype.Bool) (int64, error)
 	CountStudentsByYear(ctx context.Context, yearOfStudy int32) (int64, error)
+	CountStudentsWithFines(ctx context.Context) (int64, error)
+	CountStudentsWithOverdue(ctx context.Context) (int32, error)
+	CountStudentsWithOverdueBooks(ctx context.Context) (int64, error)
+	CountStudentsWithUnpaidFines(ctx context.Context) (int32, error)
 	CountTodayBorrowings(ctx context.Context) (int64, error)
 	CountTransactions(ctx context.Context) (int64, error)
 	CountUnreadNotificationsByRecipient(ctx context.Context, arg CountUnreadNotificationsByRecipientParams) (int64, error)
@@ -84,6 +89,8 @@ type Querier interface {
 	GetEmailQueueItem(ctx context.Context, id int32) (EmailQueue, error)
 	GetExportFilesByHistoryID(ctx context.Context, importHistoryID int32) ([]ExportFile, error)
 	GetFailedEmailDeliveries(ctx context.Context, limit int32) ([]EmailDelivery, error)
+	GetFineByTransactionID(ctx context.Context, id int32) (GetFineByTransactionIDRow, error)
+	GetFineOverviewStats(ctx context.Context) (GetFineOverviewStatsRow, error)
 	GetFineStatistics(ctx context.Context, arg GetFineStatisticsParams) (GetFineStatisticsRow, error)
 	GetGenrePopularity(ctx context.Context, arg GetGenrePopularityParams) ([]GetGenrePopularityRow, error)
 	GetImportErrorsByHistoryID(ctx context.Context, importHistoryID int32) ([]ImportError, error)
@@ -98,6 +105,7 @@ type Querier interface {
 	GetNextReservationForBook(ctx context.Context, bookID int32) (GetNextReservationForBookRow, error)
 	GetNotificationByID(ctx context.Context, id int32) (Notification, error)
 	GetOverdueBooksByYear(ctx context.Context, arg GetOverdueBooksByYearParams) ([]GetOverdueBooksByYearRow, error)
+	GetOverdueTransactionsForFineCalculation(ctx context.Context) ([]GetOverdueTransactionsForFineCalculationRow, error)
 	GetPendingEmailDeliveries(ctx context.Context, limit int32) ([]EmailDelivery, error)
 	GetPopularBooks(ctx context.Context, arg GetPopularBooksParams) ([]GetPopularBooksRow, error)
 	GetProcessingQueueItems(ctx context.Context, processingStartedAt pgtype.Timestamp) ([]EmailQueue, error)
@@ -120,8 +128,11 @@ type Querier interface {
 	GetStudentReservationForBook(ctx context.Context, arg GetStudentReservationForBookParams) (GetStudentReservationForBookRow, error)
 	GetStudentTotalBorrowed(ctx context.Context, studentID int32) (int64, error)
 	GetStudentsByStatus(ctx context.Context, arg GetStudentsByStatusParams) ([]Student, error)
+	GetStudentsWithHighFines(ctx context.Context, fineAmount pgtype.Numeric) ([]GetStudentsWithHighFinesRow, error)
 	GetTopBorrowingStudents(ctx context.Context, arg GetTopBorrowingStudentsParams) ([]GetTopBorrowingStudentsRow, error)
+	GetTotalUnpaidFinesByStudent(ctx context.Context, studentID int32) (pgtype.Numeric, error)
 	GetTransactionByID(ctx context.Context, id int32) (GetTransactionByIDRow, error)
+	GetUnpaidFinesByStudent(ctx context.Context, studentID int32) ([]GetUnpaidFinesByStudentRow, error)
 	// Phase 8.3 - Advanced Analytics Queries
 	GetUsagePatternAnalysis(ctx context.Context, arg GetUsagePatternAnalysisParams) ([]GetUsagePatternAnalysisRow, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
@@ -149,6 +160,8 @@ type Querier interface {
 	ListBooks(ctx context.Context, arg ListBooksParams) ([]Book, error)
 	ListCategories(ctx context.Context) ([]Category, error)
 	ListExpiredReservations(ctx context.Context) ([]ListExpiredReservationsRow, error)
+	// Fines Management Queries
+	ListFines(ctx context.Context, arg ListFinesParams) ([]ListFinesRow, error)
 	ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]Notification, error)
 	ListNotificationsByRecipient(ctx context.Context, arg ListNotificationsByRecipientParams) ([]Notification, error)
 	ListNotificationsByType(ctx context.Context, arg ListNotificationsByTypeParams) ([]Notification, error)
@@ -159,6 +172,10 @@ type Querier interface {
 	ListReservationsByStudent(ctx context.Context, arg ListReservationsByStudentParams) ([]ListReservationsByStudentRow, error)
 	ListStudents(ctx context.Context, arg ListStudentsParams) ([]Student, error)
 	ListStudentsByYear(ctx context.Context, arg ListStudentsByYearParams) ([]Student, error)
+	// Fine and Overdue Filtering Queries
+	ListStudentsWithFines(ctx context.Context, arg ListStudentsWithFinesParams) ([]Student, error)
+	ListStudentsWithFinesAndOverdue(ctx context.Context, arg ListStudentsWithFinesAndOverdueParams) ([]Student, error)
+	ListStudentsWithOverdue(ctx context.Context, arg ListStudentsWithOverdueParams) ([]Student, error)
 	ListTransactions(ctx context.Context, arg ListTransactionsParams) ([]ListTransactionsRow, error)
 	ListTransactionsByBook(ctx context.Context, arg ListTransactionsByBookParams) ([]ListTransactionsByBookRow, error)
 	ListTransactionsByStudent(ctx context.Context, arg ListTransactionsByStudentParams) ([]ListTransactionsByStudentRow, error)
@@ -171,6 +188,7 @@ type Querier interface {
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
 	MarkNotificationAsRead(ctx context.Context, id int32) error
 	MarkNotificationAsSent(ctx context.Context, id int32) error
+	PayFineByTransactionID(ctx context.Context, id int32) (Transaction, error)
 	PayTransactionFine(ctx context.Context, id int32) error
 	ResetStuckQueueItems(ctx context.Context, processingStartedAt pgtype.Timestamp) error
 	ReturnBook(ctx context.Context, arg ReturnBookParams) (Transaction, error)
@@ -192,6 +210,7 @@ type Querier interface {
 	UpdateEmailDeliveryToFailed(ctx context.Context, id int32) (EmailDelivery, error)
 	UpdateEmailDeliveryToSent(ctx context.Context, id int32) (EmailDelivery, error)
 	UpdateExportFileDownload(ctx context.Context, id int32) (ExportFile, error)
+	UpdateFineAmount(ctx context.Context, arg UpdateFineAmountParams) error
 	UpdateImportHistory(ctx context.Context, arg UpdateImportHistoryParams) (ImportHistory, error)
 	UpdateQueueItemError(ctx context.Context, arg UpdateQueueItemErrorParams) (EmailQueue, error)
 	// Items processing longer than threshold
@@ -208,6 +227,7 @@ type Querier interface {
 	UpdateTransactionReturn(ctx context.Context, arg UpdateTransactionReturnParams) (Transaction, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
 	UpdateUserLastLogin(ctx context.Context, id int32) error
+	WaiveFineByTransactionID(ctx context.Context, arg WaiveFineByTransactionIDParams) (Transaction, error)
 }
 
 var _ Querier = (*Queries)(nil)

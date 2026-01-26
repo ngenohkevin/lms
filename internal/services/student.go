@@ -51,6 +51,12 @@ type StudentQuerier interface {
 	CountActiveBorrowingsByStudent(ctx context.Context, studentID int32) (int64, error)
 	GetStudentTotalBorrowed(ctx context.Context, studentID int32) (int64, error)
 	GetStudentFineStats(ctx context.Context, studentID int32) (queries.GetStudentFineStatsRow, error)
+
+	// Fine and Overdue Filtering
+	ListStudentsWithFines(ctx context.Context, params queries.ListStudentsWithFinesParams) ([]queries.Student, error)
+	ListStudentsWithOverdue(ctx context.Context, params queries.ListStudentsWithOverdueParams) ([]queries.Student, error)
+	CountStudentsWithFines(ctx context.Context) (int64, error)
+	CountStudentsWithOverdueBooks(ctx context.Context) (int64, error)
 }
 
 // AuthServiceInterface defines the interface for auth-related operations
@@ -433,7 +439,36 @@ func (s *StudentService) ListStudents(ctx context.Context, req *models.StudentSe
 	var err error
 
 	// Apply filtering based on request parameters
-	if req.YearOfStudy > 0 {
+	// Priority: has_fines > has_overdue > year_of_study > all
+	if req.HasFines != nil && *req.HasFines {
+		// Filter students with unpaid fines
+		students, err = s.queries.ListStudentsWithFines(ctx, queries.ListStudentsWithFinesParams{
+			Limit:  req.GetLimit(),
+			Offset: req.GetOffset(),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to list students with fines: %w", err)
+		}
+
+		totalCount, err = s.queries.CountStudentsWithFines(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to count students with fines: %w", err)
+		}
+	} else if req.HasOverdue != nil && *req.HasOverdue {
+		// Filter students with overdue books
+		students, err = s.queries.ListStudentsWithOverdue(ctx, queries.ListStudentsWithOverdueParams{
+			Limit:  req.GetLimit(),
+			Offset: req.GetOffset(),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to list students with overdue: %w", err)
+		}
+
+		totalCount, err = s.queries.CountStudentsWithOverdueBooks(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to count students with overdue: %w", err)
+		}
+	} else if req.YearOfStudy > 0 {
 		// Filter by year of study
 		students, err = s.queries.ListStudentsByYear(ctx, queries.ListStudentsByYearParams{
 			YearOfStudy: req.YearOfStudy,

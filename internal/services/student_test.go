@@ -152,6 +152,27 @@ func (m *MockQueries) GetStudentFineStats(ctx context.Context, studentID int32) 
 	return args.Get(0).(queries.GetStudentFineStatsRow), args.Error(1)
 }
 
+// Fine and Overdue Filtering Mock Methods
+func (m *MockQueries) ListStudentsWithFines(ctx context.Context, params queries.ListStudentsWithFinesParams) ([]queries.Student, error) {
+	args := m.Called(ctx, params)
+	return args.Get(0).([]queries.Student), args.Error(1)
+}
+
+func (m *MockQueries) ListStudentsWithOverdue(ctx context.Context, params queries.ListStudentsWithOverdueParams) ([]queries.Student, error) {
+	args := m.Called(ctx, params)
+	return args.Get(0).([]queries.Student), args.Error(1)
+}
+
+func (m *MockQueries) CountStudentsWithFines(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockQueries) CountStudentsWithOverdueBooks(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 // Helper function to create a mock student
 func createMockStudent() queries.Student {
 	now := time.Now()

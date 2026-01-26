@@ -63,6 +63,34 @@ func (q *Queries) CountStudentsByYear(ctx context.Context, yearOfStudy int32) (i
 	return count, err
 }
 
+const countStudentsWithFines = `-- name: CountStudentsWithFines :one
+SELECT COUNT(DISTINCT s.id) FROM students s
+INNER JOIN transactions t ON s.id = t.student_id
+WHERE s.deleted_at IS NULL
+  AND t.fine_amount > 0 AND t.fine_paid = false
+`
+
+func (q *Queries) CountStudentsWithFines(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countStudentsWithFines)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countStudentsWithOverdueBooks = `-- name: CountStudentsWithOverdueBooks :one
+SELECT COUNT(DISTINCT s.id) FROM students s
+INNER JOIN transactions t ON s.id = t.student_id
+WHERE s.deleted_at IS NULL
+  AND t.due_date < NOW() AND t.returned_date IS NULL
+`
+
+func (q *Queries) CountStudentsWithOverdueBooks(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countStudentsWithOverdueBooks)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createStudent = `-- name: CreateStudent :one
 INSERT INTO students (student_id, first_name, last_name, email, phone, year_of_study, department, password_hash, max_books)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -233,10 +261,10 @@ func (q *Queries) GetStudentCountByYearAndDepartment(ctx context.Context) ([]Get
 }
 
 const getStudentEnrollmentTrends = `-- name: GetStudentEnrollmentTrends :many
-SELECT DATE_TRUNC('month', enrollment_date) as month, 
-       year_of_study, 
+SELECT DATE_TRUNC('month', enrollment_date) as month,
+       year_of_study,
        COUNT(*) as enrollments
-FROM students 
+FROM students
 WHERE enrollment_date >= $1 AND enrollment_date <= $2
 GROUP BY month, year_of_study
 ORDER BY month, year_of_study
@@ -385,6 +413,158 @@ type ListStudentsByYearParams struct {
 
 func (q *Queries) ListStudentsByYear(ctx context.Context, arg ListStudentsByYearParams) ([]Student, error) {
 	rows, err := q.db.Query(ctx, listStudentsByYear, arg.YearOfStudy, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Student{}
+	for rows.Next() {
+		var i Student
+		if err := rows.Scan(
+			&i.ID,
+			&i.StudentID,
+			&i.FirstName,
+			&i.LastName,
+			&i.Email,
+			&i.Phone,
+			&i.YearOfStudy,
+			&i.Department,
+			&i.EnrollmentDate,
+			&i.PasswordHash,
+			&i.IsActive,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.MaxBooks,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStudentsWithFines = `-- name: ListStudentsWithFines :many
+
+SELECT DISTINCT s.id, s.student_id, s.first_name, s.last_name, s.email, s.phone, s.year_of_study, s.department, s.enrollment_date, s.password_hash, s.is_active, s.deleted_at, s.created_at, s.updated_at, s.max_books FROM students s
+INNER JOIN transactions t ON s.id = t.student_id
+WHERE s.deleted_at IS NULL
+  AND t.fine_amount > 0 AND t.fine_paid = false
+ORDER BY s.created_at DESC
+LIMIT $1 OFFSET $2
+`
+
+type ListStudentsWithFinesParams struct {
+	Limit  int32 `db:"limit" json:"limit"`
+	Offset int32 `db:"offset" json:"offset"`
+}
+
+// Fine and Overdue Filtering Queries
+func (q *Queries) ListStudentsWithFines(ctx context.Context, arg ListStudentsWithFinesParams) ([]Student, error) {
+	rows, err := q.db.Query(ctx, listStudentsWithFines, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Student{}
+	for rows.Next() {
+		var i Student
+		if err := rows.Scan(
+			&i.ID,
+			&i.StudentID,
+			&i.FirstName,
+			&i.LastName,
+			&i.Email,
+			&i.Phone,
+			&i.YearOfStudy,
+			&i.Department,
+			&i.EnrollmentDate,
+			&i.PasswordHash,
+			&i.IsActive,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.MaxBooks,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStudentsWithFinesAndOverdue = `-- name: ListStudentsWithFinesAndOverdue :many
+SELECT DISTINCT s.id, s.student_id, s.first_name, s.last_name, s.email, s.phone, s.year_of_study, s.department, s.enrollment_date, s.password_hash, s.is_active, s.deleted_at, s.created_at, s.updated_at, s.max_books FROM students s
+INNER JOIN transactions t ON s.id = t.student_id
+WHERE s.deleted_at IS NULL
+  AND ((t.fine_amount > 0 AND t.fine_paid = false) OR (t.due_date < NOW() AND t.returned_date IS NULL))
+ORDER BY s.created_at DESC
+LIMIT $1 OFFSET $2
+`
+
+type ListStudentsWithFinesAndOverdueParams struct {
+	Limit  int32 `db:"limit" json:"limit"`
+	Offset int32 `db:"offset" json:"offset"`
+}
+
+func (q *Queries) ListStudentsWithFinesAndOverdue(ctx context.Context, arg ListStudentsWithFinesAndOverdueParams) ([]Student, error) {
+	rows, err := q.db.Query(ctx, listStudentsWithFinesAndOverdue, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Student{}
+	for rows.Next() {
+		var i Student
+		if err := rows.Scan(
+			&i.ID,
+			&i.StudentID,
+			&i.FirstName,
+			&i.LastName,
+			&i.Email,
+			&i.Phone,
+			&i.YearOfStudy,
+			&i.Department,
+			&i.EnrollmentDate,
+			&i.PasswordHash,
+			&i.IsActive,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.MaxBooks,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStudentsWithOverdue = `-- name: ListStudentsWithOverdue :many
+SELECT DISTINCT s.id, s.student_id, s.first_name, s.last_name, s.email, s.phone, s.year_of_study, s.department, s.enrollment_date, s.password_hash, s.is_active, s.deleted_at, s.created_at, s.updated_at, s.max_books FROM students s
+INNER JOIN transactions t ON s.id = t.student_id
+WHERE s.deleted_at IS NULL
+  AND t.due_date < NOW() AND t.returned_date IS NULL
+ORDER BY s.created_at DESC
+LIMIT $1 OFFSET $2
+`
+
+type ListStudentsWithOverdueParams struct {
+	Limit  int32 `db:"limit" json:"limit"`
+	Offset int32 `db:"offset" json:"offset"`
+}
+
+func (q *Queries) ListStudentsWithOverdue(ctx context.Context, arg ListStudentsWithOverdueParams) ([]Student, error) {
+	rows, err := q.db.Query(ctx, listStudentsWithOverdue, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}

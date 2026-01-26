@@ -57,6 +57,11 @@ func (m *MockReportQuerier) GetLibraryOverview(ctx context.Context) (queries.Get
 	return args.Get(0).(queries.GetLibraryOverviewRow), args.Error(1)
 }
 
+func (m *MockReportQuerier) GetDashboardMetrics(ctx context.Context) (queries.GetDashboardMetricsRow, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(queries.GetDashboardMetricsRow), args.Error(1)
+}
+
 // Phase 8.2 - Additional mock methods
 func (m *MockReportQuerier) GetYearEndSummary(ctx context.Context) (queries.GetYearEndSummaryRow, error) {
 	args := m.Called(ctx)

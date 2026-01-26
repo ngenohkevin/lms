@@ -37,6 +37,8 @@ type TransactionQuerier interface {
 	CountTransactions(ctx context.Context) (int64, error)
 	ListActiveBorrowings(ctx context.Context, arg queries.ListActiveBorrowingsParams) ([]queries.ListActiveBorrowingsRow, error)
 	CountTodayBorrowings(ctx context.Context) (int64, error)
+	// Fine queries
+	GetTotalUnpaidFinesByStudent(ctx context.Context, studentID int32) (pgtype.Numeric, error)
 }
 
 // TransactionService handles all business logic related to book transactions
@@ -383,6 +385,16 @@ func (s *TransactionService) validateBorrowingEligibility(ctx context.Context, s
 		return fmt.Errorf("student has overdue books and cannot borrow until they are returned")
 	}
 
+	// Check for unpaid fines - prevent borrowing if student has unpaid fines above threshold
+	hasUnpaidFines, totalFines, err := s.hasUnpaidFines(ctx, studentID)
+	if err != nil {
+		return fmt.Errorf("failed to check for unpaid fines: %w", err)
+	}
+
+	if hasUnpaidFines {
+		return fmt.Errorf("student has unpaid fines ($%.2f) and cannot borrow until fines are paid", totalFines)
+	}
+
 	return nil
 }
 
@@ -401,6 +413,28 @@ func (s *TransactionService) hasOverdueBooks(ctx context.Context, studentID int3
 	}
 
 	return false, nil
+}
+
+// hasUnpaidFines checks if a student has any unpaid fines
+// Returns true if total unpaid fines exceed the threshold (default $0)
+func (s *TransactionService) hasUnpaidFines(ctx context.Context, studentID int32) (bool, float64, error) {
+	total, err := s.queries.GetTotalUnpaidFinesByStudent(ctx, studentID)
+	if err != nil {
+		return false, 0, err
+	}
+
+	// Convert pgtype.Numeric to float64
+	totalFloat := 0.0
+	if total.Valid {
+		f, err := total.Float64Value()
+		if err == nil {
+			totalFloat = f.Float64
+		}
+	}
+
+	// Block borrowing if any unpaid fines exist (threshold is $0)
+	// Can be made configurable later
+	return totalFloat > 0, totalFloat, nil
 }
 
 // validateBorrowingPeriod validates the borrowing period based on student year

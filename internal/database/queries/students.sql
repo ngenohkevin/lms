@@ -95,10 +95,48 @@ GROUP BY year_of_study, department
 ORDER BY year_of_study, department;
 
 -- name: GetStudentEnrollmentTrends :many
-SELECT DATE_TRUNC('month', enrollment_date) as month, 
-       year_of_study, 
+SELECT DATE_TRUNC('month', enrollment_date) as month,
+       year_of_study,
        COUNT(*) as enrollments
-FROM students 
+FROM students
 WHERE enrollment_date >= $1 AND enrollment_date <= $2
 GROUP BY month, year_of_study
 ORDER BY month, year_of_study;
+
+-- Fine and Overdue Filtering Queries
+
+-- name: ListStudentsWithFines :many
+SELECT DISTINCT s.* FROM students s
+INNER JOIN transactions t ON s.id = t.student_id
+WHERE s.deleted_at IS NULL
+  AND t.fine_amount > 0 AND t.fine_paid = false
+ORDER BY s.created_at DESC
+LIMIT $1 OFFSET $2;
+
+-- name: CountStudentsWithFines :one
+SELECT COUNT(DISTINCT s.id) FROM students s
+INNER JOIN transactions t ON s.id = t.student_id
+WHERE s.deleted_at IS NULL
+  AND t.fine_amount > 0 AND t.fine_paid = false;
+
+-- name: ListStudentsWithOverdue :many
+SELECT DISTINCT s.* FROM students s
+INNER JOIN transactions t ON s.id = t.student_id
+WHERE s.deleted_at IS NULL
+  AND t.due_date < NOW() AND t.returned_date IS NULL
+ORDER BY s.created_at DESC
+LIMIT $1 OFFSET $2;
+
+-- name: CountStudentsWithOverdueBooks :one
+SELECT COUNT(DISTINCT s.id) FROM students s
+INNER JOIN transactions t ON s.id = t.student_id
+WHERE s.deleted_at IS NULL
+  AND t.due_date < NOW() AND t.returned_date IS NULL;
+
+-- name: ListStudentsWithFinesAndOverdue :many
+SELECT DISTINCT s.* FROM students s
+INNER JOIN transactions t ON s.id = t.student_id
+WHERE s.deleted_at IS NULL
+  AND ((t.fine_amount > 0 AND t.fine_paid = false) OR (t.due_date < NOW() AND t.returned_date IS NULL))
+ORDER BY s.created_at DESC
+LIMIT $1 OFFSET $2;

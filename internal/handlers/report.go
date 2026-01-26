@@ -24,6 +24,7 @@ type ReportService interface {
 	GetStudentActivity(ctx context.Context, yearOfStudy *int32, department *string, startDate, endDate time.Time) (*models.StudentActivityReport, error)
 	GetInventoryStatus(ctx context.Context) (*models.InventoryStatusReport, error)
 	GetLibraryOverview(ctx context.Context) (*models.LibraryOverviewReport, error)
+	GetDashboardMetrics(ctx context.Context) (*models.DashboardMetrics, error)
 	GetBorrowingTrends(ctx context.Context, startDate, endDate time.Time, interval string) (*models.BorrowingTrendsReport, error)
 	GetYearlyComparison(ctx context.Context, years []int32) (*models.YearlyComparisonReport, error)
 
@@ -457,8 +458,7 @@ func (rh *ReportHandler) GetYearlyComparison(c *gin.Context) {
 
 // GetDashboardMetrics generates dashboard metrics
 func (rh *ReportHandler) GetDashboardMetrics(c *gin.Context) {
-	// For now, return library overview as dashboard metrics
-	report, err := rh.reportService.GetLibraryOverview(c.Request.Context())
+	metrics, err := rh.reportService.GetDashboardMetrics(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Success: false,
@@ -471,27 +471,14 @@ func (rh *ReportHandler) GetDashboardMetrics(c *gin.Context) {
 		return
 	}
 
-	// Convert to dashboard metrics format with timezone awareness
-	// Convert times to user's timezone (EAT - East Africa Time)
-	location, _ := time.LoadLocation("Africa/Nairobi") // EAT timezone
-	lastUpdated := time.Now().In(location)
-
-	dashboardMetrics := models.DashboardMetrics{
-		TodayBorrows:   0, // Placeholder - would need separate query
-		TodayReturns:   0, // Placeholder - would need separate query
-		CurrentOverdue: report.OverdueBooks,
-		NewStudents:    0, // Placeholder - would need separate query
-		ActiveUsers:    0, // Placeholder - would need separate query
-		AvailableBooks: report.AvailableBooks,
-		PendingReserve: report.TotalReservations,
-		SystemAlerts:   0, // Placeholder - would need separate query
-		LastUpdated:    lastUpdated,
-	}
+	// Convert time to user's timezone (EAT - East Africa Time)
+	location, _ := time.LoadLocation("Africa/Nairobi")
+	metrics.LastUpdated = metrics.LastUpdated.In(location)
 
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Message: "Dashboard metrics generated successfully",
-		Data:    dashboardMetrics,
+		Data:    metrics,
 	})
 }
 

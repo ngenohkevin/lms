@@ -78,6 +78,14 @@ func (m *MockReportService) GetYearOverYearComparison(ctx context.Context, years
 	return args.Get(0).(*models.YearOverYearComparisonReport), args.Error(1)
 }
 
+func (m *MockReportService) GetDashboardMetrics(ctx context.Context) (*models.DashboardMetrics, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.DashboardMetrics), args.Error(1)
+}
+
 func (m *MockReportService) GetYearBasedOverdueAnalysis(ctx context.Context, year *int32, yearOfStudy *int32) (*models.YearBasedOverdueAnalysisReport, error) {
 	args := m.Called(ctx, year, yearOfStudy)
 	return args.Get(0).(*models.YearBasedOverdueAnalysisReport), args.Error(1)

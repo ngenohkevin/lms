@@ -11,12 +11,14 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig   `mapstructure:"server"`
-	Database DatabaseConfig `mapstructure:"database"`
-	Redis    RedisConfig    `mapstructure:"redis"`
-	JWT      JWTConfig      `mapstructure:"jwt"`
-	Email    EmailConfig    `mapstructure:"email"`
-	Backup   BackupConfig   `mapstructure:"backup"`
+	Server    ServerConfig    `mapstructure:"server"`
+	Database  DatabaseConfig  `mapstructure:"database"`
+	Redis     RedisConfig     `mapstructure:"redis"`
+	JWT       JWTConfig       `mapstructure:"jwt"`
+	Email     EmailConfig     `mapstructure:"email"`
+	Backup    BackupConfig    `mapstructure:"backup"`
+	Borrowing BorrowingConfig `mapstructure:"borrowing"`
+	Scheduler SchedulerConfig `mapstructure:"scheduler"`
 }
 
 type ServerConfig struct {
@@ -79,6 +81,23 @@ type BackupConfig struct {
 	NotifyOnFailure bool     `mapstructure:"notify_on_failure"`
 }
 
+type BorrowingConfig struct {
+	BorrowingPeriodDays  int     `mapstructure:"borrowing_period_days"`
+	MaxBooksPerStudent   int     `mapstructure:"max_books_per_student"`
+	FinePerDay           float64 `mapstructure:"fine_per_day"`
+	MaxRenewals          int     `mapstructure:"max_renewals"`
+	ReservationExpiryDays int    `mapstructure:"reservation_expiry_days"`
+}
+
+type SchedulerConfig struct {
+	Enabled                     bool   `mapstructure:"enabled"`
+	FineCalculationSchedule     string `mapstructure:"fine_calculation_schedule"`
+	OverdueReminderSchedule     string `mapstructure:"overdue_reminder_schedule"`
+	ReservationExpirySchedule   string `mapstructure:"reservation_expiry_schedule"`
+	FineReminderSchedule        string `mapstructure:"fine_reminder_schedule"`
+	NotificationCleanupSchedule string `mapstructure:"notification_cleanup_schedule"`
+}
+
 func Load() (*Config, error) {
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
@@ -122,6 +141,21 @@ func Load() (*Config, error) {
 	viper.SetDefault("backup.max_backups", 10)
 	viper.SetDefault("backup.backup_timeout", 3600) // 1 hour
 	viper.SetDefault("backup.notify_on_failure", true)
+
+	// Borrowing defaults
+	viper.SetDefault("borrowing.borrowing_period_days", 14)
+	viper.SetDefault("borrowing.max_books_per_student", 5)
+	viper.SetDefault("borrowing.fine_per_day", 0.50)
+	viper.SetDefault("borrowing.max_renewals", 2)
+	viper.SetDefault("borrowing.reservation_expiry_days", 3)
+
+	// Scheduler defaults
+	viper.SetDefault("scheduler.enabled", true)
+	viper.SetDefault("scheduler.fine_calculation_schedule", "0 0 * * *")      // Daily at midnight
+	viper.SetDefault("scheduler.overdue_reminder_schedule", "0 9 * * *")      // Daily at 9 AM
+	viper.SetDefault("scheduler.reservation_expiry_schedule", "0 * * * *")    // Every hour
+	viper.SetDefault("scheduler.fine_reminder_schedule", "0 10 * * MON")      // Weekly on Monday at 10 AM
+	viper.SetDefault("scheduler.notification_cleanup_schedule", "0 2 * * *")  // Daily at 2 AM
 
 	// Try to read config file
 	if err := viper.ReadInConfig(); err != nil {

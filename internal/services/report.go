@@ -22,6 +22,7 @@ type ReportQuerier interface {
 	GetBorrowingTrends(ctx context.Context, arg queries.GetBorrowingTrendsParams) ([]queries.GetBorrowingTrendsRow, error)
 	GetYearlyStatistics(ctx context.Context, years []int32) ([]queries.GetYearlyStatisticsRow, error)
 	GetLibraryOverview(ctx context.Context) (queries.GetLibraryOverviewRow, error)
+	GetDashboardMetrics(ctx context.Context) (queries.GetDashboardMetricsRow, error)
 
 	// Phase 8.2 - Year-based Reporting Methods
 	GetYearEndSummary(ctx context.Context) (queries.GetYearEndSummaryRow, error)
@@ -220,6 +221,34 @@ func (rs *ReportService) GetLibraryOverview(ctx context.Context) (*models.Librar
 		AvailableBooks:    row.AvailableBooks,
 		TotalFines:        row.TotalFines,
 		GeneratedAt:       time.Now(),
+	}, nil
+}
+
+// GetDashboardMetrics generates real-time dashboard metrics
+func (rs *ReportService) GetDashboardMetrics(ctx context.Context) (*models.DashboardMetrics, error) {
+	row, err := rs.db.GetDashboardMetrics(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get dashboard metrics: %w", err)
+	}
+
+	// Handle LastUpdated which comes as interface{}
+	lastUpdated := time.Now()
+	if row.LastUpdated != nil {
+		if t, ok := row.LastUpdated.(time.Time); ok {
+			lastUpdated = t
+		}
+	}
+
+	return &models.DashboardMetrics{
+		TodayBorrows:   row.TodayBorrows,
+		TodayReturns:   row.TodayReturns,
+		CurrentOverdue: row.CurrentOverdue,
+		NewStudents:    row.NewStudents,
+		ActiveUsers:    row.ActiveUsers,
+		AvailableBooks: row.AvailableBooks,
+		PendingReserve: row.PendingReservations,
+		SystemAlerts:   row.SystemAlerts,
+		LastUpdated:    lastUpdated,
 	}, nil
 }
 

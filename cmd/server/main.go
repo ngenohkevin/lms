@@ -113,6 +113,7 @@ func main() {
 	recommendationService := services.NewRecommendationService(bookService, db.Queries)
 	ratingService := services.NewRatingService(cacheService, bookService, studentService)
 	importExportService := services.NewImportExportService(bookService, db.Queries, "./uploads")
+	fineService := services.NewFineService(db.Queries, cfg.Borrowing.FinePerDay)
 
 	// Initialize Email Service (optional)
 	var emailService services.EmailServiceInterface
@@ -129,6 +130,22 @@ func main() {
 
 	// Initialize Notification Service
 	notificationService := services.NewNotificationService(db.Queries, emailService, queueService, logger)
+
+	// Initialize Scheduler Service
+	schedulerConfig := services.SchedulerConfig{
+		Enabled:                     cfg.Scheduler.Enabled,
+		FineCalculationSchedule:     cfg.Scheduler.FineCalculationSchedule,
+		OverdueReminderSchedule:     cfg.Scheduler.OverdueReminderSchedule,
+		ReservationExpirySchedule:   cfg.Scheduler.ReservationExpirySchedule,
+		FineReminderSchedule:        cfg.Scheduler.FineReminderSchedule,
+		NotificationCleanupSchedule: cfg.Scheduler.NotificationCleanupSchedule,
+	}
+	schedulerDeps := services.SchedulerDependencies{
+		FineService:         fineService,
+		NotificationService: notificationService,
+		ReservationService:  reservationService,
+	}
+	schedulerService := services.NewSchedulerService(schedulerConfig, schedulerDeps, logger)
 
 	// Initialize auth middleware
 	authMiddleware := middleware.NewAuthMiddleware(
@@ -152,11 +169,17 @@ func main() {
 	uploadHandler := handlers.NewUploadHandler(bookService)
 	ratingHandler := handlers.NewRatingHandler(ratingService)
 	categoryHandler := handlers.NewCategoryHandler(db.Queries)
+	fineHandler := handlers.NewFineHandler(fineService)
 
 	// Setup routes
 	setupRoutes(router, authHandler, healthHandler, bookHandler, studentHandler,
 		transactionHandler, reservationHandler, notificationHandler,
-		reportHandler, importExportHandler, uploadHandler, ratingHandler, categoryHandler, authMiddleware)
+		reportHandler, importExportHandler, uploadHandler, ratingHandler, categoryHandler, fineHandler, authMiddleware)
+
+	// Start scheduler
+	if err := schedulerService.Start(); err != nil {
+		log.Printf("Warning: Failed to start scheduler: %v", err)
+	}
 
 	// Start server
 	srv := &http.Server{
@@ -181,6 +204,10 @@ func main() {
 	<-quit
 
 	slog.Info("Shutting down server...")
+
+	// Stop scheduler
+	schedulerCtx := schedulerService.Stop()
+	<-schedulerCtx.Done()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -227,6 +254,7 @@ func setupRoutes(
 	uploadHandler *handlers.UploadHandler,
 	ratingHandler *handlers.RatingHandler,
 	categoryHandler *handlers.CategoryHandler,
+	fineHandler *handlers.FineHandler,
 	authMiddleware *middleware.AuthMiddleware,
 ) {
 	// Health check endpoints (no auth required)
@@ -392,6 +420,9 @@ func setupRoutes(
 					librarianCategories.POST("/:id/activate", categoryHandler.ActivateCategory)
 				}
 			}
+
+			// Fine routes
+			fineHandler.RegisterRoutes(protected)
 
 			// Report routes (librarian only)
 			reportHandler.RegisterRoutes(protected)

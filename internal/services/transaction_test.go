@@ -126,6 +126,11 @@ func (m *MockTransactionQueries) CountTodayBorrowings(ctx context.Context) (int6
 	return args.Get(0).(int64), args.Error(1)
 }
 
+func (m *MockTransactionQueries) GetTotalUnpaidFinesByStudent(ctx context.Context, studentID int32) (pgtype.Numeric, error) {
+	args := m.Called(ctx, studentID)
+	return args.Get(0).(pgtype.Numeric), args.Error(1)
+}
+
 // Test helper functions
 func createTestTransaction() queries.Transaction {
 	now := time.Now()
@@ -198,6 +203,7 @@ func TestTransactionService_BorrowBook_Success(t *testing.T) {
 	mockQueries.On("GetBookByID", ctx, bookID).Return(book, nil)
 	mockQueries.On("GetStudentByID", ctx, studentID).Return(student, nil)
 	mockQueries.On("ListActiveTransactionsByStudent", ctx, studentID).Return([]queries.ListActiveTransactionsByStudentRow{}, nil)
+	mockQueries.On("GetTotalUnpaidFinesByStudent", ctx, studentID).Return(pgtype.Numeric{Int: big.NewInt(0), Valid: false}, nil) // No unpaid fines
 	mockQueries.On("CreateTransaction", ctx, mock.AnythingOfType("queries.CreateTransactionParams")).Return(transaction, nil)
 	mockQueries.On("UpdateBookAvailability", ctx, mock.AnythingOfType("queries.UpdateBookAvailabilityParams")).Return(nil)
 
@@ -1320,6 +1326,7 @@ func TestTransactionService_BorrowBook_AvailabilityUpdate_Success(t *testing.T) 
 	mockQueries.On("GetBookByID", ctx, bookID).Return(book, nil)
 	mockQueries.On("GetStudentByID", ctx, studentID).Return(student, nil)
 	mockQueries.On("ListActiveTransactionsByStudent", ctx, studentID).Return([]queries.ListActiveTransactionsByStudentRow{}, nil)
+	mockQueries.On("GetTotalUnpaidFinesByStudent", ctx, studentID).Return(pgtype.Numeric{Int: big.NewInt(0), Valid: false}, nil) // No unpaid fines
 	mockQueries.On("CreateTransaction", ctx, mock.AnythingOfType("queries.CreateTransactionParams")).Return(transaction, nil)
 
 	// Verify that availability is decreased by 1

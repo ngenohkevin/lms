@@ -186,21 +186,26 @@ type Student struct {
 }
 
 type Transaction struct {
-	ID              int32            `db:"id" json:"id"`
-	StudentID       int32            `db:"student_id" json:"student_id"`
-	BookID          int32            `db:"book_id" json:"book_id"`
-	TransactionType string           `db:"transaction_type" json:"transaction_type"`
-	TransactionDate pgtype.Timestamp `db:"transaction_date" json:"transaction_date"`
-	DueDate         pgtype.Timestamp `db:"due_date" json:"due_date"`
-	ReturnedDate    pgtype.Timestamp `db:"returned_date" json:"returned_date"`
-	LibrarianID     pgtype.Int4      `db:"librarian_id" json:"librarian_id"`
-	FineAmount      pgtype.Numeric   `db:"fine_amount" json:"fine_amount"`
-	FinePaid        pgtype.Bool      `db:"fine_paid" json:"fine_paid"`
-	Notes           pgtype.Text      `db:"notes" json:"notes"`
-	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
-	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
-	ReturnCondition pgtype.Text      `db:"return_condition" json:"return_condition"`
-	ConditionNotes  pgtype.Text      `db:"condition_notes" json:"condition_notes"`
+	ID               int32            `db:"id" json:"id"`
+	StudentID        int32            `db:"student_id" json:"student_id"`
+	BookID           int32            `db:"book_id" json:"book_id"`
+	TransactionType  string           `db:"transaction_type" json:"transaction_type"`
+	TransactionDate  pgtype.Timestamp `db:"transaction_date" json:"transaction_date"`
+	DueDate          pgtype.Timestamp `db:"due_date" json:"due_date"`
+	ReturnedDate     pgtype.Timestamp `db:"returned_date" json:"returned_date"`
+	LibrarianID      pgtype.Int4      `db:"librarian_id" json:"librarian_id"`
+	FineAmount       pgtype.Numeric   `db:"fine_amount" json:"fine_amount"`
+	FinePaid         pgtype.Bool      `db:"fine_paid" json:"fine_paid"`
+	Notes            pgtype.Text      `db:"notes" json:"notes"`
+	CreatedAt        pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt        pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	ReturnCondition  pgtype.Text      `db:"return_condition" json:"return_condition"`
+	ConditionNotes   pgtype.Text      `db:"condition_notes" json:"condition_notes"`
+	FineWaived       pgtype.Bool      `db:"fine_waived" json:"fine_waived"`
+	FineWaivedAt     pgtype.Timestamp `db:"fine_waived_at" json:"fine_waived_at"`
+	FineWaivedBy     pgtype.Int4      `db:"fine_waived_by" json:"fine_waived_by"`
+	FineWaivedReason pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
+	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
 }
 
 type User struct {
