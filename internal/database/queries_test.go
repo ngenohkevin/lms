@@ -164,6 +164,7 @@ func TestQueries_StudentOperations(t *testing.T) {
 		Phone:       pgtype.Text{String: "+1987654321", Valid: true},
 		YearOfStudy: 3,
 		Department:  pgtype.Text{String: "Mathematics", Valid: true},
+		MaxBooks:    5,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "Jane", updatedStudent.FirstName)
