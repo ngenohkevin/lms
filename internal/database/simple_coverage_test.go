@@ -106,6 +106,7 @@ func TestDatabaseCoverageSimple(t *testing.T) {
 			Email:        pgtype.Text{String: "COVTEST001@test.com", Valid: true},
 			YearOfStudy:  1,
 			PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
+			MaxBooks:     5,
 		})
 		require.NoError(t, err)
 		assert.NotZero(t, student.ID)
@@ -239,6 +240,7 @@ func TestDatabaseCoverageSimple(t *testing.T) {
 			Email:        pgtype.Text{String: "COVTEST002@test.com", Valid: true},
 			YearOfStudy:  1,
 			PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
+			MaxBooks:     5,
 		})
 		require.NoError(t, err)
 
@@ -296,6 +298,7 @@ func TestDatabaseCoverageSimple(t *testing.T) {
 			Email:        pgtype.Text{String: "COVTEST003@test.com", Valid: true},
 			YearOfStudy:  1,
 			PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
+			MaxBooks:     5,
 		})
 		require.NoError(t, err)
 
@@ -351,6 +354,7 @@ func TestDatabaseCoverageSimple(t *testing.T) {
 			Email:        pgtype.Text{String: "COVTEST004@test.com", Valid: true},
 			YearOfStudy:  1,
 			PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
+			MaxBooks:     5,
 		})
 		require.NoError(t, err)
 
