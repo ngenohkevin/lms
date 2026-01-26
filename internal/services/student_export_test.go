@@ -59,6 +59,7 @@ func TestStudentService_DataExport(t *testing.T) {
 				}, nil)
 
 				m.On("CountStudentsByStatus", mock.Anything, pgtype.Bool{Bool: true, Valid: true}).Return(int64(2), nil)
+				m.On("GetStudentBorrowingStats", mock.Anything).Return([]queries.GetStudentBorrowingStatsRow{}, nil)
 			},
 			expectError: false,
 			validateResult: func(t *testing.T, result *models.StudentExportResponse) {
@@ -97,6 +98,7 @@ func TestStudentService_DataExport(t *testing.T) {
 				}, nil)
 
 				m.On("CountStudentsByStatus", mock.Anything, pgtype.Bool{Bool: true, Valid: true}).Return(int64(1), nil)
+				m.On("GetStudentBorrowingStats", mock.Anything).Return([]queries.GetStudentBorrowingStatsRow{}, nil)
 			},
 			expectError: false,
 			validateResult: func(t *testing.T, result *models.StudentExportResponse) {
@@ -144,6 +146,7 @@ func TestStudentService_DataExport(t *testing.T) {
 				}, nil)
 
 				m.On("CountStudentsByStatus", mock.Anything, pgtype.Bool{Bool: true, Valid: true}).Return(int64(1), nil)
+				m.On("GetStudentBorrowingStats", mock.Anything).Return([]queries.GetStudentBorrowingStatsRow{}, nil)
 			},
 			expectError: false,
 			validateResult: func(t *testing.T, result *models.StudentExportResponse) {
@@ -178,6 +181,7 @@ func TestStudentService_DataExport(t *testing.T) {
 				}, nil)
 
 				m.On("CountStudentsByStatus", mock.Anything, pgtype.Bool{Bool: true, Valid: true}).Return(int64(1), nil)
+				m.On("GetStudentBorrowingStats", mock.Anything).Return([]queries.GetStudentBorrowingStatsRow{}, nil)
 			},
 			expectError: false,
 			validateResult: func(t *testing.T, result *models.StudentExportResponse) {
@@ -212,6 +216,7 @@ func TestStudentService_DataExport(t *testing.T) {
 				}, nil)
 
 				m.On("CountStudents", mock.Anything).Return(int64(2), nil)
+				m.On("GetStudentBorrowingStats", mock.Anything).Return([]queries.GetStudentBorrowingStatsRow{}, nil)
 			},
 			expectError: false,
 			validateResult: func(t *testing.T, result *models.StudentExportResponse) {
@@ -407,6 +412,7 @@ func TestStudentService_ExportByYear(t *testing.T) {
 				}, nil)
 
 				m.On("CountStudentsByStatus", mock.Anything, pgtype.Bool{Bool: true, Valid: true}).Return(int64(1), nil)
+				m.On("GetStudentBorrowingStats", mock.Anything).Return([]queries.GetStudentBorrowingStatsRow{}, nil)
 			},
 			expectError: false,
 		},
@@ -429,6 +435,7 @@ func TestStudentService_ExportByYear(t *testing.T) {
 				}, nil)
 
 				m.On("CountStudentsByStatus", mock.Anything, pgtype.Bool{Bool: true, Valid: true}).Return(int64(1), nil)
+				m.On("GetStudentBorrowingStats", mock.Anything).Return([]queries.GetStudentBorrowingStatsRow{}, nil)
 			},
 			expectError: false,
 		},
@@ -504,6 +511,7 @@ func TestStudentService_ExportByDepartment(t *testing.T) {
 				}, nil)
 
 				m.On("CountStudentsByStatus", mock.Anything, pgtype.Bool{Bool: true, Valid: true}).Return(int64(1), nil)
+				m.On("GetStudentBorrowingStats", mock.Anything).Return([]queries.GetStudentBorrowingStatsRow{}, nil)
 			},
 			expectError: false,
 		},

@@ -165,6 +165,7 @@ func TestStudentService_GetStudentsByStatus(t *testing.T) {
 					return params.IsActive.Bool == true && params.Limit == 20 && params.Offset == 0
 				})).Return(activeStudents, nil)
 				m.On("CountStudentsByStatus", mock.Anything, pgtype.Bool{Bool: true, Valid: true}).Return(int64(2), nil)
+				m.On("GetStudentBorrowingStats", mock.Anything).Return([]queries.GetStudentBorrowingStatsRow{}, nil)
 			},
 			expectedCount: 2,
 			expectError:   false,
@@ -181,6 +182,7 @@ func TestStudentService_GetStudentsByStatus(t *testing.T) {
 					return params.IsActive.Bool == false && params.Limit == 20 && params.Offset == 0
 				})).Return(inactiveStudents, nil)
 				m.On("CountStudentsByStatus", mock.Anything, pgtype.Bool{Bool: false, Valid: true}).Return(int64(1), nil)
+				m.On("GetStudentBorrowingStats", mock.Anything).Return([]queries.GetStudentBorrowingStatsRow{}, nil)
 			},
 			expectedCount: 1,
 			expectError:   false,
@@ -197,6 +199,7 @@ func TestStudentService_GetStudentsByStatus(t *testing.T) {
 					return params.IsActive.Bool == true && params.Limit == 1 && params.Offset == 1
 				})).Return([]queries.Student{activeStudents[1]}, nil)
 				m.On("CountStudentsByStatus", mock.Anything, pgtype.Bool{Bool: true, Valid: true}).Return(int64(2), nil)
+				m.On("GetStudentBorrowingStats", mock.Anything).Return([]queries.GetStudentBorrowingStatsRow{}, nil)
 			},
 			expectedCount: 1,
 			expectError:   false,

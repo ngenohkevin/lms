@@ -1198,6 +1198,19 @@ func (s *StudentService) GetStudentsByStatus(ctx context.Context, isActive bool,
 		return nil, fmt.Errorf("failed to count students by status: %w", err)
 	}
 
+	// Fetch borrowing stats for all students
+	borrowingStats, err := s.queries.GetStudentBorrowingStats(ctx)
+	if err != nil {
+		// Log error but continue - borrowing stats are not critical
+		borrowingStats = []queries.GetStudentBorrowingStatsRow{}
+	}
+
+	// Create a map for quick lookup
+	currentBooksMap := make(map[int32]int64)
+	for _, stat := range borrowingStats {
+		currentBooksMap[stat.StudentID] = stat.CurrentBooks
+	}
+
 	// Convert to response format
 	studentResponses := make([]models.StudentResponse, len(students))
 	for i, student := range students {
@@ -1214,6 +1227,7 @@ func (s *StudentService) GetStudentsByStatus(ctx context.Context, isActive bool,
 			PasswordHash:   student.PasswordHash,
 			IsActive:       student.IsActive,
 			MaxBooks:       student.MaxBooks,
+			CurrentBooks:   int32(currentBooksMap[student.ID]),
 			DeletedAt:      student.DeletedAt,
 			CreatedAt:      student.CreatedAt,
 			UpdatedAt:      student.UpdatedAt,

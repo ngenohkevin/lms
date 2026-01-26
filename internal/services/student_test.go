@@ -555,6 +555,7 @@ func TestStudentService_ListStudents(t *testing.T) {
 					Offset: 0,
 				}).Return(mockStudents, nil)
 				m.On("CountStudents", mock.Anything).Return(int64(2), nil)
+				m.On("GetStudentBorrowingStats", mock.Anything).Return([]queries.GetStudentBorrowingStatsRow{}, nil)
 			},
 			expectedCount: 2,
 			expectError:   false,
@@ -573,6 +574,7 @@ func TestStudentService_ListStudents(t *testing.T) {
 					Offset:      0,
 				}).Return([]queries.Student{mockStudents[0]}, nil)
 				m.On("CountStudentsByYear", mock.Anything, int32(1)).Return(int64(1), nil)
+				m.On("GetStudentBorrowingStats", mock.Anything).Return([]queries.GetStudentBorrowingStatsRow{}, nil)
 			},
 			expectedCount: 1,
 			expectError:   false,
@@ -589,6 +591,7 @@ func TestStudentService_ListStudents(t *testing.T) {
 					Offset: 1,
 				}).Return([]queries.Student{mockStudents[1]}, nil)
 				m.On("CountStudents", mock.Anything).Return(int64(2), nil)
+				m.On("GetStudentBorrowingStats", mock.Anything).Return([]queries.GetStudentBorrowingStatsRow{}, nil)
 			},
 			expectedCount: 1,
 			expectError:   false,
@@ -645,6 +648,7 @@ func TestStudentService_SearchStudents(t *testing.T) {
 					Limit:     20,
 					Offset:    0,
 				}).Return(mockStudents, nil)
+				m.On("GetStudentBorrowingStats", mock.Anything).Return([]queries.GetStudentBorrowingStatsRow{}, nil)
 			},
 			expectedCount: 1,
 			expectError:   false,
@@ -662,6 +666,7 @@ func TestStudentService_SearchStudents(t *testing.T) {
 					Limit:       20,
 					Offset:      0,
 				}).Return(mockStudents, nil)
+				m.On("GetStudentBorrowingStats", mock.Anything).Return([]queries.GetStudentBorrowingStatsRow{}, nil)
 			},
 			expectedCount: 1,
 			expectError:   false,
@@ -677,6 +682,7 @@ func TestStudentService_SearchStudents(t *testing.T) {
 					Limit:  20,
 					Offset: 0,
 				}).Return(mockStudents, nil)
+				m.On("GetStudentBorrowingStats", mock.Anything).Return([]queries.GetStudentBorrowingStatsRow{}, nil)
 			},
 			expectedCount: 1,
 			expectError:   false,
@@ -1335,6 +1341,7 @@ func TestStudentService_YearOrganization(t *testing.T) {
 					Offset:      0,
 				}).Return(year1Students, nil)
 				m.On("CountStudentsByYear", mock.Anything, int32(1)).Return(int64(2), nil)
+				m.On("GetStudentBorrowingStats", mock.Anything).Return([]queries.GetStudentBorrowingStatsRow{}, nil)
 			},
 			expectedCount: 2,
 			expectError:   false,
@@ -1359,6 +1366,7 @@ func TestStudentService_YearOrganization(t *testing.T) {
 					Offset:      0,
 				}).Return(year3Students, nil)
 				m.On("CountStudentsByYear", mock.Anything, int32(3)).Return(int64(1), nil)
+				m.On("GetStudentBorrowingStats", mock.Anything).Return([]queries.GetStudentBorrowingStatsRow{}, nil)
 			},
 			expectedCount: 1,
 			expectError:   false,
@@ -1373,6 +1381,7 @@ func TestStudentService_YearOrganization(t *testing.T) {
 					Offset:      0,
 				}).Return([]queries.Student{}, nil)
 				m.On("CountStudentsByYear", mock.Anything, int32(8)).Return(int64(0), nil)
+				m.On("GetStudentBorrowingStats", mock.Anything).Return([]queries.GetStudentBorrowingStatsRow{}, nil)
 			},
 			expectedCount: 0,
 			expectError:   false,
