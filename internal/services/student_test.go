@@ -132,6 +132,11 @@ func (m *MockQueries) GetStudentEnrollmentTrends(ctx context.Context, params que
 	return args.Get(0).([]queries.GetStudentEnrollmentTrendsRow), args.Error(1)
 }
 
+func (m *MockQueries) GetStudentBorrowingStats(ctx context.Context) ([]queries.GetStudentBorrowingStatsRow, error) {
+	args := m.Called(ctx)
+	return args.Get(0).([]queries.GetStudentBorrowingStatsRow), args.Error(1)
+}
+
 // Helper function to create a mock student
 func createMockStudent() queries.Student {
 	now := time.Now()

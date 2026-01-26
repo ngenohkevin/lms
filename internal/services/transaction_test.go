@@ -121,6 +121,11 @@ func (m *MockTransactionQueries) ListActiveBorrowings(ctx context.Context, arg q
 	return args.Get(0).([]queries.ListActiveBorrowingsRow), args.Error(1)
 }
 
+func (m *MockTransactionQueries) CountTodayBorrowings(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 // Test helper functions
 func createTestTransaction() queries.Transaction {
 	now := time.Now()
