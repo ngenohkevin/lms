@@ -281,7 +281,7 @@ func (h *RatingHandler) DeleteRating(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Router /api/v1/books/{book_id}/ratings [get]
 func (h *RatingHandler) GetBookRatings(c *gin.Context) {
-	bookIDStr := c.Param("book_id")
+	bookIDStr := c.Param("bookId")
 	bookID, err := strconv.ParseInt(bookIDStr, 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
@@ -326,7 +326,7 @@ func (h *RatingHandler) GetBookRatings(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Router /api/v1/books/{book_id}/ratings/summary [get]
 func (h *RatingHandler) GetBookRatingsSummary(c *gin.Context) {
-	bookIDStr := c.Param("book_id")
+	bookIDStr := c.Param("bookId")
 	bookID, err := strconv.ParseInt(bookIDStr, 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{

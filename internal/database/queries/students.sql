@@ -45,7 +45,7 @@ LIMIT $2 OFFSET $3;
 
 -- name: SearchStudents :many
 SELECT * FROM students
-WHERE (first_name ILIKE $1 OR last_name ILIKE $1 OR student_id ILIKE $1)
+WHERE (first_name ILIKE $1 OR last_name ILIKE $1 OR student_id ILIKE $1 OR email ILIKE $1)
 AND deleted_at IS NULL
 ORDER BY last_name, first_name
 LIMIT $2 OFFSET $3;
