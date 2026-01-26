@@ -176,6 +176,7 @@ func (suite *DatabaseIntegrationTestSuite) TestCompleteStudentWorkflow() {
 		Email:       pgtype.Text{String: "integration.test@student.edu", Valid: true},
 		Phone:       pgtype.Text{String: "+1234567890", Valid: true},
 		YearOfStudy: 2,
+		MaxBooks:    5,
 		Department:  pgtype.Text{String: "Computer Science", Valid: true},
 	})
 	require.NoError(suite.T(), err)
@@ -202,6 +203,7 @@ func (suite *DatabaseIntegrationTestSuite) TestCompleteStudentWorkflow() {
 		Email:       pgtype.Text{String: "updated.student@student.edu", Valid: true},
 		Phone:       pgtype.Text{String: "+1987654321", Valid: true},
 		YearOfStudy: 3,
+		MaxBooks:    5,
 		Department:  pgtype.Text{String: "Mathematics", Valid: true},
 	})
 	require.NoError(suite.T(), err)
@@ -283,6 +285,7 @@ func (suite *DatabaseIntegrationTestSuite) TestTransactionOperations() {
 		FirstName:   "Transaction",
 		LastName:    "Student",
 		YearOfStudy: 1,
+		MaxBooks:    5,
 	})
 	require.NoError(suite.T(), err)
 
@@ -357,6 +360,7 @@ func (suite *DatabaseIntegrationTestSuite) TestReservationOperations() {
 		FirstName:   "Reservation",
 		LastName:    "Student",
 		YearOfStudy: 2,
+		MaxBooks:    5,
 	})
 	require.NoError(suite.T(), err)
 

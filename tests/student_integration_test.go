@@ -304,6 +304,7 @@ func (suite *StudentIntegrationTestSuite) createTestStudent() *queries.Student {
 		FirstName:   "John",
 		LastName:    "Doe",
 		YearOfStudy: 1,
+		MaxBooks:    5,
 	}
 
 	student, err := suite.queries.CreateStudent(context.Background(), params)
@@ -328,6 +329,7 @@ func (suite *StudentIntegrationTestSuite) TestCreateStudent() {
 				Email:       "john.doe@test.com",
 				Phone:       "+1234567890",
 				YearOfStudy: 1,
+		MaxBooks:    5,
 				Department:  "Computer Science",
 			},
 			expectedStatus: http.StatusCreated,
@@ -339,6 +341,7 @@ func (suite *StudentIntegrationTestSuite) TestCreateStudent() {
 				StudentID: "STU2024002",
 				// Missing FirstName and LastName
 				YearOfStudy: 1,
+		MaxBooks:    5,
 			},
 			expectedStatus: http.StatusBadRequest,
 			expectError:    true,
@@ -350,6 +353,7 @@ func (suite *StudentIntegrationTestSuite) TestCreateStudent() {
 				FirstName:   "Jane",
 				LastName:    "Doe",
 				YearOfStudy: 1,
+		MaxBooks:    5,
 			},
 			expectedStatus: http.StatusBadRequest,
 			expectError:    true,
@@ -373,6 +377,7 @@ func (suite *StudentIntegrationTestSuite) TestCreateStudent() {
 				LastName:    "Johnson",
 				Email:       "invalid-email",
 				YearOfStudy: 2,
+		MaxBooks:    5,
 			},
 			expectedStatus: http.StatusBadRequest,
 			expectError:    true,
@@ -486,6 +491,7 @@ func (suite *StudentIntegrationTestSuite) TestUpdateStudent() {
 				Email:       "updated@test.com",
 				Phone:       "+9876543210",
 				YearOfStudy: 2,
+		MaxBooks:    5,
 				Department:  "Mathematics",
 			},
 			expectedStatus: http.StatusOK,
@@ -498,6 +504,7 @@ func (suite *StudentIntegrationTestSuite) TestUpdateStudent() {
 				FirstName:   "Test",
 				LastName:    "User",
 				YearOfStudy: 1,
+		MaxBooks:    5,
 			},
 			expectedStatus: http.StatusNotFound,
 			expectError:    true,
@@ -594,6 +601,7 @@ func (suite *StudentIntegrationTestSuite) TestListStudents() {
 			FirstName:   fmt.Sprintf("Student%d", i),
 			LastName:    "Test",
 			YearOfStudy: int32(i%4 + 1), // Years 1-4
+			MaxBooks:    5,
 		}
 		_, err := suite.queries.CreateStudent(context.Background(), params)
 		require.NoError(suite.T(), err)
@@ -674,18 +682,21 @@ func (suite *StudentIntegrationTestSuite) TestSearchStudents() {
 			FirstName:   "John",
 			LastName:    "Doe",
 			YearOfStudy: 1,
+		MaxBooks:    5,
 		},
 		{
 			StudentID:   "STU2024002",
 			FirstName:   "Jane",
 			LastName:    "Smith",
 			YearOfStudy: 2,
+		MaxBooks:    5,
 		},
 		{
 			StudentID:   "STU2024003",
 			FirstName:   "Bob",
 			LastName:    "Johnson",
 			YearOfStudy: 1,
+		MaxBooks:    5,
 		},
 	}
 

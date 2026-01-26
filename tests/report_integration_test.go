@@ -59,6 +59,7 @@ func (suite *ReportIntegrationTestSuite) createTestDataForReports() {
 		FirstName:   "John",
 		LastName:    "Doe",
 		YearOfStudy: 1,
+		MaxBooks:    5,
 		Department:  pgtype.Text{String: "Computer Science", Valid: true},
 	})
 	assert.NoError(suite.T(), err)
@@ -68,6 +69,7 @@ func (suite *ReportIntegrationTestSuite) createTestDataForReports() {
 		FirstName:   "Jane",
 		LastName:    "Smith",
 		YearOfStudy: 2,
+		MaxBooks:    5,
 		Department:  pgtype.Text{String: "Engineering", Valid: true},
 	})
 	assert.NoError(suite.T(), err)

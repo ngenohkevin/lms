@@ -108,6 +108,7 @@ func (suite *NotificationIntegrationTestSuite) createTestData() {
 		Email:        pgtype.Text{String: "teststudent@example.com", Valid: true},
 		Phone:        pgtype.Text{String: "123-456-7890", Valid: true},
 		YearOfStudy:  1,
+		MaxBooks:    5,
 		Department:   pgtype.Text{String: "Computer Science", Valid: true},
 		PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
 	})
@@ -406,6 +407,7 @@ func (suite *NotificationIntegrationTestSuite) TestPhase7_2_BatchNotifications()
 		Email:        pgtype.Text{String: "teststudent2@example.com", Valid: true},
 		Phone:        pgtype.Text{String: "123-456-7891", Valid: true},
 		YearOfStudy:  2,
+		MaxBooks:    5,
 		Department:   pgtype.Text{String: "Computer Science", Valid: true},
 		PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
 	})

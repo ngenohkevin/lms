@@ -345,6 +345,7 @@ func createTestStudentWithStatus(t *testing.T, querier *queries.Queries, firstNa
 		FirstName:   firstName,
 		LastName:    lastName,
 		YearOfStudy: 1,
+		MaxBooks:    5,
 		Department:  pgtype.Text{String: "Computer Science", Valid: true},
 		Email:       pgtype.Text{String: firstName + "." + lastName + "@example.com", Valid: true},
 	})
