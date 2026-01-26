@@ -179,7 +179,7 @@ func TestConcurrentUsers(t *testing.T) {
 				FirstName:   fmt.Sprintf("Concurrent%d", i),
 				LastName:    "Student",
 				YearOfStudy: 1,
-		MaxBooks:    5,
+				MaxBooks:    5,
 			})
 			require.NoError(t, err)
 			students = append(students, student)
