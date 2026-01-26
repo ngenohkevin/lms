@@ -64,9 +64,9 @@ func (q *Queries) CountStudentsByYear(ctx context.Context, yearOfStudy int32) (i
 }
 
 const createStudent = `-- name: CreateStudent :one
-INSERT INTO students (student_id, first_name, last_name, email, phone, year_of_study, department, password_hash)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, student_id, first_name, last_name, email, phone, year_of_study, department, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at
+INSERT INTO students (student_id, first_name, last_name, email, phone, year_of_study, department, password_hash, max_books)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, student_id, first_name, last_name, email, phone, year_of_study, department, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books
 `
 
 type CreateStudentParams struct {
@@ -78,6 +78,7 @@ type CreateStudentParams struct {
 	YearOfStudy  int32       `db:"year_of_study" json:"year_of_study"`
 	Department   pgtype.Text `db:"department" json:"department"`
 	PasswordHash pgtype.Text `db:"password_hash" json:"password_hash"`
+	MaxBooks     int32       `db:"max_books" json:"max_books"`
 }
 
 func (q *Queries) CreateStudent(ctx context.Context, arg CreateStudentParams) (Student, error) {
@@ -90,6 +91,7 @@ func (q *Queries) CreateStudent(ctx context.Context, arg CreateStudentParams) (S
 		arg.YearOfStudy,
 		arg.Department,
 		arg.PasswordHash,
+		arg.MaxBooks,
 	)
 	var i Student
 	err := row.Scan(
@@ -107,12 +109,13 @@ func (q *Queries) CreateStudent(ctx context.Context, arg CreateStudentParams) (S
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MaxBooks,
 	)
 	return i, err
 }
 
 const getStudentByEmail = `-- name: GetStudentByEmail :one
-SELECT id, student_id, first_name, last_name, email, phone, year_of_study, department, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at FROM students
+SELECT id, student_id, first_name, last_name, email, phone, year_of_study, department, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books FROM students
 WHERE email = $1 AND deleted_at IS NULL
 `
 
@@ -134,12 +137,13 @@ func (q *Queries) GetStudentByEmail(ctx context.Context, email pgtype.Text) (Stu
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MaxBooks,
 	)
 	return i, err
 }
 
 const getStudentByID = `-- name: GetStudentByID :one
-SELECT id, student_id, first_name, last_name, email, phone, year_of_study, department, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at FROM students
+SELECT id, student_id, first_name, last_name, email, phone, year_of_study, department, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books FROM students
 WHERE id = $1 AND deleted_at IS NULL
 `
 
@@ -161,12 +165,13 @@ func (q *Queries) GetStudentByID(ctx context.Context, id int32) (Student, error)
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MaxBooks,
 	)
 	return i, err
 }
 
 const getStudentByStudentID = `-- name: GetStudentByStudentID :one
-SELECT id, student_id, first_name, last_name, email, phone, year_of_study, department, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at FROM students
+SELECT id, student_id, first_name, last_name, email, phone, year_of_study, department, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books FROM students
 WHERE student_id = $1 AND deleted_at IS NULL
 `
 
@@ -188,6 +193,7 @@ func (q *Queries) GetStudentByStudentID(ctx context.Context, studentID string) (
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MaxBooks,
 	)
 	return i, err
 }
@@ -268,7 +274,7 @@ func (q *Queries) GetStudentEnrollmentTrends(ctx context.Context, arg GetStudent
 }
 
 const getStudentsByStatus = `-- name: GetStudentsByStatus :many
-SELECT id, student_id, first_name, last_name, email, phone, year_of_study, department, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at FROM students 
+SELECT id, student_id, first_name, last_name, email, phone, year_of_study, department, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books FROM students 
 WHERE is_active = $1 AND deleted_at IS NULL
 ORDER BY last_name, first_name
 LIMIT $2 OFFSET $3
@@ -304,6 +310,7 @@ func (q *Queries) GetStudentsByStatus(ctx context.Context, arg GetStudentsByStat
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.MaxBooks,
 		); err != nil {
 			return nil, err
 		}
@@ -316,7 +323,7 @@ func (q *Queries) GetStudentsByStatus(ctx context.Context, arg GetStudentsByStat
 }
 
 const listStudents = `-- name: ListStudents :many
-SELECT id, student_id, first_name, last_name, email, phone, year_of_study, department, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at FROM students
+SELECT id, student_id, first_name, last_name, email, phone, year_of_study, department, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books FROM students
 WHERE deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
@@ -351,6 +358,7 @@ func (q *Queries) ListStudents(ctx context.Context, arg ListStudentsParams) ([]S
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.MaxBooks,
 		); err != nil {
 			return nil, err
 		}
@@ -363,7 +371,7 @@ func (q *Queries) ListStudents(ctx context.Context, arg ListStudentsParams) ([]S
 }
 
 const listStudentsByYear = `-- name: ListStudentsByYear :many
-SELECT id, student_id, first_name, last_name, email, phone, year_of_study, department, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at FROM students
+SELECT id, student_id, first_name, last_name, email, phone, year_of_study, department, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books FROM students
 WHERE year_of_study = $1 AND deleted_at IS NULL
 ORDER BY last_name, first_name
 LIMIT $2 OFFSET $3
@@ -399,6 +407,7 @@ func (q *Queries) ListStudentsByYear(ctx context.Context, arg ListStudentsByYear
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.MaxBooks,
 		); err != nil {
 			return nil, err
 		}
@@ -411,7 +420,7 @@ func (q *Queries) ListStudentsByYear(ctx context.Context, arg ListStudentsByYear
 }
 
 const searchStudents = `-- name: SearchStudents :many
-SELECT id, student_id, first_name, last_name, email, phone, year_of_study, department, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at FROM students
+SELECT id, student_id, first_name, last_name, email, phone, year_of_study, department, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books FROM students
 WHERE (first_name ILIKE $1 OR last_name ILIKE $1 OR student_id ILIKE $1)
 AND deleted_at IS NULL
 ORDER BY last_name, first_name
@@ -448,6 +457,7 @@ func (q *Queries) SearchStudents(ctx context.Context, arg SearchStudentsParams) 
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.MaxBooks,
 		); err != nil {
 			return nil, err
 		}
@@ -460,7 +470,7 @@ func (q *Queries) SearchStudents(ctx context.Context, arg SearchStudentsParams) 
 }
 
 const searchStudentsIncludingDeleted = `-- name: SearchStudentsIncludingDeleted :many
-SELECT id, student_id, first_name, last_name, email, phone, year_of_study, department, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at FROM students
+SELECT id, student_id, first_name, last_name, email, phone, year_of_study, department, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books FROM students
 WHERE student_id ILIKE $1
 ORDER BY student_id
 LIMIT $2 OFFSET $3
@@ -496,6 +506,7 @@ func (q *Queries) SearchStudentsIncludingDeleted(ctx context.Context, arg Search
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.MaxBooks,
 		); err != nil {
 			return nil, err
 		}
@@ -520,9 +531,9 @@ func (q *Queries) SoftDeleteStudent(ctx context.Context, id int32) error {
 
 const updateStudent = `-- name: UpdateStudent :one
 UPDATE students
-SET first_name = $2, last_name = $3, email = $4, phone = $5, year_of_study = $6, department = $7, updated_at = NOW()
+SET first_name = $2, last_name = $3, email = $4, phone = $5, year_of_study = $6, department = $7, max_books = $8, updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, student_id, first_name, last_name, email, phone, year_of_study, department, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at
+RETURNING id, student_id, first_name, last_name, email, phone, year_of_study, department, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books
 `
 
 type UpdateStudentParams struct {
@@ -533,6 +544,7 @@ type UpdateStudentParams struct {
 	Phone       pgtype.Text `db:"phone" json:"phone"`
 	YearOfStudy int32       `db:"year_of_study" json:"year_of_study"`
 	Department  pgtype.Text `db:"department" json:"department"`
+	MaxBooks    int32       `db:"max_books" json:"max_books"`
 }
 
 func (q *Queries) UpdateStudent(ctx context.Context, arg UpdateStudentParams) (Student, error) {
@@ -544,6 +556,7 @@ func (q *Queries) UpdateStudent(ctx context.Context, arg UpdateStudentParams) (S
 		arg.Phone,
 		arg.YearOfStudy,
 		arg.Department,
+		arg.MaxBooks,
 	)
 	var i Student
 	err := row.Scan(
@@ -561,6 +574,7 @@ func (q *Queries) UpdateStudent(ctx context.Context, arg UpdateStudentParams) (S
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MaxBooks,
 	)
 	return i, err
 }
@@ -586,7 +600,7 @@ const updateStudentStatus = `-- name: UpdateStudentStatus :one
 UPDATE students 
 SET is_active = $2, updated_at = NOW() 
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, student_id, first_name, last_name, email, phone, year_of_study, department, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at
+RETURNING id, student_id, first_name, last_name, email, phone, year_of_study, department, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books
 `
 
 type UpdateStudentStatusParams struct {
@@ -613,6 +627,7 @@ func (q *Queries) UpdateStudentStatus(ctx context.Context, arg UpdateStudentStat
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MaxBooks,
 	)
 	return i, err
 }

@@ -172,6 +172,8 @@ type Student struct {
 	DeletedAt      pgtype.Timestamp `db:"deleted_at" json:"deleted_at"`
 	CreatedAt      pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt      pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	// Maximum number of books this student can borrow at once
+	MaxBooks int32 `db:"max_books" json:"max_books"`
 }
 
 type Transaction struct {

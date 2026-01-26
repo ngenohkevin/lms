@@ -109,6 +109,12 @@ func (s *StudentService) CreateStudent(ctx context.Context, req *models.CreateSt
 	if req.Department != "" {
 		params.Department = pgtype.Text{String: req.Department, Valid: true}
 	}
+	// Set max_books with default value of 5 if not specified
+	if req.MaxBooks > 0 {
+		params.MaxBooks = req.MaxBooks
+	} else {
+		params.MaxBooks = 5
+	}
 
 	// Generate default password (student ID)
 	passwordHash, err := s.authService.HashPassword(req.StudentID)
@@ -136,6 +142,7 @@ func (s *StudentService) CreateStudent(ctx context.Context, req *models.CreateSt
 		EnrollmentDate: student.EnrollmentDate,
 		PasswordHash:   student.PasswordHash,
 		IsActive:       student.IsActive,
+		MaxBooks:       student.MaxBooks,
 		DeletedAt:      student.DeletedAt,
 		CreatedAt:      student.CreatedAt,
 		UpdatedAt:      student.UpdatedAt,
@@ -181,6 +188,7 @@ func (s *StudentService) GetStudentByID(ctx context.Context, id int32) (*models.
 		EnrollmentDate: student.EnrollmentDate,
 		PasswordHash:   student.PasswordHash,
 		IsActive:       student.IsActive,
+		MaxBooks:       student.MaxBooks,
 		DeletedAt:      student.DeletedAt,
 		CreatedAt:      student.CreatedAt,
 		UpdatedAt:      student.UpdatedAt,
@@ -214,6 +222,7 @@ func (s *StudentService) GetStudentByStudentID(ctx context.Context, studentID st
 		EnrollmentDate: student.EnrollmentDate,
 		PasswordHash:   student.PasswordHash,
 		IsActive:       student.IsActive,
+		MaxBooks:       student.MaxBooks,
 		DeletedAt:      student.DeletedAt,
 		CreatedAt:      student.CreatedAt,
 		UpdatedAt:      student.UpdatedAt,
@@ -262,6 +271,14 @@ func (s *StudentService) UpdateStudent(ctx context.Context, id int32, req *model
 	if req.Department != "" {
 		params.Department = pgtype.Text{String: req.Department, Valid: true}
 	}
+	// Set max_books - keep current value if not specified
+	if req.MaxBooks > 0 {
+		params.MaxBooks = req.MaxBooks
+	} else {
+		// Get current student to preserve max_books
+		currentStudent, _ := s.queries.GetStudentByID(ctx, id)
+		params.MaxBooks = currentStudent.MaxBooks
+	}
 
 	// Update the student
 	student, err := s.queries.UpdateStudent(ctx, params)
@@ -282,6 +299,7 @@ func (s *StudentService) UpdateStudent(ctx context.Context, id int32, req *model
 		EnrollmentDate: student.EnrollmentDate,
 		PasswordHash:   student.PasswordHash,
 		IsActive:       student.IsActive,
+		MaxBooks:       student.MaxBooks,
 		DeletedAt:      student.DeletedAt,
 		CreatedAt:      student.CreatedAt,
 		UpdatedAt:      student.UpdatedAt,
@@ -312,13 +330,14 @@ func (s *StudentService) UpdateStudentProfile(ctx context.Context, id int32, req
 		}
 	}
 
-	// Prepare update parameters (keep current year and department)
+	// Prepare update parameters (keep current year, department, and max_books)
 	params := queries.UpdateStudentParams{
 		ID:          id,
 		FirstName:   req.FirstName,
 		LastName:    req.LastName,
 		YearOfStudy: currentStudent.YearOfStudy, // Keep current year
 		Department:  currentStudent.Department,  // Keep current department
+		MaxBooks:    currentStudent.MaxBooks,    // Keep current max_books
 	}
 
 	// Handle optional fields
@@ -348,6 +367,7 @@ func (s *StudentService) UpdateStudentProfile(ctx context.Context, id int32, req
 		EnrollmentDate: student.EnrollmentDate,
 		PasswordHash:   student.PasswordHash,
 		IsActive:       student.IsActive,
+		MaxBooks:       student.MaxBooks,
 		DeletedAt:      student.DeletedAt,
 		CreatedAt:      student.CreatedAt,
 		UpdatedAt:      student.UpdatedAt,
@@ -1116,6 +1136,7 @@ func (s *StudentService) UpdateStudentStatus(ctx context.Context, studentID int3
 		EnrollmentDate: student.EnrollmentDate,
 		PasswordHash:   student.PasswordHash,
 		IsActive:       student.IsActive,
+		MaxBooks:       student.MaxBooks,
 		DeletedAt:      student.DeletedAt,
 		CreatedAt:      student.CreatedAt,
 		UpdatedAt:      student.UpdatedAt,

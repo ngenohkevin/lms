@@ -1,6 +1,6 @@
 -- name: CreateStudent :one
-INSERT INTO students (student_id, first_name, last_name, email, phone, year_of_study, department, password_hash)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO students (student_id, first_name, last_name, email, phone, year_of_study, department, password_hash, max_books)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING *;
 
 -- name: GetStudentByID :one
@@ -17,7 +17,7 @@ WHERE email = $1 AND deleted_at IS NULL;
 
 -- name: UpdateStudent :one
 UPDATE students
-SET first_name = $2, last_name = $3, email = $4, phone = $5, year_of_study = $6, department = $7, updated_at = NOW()
+SET first_name = $2, last_name = $3, email = $4, phone = $5, year_of_study = $6, department = $7, max_books = $8, updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;
 

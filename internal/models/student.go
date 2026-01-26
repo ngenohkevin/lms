@@ -23,6 +23,7 @@ type StudentDB struct {
 	EnrollmentDate pgtype.Date      `json:"enrollment_date"`
 	PasswordHash   pgtype.Text      `json:"password_hash,omitempty"`
 	IsActive       pgtype.Bool      `json:"is_active"`
+	MaxBooks       int32            `json:"max_books"`
 	DeletedAt      pgtype.Timestamp `json:"deleted_at,omitempty"`
 	CreatedAt      pgtype.Timestamp `json:"created_at"`
 	UpdatedAt      pgtype.Timestamp `json:"updated_at"`
@@ -37,6 +38,7 @@ type CreateStudentRequest struct {
 	Phone       string `json:"phone" binding:"omitempty"`
 	YearOfStudy int32  `json:"year_of_study" binding:"required,min=1,max=8"`
 	Department  string `json:"department" binding:"omitempty"`
+	MaxBooks    int32  `json:"max_books" binding:"omitempty,min=1,max=20"`
 }
 
 // UpdateStudentRequest represents the request payload for updating a student
@@ -47,6 +49,7 @@ type UpdateStudentRequest struct {
 	Phone       string `json:"phone" binding:"omitempty"`
 	YearOfStudy int32  `json:"year_of_study" binding:"required,min=1,max=8"`
 	Department  string `json:"department" binding:"omitempty"`
+	MaxBooks    int32  `json:"max_books" binding:"omitempty,min=1,max=20"`
 }
 
 // UpdateStudentProfileRequest represents the request payload for students updating their own profile
@@ -69,6 +72,7 @@ type StudentResponse struct {
 	Department     string `json:"department,omitempty"`
 	EnrollmentDate string `json:"enrollment_date"`
 	IsActive       bool   `json:"is_active"`
+	MaxBooks       int32  `json:"max_books"`
 	CreatedAt      string `json:"created_at"`
 	UpdatedAt      string `json:"updated_at"`
 }
@@ -274,6 +278,7 @@ func (s *StudentDB) ToResponse() StudentResponse {
 		LastName:    s.LastName,
 		YearOfStudy: s.YearOfStudy,
 		IsActive:    s.IsActive.Bool,
+		MaxBooks:    s.MaxBooks,
 	}
 
 	// Handle optional fields
