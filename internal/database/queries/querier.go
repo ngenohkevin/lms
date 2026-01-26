@@ -11,6 +11,7 @@ import (
 )
 
 type Querier interface {
+	ActivateCategory(ctx context.Context, id int32) error
 	BulkUpdateStudentStatus(ctx context.Context, arg BulkUpdateStudentStatusParams) error
 	CancelQueueItem(ctx context.Context, id int32) (EmailQueue, error)
 	CancelReservation(ctx context.Context, id int32) (Reservation, error)
@@ -22,6 +23,7 @@ type Querier interface {
 	CountAuditLogsByTable(ctx context.Context, tableName string) (int64, error)
 	CountAvailableBooks(ctx context.Context) (int64, error)
 	CountBooks(ctx context.Context) (int64, error)
+	CountCategories(ctx context.Context) (int64, error)
 	CountImportHistoryByFilters(ctx context.Context, arg CountImportHistoryByFiltersParams) (int64, error)
 	CountNotificationsByType(ctx context.Context, type_ string) (int64, error)
 	CountOverdueTransactions(ctx context.Context) (int64, error)
@@ -35,6 +37,7 @@ type Querier interface {
 	CountUsers(ctx context.Context) (int64, error)
 	CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) error
 	CreateBook(ctx context.Context, arg CreateBookParams) (Book, error)
+	CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error)
 	// Email Deliveries Queries
 	// Phase 7.4: Email Integration - Delivery Tracking
 	CreateEmailDelivery(ctx context.Context, arg CreateEmailDeliveryParams) (EmailDelivery, error)
@@ -49,6 +52,8 @@ type Querier interface {
 	CreateStudent(ctx context.Context, arg CreateStudentParams) (Student, error)
 	CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DeactivateCategory(ctx context.Context, id int32) error
+	DeleteCategory(ctx context.Context, id int32) error
 	DeleteNotification(ctx context.Context, id int32) error
 	DeleteOldAuditLogs(ctx context.Context, createdAt pgtype.Timestamp) error
 	DeleteOldEmailDeliveries(ctx context.Context, createdAt pgtype.Timestamp) error
@@ -65,7 +70,10 @@ type Querier interface {
 	GetBorrowingStatisticsByDepartment(ctx context.Context, arg GetBorrowingStatisticsByDepartmentParams) ([]GetBorrowingStatisticsByDepartmentRow, error)
 	GetBorrowingTrends(ctx context.Context, arg GetBorrowingTrendsParams) ([]GetBorrowingTrendsRow, error)
 	GetCapacityPlanningAnalysis(ctx context.Context) (GetCapacityPlanningAnalysisRow, error)
+	GetCategoryByID(ctx context.Context, id int32) (Category, error)
+	GetCategoryByName(ctx context.Context, name string) (Category, error)
 	GetDashboardMetrics(ctx context.Context) (GetDashboardMetricsRow, error)
+	GetDistinctBookGenres(ctx context.Context) ([]pgtype.Text, error)
 	GetEmailDeliveriesByNotification(ctx context.Context, notificationID int32) ([]EmailDelivery, error)
 	GetEmailDeliveriesByStatus(ctx context.Context, arg GetEmailDeliveriesByStatusParams) ([]EmailDelivery, error)
 	GetEmailDelivery(ctx context.Context, id int32) (EmailDelivery, error)
@@ -125,6 +133,7 @@ type Querier interface {
 	// Notification-related queries for Phase 7.2
 	ListActiveReservationsForAvailableBook(ctx context.Context, bookID int32) ([]ListActiveReservationsForAvailableBookRow, error)
 	ListActiveTransactionsByStudent(ctx context.Context, studentID int32) ([]ListActiveTransactionsByStudentRow, error)
+	ListAllCategories(ctx context.Context) ([]Category, error)
 	ListAuditLogs(ctx context.Context, arg ListAuditLogsParams) ([]AuditLog, error)
 	ListAuditLogsByAction(ctx context.Context, arg ListAuditLogsByActionParams) ([]AuditLog, error)
 	ListAuditLogsByDateRange(ctx context.Context, arg ListAuditLogsByDateRangeParams) ([]AuditLog, error)
@@ -133,6 +142,7 @@ type Querier interface {
 	ListAuditLogsByUser(ctx context.Context, arg ListAuditLogsByUserParams) ([]AuditLog, error)
 	ListAvailableBooks(ctx context.Context, arg ListAvailableBooksParams) ([]Book, error)
 	ListBooks(ctx context.Context, arg ListBooksParams) ([]Book, error)
+	ListCategories(ctx context.Context) ([]Category, error)
 	ListExpiredReservations(ctx context.Context) ([]ListExpiredReservationsRow, error)
 	ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]Notification, error)
 	ListNotificationsByRecipient(ctx context.Context, arg ListNotificationsByRecipientParams) ([]Notification, error)
@@ -169,6 +179,7 @@ type Querier interface {
 	UpdateBook(ctx context.Context, arg UpdateBookParams) (Book, error)
 	UpdateBookAvailability(ctx context.Context, arg UpdateBookAvailabilityParams) error
 	UpdateBookCondition(ctx context.Context, arg UpdateBookConditionParams) error
+	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (Category, error)
 	UpdateEmailDeliveryError(ctx context.Context, arg UpdateEmailDeliveryErrorParams) (EmailDelivery, error)
 	UpdateEmailDeliveryProviderInfo(ctx context.Context, arg UpdateEmailDeliveryProviderInfoParams) (EmailDelivery, error)
 	UpdateEmailDeliveryStatus(ctx context.Context, arg UpdateEmailDeliveryStatusParams) (EmailDelivery, error)

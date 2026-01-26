@@ -36,3 +36,5 @@ sql:
             go_type: "int32"
           - column: "notifications.id"
             go_type: "int32"
+          - column: "categories.id"
+            go_type: "int32"

@@ -151,11 +151,12 @@ func main() {
 	importExportHandler := handlers.NewImportExportHandler(importExportService)
 	uploadHandler := handlers.NewUploadHandler(bookService)
 	ratingHandler := handlers.NewRatingHandler(ratingService)
+	categoryHandler := handlers.NewCategoryHandler(db.Queries)
 
 	// Setup routes
 	setupRoutes(router, authHandler, healthHandler, bookHandler, studentHandler,
 		transactionHandler, reservationHandler, notificationHandler,
-		reportHandler, importExportHandler, uploadHandler, ratingHandler, authMiddleware)
+		reportHandler, importExportHandler, uploadHandler, ratingHandler, categoryHandler, authMiddleware)
 
 	// Start server
 	srv := &http.Server{
@@ -225,6 +226,7 @@ func setupRoutes(
 	importExportHandler *handlers.ImportExportHandler,
 	uploadHandler *handlers.UploadHandler,
 	ratingHandler *handlers.RatingHandler,
+	categoryHandler *handlers.CategoryHandler,
 	authMiddleware *middleware.AuthMiddleware,
 ) {
 	// Health check endpoints (no auth required)
@@ -371,6 +373,24 @@ func setupRoutes(
 				ratings.POST("", ratingHandler.CreateRating)
 				ratings.PUT("/:id", ratingHandler.UpdateRating)
 				ratings.DELETE("/:id", ratingHandler.DeleteRating)
+			}
+
+			// Category routes
+			categories := protected.Group("/categories")
+			{
+				categories.GET("", categoryHandler.ListCategories)
+				categories.GET("/:id", categoryHandler.GetCategory)
+
+				// Librarian only routes
+				librarianCategories := categories.Group("")
+				librarianCategories.Use(authMiddleware.RequireLibrarian())
+				{
+					librarianCategories.POST("", categoryHandler.CreateCategory)
+					librarianCategories.PUT("/:id", categoryHandler.UpdateCategory)
+					librarianCategories.DELETE("/:id", categoryHandler.DeleteCategory)
+					librarianCategories.POST("/:id/deactivate", categoryHandler.DeactivateCategory)
+					librarianCategories.POST("/:id/activate", categoryHandler.ActivateCategory)
+				}
 			}
 
 			// Report routes (librarian only)

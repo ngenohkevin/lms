@@ -45,6 +45,15 @@ type Book struct {
 	Condition       pgtype.Text      `db:"condition" json:"condition"`
 }
 
+type Category struct {
+	ID          int32            `db:"id" json:"id"`
+	Name        string           `db:"name" json:"name"`
+	Description pgtype.Text      `db:"description" json:"description"`
+	IsActive    pgtype.Bool      `db:"is_active" json:"is_active"`
+	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt   pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+}
+
 // Tracks email delivery status and attempts for notifications
 type EmailDelivery struct {
 	ID             int32  `db:"id" json:"id"`
