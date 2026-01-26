@@ -82,11 +82,11 @@ type BackupConfig struct {
 }
 
 type BorrowingConfig struct {
-	BorrowingPeriodDays  int     `mapstructure:"borrowing_period_days"`
-	MaxBooksPerStudent   int     `mapstructure:"max_books_per_student"`
-	FinePerDay           float64 `mapstructure:"fine_per_day"`
-	MaxRenewals          int     `mapstructure:"max_renewals"`
-	ReservationExpiryDays int    `mapstructure:"reservation_expiry_days"`
+	BorrowingPeriodDays   int     `mapstructure:"borrowing_period_days"`
+	MaxBooksPerStudent    int     `mapstructure:"max_books_per_student"`
+	FinePerDay            float64 `mapstructure:"fine_per_day"`
+	MaxRenewals           int     `mapstructure:"max_renewals"`
+	ReservationExpiryDays int     `mapstructure:"reservation_expiry_days"`
 }
 
 type SchedulerConfig struct {
@@ -151,11 +151,11 @@ func Load() (*Config, error) {
 
 	// Scheduler defaults
 	viper.SetDefault("scheduler.enabled", true)
-	viper.SetDefault("scheduler.fine_calculation_schedule", "0 0 * * *")      // Daily at midnight
-	viper.SetDefault("scheduler.overdue_reminder_schedule", "0 9 * * *")      // Daily at 9 AM
-	viper.SetDefault("scheduler.reservation_expiry_schedule", "0 * * * *")    // Every hour
-	viper.SetDefault("scheduler.fine_reminder_schedule", "0 10 * * MON")      // Weekly on Monday at 10 AM
-	viper.SetDefault("scheduler.notification_cleanup_schedule", "0 2 * * *")  // Daily at 2 AM
+	viper.SetDefault("scheduler.fine_calculation_schedule", "0 0 * * *")     // Daily at midnight
+	viper.SetDefault("scheduler.overdue_reminder_schedule", "0 9 * * *")     // Daily at 9 AM
+	viper.SetDefault("scheduler.reservation_expiry_schedule", "0 * * * *")   // Every hour
+	viper.SetDefault("scheduler.fine_reminder_schedule", "0 10 * * MON")     // Weekly on Monday at 10 AM
+	viper.SetDefault("scheduler.notification_cleanup_schedule", "0 2 * * *") // Daily at 2 AM
 
 	// Try to read config file
 	if err := viper.ReadInConfig(); err != nil {

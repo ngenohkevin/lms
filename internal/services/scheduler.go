@@ -11,22 +11,22 @@ import (
 
 // SchedulerConfig holds scheduler configuration
 type SchedulerConfig struct {
-	Enabled                    bool
-	FineCalculationSchedule    string // Cron expression for fine calculation
-	OverdueReminderSchedule    string // Cron expression for overdue reminders
-	ReservationExpirySchedule  string // Cron expression for reservation expiry
-	FineReminderSchedule       string // Cron expression for fine reminders
+	Enabled                     bool
+	FineCalculationSchedule     string // Cron expression for fine calculation
+	OverdueReminderSchedule     string // Cron expression for overdue reminders
+	ReservationExpirySchedule   string // Cron expression for reservation expiry
+	FineReminderSchedule        string // Cron expression for fine reminders
 	NotificationCleanupSchedule string // Cron expression for notification cleanup
 }
 
 // DefaultSchedulerConfig returns default scheduler configuration
 func DefaultSchedulerConfig() SchedulerConfig {
 	return SchedulerConfig{
-		Enabled:                    true,
-		FineCalculationSchedule:    "0 0 * * *",     // Daily at midnight
-		OverdueReminderSchedule:    "0 9 * * *",     // Daily at 9 AM
-		ReservationExpirySchedule:  "0 * * * *",     // Every hour
-		FineReminderSchedule:       "0 10 * * MON",  // Weekly on Monday at 10 AM
+		Enabled:                     true,
+		FineCalculationSchedule:     "0 0 * * *",    // Daily at midnight
+		OverdueReminderSchedule:     "0 9 * * *",    // Daily at 9 AM
+		ReservationExpirySchedule:   "0 * * * *",    // Every hour
+		FineReminderSchedule:        "0 10 * * MON", // Weekly on Monday at 10 AM
 		NotificationCleanupSchedule: "0 2 * * *",    // Daily at 2 AM
 	}
 }

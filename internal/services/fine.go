@@ -62,13 +62,13 @@ type UnpaidFine struct {
 
 // FineStatistics represents overall fine statistics
 type FineStatistics struct {
-	UnpaidCount            int32   `json:"unpaid_count"`
-	PaidCount              int32   `json:"paid_count"`
-	WaivedCount            int32   `json:"waived_count"`
-	TotalUnpaid            float64 `json:"total_unpaid"`
-	TotalCollected         float64 `json:"total_collected"`
-	TotalWaived            float64 `json:"total_waived"`
-	StudentsWithUnpaidFines int32  `json:"students_with_unpaid_fines"`
+	UnpaidCount             int32   `json:"unpaid_count"`
+	PaidCount               int32   `json:"paid_count"`
+	WaivedCount             int32   `json:"waived_count"`
+	TotalUnpaid             float64 `json:"total_unpaid"`
+	TotalCollected          float64 `json:"total_collected"`
+	TotalWaived             float64 `json:"total_waived"`
+	StudentsWithUnpaidFines int32   `json:"students_with_unpaid_fines"`
 }
 
 // FineListResult represents paginated fine list results
