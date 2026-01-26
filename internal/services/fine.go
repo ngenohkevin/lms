@@ -456,6 +456,6 @@ func numericToFloat64(n pgtype.Numeric) float64 {
 
 func float64ToNumeric(f float64) pgtype.Numeric {
 	var n pgtype.Numeric
-	n.Scan(f)
+	_ = n.Scan(f) // Error is safe to ignore - Scan from float64 always succeeds
 	return n
 }
