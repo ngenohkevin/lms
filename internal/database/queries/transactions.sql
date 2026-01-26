@@ -147,3 +147,17 @@ WHERE t.fine_amount > 0 AND t.fine_paid = false
   AND s.is_active = true
   AND s.deleted_at IS NULL
 ORDER BY t.fine_amount DESC;
+
+-- name: CountActiveBorrowingsByStudent :one
+SELECT COUNT(*) FROM transactions
+WHERE student_id = $1 AND returned_date IS NULL;
+
+-- name: CountTodayBorrowings :one
+SELECT COUNT(*) FROM transactions
+WHERE transaction_type = 'borrow' AND DATE(transaction_date) = CURRENT_DATE;
+
+-- name: GetStudentBorrowingStats :many
+SELECT student_id, COUNT(*) as current_books
+FROM transactions
+WHERE returned_date IS NULL
+GROUP BY student_id;

@@ -24,6 +24,7 @@ type StudentDB struct {
 	PasswordHash   pgtype.Text      `json:"password_hash,omitempty"`
 	IsActive       pgtype.Bool      `json:"is_active"`
 	MaxBooks       int32            `json:"max_books"`
+	CurrentBooks   int32            `json:"current_books"` // Populated from transactions
 	DeletedAt      pgtype.Timestamp `json:"deleted_at,omitempty"`
 	CreatedAt      pgtype.Timestamp `json:"created_at"`
 	UpdatedAt      pgtype.Timestamp `json:"updated_at"`
@@ -73,6 +74,7 @@ type StudentResponse struct {
 	EnrollmentDate string `json:"enrollment_date"`
 	IsActive       bool   `json:"is_active"`
 	MaxBooks       int32  `json:"max_books"`
+	CurrentBooks   int32  `json:"current_books"`
 	CreatedAt      string `json:"created_at"`
 	UpdatedAt      string `json:"updated_at"`
 }
@@ -272,13 +274,14 @@ func (r *BulkImportStudentRequest) Validate() error {
 // ToResponse converts a database StudentDB to StudentResponse
 func (s *StudentDB) ToResponse() StudentResponse {
 	response := StudentResponse{
-		ID:          s.ID,
-		StudentID:   s.StudentID,
-		FirstName:   s.FirstName,
-		LastName:    s.LastName,
-		YearOfStudy: s.YearOfStudy,
-		IsActive:    s.IsActive.Bool,
-		MaxBooks:    s.MaxBooks,
+		ID:           s.ID,
+		StudentID:    s.StudentID,
+		FirstName:    s.FirstName,
+		LastName:     s.LastName,
+		YearOfStudy:  s.YearOfStudy,
+		IsActive:     s.IsActive.Bool,
+		MaxBooks:     s.MaxBooks,
+		CurrentBooks: s.CurrentBooks,
 	}
 
 	// Handle optional fields

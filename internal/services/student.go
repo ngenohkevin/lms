@@ -45,6 +45,9 @@ type StudentQuerier interface {
 	// Enhanced Statistics
 	GetStudentCountByYearAndDepartment(ctx context.Context) ([]queries.GetStudentCountByYearAndDepartmentRow, error)
 	GetStudentEnrollmentTrends(ctx context.Context, params queries.GetStudentEnrollmentTrendsParams) ([]queries.GetStudentEnrollmentTrendsRow, error)
+
+	// Borrowing stats (from transactions)
+	GetStudentBorrowingStats(ctx context.Context) ([]queries.GetStudentBorrowingStatsRow, error)
 }
 
 // AuthServiceInterface defines the interface for auth-related operations
@@ -434,6 +437,19 @@ func (s *StudentService) ListStudents(ctx context.Context, req *models.StudentSe
 		}
 	}
 
+	// Get borrowing stats for all students
+	borrowingStats, err := s.queries.GetStudentBorrowingStats(ctx)
+	if err != nil {
+		// Log the error but don't fail - we can still return students without borrowing stats
+		borrowingStats = nil
+	}
+
+	// Create a map of student ID to current books count
+	currentBooksMap := make(map[int32]int64)
+	for _, stat := range borrowingStats {
+		currentBooksMap[stat.StudentID] = stat.CurrentBooks
+	}
+
 	// Convert to response format
 	studentResponses := make([]models.StudentResponse, len(students))
 	for i, student := range students {
@@ -450,6 +466,7 @@ func (s *StudentService) ListStudents(ctx context.Context, req *models.StudentSe
 			PasswordHash:   student.PasswordHash,
 			IsActive:       student.IsActive,
 			MaxBooks:       student.MaxBooks,
+			CurrentBooks:   int32(currentBooksMap[student.ID]),
 			DeletedAt:      student.DeletedAt,
 			CreatedAt:      student.CreatedAt,
 			UpdatedAt:      student.UpdatedAt,
@@ -513,6 +530,19 @@ func (s *StudentService) SearchStudents(ctx context.Context, req *models.Student
 		}
 	}
 
+	// Get borrowing stats for all students
+	borrowingStats, err := s.queries.GetStudentBorrowingStats(ctx)
+	if err != nil {
+		// Log the error but don't fail - we can still return students without borrowing stats
+		borrowingStats = nil
+	}
+
+	// Create a map of student ID to current books count
+	currentBooksMap := make(map[int32]int64)
+	for _, stat := range borrowingStats {
+		currentBooksMap[stat.StudentID] = stat.CurrentBooks
+	}
+
 	// Convert to response format
 	studentResponses := make([]models.StudentResponse, len(students))
 	for i, student := range students {
@@ -529,6 +559,7 @@ func (s *StudentService) SearchStudents(ctx context.Context, req *models.Student
 			PasswordHash:   student.PasswordHash,
 			IsActive:       student.IsActive,
 			MaxBooks:       student.MaxBooks,
+			CurrentBooks:   int32(currentBooksMap[student.ID]),
 			DeletedAt:      student.DeletedAt,
 			CreatedAt:      student.CreatedAt,
 			UpdatedAt:      student.UpdatedAt,

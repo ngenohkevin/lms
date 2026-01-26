@@ -11,6 +11,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countActiveBorrowingsByStudent = `-- name: CountActiveBorrowingsByStudent :one
+SELECT COUNT(*) FROM transactions
+WHERE student_id = $1 AND returned_date IS NULL
+`
+
+func (q *Queries) CountActiveBorrowingsByStudent(ctx context.Context, studentID int32) (int64, error) {
+	row := q.db.QueryRow(ctx, countActiveBorrowingsByStudent, studentID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countOverdueTransactions = `-- name: CountOverdueTransactions :one
 SELECT COUNT(*) FROM transactions
 WHERE due_date < NOW() AND returned_date IS NULL
@@ -37,6 +49,18 @@ type CountRenewalsByStudentAndBookParams struct {
 // Renewal-related queries for Phase 6.7
 func (q *Queries) CountRenewalsByStudentAndBook(ctx context.Context, arg CountRenewalsByStudentAndBookParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countRenewalsByStudentAndBook, arg.StudentID, arg.BookID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countTodayBorrowings = `-- name: CountTodayBorrowings :one
+SELECT COUNT(*) FROM transactions
+WHERE transaction_type = 'borrow' AND DATE(transaction_date) = CURRENT_DATE
+`
+
+func (q *Queries) CountTodayBorrowings(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countTodayBorrowings)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -119,6 +143,38 @@ func (q *Queries) GetRenewalStatisticsByStudent(ctx context.Context, studentID i
 	var i GetRenewalStatisticsByStudentRow
 	err := row.Scan(&i.StudentID, &i.TotalRenewals, &i.BooksRenewed)
 	return i, err
+}
+
+const getStudentBorrowingStats = `-- name: GetStudentBorrowingStats :many
+SELECT student_id, COUNT(*) as current_books
+FROM transactions
+WHERE returned_date IS NULL
+GROUP BY student_id
+`
+
+type GetStudentBorrowingStatsRow struct {
+	StudentID    int32 `db:"student_id" json:"student_id"`
+	CurrentBooks int64 `db:"current_books" json:"current_books"`
+}
+
+func (q *Queries) GetStudentBorrowingStats(ctx context.Context) ([]GetStudentBorrowingStatsRow, error) {
+	rows, err := q.db.Query(ctx, getStudentBorrowingStats)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetStudentBorrowingStatsRow{}
+	for rows.Next() {
+		var i GetStudentBorrowingStatsRow
+		if err := rows.Scan(&i.StudentID, &i.CurrentBooks); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getTransactionByID = `-- name: GetTransactionByID :one

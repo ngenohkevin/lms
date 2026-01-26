@@ -36,6 +36,7 @@ type TransactionQuerier interface {
 	// Stats queries
 	CountTransactions(ctx context.Context) (int64, error)
 	ListActiveBorrowings(ctx context.Context, arg queries.ListActiveBorrowingsParams) ([]queries.ListActiveBorrowingsRow, error)
+	CountTodayBorrowings(ctx context.Context) (int64, error)
 }
 
 // TransactionService handles all business logic related to book transactions
@@ -758,8 +759,12 @@ func (s *TransactionService) GetTransactionStats(ctx context.Context) (*Transact
 		}
 	}
 
-	// Count today's borrowings (simplified - we'd need a specific query for accuracy)
-	todayCount := int64(0) // Placeholder - would need a date-filtered query
+	// Count today's borrowings
+	todayCount, err := s.queries.CountTodayBorrowings(ctx)
+	if err != nil {
+		// Don't fail if we can't get today's count, just use 0
+		todayCount = 0
+	}
 
 	return &TransactionStatsResponse{
 		TotalActive:        int64(len(activeBorrowings)),
