@@ -48,6 +48,9 @@ type StudentQuerier interface {
 
 	// Borrowing stats (from transactions)
 	GetStudentBorrowingStats(ctx context.Context) ([]queries.GetStudentBorrowingStatsRow, error)
+	CountActiveBorrowingsByStudent(ctx context.Context, studentID int32) (int64, error)
+	GetStudentTotalBorrowed(ctx context.Context, studentID int32) (int64, error)
+	GetStudentFineStats(ctx context.Context, studentID int32) (queries.GetStudentFineStatsRow, error)
 }
 
 // AuthServiceInterface defines the interface for auth-related operations
@@ -178,6 +181,26 @@ func (s *StudentService) GetStudentByID(ctx context.Context, id int32) (*models.
 		return nil, models.ErrStudentNotFound
 	}
 
+	// Get borrowing stats
+	currentBooks, _ := s.queries.CountActiveBorrowingsByStudent(ctx, id)
+	totalBorrowed, _ := s.queries.GetStudentTotalBorrowed(ctx, id)
+	fineStats, _ := s.queries.GetStudentFineStats(ctx, id)
+
+	// Convert fine stats to float64
+	var totalFines, unpaidFines float64
+	if fineStats.TotalFines.Valid {
+		f64, err := fineStats.TotalFines.Float64Value()
+		if err == nil {
+			totalFines = f64.Float64
+		}
+	}
+	if fineStats.UnpaidFines.Valid {
+		f64, err := fineStats.UnpaidFines.Float64Value()
+		if err == nil {
+			unpaidFines = f64.Float64
+		}
+	}
+
 	// Convert to our model type
 	studentDB := &models.StudentDB{
 		ID:             student.ID,
@@ -192,6 +215,10 @@ func (s *StudentService) GetStudentByID(ctx context.Context, id int32) (*models.
 		PasswordHash:   student.PasswordHash,
 		IsActive:       student.IsActive,
 		MaxBooks:       student.MaxBooks,
+		CurrentBooks:   int32(currentBooks),
+		TotalBorrowed:  int32(totalBorrowed),
+		TotalFines:     totalFines,
+		UnpaidFines:    unpaidFines,
 		DeletedAt:      student.DeletedAt,
 		CreatedAt:      student.CreatedAt,
 		UpdatedAt:      student.UpdatedAt,

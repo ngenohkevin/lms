@@ -161,3 +161,14 @@ SELECT student_id, COUNT(*) as current_books
 FROM transactions
 WHERE returned_date IS NULL
 GROUP BY student_id;
+
+-- name: GetStudentTotalBorrowed :one
+SELECT COUNT(*) FROM transactions
+WHERE student_id = $1 AND transaction_type = 'borrow';
+
+-- name: GetStudentFineStats :one
+SELECT
+    COALESCE(SUM(fine_amount), 0)::numeric as total_fines,
+    COALESCE(SUM(CASE WHEN fine_paid = false THEN fine_amount ELSE 0 END), 0)::numeric as unpaid_fines
+FROM transactions
+WHERE student_id = $1;

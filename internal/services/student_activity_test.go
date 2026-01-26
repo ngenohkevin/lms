@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
@@ -29,25 +28,12 @@ func TestStudentService_ActivityTracking(t *testing.T) {
 			setupMocks: func(m *MockQueries) {
 				// Student exists
 				m.On("GetStudentByID", mock.Anything, int32(1)).Return(createMockStudent(), nil)
-
-				// Simulate transaction activity data
-				// In a real implementation, these would be actual SQL queries for:
-				// - Count of books currently checked out
-				// - Count of overdue books
-				// - Total fine amount owed
-
-				// Mock data showing activity
-				// This would typically come from transactions table joins
-				mockActivity := map[string]interface{}{
-					"books_checked_out": int64(3),
-					"overdue_books":     int64(1),
-					"total_fines":       float64(15.50),
-					"last_activity":     time.Now().Add(-2 * 24 * time.Hour), // 2 days ago
-				}
-
-				// For testing purposes, we'll verify that the service
-				// would call the appropriate queries to get this data
-				_ = mockActivity
+				m.On("CountActiveBorrowingsByStudent", mock.Anything, int32(1)).Return(int64(3), nil)
+				m.On("GetStudentTotalBorrowed", mock.Anything, int32(1)).Return(int64(10), nil)
+				m.On("GetStudentFineStats", mock.Anything, int32(1)).Return(queries.GetStudentFineStatsRow{
+					TotalFines:  pgtype.Numeric{Valid: true},
+					UnpaidFines: pgtype.Numeric{Valid: true},
+				}, nil)
 			},
 			expectedBooksCount: 3,
 			expectedOverdue:    1,
@@ -64,6 +50,9 @@ func TestStudentService_ActivityTracking(t *testing.T) {
 				inactiveStudent.IsActive = pgtype.Bool{Bool: false, Valid: true}
 
 				m.On("GetStudentByID", mock.Anything, int32(2)).Return(inactiveStudent, nil)
+				m.On("CountActiveBorrowingsByStudent", mock.Anything, int32(2)).Return(int64(0), nil)
+				m.On("GetStudentTotalBorrowed", mock.Anything, int32(2)).Return(int64(0), nil)
+				m.On("GetStudentFineStats", mock.Anything, int32(2)).Return(queries.GetStudentFineStatsRow{}, nil)
 			},
 			expectedBooksCount: 0,
 			expectedOverdue:    0,
@@ -206,12 +195,9 @@ func TestStudentService_ActivityScoring(t *testing.T) {
 			setupMocks: func(m *MockQueries) {
 				activeStudent := createMockStudent()
 				m.On("GetStudentByID", mock.Anything, int32(1)).Return(activeStudent, nil)
-
-				// Mock activity data that would result in high score:
-				// - Frequent book checkouts
-				// - On-time returns
-				// - No overdue fines
-				// - Regular library visits
+				m.On("CountActiveBorrowingsByStudent", mock.Anything, int32(1)).Return(int64(3), nil)
+				m.On("GetStudentTotalBorrowed", mock.Anything, int32(1)).Return(int64(15), nil)
+				m.On("GetStudentFineStats", mock.Anything, int32(1)).Return(queries.GetStudentFineStatsRow{}, nil)
 			},
 			expectedScore:   8.5,
 			expectedRanking: "Excellent",
@@ -225,11 +211,9 @@ func TestStudentService_ActivityScoring(t *testing.T) {
 				moderateStudent.ID = 2
 				moderateStudent.StudentID = "STU2024002"
 				m.On("GetStudentByID", mock.Anything, int32(2)).Return(moderateStudent, nil)
-
-				// Mock activity data that would result in moderate score:
-				// - Some book checkouts
-				// - Occasional late returns
-				// - Small fines
+				m.On("CountActiveBorrowingsByStudent", mock.Anything, int32(2)).Return(int64(1), nil)
+				m.On("GetStudentTotalBorrowed", mock.Anything, int32(2)).Return(int64(5), nil)
+				m.On("GetStudentFineStats", mock.Anything, int32(2)).Return(queries.GetStudentFineStatsRow{}, nil)
 			},
 			expectedScore:   6.0,
 			expectedRanking: "Good",
@@ -243,11 +227,9 @@ func TestStudentService_ActivityScoring(t *testing.T) {
 				lowActiveStudent.ID = 3
 				lowActiveStudent.StudentID = "STU2024003"
 				m.On("GetStudentByID", mock.Anything, int32(3)).Return(lowActiveStudent, nil)
-
-				// Mock activity data that would result in low score:
-				// - Very few book checkouts
-				// - Multiple overdue items
-				// - Significant fines
+				m.On("CountActiveBorrowingsByStudent", mock.Anything, int32(3)).Return(int64(0), nil)
+				m.On("GetStudentTotalBorrowed", mock.Anything, int32(3)).Return(int64(1), nil)
+				m.On("GetStudentFineStats", mock.Anything, int32(3)).Return(queries.GetStudentFineStatsRow{}, nil)
 			},
 			expectedScore:   2.5,
 			expectedRanking: "Needs Improvement",

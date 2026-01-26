@@ -438,6 +438,9 @@ func TestStudentService_StatusValidation(t *testing.T) {
 				activeStudent := createMockStudent()
 				activeStudent.IsActive = pgtype.Bool{Bool: true, Valid: true}
 				m.On("GetStudentByID", mock.Anything, int32(1)).Return(activeStudent, nil)
+				m.On("CountActiveBorrowingsByStudent", mock.Anything, int32(1)).Return(int64(0), nil)
+				m.On("GetStudentTotalBorrowed", mock.Anything, int32(1)).Return(int64(0), nil)
+				m.On("GetStudentFineStats", mock.Anything, int32(1)).Return(queries.GetStudentFineStatsRow{}, nil)
 			},
 			expectRestriction: false,
 		},
@@ -450,6 +453,9 @@ func TestStudentService_StatusValidation(t *testing.T) {
 				inactiveStudent.ID = 2
 				inactiveStudent.IsActive = pgtype.Bool{Bool: false, Valid: true}
 				m.On("GetStudentByID", mock.Anything, int32(2)).Return(inactiveStudent, nil)
+				m.On("CountActiveBorrowingsByStudent", mock.Anything, int32(2)).Return(int64(0), nil)
+				m.On("GetStudentTotalBorrowed", mock.Anything, int32(2)).Return(int64(0), nil)
+				m.On("GetStudentFineStats", mock.Anything, int32(2)).Return(queries.GetStudentFineStatsRow{}, nil)
 			},
 			expectRestriction: true,
 			restrictionReason: "student account is inactive",

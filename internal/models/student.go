@@ -24,7 +24,10 @@ type StudentDB struct {
 	PasswordHash   pgtype.Text      `json:"password_hash,omitempty"`
 	IsActive       pgtype.Bool      `json:"is_active"`
 	MaxBooks       int32            `json:"max_books"`
-	CurrentBooks   int32            `json:"current_books"` // Populated from transactions
+	CurrentBooks   int32            `json:"current_books"`  // Populated from transactions
+	TotalBorrowed  int32            `json:"total_borrowed"` // Populated from transactions
+	TotalFines     float64          `json:"total_fines"`    // Populated from transactions
+	UnpaidFines    float64          `json:"unpaid_fines"`   // Populated from transactions
 	DeletedAt      pgtype.Timestamp `json:"deleted_at,omitempty"`
 	CreatedAt      pgtype.Timestamp `json:"created_at"`
 	UpdatedAt      pgtype.Timestamp `json:"updated_at"`
@@ -63,20 +66,23 @@ type UpdateStudentProfileRequest struct {
 
 // StudentResponse represents the response payload for student operations
 type StudentResponse struct {
-	ID             int32  `json:"id"`
-	StudentID      string `json:"student_id"`
-	FirstName      string `json:"first_name"`
-	LastName       string `json:"last_name"`
-	Email          string `json:"email,omitempty"`
-	Phone          string `json:"phone,omitempty"`
-	YearOfStudy    int32  `json:"year_of_study"`
-	Department     string `json:"department,omitempty"`
-	EnrollmentDate string `json:"enrollment_date"`
-	IsActive       bool   `json:"is_active"`
-	MaxBooks       int32  `json:"max_books"`
-	CurrentBooks   int32  `json:"current_books"`
-	CreatedAt      string `json:"created_at"`
-	UpdatedAt      string `json:"updated_at"`
+	ID             int32   `json:"id"`
+	StudentID      string  `json:"student_id"`
+	FirstName      string  `json:"first_name"`
+	LastName       string  `json:"last_name"`
+	Email          string  `json:"email,omitempty"`
+	Phone          string  `json:"phone,omitempty"`
+	YearOfStudy    int32   `json:"year_of_study"`
+	Department     string  `json:"department,omitempty"`
+	EnrollmentDate string  `json:"enrollment_date"`
+	IsActive       bool    `json:"is_active"`
+	MaxBooks       int32   `json:"max_books"`
+	CurrentBooks   int32   `json:"current_books"`
+	TotalBorrowed  int32   `json:"total_borrowed"`
+	TotalFines     float64 `json:"total_fines"`
+	UnpaidFines    float64 `json:"unpaid_fines"`
+	CreatedAt      string  `json:"created_at"`
+	UpdatedAt      string  `json:"updated_at"`
 }
 
 // StudentListResponse represents the response payload for listing students
@@ -274,14 +280,17 @@ func (r *BulkImportStudentRequest) Validate() error {
 // ToResponse converts a database StudentDB to StudentResponse
 func (s *StudentDB) ToResponse() StudentResponse {
 	response := StudentResponse{
-		ID:           s.ID,
-		StudentID:    s.StudentID,
-		FirstName:    s.FirstName,
-		LastName:     s.LastName,
-		YearOfStudy:  s.YearOfStudy,
-		IsActive:     s.IsActive.Bool,
-		MaxBooks:     s.MaxBooks,
-		CurrentBooks: s.CurrentBooks,
+		ID:            s.ID,
+		StudentID:     s.StudentID,
+		FirstName:     s.FirstName,
+		LastName:      s.LastName,
+		YearOfStudy:   s.YearOfStudy,
+		IsActive:      s.IsActive.Bool,
+		MaxBooks:      s.MaxBooks,
+		CurrentBooks:  s.CurrentBooks,
+		TotalBorrowed: s.TotalBorrowed,
+		TotalFines:    s.TotalFines,
+		UnpaidFines:   s.UnpaidFines,
 	}
 
 	// Handle optional fields

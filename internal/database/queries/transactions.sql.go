@@ -177,6 +177,38 @@ func (q *Queries) GetStudentBorrowingStats(ctx context.Context) ([]GetStudentBor
 	return items, nil
 }
 
+const getStudentFineStats = `-- name: GetStudentFineStats :one
+SELECT
+    COALESCE(SUM(fine_amount), 0)::numeric as total_fines,
+    COALESCE(SUM(CASE WHEN fine_paid = false THEN fine_amount ELSE 0 END), 0)::numeric as unpaid_fines
+FROM transactions
+WHERE student_id = $1
+`
+
+type GetStudentFineStatsRow struct {
+	TotalFines  pgtype.Numeric `db:"total_fines" json:"total_fines"`
+	UnpaidFines pgtype.Numeric `db:"unpaid_fines" json:"unpaid_fines"`
+}
+
+func (q *Queries) GetStudentFineStats(ctx context.Context, studentID int32) (GetStudentFineStatsRow, error) {
+	row := q.db.QueryRow(ctx, getStudentFineStats, studentID)
+	var i GetStudentFineStatsRow
+	err := row.Scan(&i.TotalFines, &i.UnpaidFines)
+	return i, err
+}
+
+const getStudentTotalBorrowed = `-- name: GetStudentTotalBorrowed :one
+SELECT COUNT(*) FROM transactions
+WHERE student_id = $1 AND transaction_type = 'borrow'
+`
+
+func (q *Queries) GetStudentTotalBorrowed(ctx context.Context, studentID int32) (int64, error) {
+	row := q.db.QueryRow(ctx, getStudentTotalBorrowed, studentID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getTransactionByID = `-- name: GetTransactionByID :one
 SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
 FROM transactions t

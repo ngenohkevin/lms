@@ -137,6 +137,21 @@ func (m *MockQueries) GetStudentBorrowingStats(ctx context.Context) ([]queries.G
 	return args.Get(0).([]queries.GetStudentBorrowingStatsRow), args.Error(1)
 }
 
+func (m *MockQueries) CountActiveBorrowingsByStudent(ctx context.Context, studentID int32) (int64, error) {
+	args := m.Called(ctx, studentID)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockQueries) GetStudentTotalBorrowed(ctx context.Context, studentID int32) (int64, error) {
+	args := m.Called(ctx, studentID)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockQueries) GetStudentFineStats(ctx context.Context, studentID int32) (queries.GetStudentFineStatsRow, error) {
+	args := m.Called(ctx, studentID)
+	return args.Get(0).(queries.GetStudentFineStatsRow), args.Error(1)
+}
+
 // Helper function to create a mock student
 func createMockStudent() queries.Student {
 	now := time.Now()
@@ -316,6 +331,9 @@ func TestStudentService_GetStudentByID(t *testing.T) {
 			studentID: 1,
 			setupMocks: func(m *MockQueries) {
 				m.On("GetStudentByID", mock.Anything, int32(1)).Return(createMockStudent(), nil)
+				m.On("CountActiveBorrowingsByStudent", mock.Anything, int32(1)).Return(int64(0), nil)
+				m.On("GetStudentTotalBorrowed", mock.Anything, int32(1)).Return(int64(0), nil)
+				m.On("GetStudentFineStats", mock.Anything, int32(1)).Return(queries.GetStudentFineStatsRow{}, nil)
 			},
 			expectError: false,
 		},
