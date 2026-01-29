@@ -20,6 +20,7 @@ type Querier interface {
 	CountActiveBorrowingsByStudent(ctx context.Context, studentID int32) (int64, error)
 	CountActiveReservationsByBook(ctx context.Context, bookID int32) (int64, error)
 	CountActiveReservationsByStudent(ctx context.Context, studentID int32) (int64, error)
+	CountActiveTransactionsByBook(ctx context.Context, bookID int32) (int64, error)
 	CountAuditLogs(ctx context.Context) (int64, error)
 	CountAuditLogsByTable(ctx context.Context, tableName string) (int64, error)
 	CountAvailableBooks(ctx context.Context) (int64, error)
@@ -60,6 +61,8 @@ type Querier interface {
 	CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeactivateCategory(ctx context.Context, id int32) error
+	// Atomically decrement available copies. Returns the new count, or no rows if book unavailable.
+	DecrementBookAvailability(ctx context.Context, id int32) (pgtype.Int4, error)
 	DeleteCategory(ctx context.Context, id int32) error
 	DeleteNotification(ctx context.Context, id int32) error
 	DeleteOldAuditLogs(ctx context.Context, createdAt pgtype.Timestamp) error
@@ -144,6 +147,8 @@ type Querier interface {
 	GetYearSpecificBorrowingReport(ctx context.Context, dollar_1 int32) ([]GetYearSpecificBorrowingReportRow, error)
 	GetYearlyStatistics(ctx context.Context, dollar_1 []int32) ([]GetYearlyStatisticsRow, error)
 	HasActiveReservationsByOtherStudents(ctx context.Context, arg HasActiveReservationsByOtherStudentsParams) (bool, error)
+	// Atomically increment available copies.
+	IncrementBookAvailability(ctx context.Context, id int32) (pgtype.Int4, error)
 	ListActiveBorrowings(ctx context.Context, arg ListActiveBorrowingsParams) ([]ListActiveBorrowingsRow, error)
 	ListActiveReservations(ctx context.Context) ([]ListActiveReservationsRow, error)
 	// Notification-related queries for Phase 7.2

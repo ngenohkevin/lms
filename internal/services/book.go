@@ -27,6 +27,9 @@ type BookQuerier interface {
 	SearchBooksByGenre(ctx context.Context, arg queries.SearchBooksByGenreParams) ([]queries.Book, error)
 	CountBooks(ctx context.Context) (int64, error)
 	CountAvailableBooks(ctx context.Context) (int64, error)
+	// Deletion validation queries
+	CountActiveTransactionsByBook(ctx context.Context, bookID int32) (int64, error)
+	CountActiveReservationsByBook(ctx context.Context, bookID int32) (int64, error)
 }
 
 // BookServiceInterface defines the interface for book service operations
@@ -316,12 +319,30 @@ func (s *BookService) UpdateBook(ctx context.Context, id int32, req models.Updat
 	return &response, nil
 }
 
-// DeleteBook soft deletes a book
+// DeleteBook soft deletes a book after validation
 func (s *BookService) DeleteBook(ctx context.Context, id int32) error {
 	// Check if the book exists
-	_, err := s.querier.GetBookByID(ctx, id)
+	book, err := s.querier.GetBookByID(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to get book: %w", err)
+	}
+
+	// Validate deletion is allowed - check for active transactions (borrowed copies)
+	activeTransactions, err := s.querier.CountActiveTransactionsByBook(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to check active transactions: %w", err)
+	}
+	if activeTransactions > 0 {
+		return fmt.Errorf("cannot delete book '%s': %d copy(ies) currently borrowed - books must be returned first", book.Title, activeTransactions)
+	}
+
+	// Check for active reservations
+	activeReservations, err := s.querier.CountActiveReservationsByBook(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to check active reservations: %w", err)
+	}
+	if activeReservations > 0 {
+		return fmt.Errorf("cannot delete book '%s': %d active reservation(s) - reservations must be cancelled or fulfilled first", book.Title, activeReservations)
 	}
 
 	// Soft delete the book

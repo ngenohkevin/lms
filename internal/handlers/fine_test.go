@@ -99,6 +99,21 @@ func setupFineTestRouter(handler *FineHandler) *gin.Engine {
 	return router
 }
 
+// setupFineTestRouterWithAuth sets up a router with mock auth context for privileged operations
+func setupFineTestRouterWithAuth(handler *FineHandler, userID int32, role string) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	// Add middleware to set auth context
+	router.Use(func(c *gin.Context) {
+		c.Set("user_id", userID)
+		c.Set("user_role", role)
+		c.Next()
+	})
+	api := router.Group("/api/v1")
+	handler.RegisterRoutes(api)
+	return router
+}
+
 func TestFineHandler_ListFines(t *testing.T) {
 	mockService := new(MockFineService)
 	handler := NewFineHandler(mockService)
@@ -266,7 +281,8 @@ func TestFineHandler_PayFine(t *testing.T) {
 func TestFineHandler_WaiveFine(t *testing.T) {
 	mockService := new(MockFineService)
 	handler := NewFineHandler(mockService)
-	router := setupFineTestRouter(handler)
+	// Use auth router with admin role for waive operations
+	router := setupFineTestRouterWithAuth(handler, 1, "admin")
 
 	t.Run("successfully waives fine", func(t *testing.T) {
 		reason := "Student hardship"
@@ -307,6 +323,36 @@ func TestFineHandler_WaiveFine(t *testing.T) {
 		router.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("returns unauthorized when user_id not in context", func(t *testing.T) {
+		// Use router without auth context
+		noAuthRouter := setupFineTestRouter(handler)
+
+		body := WaiveFineRequest{Reason: "Test reason"}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("POST", "/api/v1/fines/1/waive", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		noAuthRouter.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+
+	t.Run("returns forbidden when user is not admin or librarian", func(t *testing.T) {
+		// Use router with student role
+		studentRouter := setupFineTestRouterWithAuth(handler, 1, "student")
+
+		body := WaiveFineRequest{Reason: "Test reason"}
+		jsonBody, _ := json.Marshal(body)
+
+		req, _ := http.NewRequest("POST", "/api/v1/fines/1/waive", bytes.NewBuffer(jsonBody))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		studentRouter.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusForbidden, w.Code)
 	})
 }
 

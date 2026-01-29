@@ -412,18 +412,42 @@ func (s *StudentService) UpdateStudentProfile(ctx context.Context, id int32, req
 	return studentDB, nil
 }
 
-// DeleteStudent soft deletes a student
+// DeleteStudent soft deletes a student after validation
 func (s *StudentService) DeleteStudent(ctx context.Context, id int32) error {
 	// Check if student exists
-	_, err := s.queries.GetStudentByID(ctx, id)
+	student, err := s.queries.GetStudentByID(ctx, id)
 	if err != nil {
 		return models.ErrStudentNotFound
+	}
+
+	// Validate deletion is allowed - check for active transactions
+	activeBorrowings, err := s.queries.CountActiveBorrowingsByStudent(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to check active borrowings: %w", err)
+	}
+	if activeBorrowings > 0 {
+		return fmt.Errorf("cannot delete student %s: has %d active borrowing(s) - books must be returned first", student.StudentID, activeBorrowings)
+	}
+
+	// Check for unpaid fines
+	fineStats, err := s.queries.GetStudentFineStats(ctx, id)
+	if err == nil && fineStats.UnpaidFines.Valid {
+		unpaidFines, _ := fineStats.UnpaidFines.Float64Value()
+		if unpaidFines.Float64 > 0 {
+			return fmt.Errorf("cannot delete student %s: has unpaid fines ($%.2f) - fines must be paid or waived first", student.StudentID, unpaidFines.Float64)
+		}
 	}
 
 	// Soft delete the student
 	err = s.queries.SoftDeleteStudent(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete student: %w", err)
+	}
+
+	// Invalidate student-related caches after successful deletion
+	if s.cacheService != nil {
+		_ = s.cacheService.InvalidateByPattern(ctx, "students:*")
+		_ = s.cacheService.InvalidateByPattern(ctx, "student_search:*")
 	}
 
 	return nil
@@ -744,12 +768,57 @@ func (s *StudentService) GenerateNextStudentID(ctx context.Context, year int) (s
 	return models.GenerateStudentID(year, nextSequence), nil
 }
 
-// UpdateStudentPassword updates a student's password
+// UpdateStudentPassword updates a student's password (admin use - no current password required)
 func (s *StudentService) UpdateStudentPassword(ctx context.Context, id int32, newPassword string) error {
 	// Check if student exists
 	_, err := s.queries.GetStudentByID(ctx, id)
 	if err != nil {
 		return models.ErrStudentNotFound
+	}
+
+	// Hash the new password
+	passwordHash, err := s.authService.HashPassword(newPassword)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	// Update the password
+	err = s.queries.UpdateStudentPassword(ctx, queries.UpdateStudentPasswordParams{
+		ID:           id,
+		PasswordHash: pgtype.Text{String: passwordHash, Valid: true},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update password: %w", err)
+	}
+
+	return nil
+}
+
+// ChangeStudentPassword allows a student to change their own password (self-service)
+// Requires current password verification
+func (s *StudentService) ChangeStudentPassword(ctx context.Context, id int32, currentPassword, newPassword string) error {
+	// Check if student exists and get current password hash
+	student, err := s.queries.GetStudentByID(ctx, id)
+	if err != nil {
+		return models.ErrStudentNotFound
+	}
+
+	// Verify current password
+	if !student.PasswordHash.Valid || student.PasswordHash.String == "" {
+		return fmt.Errorf("student account has no password set - please contact administrator")
+	}
+
+	valid, err := s.authService.VerifyPassword(student.PasswordHash.String, currentPassword)
+	if err != nil {
+		return fmt.Errorf("failed to verify current password: %w", err)
+	}
+	if !valid {
+		return fmt.Errorf("current password is incorrect")
+	}
+
+	// Validate new password
+	if len(newPassword) < 8 {
+		return fmt.Errorf("new password must be at least 8 characters long")
 	}
 
 	// Hash the new password
@@ -1205,9 +1274,21 @@ func (s *StudentService) GetMostActiveStudents(ctx context.Context, limit int) (
 // UpdateStudentStatus updates the active status of a single student
 func (s *StudentService) UpdateStudentStatus(ctx context.Context, studentID int32, isActive bool, reason string) (*models.StudentDB, error) {
 	// Check if student exists
-	_, err := s.queries.GetStudentByID(ctx, studentID)
+	existingStudent, err := s.queries.GetStudentByID(ctx, studentID)
 	if err != nil {
 		return nil, models.ErrStudentNotFound
+	}
+
+	// Validation for status changes
+	if !isActive {
+		// Suspending a student - check for active borrows
+		activeBorrowings, err := s.queries.CountActiveBorrowingsByStudent(ctx, studentID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check active borrowings: %w", err)
+		}
+		if activeBorrowings > 0 {
+			return nil, fmt.Errorf("cannot suspend student %s: has %d active borrowing(s) - books must be returned first", existingStudent.StudentID, activeBorrowings)
+		}
 	}
 
 	// Update the status
@@ -1217,6 +1298,12 @@ func (s *StudentService) UpdateStudentStatus(ctx context.Context, studentID int3
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to update student status: %w", err)
+	}
+
+	// Invalidate student-related caches after successful update
+	if s.cacheService != nil {
+		_ = s.cacheService.InvalidateByPattern(ctx, "students:*")
+		_ = s.cacheService.InvalidateStudentProfile(ctx, int(studentID))
 	}
 
 	// Convert to our model type

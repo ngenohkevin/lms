@@ -376,6 +376,28 @@ func (s *ReservationService) getQueuePosition(ctx context.Context, bookID, reser
 	return 0, fmt.Errorf("reservation not found in queue")
 }
 
+// mapStatusToAPI maps internal database status to API-friendly status
+// Database uses: "active", "fulfilled", "cancelled", "expired"
+// API returns: "pending", "ready", "fulfilled", "cancelled", "expired"
+// - "active" -> "pending" (waiting in queue)
+// - Note: "ready" status is set when student is notified book is available
+func mapStatusToAPI(dbStatus string) string {
+	switch dbStatus {
+	case "active":
+		return "pending" // "active" in DB means "pending" (waiting in queue)
+	case "ready":
+		return "ready" // Book available, student notified
+	case "fulfilled":
+		return "fulfilled"
+	case "cancelled":
+		return "cancelled"
+	case "expired":
+		return "expired"
+	default:
+		return dbStatus
+	}
+}
+
 // convertToReservationResponse converts a queries.Reservation to ReservationResponse
 func (s *ReservationService) convertToReservationResponse(reservation queries.Reservation, queuePosition int) *ReservationResponse {
 	response := &ReservationResponse{
@@ -384,7 +406,7 @@ func (s *ReservationService) convertToReservationResponse(reservation queries.Re
 		BookID:        reservation.BookID,
 		ReservedAt:    reservation.ReservedAt.Time,
 		ExpiresAt:     reservation.ExpiresAt.Time,
-		Status:        reservation.Status.String,
+		Status:        mapStatusToAPI(reservation.Status.String),
 		CreatedAt:     reservation.CreatedAt.Time,
 		UpdatedAt:     reservation.UpdatedAt.Time,
 		QueuePosition: queuePosition,
@@ -405,7 +427,7 @@ func (s *ReservationService) convertToExtendedReservationResponse(reservation qu
 		BookID:        reservation.BookID,
 		ReservedAt:    reservation.ReservedAt.Time,
 		ExpiresAt:     reservation.ExpiresAt.Time,
-		Status:        reservation.Status.String,
+		Status:        mapStatusToAPI(reservation.Status.String),
 		CreatedAt:     reservation.CreatedAt.Time,
 		UpdatedAt:     reservation.UpdatedAt.Time,
 		StudentName:   reservation.FirstName + " " + reservation.LastName,
@@ -431,7 +453,7 @@ func (s *ReservationService) convertToStudentReservationResponse(reservation que
 		BookID:     reservation.BookID,
 		ReservedAt: reservation.ReservedAt.Time,
 		ExpiresAt:  reservation.ExpiresAt.Time,
-		Status:     reservation.Status.String,
+		Status:     mapStatusToAPI(reservation.Status.String),
 		CreatedAt:  reservation.CreatedAt.Time,
 		UpdatedAt:  reservation.UpdatedAt.Time,
 		BookTitle:  reservation.Title,
@@ -454,7 +476,7 @@ func (s *ReservationService) convertToBookReservationResponse(reservation querie
 		BookID:        reservation.BookID,
 		ReservedAt:    reservation.ReservedAt.Time,
 		ExpiresAt:     reservation.ExpiresAt.Time,
-		Status:        reservation.Status.String,
+		Status:        mapStatusToAPI(reservation.Status.String),
 		CreatedAt:     reservation.CreatedAt.Time,
 		UpdatedAt:     reservation.UpdatedAt.Time,
 		StudentName:   reservation.FirstName + " " + reservation.LastName,
@@ -476,7 +498,7 @@ func (s *ReservationService) convertToNextReservationResponse(reservation querie
 		BookID:        reservation.BookID,
 		ReservedAt:    reservation.ReservedAt.Time,
 		ExpiresAt:     reservation.ExpiresAt.Time,
-		Status:        reservation.Status.String,
+		Status:        mapStatusToAPI(reservation.Status.String),
 		CreatedAt:     reservation.CreatedAt.Time,
 		UpdatedAt:     reservation.UpdatedAt.Time,
 		StudentName:   reservation.FirstName + " " + reservation.LastName,
@@ -498,7 +520,7 @@ func (s *ReservationService) convertToListReservationResponse(reservation querie
 		BookID:        reservation.BookID,
 		ReservedAt:    reservation.ReservedAt.Time,
 		ExpiresAt:     reservation.ExpiresAt.Time,
-		Status:        reservation.Status.String,
+		Status:        mapStatusToAPI(reservation.Status.String),
 		CreatedAt:     reservation.CreatedAt.Time,
 		UpdatedAt:     reservation.UpdatedAt.Time,
 		StudentName:   reservation.FirstName + " " + reservation.LastName,

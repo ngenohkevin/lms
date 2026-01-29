@@ -68,3 +68,17 @@ WHERE deleted_at IS NULL;
 -- name: CountAvailableBooks :one
 SELECT COUNT(*) FROM books
 WHERE available_copies > 0 AND deleted_at IS NULL;
+
+-- name: DecrementBookAvailability :one
+-- Atomically decrement available copies. Returns the new count, or no rows if book unavailable.
+UPDATE books
+SET available_copies = available_copies - 1, updated_at = NOW()
+WHERE id = $1 AND available_copies > 0 AND deleted_at IS NULL
+RETURNING available_copies;
+
+-- name: IncrementBookAvailability :one
+-- Atomically increment available copies.
+UPDATE books
+SET available_copies = available_copies + 1, updated_at = NOW()
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING available_copies;

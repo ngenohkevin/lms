@@ -28,6 +28,9 @@ type TransactionQuerier interface {
 	GetStudentByID(ctx context.Context, id int32) (queries.Student, error)
 	UpdateBookAvailability(ctx context.Context, arg queries.UpdateBookAvailabilityParams) error
 	UpdateBookCondition(ctx context.Context, arg queries.UpdateBookConditionParams) error
+	// Atomic availability operations (race-condition safe)
+	DecrementBookAvailability(ctx context.Context, id int32) (pgtype.Int4, error)
+	IncrementBookAvailability(ctx context.Context, id int32) (pgtype.Int4, error)
 	// Renewal-related queries
 	CountRenewalsByStudentAndBook(ctx context.Context, arg queries.CountRenewalsByStudentAndBookParams) (int64, error)
 	HasActiveReservationsByOtherStudents(ctx context.Context, arg queries.HasActiveReservationsByOtherStudentsParams) (bool, error)
@@ -121,7 +124,7 @@ type TransactionResponse struct {
 
 // BorrowBook processes a book borrowing request
 func (s *TransactionService) BorrowBook(ctx context.Context, studentID, bookID, librarianID int32, notes string) (*TransactionResponse, error) {
-	// Validate book exists and is available
+	// Validate book exists
 	book, err := s.queries.GetBookByID(ctx, bookID)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -147,7 +150,17 @@ func (s *TransactionService) BorrowBook(ctx context.Context, studentID, bookID, 
 	// Calculate due date based on student year and borrowing rules
 	dueDate := s.calculateDueDate(student)
 
-	// Create transaction
+	// ATOMIC: Decrement book availability first to prevent race conditions
+	// This will fail if no copies are available (WHERE available_copies > 0)
+	_, err = s.queries.DecrementBookAvailability(ctx, bookID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("book not available")
+		}
+		return nil, fmt.Errorf("failed to update book availability: %w", err)
+	}
+
+	// Create transaction after successful availability decrement
 	transaction, err := s.queries.CreateTransaction(ctx, queries.CreateTransactionParams{
 		StudentID:       studentID,
 		BookID:          bookID,
@@ -157,16 +170,9 @@ func (s *TransactionService) BorrowBook(ctx context.Context, studentID, bookID, 
 		Notes:           pgtype.Text{String: notes, Valid: notes != ""},
 	})
 	if err != nil {
+		// Rollback: increment availability back since transaction creation failed
+		_, _ = s.queries.IncrementBookAvailability(ctx, bookID)
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
-	}
-
-	// Update book availability
-	err = s.queries.UpdateBookAvailability(ctx, queries.UpdateBookAvailabilityParams{
-		ID:              bookID,
-		AvailableCopies: pgtype.Int4{Int32: book.AvailableCopies.Int32 - 1, Valid: true},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to update book availability: %w", err)
 	}
 
 	return s.convertToTransactionResponse(transaction), nil
@@ -225,18 +231,16 @@ func (s *TransactionService) ReturnBookWithCondition(ctx context.Context, transa
 		return nil, fmt.Errorf("failed to return book: %w", err)
 	}
 
-	// Update book availability
-	book, err := s.queries.GetBookByID(ctx, transactionRow.BookID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get book for availability update: %w", err)
-	}
-
-	err = s.queries.UpdateBookAvailability(ctx, queries.UpdateBookAvailabilityParams{
-		ID:              transactionRow.BookID,
-		AvailableCopies: pgtype.Int4{Int32: book.AvailableCopies.Int32 + 1, Valid: true},
-	})
+	// ATOMIC: Increment book availability (race-condition safe)
+	_, err = s.queries.IncrementBookAvailability(ctx, transactionRow.BookID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update book availability: %w", err)
+	}
+
+	// Get book for condition update
+	book, err := s.queries.GetBookByID(ctx, transactionRow.BookID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get book for condition update: %w", err)
 	}
 
 	// Update book condition if it's deteriorated

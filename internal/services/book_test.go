@@ -177,6 +177,16 @@ func (m *MockBookQuerier) CountAvailableBooks(ctx context.Context) (int64, error
 	return args.Get(0).(int64), args.Error(1)
 }
 
+func (m *MockBookQuerier) CountActiveTransactionsByBook(ctx context.Context, bookID int32) (int64, error) {
+	args := m.Called(ctx, bookID)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockBookQuerier) CountActiveReservationsByBook(ctx context.Context, bookID int32) (int64, error) {
+	args := m.Called(ctx, bookID)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 func TestBookService_CreateBook(t *testing.T) {
 	mockQuerier := new(MockBookQuerier)
 	mockCache := new(MockCacheService)

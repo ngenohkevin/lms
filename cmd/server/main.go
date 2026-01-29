@@ -104,6 +104,10 @@ func main() {
 
 	// Initialize services
 	userService := services.NewUserService(db.Pool, logger)
+
+	// Set user service for auth service (needed for secure token refresh)
+	authService.SetUserService(userService)
+
 	studentService := services.NewStudentService(db.Queries, authService, cacheService)
 	bookService := services.NewBookService(db.Queries, cacheService)
 	transactionService := services.NewTransactionService(db.Queries)
@@ -331,6 +335,7 @@ func setupRoutes(
 				// Self-service student routes
 				students.GET("/profile", studentHandler.GetStudentProfile)
 				students.PUT("/profile", studentHandler.UpdateStudentProfile)
+				students.PUT("/password", studentHandler.ChangePassword) // Student self-service password change
 
 				// Librarian routes
 				students.POST("", authMiddleware.RequireLibrarian(), studentHandler.CreateStudent)
@@ -369,14 +374,17 @@ func setupRoutes(
 			reservations := protected.Group("/reservations")
 			{
 				reservations.GET("", authMiddleware.RequireLibrarian(), reservationHandler.GetAllReservations)
-				reservations.GET("/:id", reservationHandler.GetReservation)
 				reservations.GET("/student/:studentId", reservationHandler.GetStudentReservations)
 				reservations.GET("/book/:bookId", reservationHandler.GetBookReservations)
+				reservations.GET("/book/:bookId/next", reservationHandler.GetNextReservation)
 
 				reservations.POST("", reservationHandler.ReserveBook)
+				reservations.POST("/expire", authMiddleware.RequireLibrarian(), reservationHandler.ExpireReservations)
+
+				// Routes with :id parameter placed last to avoid conflicts
+				reservations.GET("/:id", reservationHandler.GetReservation)
 				reservations.DELETE("/:id", reservationHandler.CancelReservation)
 				reservations.POST("/:id/fulfill", authMiddleware.RequireLibrarian(), reservationHandler.FulfillReservation)
-				reservations.POST("/expire", authMiddleware.RequireLibrarian(), reservationHandler.ExpireReservations)
 			}
 
 			// Notification routes

@@ -131,6 +131,16 @@ func (m *MockTransactionQueries) GetTotalUnpaidFinesByStudent(ctx context.Contex
 	return args.Get(0).(pgtype.Numeric), args.Error(1)
 }
 
+func (m *MockTransactionQueries) DecrementBookAvailability(ctx context.Context, id int32) (pgtype.Int4, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(pgtype.Int4), args.Error(1)
+}
+
+func (m *MockTransactionQueries) IncrementBookAvailability(ctx context.Context, id int32) (pgtype.Int4, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(pgtype.Int4), args.Error(1)
+}
+
 // Test helper functions
 func createTestTransaction() queries.Transaction {
 	now := time.Now()
@@ -204,8 +214,9 @@ func TestTransactionService_BorrowBook_Success(t *testing.T) {
 	mockQueries.On("GetStudentByID", ctx, studentID).Return(student, nil)
 	mockQueries.On("ListActiveTransactionsByStudent", ctx, studentID).Return([]queries.ListActiveTransactionsByStudentRow{}, nil)
 	mockQueries.On("GetTotalUnpaidFinesByStudent", ctx, studentID).Return(pgtype.Numeric{Int: big.NewInt(0), Valid: false}, nil) // No unpaid fines
+	// Atomic decrement (returns new availability count)
+	mockQueries.On("DecrementBookAvailability", ctx, bookID).Return(pgtype.Int4{Int32: 2, Valid: true}, nil)
 	mockQueries.On("CreateTransaction", ctx, mock.AnythingOfType("queries.CreateTransactionParams")).Return(transaction, nil)
-	mockQueries.On("UpdateBookAvailability", ctx, mock.AnythingOfType("queries.UpdateBookAvailabilityParams")).Return(nil)
 
 	// Execute
 	result, err := service.BorrowBook(ctx, studentID, bookID, librarianID, "")
@@ -378,8 +389,9 @@ func TestTransactionService_ReturnBook_Success(t *testing.T) {
 	// Setup mocks
 	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
 	mockQueries.On("ReturnBook", ctx, mock.AnythingOfType("queries.ReturnBookParams")).Return(returnedTransaction, nil)
+	// Atomic increment (returns new availability count)
+	mockQueries.On("IncrementBookAvailability", ctx, int32(1)).Return(pgtype.Int4{Int32: 4, Valid: true}, nil)
 	mockQueries.On("GetBookByID", ctx, int32(1)).Return(book, nil)
-	mockQueries.On("UpdateBookAvailability", ctx, mock.AnythingOfType("queries.UpdateBookAvailabilityParams")).Return(nil)
 
 	// Execute
 	result, err := service.ReturnBook(ctx, transactionID)
@@ -847,8 +859,9 @@ func TestTransactionService_ReturnBook_WithOverdueFine(t *testing.T) {
 	// Setup mocks
 	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
 	mockQueries.On("ReturnBook", ctx, mock.AnythingOfType("queries.ReturnBookParams")).Return(returnedTransaction, nil)
+	// Atomic increment (returns new availability count)
+	mockQueries.On("IncrementBookAvailability", ctx, int32(1)).Return(pgtype.Int4{Int32: 4, Valid: true}, nil)
 	mockQueries.On("GetBookByID", ctx, int32(1)).Return(book, nil)
-	mockQueries.On("UpdateBookAvailability", ctx, mock.AnythingOfType("queries.UpdateBookAvailabilityParams")).Return(nil)
 
 	// Execute
 	result, err := service.ReturnBook(ctx, transactionID)
@@ -911,13 +924,11 @@ func TestTransactionService_ReturnBook_BookAvailabilityUpdateFailure(t *testing.
 
 	returnedTransaction := createTestTransaction()
 	returnedTransaction.ReturnedDate = pgtype.Timestamp{Time: now, Valid: true}
-	book := createTestBook()
 
-	// Setup mocks - book availability update will fail
+	// Setup mocks - atomic book availability increment will fail
 	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
 	mockQueries.On("ReturnBook", ctx, mock.AnythingOfType("queries.ReturnBookParams")).Return(returnedTransaction, nil)
-	mockQueries.On("GetBookByID", ctx, int32(1)).Return(book, nil)
-	mockQueries.On("UpdateBookAvailability", ctx, mock.AnythingOfType("queries.UpdateBookAvailabilityParams")).Return(assert.AnError)
+	mockQueries.On("IncrementBookAvailability", ctx, int32(1)).Return(pgtype.Int4{}, assert.AnError)
 
 	// Execute
 	_, err := service.ReturnBook(ctx, transactionID)
@@ -949,9 +960,12 @@ func TestTransactionService_ReturnBook_GetBookFailure(t *testing.T) {
 	returnedTransaction := createTestTransaction()
 	returnedTransaction.ReturnedDate = pgtype.Timestamp{Time: now, Valid: true}
 
-	// Setup mocks - GetBookByID will fail
+	// Setup mocks - GetBookByID will fail (called after availability increment for condition update)
 	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
 	mockQueries.On("ReturnBook", ctx, mock.AnythingOfType("queries.ReturnBookParams")).Return(returnedTransaction, nil)
+	// Atomic increment succeeds
+	mockQueries.On("IncrementBookAvailability", ctx, int32(1)).Return(pgtype.Int4{Int32: 4, Valid: true}, nil)
+	// GetBookByID for condition update fails
 	mockQueries.On("GetBookByID", ctx, int32(1)).Return(queries.Book{}, assert.AnError)
 
 	// Execute
@@ -959,7 +973,7 @@ func TestTransactionService_ReturnBook_GetBookFailure(t *testing.T) {
 
 	// Assert
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to get book for availability update")
+	assert.Contains(t, err.Error(), "failed to get book for condition update")
 	mockQueries.AssertExpectations(t)
 }
 
@@ -1214,8 +1228,9 @@ func TestTransactionService_ReturnBookWithCondition_Success(t *testing.T) {
 	// Setup mocks
 	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
 	mockQueries.On("ReturnBook", ctx, mock.AnythingOfType("queries.ReturnBookParams")).Return(returnedTransaction, nil)
+	// Atomic increment (returns new availability count)
+	mockQueries.On("IncrementBookAvailability", ctx, int32(1)).Return(pgtype.Int4{Int32: 4, Valid: true}, nil)
 	mockQueries.On("GetBookByID", ctx, int32(1)).Return(book, nil)
-	mockQueries.On("UpdateBookAvailability", ctx, mock.AnythingOfType("queries.UpdateBookAvailabilityParams")).Return(nil)
 	mockQueries.On("UpdateBookCondition", ctx, mock.AnythingOfType("queries.UpdateBookConditionParams")).Return(nil)
 
 	// Execute
@@ -1284,19 +1299,14 @@ func TestTransactionService_ReturnBook_AvailabilityUpdate_Success(t *testing.T) 
 	returnedTransaction.ReturnedDate = pgtype.Timestamp{Time: now, Valid: true}
 
 	book := createTestBook()
-	book.AvailableCopies = pgtype.Int4{Int32: 2, Valid: true}
+	book.AvailableCopies = pgtype.Int4{Int32: 3, Valid: true} // After increment
 
 	// Setup mocks
 	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
 	mockQueries.On("ReturnBook", ctx, mock.AnythingOfType("queries.ReturnBookParams")).Return(returnedTransaction, nil)
+	// Atomic increment returns new availability (was 2, now 3)
+	mockQueries.On("IncrementBookAvailability", ctx, int32(1)).Return(pgtype.Int4{Int32: 3, Valid: true}, nil)
 	mockQueries.On("GetBookByID", ctx, int32(1)).Return(book, nil)
-
-	// Verify that availability is increased by 1
-	expectedAvailability := int32(3)
-	mockQueries.On("UpdateBookAvailability", ctx, queries.UpdateBookAvailabilityParams{
-		ID:              int32(1),
-		AvailableCopies: pgtype.Int4{Int32: expectedAvailability, Valid: true},
-	}).Return(nil)
 
 	// Execute
 	result, err := service.ReturnBook(ctx, transactionID)
@@ -1327,14 +1337,9 @@ func TestTransactionService_BorrowBook_AvailabilityUpdate_Success(t *testing.T) 
 	mockQueries.On("GetStudentByID", ctx, studentID).Return(student, nil)
 	mockQueries.On("ListActiveTransactionsByStudent", ctx, studentID).Return([]queries.ListActiveTransactionsByStudentRow{}, nil)
 	mockQueries.On("GetTotalUnpaidFinesByStudent", ctx, studentID).Return(pgtype.Numeric{Int: big.NewInt(0), Valid: false}, nil) // No unpaid fines
+	// Atomic decrement returns new availability (was 3, now 2)
+	mockQueries.On("DecrementBookAvailability", ctx, bookID).Return(pgtype.Int4{Int32: 2, Valid: true}, nil)
 	mockQueries.On("CreateTransaction", ctx, mock.AnythingOfType("queries.CreateTransactionParams")).Return(transaction, nil)
-
-	// Verify that availability is decreased by 1
-	expectedAvailability := int32(2)
-	mockQueries.On("UpdateBookAvailability", ctx, queries.UpdateBookAvailabilityParams{
-		ID:              bookID,
-		AvailableCopies: pgtype.Int4{Int32: expectedAvailability, Valid: true},
-	}).Return(nil)
 
 	// Execute
 	result, err := service.BorrowBook(ctx, studentID, bookID, librarianID, "")
@@ -1352,13 +1357,14 @@ func TestTransactionService_ReturnBook_AvailabilityUpdate_BoundaryConditions(t *
 
 	ctx := context.Background()
 	transactionID := int32(1)
+	bookID := int32(1)
 
 	// Create a valid transaction
 	now := time.Now()
 	transaction := queries.GetTransactionByIDRow{
 		ID:              transactionID,
 		StudentID:       1,
-		BookID:          1,
+		BookID:          bookID,
 		TransactionType: "borrow",
 		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, 1), Valid: true},
 		ReturnedDate:    pgtype.Timestamp{Valid: false},
@@ -1367,21 +1373,19 @@ func TestTransactionService_ReturnBook_AvailabilityUpdate_BoundaryConditions(t *
 	returnedTransaction := createTestTransaction()
 	returnedTransaction.ReturnedDate = pgtype.Timestamp{Time: now, Valid: true}
 
-	// Test with zero available copies (should become 1)
+	// Book starts with zero available copies
 	book := createTestBook()
 	book.AvailableCopies = pgtype.Int4{Int32: 0, Valid: true}
 
-	// Setup mocks
+	// Setup mocks in order of execution:
+	// 1. Get transaction to verify it exists
 	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+	// 2. Return the book (update transaction record)
 	mockQueries.On("ReturnBook", ctx, mock.AnythingOfType("queries.ReturnBookParams")).Return(returnedTransaction, nil)
-	mockQueries.On("GetBookByID", ctx, int32(1)).Return(book, nil)
-
-	// Verify that availability is increased to 1 from 0
-	expectedAvailability := int32(1)
-	mockQueries.On("UpdateBookAvailability", ctx, queries.UpdateBookAvailabilityParams{
-		ID:              int32(1),
-		AvailableCopies: pgtype.Int4{Int32: expectedAvailability, Valid: true},
-	}).Return(nil)
+	// 3. ATOMIC: Increment book availability (returns new value of 1)
+	mockQueries.On("IncrementBookAvailability", ctx, bookID).Return(pgtype.Int4{Int32: 1, Valid: true}, nil)
+	// 4. Get book to check if condition update is needed
+	mockQueries.On("GetBookByID", ctx, bookID).Return(book, nil)
 
 	// Execute
 	result, err := service.ReturnBook(ctx, transactionID)

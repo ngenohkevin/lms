@@ -254,31 +254,41 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	})
 }
 
+// LogoutRequest represents the logout request body
+type LogoutRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
 func (h *AuthHandler) Logout(c *gin.Context) {
-	// Get token from Authorization header
+	// Get access token from Authorization header
 	authHeader := c.GetHeader("Authorization")
-	if authHeader == "" {
-		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"message": "Logout successful",
-		})
-		return
+	var accessToken string
+	if authHeader != "" {
+		parts := strings.Split(authHeader, " ")
+		if len(parts) == 2 && strings.ToLower(parts[0]) == "bearer" {
+			accessToken = parts[1]
+		}
 	}
 
-	// Extract token from Bearer header
-	parts := strings.Split(authHeader, " ")
-	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"message": "Logout successful",
-		})
-		return
+	// Get refresh token from request body
+	var req LogoutRequest
+	// Bind JSON but don't fail if body is empty
+	_ = c.ShouldBindJSON(&req)
+
+	// Blacklist both tokens to ensure complete logout
+	if accessToken != "" {
+		if err := h.authService.BlacklistToken(accessToken); err != nil {
+			// Log but don't fail - user is logged out client-side regardless
+			slog.Warn("Failed to blacklist access token", "error", err)
+		}
 	}
 
-	tokenString := parts[1]
-
-	// Blacklist the access token (non-critical - user is logged out client-side regardless)
-	_ = h.authService.BlacklistToken(tokenString)
+	if req.RefreshToken != "" {
+		if err := h.authService.BlacklistRefreshToken(req.RefreshToken); err != nil {
+			// Log but don't fail - user is logged out client-side regardless
+			slog.Warn("Failed to blacklist refresh token", "error", err)
+		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

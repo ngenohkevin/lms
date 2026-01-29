@@ -1242,3 +1242,115 @@ func (h *StudentHandler) GetEnrollmentTrends(c *gin.Context) {
 		Message: "Enrollment trends retrieved successfully",
 	})
 }
+
+// ChangePasswordRequest represents the request body for password change
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password" binding:"required"`
+	NewPassword     string `json:"new_password" binding:"required,min=8"`
+}
+
+// ChangePassword handles PUT /api/v1/students/password (self-service password change)
+// @Summary Change student password
+// @Description Allows a student to change their own password by providing current password
+// @Tags students
+// @Accept json
+// @Produce json
+// @Param request body ChangePasswordRequest true "Password change request"
+// @Success 200 {object} SuccessResponse "Password changed successfully"
+// @Failure 400 {object} ErrorResponse "Validation error"
+// @Failure 401 {object} ErrorResponse "Unauthorized or incorrect current password"
+// @Failure 500 {object} ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Router /students/password [put]
+func (h *StudentHandler) ChangePassword(c *gin.Context) {
+	// Get student ID from context (set by auth middleware)
+	studentIDValue, exists := c.Get("student_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "UNAUTHORIZED",
+				Message: "Student authentication required",
+				Details: "This endpoint is only accessible to authenticated students",
+			},
+		})
+		return
+	}
+
+	studentID, ok := studentIDValue.(int32)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Invalid student ID in context",
+			},
+		})
+		return
+	}
+
+	var req ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid request data",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	// Call the service method to change password
+	if err := h.studentService.ChangeStudentPassword(c.Request.Context(), studentID, req.CurrentPassword, req.NewPassword); err != nil {
+		// Check for specific error types
+		if strings.Contains(err.Error(), "incorrect") || strings.Contains(err.Error(), "current password") {
+			c.JSON(http.StatusUnauthorized, ErrorResponse{
+				Success: false,
+				Error: ErrorDetail{
+					Code:    "INVALID_CREDENTIALS",
+					Message: "Current password is incorrect",
+					Details: err.Error(),
+				},
+			})
+			return
+		}
+		if strings.Contains(err.Error(), "at least 8 characters") {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Success: false,
+				Error: ErrorDetail{
+					Code:    "VALIDATION_ERROR",
+					Message: "New password must be at least 8 characters long",
+					Details: err.Error(),
+				},
+			})
+			return
+		}
+		if err == models.ErrStudentNotFound {
+			c.JSON(http.StatusNotFound, ErrorResponse{
+				Success: false,
+				Error: ErrorDetail{
+					Code:    "STUDENT_NOT_FOUND",
+					Message: "Student not found",
+					Details: err.Error(),
+				},
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to change password",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Message: "Password changed successfully",
+	})
+}

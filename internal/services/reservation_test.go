@@ -174,7 +174,7 @@ func TestReservationService_ReserveBook_Success(t *testing.T) {
 	assert.Equal(t, reservation.ID, result.ID)
 	assert.Equal(t, studentID, result.StudentID)
 	assert.Equal(t, bookID, result.BookID)
-	assert.Equal(t, "active", result.Status)
+	assert.Equal(t, "pending", result.Status) // "active" in DB maps to "pending" in API
 	assert.Equal(t, 1, result.QueuePosition)
 	mockQuerier.AssertExpectations(t)
 }

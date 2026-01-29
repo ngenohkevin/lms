@@ -40,6 +40,7 @@ type AuthService struct {
 	argon2Config      *Argon2Config
 	logger            *slog.Logger
 	redisClient       *redis.Client
+	userService       UserServiceInterface
 }
 
 type Argon2Config struct {
@@ -371,20 +372,54 @@ func (s *AuthService) ValidateRefreshToken(tokenString string) (*models.RefreshT
 	return nil, ErrInvalidToken
 }
 
+// SetUserService sets the user service for token refresh operations
+// This is called after both services are initialized to avoid circular dependencies
+func (s *AuthService) SetUserService(userService UserServiceInterface) {
+	s.userService = userService
+}
+
 func (s *AuthService) RefreshTokens(refreshTokenString string) (string, string, error) {
 	claims, err := s.ValidateRefreshToken(refreshTokenString)
 	if err != nil {
 		return "", "", err
 	}
 
-	// Here we would typically get the user from the database
-	// For now, we'll create a minimal user object
-	user := &models.User{
-		ID:       claims.UserID,
-		Username: claims.Username,
-		Role:     models.UserRole("librarian"), // Default role, should be fetched from DB
+	// SECURITY FIX: Fetch actual user data from database to prevent privilege escalation
+	// The user's role may have changed since the token was issued
+	if claims.UserType == "student" {
+		// Verify student still exists and is active
+		if s.userService == nil {
+			return "", "", errors.New("user service not configured")
+		}
+		student, err := s.userService.GetStudentByID(int(claims.UserID))
+		if err != nil {
+			s.logger.Warn("Failed to get student during token refresh", "user_id", claims.UserID, "error", err)
+			return "", "", ErrUserNotFound
+		}
+		if !student.IsActive {
+			return "", "", ErrUserInactive
+		}
+		if student.DeletedAt != nil {
+			return "", "", ErrUserNotFound
+		}
+		// Generate new tokens for the student
+		return s.GenerateStudentTokens(student)
 	}
 
+	// For librarian/admin users
+	if s.userService == nil {
+		return "", "", errors.New("user service not configured")
+	}
+	user, err := s.userService.GetUserByID(int(claims.UserID))
+	if err != nil {
+		s.logger.Warn("Failed to get user during token refresh", "user_id", claims.UserID, "error", err)
+		return "", "", ErrUserNotFound
+	}
+	if !user.IsActive {
+		return "", "", ErrUserInactive
+	}
+
+	// Use the actual role from the database, not the one from the token
 	return s.GenerateTokens(user, claims.UserType)
 }
 

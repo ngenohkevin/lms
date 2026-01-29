@@ -52,6 +52,9 @@ func TestStudentService_StatusManagement(t *testing.T) {
 				// Student exists
 				m.On("GetStudentByID", mock.Anything, int32(1)).Return(createMockStudent(), nil)
 
+				// No active borrowings (required for suspension validation)
+				m.On("CountActiveBorrowingsByStudent", mock.Anything, int32(1)).Return(int64(0), nil)
+
 				// Update status succeeds
 				updatedStudent := createMockStudent()
 				updatedStudent.IsActive = pgtype.Bool{Bool: false, Valid: true}

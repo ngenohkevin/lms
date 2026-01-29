@@ -95,6 +95,21 @@ func (q *Queries) CreateBook(ctx context.Context, arg CreateBookParams) (Book, e
 	return i, err
 }
 
+const decrementBookAvailability = `-- name: DecrementBookAvailability :one
+UPDATE books
+SET available_copies = available_copies - 1, updated_at = NOW()
+WHERE id = $1 AND available_copies > 0 AND deleted_at IS NULL
+RETURNING available_copies
+`
+
+// Atomically decrement available copies. Returns the new count, or no rows if book unavailable.
+func (q *Queries) DecrementBookAvailability(ctx context.Context, id int32) (pgtype.Int4, error) {
+	row := q.db.QueryRow(ctx, decrementBookAvailability, id)
+	var available_copies pgtype.Int4
+	err := row.Scan(&available_copies)
+	return available_copies, err
+}
+
 const getBookByBookID = `-- name: GetBookByBookID :one
 SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition FROM books
 WHERE book_id = $1 AND deleted_at IS NULL
@@ -186,6 +201,21 @@ func (q *Queries) GetBookByISBN(ctx context.Context, isbn pgtype.Text) (Book, er
 		&i.Condition,
 	)
 	return i, err
+}
+
+const incrementBookAvailability = `-- name: IncrementBookAvailability :one
+UPDATE books
+SET available_copies = available_copies + 1, updated_at = NOW()
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING available_copies
+`
+
+// Atomically increment available copies.
+func (q *Queries) IncrementBookAvailability(ctx context.Context, id int32) (pgtype.Int4, error) {
+	row := q.db.QueryRow(ctx, incrementBookAvailability, id)
+	var available_copies pgtype.Int4
+	err := row.Scan(&available_copies)
+	return available_copies, err
 }
 
 const listAvailableBooks = `-- name: ListAvailableBooks :many

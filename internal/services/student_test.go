@@ -520,6 +520,10 @@ func TestStudentService_DeleteStudent(t *testing.T) {
 			studentID: 1,
 			setupMocks: func(m *MockQueries) {
 				m.On("GetStudentByID", mock.Anything, int32(1)).Return(createMockStudent(), nil)
+				// Deletion validation: no active borrowings
+				m.On("CountActiveBorrowingsByStudent", mock.Anything, int32(1)).Return(int64(0), nil)
+				// Deletion validation: no unpaid fines
+				m.On("GetStudentFineStats", mock.Anything, int32(1)).Return(queries.GetStudentFineStatsRow{}, nil)
 				m.On("SoftDeleteStudent", mock.Anything, int32(1)).Return(nil)
 			},
 			expectError: false,

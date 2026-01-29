@@ -23,6 +23,18 @@ func (q *Queries) CountActiveBorrowingsByStudent(ctx context.Context, studentID 
 	return count, err
 }
 
+const countActiveTransactionsByBook = `-- name: CountActiveTransactionsByBook :one
+SELECT COUNT(*) FROM transactions
+WHERE book_id = $1 AND returned_date IS NULL
+`
+
+func (q *Queries) CountActiveTransactionsByBook(ctx context.Context, bookID int32) (int64, error) {
+	row := q.db.QueryRow(ctx, countActiveTransactionsByBook, bookID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countOverdueTransactions = `-- name: CountOverdueTransactions :one
 SELECT COUNT(*) FROM transactions
 WHERE due_date < NOW() AND returned_date IS NULL

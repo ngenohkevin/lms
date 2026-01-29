@@ -172,3 +172,7 @@ SELECT
     COALESCE(SUM(CASE WHEN fine_paid = false THEN fine_amount ELSE 0 END), 0)::numeric as unpaid_fines
 FROM transactions
 WHERE student_id = $1;
+
+-- name: CountActiveTransactionsByBook :one
+SELECT COUNT(*) FROM transactions
+WHERE book_id = $1 AND returned_date IS NULL;

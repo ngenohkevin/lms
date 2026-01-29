@@ -64,7 +64,7 @@ func TestReservationIntegration_CompleteWorkflow(t *testing.T) {
 	assert.NotNil(t, reservation)
 	assert.Equal(t, student2.ID, reservation.StudentID)
 	assert.Equal(t, book.ID, reservation.BookID)
-	assert.Equal(t, "active", reservation.Status)
+	assert.Equal(t, "pending", reservation.Status) // "active" in DB maps to "pending" in API
 	assert.Equal(t, 1, reservation.QueuePosition)
 	student2ReservationID = reservation.ID // Store the ID for later use
 
@@ -74,7 +74,7 @@ func TestReservationIntegration_CompleteWorkflow(t *testing.T) {
 	assert.NotNil(t, reservation2)
 	assert.Equal(t, student3.ID, reservation2.StudentID)
 	assert.Equal(t, book.ID, reservation2.BookID)
-	assert.Equal(t, "active", reservation2.Status)
+	assert.Equal(t, "pending", reservation2.Status) // "active" in DB maps to "pending" in API
 	assert.Equal(t, 2, reservation2.QueuePosition)
 
 	// Test 5: Check book reservations queue
@@ -181,7 +181,7 @@ func TestReservationIntegration_ExpiredReservations(t *testing.T) {
 		// First, let's verify the reservation exists and is active
 		beforeReservation, err := reservationService.GetReservationByID(ctx, expiredReservation.ID)
 		require.NoError(t, err)
-		assert.Equal(t, "active", beforeReservation.Status)
+		assert.Equal(t, "pending", beforeReservation.Status) // "active" in DB maps to "pending" in API
 
 		// Debug: check what the service finds
 		expiredReservations, err := querier.ListExpiredReservations(ctx)

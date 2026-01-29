@@ -13,18 +13,30 @@ type ReservationServiceInterface interface {
 	HasStudentFulfilledReservation(ctx context.Context, studentID, bookID int32) (*ReservationResponse, error)
 }
 
+// NotificationSenderInterface defines the interface for sending book availability notifications
+type NotificationSenderInterface interface {
+	SendBookAvailableNotifications(ctx context.Context, bookID int32) error
+}
+
 // EnhancedTransactionService extends the basic transaction service with reservation integration
 type EnhancedTransactionService struct {
 	*TransactionService
-	reservationService ReservationServiceInterface
+	reservationService  ReservationServiceInterface
+	notificationService NotificationSenderInterface
 }
 
 // NewEnhancedTransactionService creates a new enhanced transaction service with reservation integration
 func NewEnhancedTransactionService(queries TransactionQuerier, reservationService ReservationServiceInterface) *EnhancedTransactionService {
 	return &EnhancedTransactionService{
-		TransactionService: NewTransactionService(queries),
-		reservationService: reservationService,
+		TransactionService:  NewTransactionService(queries),
+		reservationService:  reservationService,
+		notificationService: nil, // Optional, can be set via SetNotificationService
 	}
+}
+
+// SetNotificationService sets the notification service for sending book availability notifications
+func (s *EnhancedTransactionService) SetNotificationService(notificationService NotificationSenderInterface) {
+	s.notificationService = notificationService
 }
 
 // ReturnBookWithReservationHandling processes a book return with automatic reservation fulfillment
@@ -68,6 +80,16 @@ func (s *EnhancedTransactionService) handleReservationFulfillment(ctx context.Co
 
 	log.Printf("Successfully fulfilled reservation %d for book %d (student: %s)",
 		nextReservation.ID, bookID, nextReservation.StudentName)
+
+	// Send book available notifications to students with active reservations
+	if s.notificationService != nil {
+		if err := s.notificationService.SendBookAvailableNotifications(ctx, bookID); err != nil {
+			log.Printf("Error sending book available notifications for book %d: %v", bookID, err)
+			// Don't fail the reservation fulfillment if notification fails
+		} else {
+			log.Printf("Successfully sent book available notifications for book %d", bookID)
+		}
+	}
 }
 
 // BorrowBookWithReservationCheck processes a book borrowing request with reservation priority check

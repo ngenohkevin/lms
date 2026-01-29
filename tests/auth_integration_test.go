@@ -155,6 +155,9 @@ func TestAuthenticationFlow(t *testing.T) {
 	}
 	userService.AddStudent(testStudent)
 
+	// Set the user service on auth service for token refresh security checks
+	authService.SetUserService(userService)
+
 	emailService := &MockEmailService{}
 	authHandler := handlers.NewAuthHandler(authService, userService, emailService)
 	authMiddleware := createSimpleTestAuthMiddleware(authService)

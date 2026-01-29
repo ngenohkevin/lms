@@ -292,9 +292,32 @@ func (h *FineHandler) WaiveFine(c *gin.Context) {
 	}
 
 	// Get the user ID from context (set by auth middleware)
+	// SECURITY: Never default to any user - require explicit authentication
 	userID, exists := c.Get("user_id")
 	if !exists {
-		userID = int32(1) // Default to admin user if not set
+		c.JSON(http.StatusUnauthorized, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "UNAUTHORIZED",
+				Message: "Authentication required to waive fines",
+				Details: "User ID not found in request context",
+			},
+		})
+		return
+	}
+
+	// Verify the user has admin role (fine waiving is a privileged operation)
+	role, roleExists := c.Get("user_role")
+	if !roleExists || (role != "admin" && role != "librarian") {
+		c.JSON(http.StatusForbidden, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "FORBIDDEN",
+				Message: "Insufficient permissions to waive fines",
+				Details: "Admin or librarian role required",
+			},
+		})
+		return
 	}
 
 	fine, err := h.fineService.WaiveFine(c.Request.Context(), int32(id), userID.(int32), req.Reason)
