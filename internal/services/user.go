@@ -14,10 +14,10 @@ import (
 
 // User management errors
 var (
-	ErrUsernameExists    = errors.New("username already exists")
-	ErrUserEmailExists   = errors.New("email already exists")
-	ErrCannotDeleteSelf  = errors.New("cannot delete your own account")
-	ErrLastAdmin         = errors.New("cannot delete or deactivate the last admin user")
+	ErrUsernameExists       = errors.New("username already exists")
+	ErrUserEmailExists      = errors.New("email already exists")
+	ErrCannotDeleteSelf     = errors.New("cannot delete your own account")
+	ErrLastAdmin            = errors.New("cannot delete or deactivate the last admin user")
 	ErrCannotDeactivateSelf = errors.New("cannot deactivate your own account")
 )
 
