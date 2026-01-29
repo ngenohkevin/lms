@@ -22,6 +22,12 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -a -installsuffix cgo \
     -o main ./cmd/server
 
+# Build the CLI tool
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags='-w -s -extldflags "-static"' \
+    -a -installsuffix cgo \
+    -o lms-cli ./cmd/cli
+
 # Create uploads directory in builder stage
 RUN mkdir -p uploads
 
@@ -38,8 +44,9 @@ COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 # Set working directory
 WORKDIR /app
 
-# Copy binary from builder
+# Copy binaries from builder
 COPY --from=builder /app/main .
+COPY --from=builder /app/lms-cli .
 
 # Create necessary directories with proper permissions
 # Note: distroless doesn't have shell, so we use builder stage for directory creation
