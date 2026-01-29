@@ -89,3 +89,75 @@ type RefreshTokenClaims struct {
 	UserType string `json:"user_type"`
 	jwt.RegisteredClaims
 }
+
+// User Management Request/Response Types
+
+// CreateUserRequest represents the request to create a new user
+type CreateUserRequest struct {
+	Username string   `json:"username" binding:"required,min=3,max=50"`
+	Email    string   `json:"email" binding:"required,email"`
+	Password string   `json:"password" binding:"required,min=8"`
+	Role     UserRole `json:"role" binding:"required,oneof=admin librarian staff"`
+}
+
+// UpdateUserRequest represents the request to update a user
+type UpdateUserRequest struct {
+	Email    *string   `json:"email,omitempty" binding:"omitempty,email"`
+	Role     *UserRole `json:"role,omitempty" binding:"omitempty,oneof=admin librarian staff"`
+	IsActive *bool     `json:"is_active,omitempty"`
+}
+
+// ResetUserPasswordRequest represents the request to reset a user's password
+type ResetUserPasswordRequest struct {
+	Password string `json:"password" binding:"required,min=8"`
+}
+
+// UpdateUserStatusRequest represents the request to update user status
+type UpdateUserStatusRequest struct {
+	IsActive bool    `json:"is_active"`
+	Reason   *string `json:"reason,omitempty"`
+}
+
+// UserResponse represents a safe user response without password
+type UserResponse struct {
+	ID        int        `json:"id"`
+	Username  string     `json:"username"`
+	Email     string     `json:"email"`
+	Role      UserRole   `json:"role"`
+	IsActive  bool       `json:"is_active"`
+	LastLogin *time.Time `json:"last_login,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+}
+
+// ToResponse converts a User to UserResponse (excludes password hash)
+func (u *User) ToResponse() *UserResponse {
+	return &UserResponse{
+		ID:        u.ID,
+		Username:  u.Username,
+		Email:     u.Email,
+		Role:      u.Role,
+		IsActive:  u.IsActive,
+		LastLogin: u.LastLogin,
+		CreatedAt: u.CreatedAt,
+		UpdatedAt: u.UpdatedAt,
+	}
+}
+
+// UserSearchParams represents search/filter parameters for listing users
+type UserSearchParams struct {
+	Query    string    `form:"q"`
+	Role     *UserRole `form:"role"`
+	IsActive *bool     `form:"active"`
+	Page     int       `form:"page,default=1"`
+	Limit    int       `form:"limit,default=20"`
+}
+
+// UserListResponse represents a paginated list of users
+type UserListResponse struct {
+	Users      []*UserResponse `json:"users"`
+	Pagination *Pagination     `json:"pagination"`
+}
+
+// Available roles for dropdown selection
+var AvailableRoles = []UserRole{RoleAdmin, RoleLibrarian, RoleStaff}

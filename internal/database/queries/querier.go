@@ -15,12 +15,15 @@ type Querier interface {
 	BulkUpdateStudentStatus(ctx context.Context, arg BulkUpdateStudentStatusParams) error
 	CancelQueueItem(ctx context.Context, id int32) (EmailQueue, error)
 	CancelReservation(ctx context.Context, id int32) (Reservation, error)
+	CheckEmailExists(ctx context.Context, arg CheckEmailExistsParams) (bool, error)
+	CheckUsernameExists(ctx context.Context, arg CheckUsernameExistsParams) (bool, error)
 	CleanupExpiredExportFiles(ctx context.Context) ([]ExportFile, error)
 	CompleteQueueItem(ctx context.Context, id int32) (EmailQueue, error)
 	CountActiveBorrowingsByStudent(ctx context.Context, studentID int32) (int64, error)
 	CountActiveReservationsByBook(ctx context.Context, bookID int32) (int64, error)
 	CountActiveReservationsByStudent(ctx context.Context, studentID int32) (int64, error)
 	CountActiveTransactionsByBook(ctx context.Context, bookID int32) (int64, error)
+	CountAdminUsers(ctx context.Context) (int64, error)
 	CountAuditLogs(ctx context.Context) (int64, error)
 	CountAuditLogsByTable(ctx context.Context, tableName string) (int64, error)
 	CountAvailableBooks(ctx context.Context) (int64, error)
@@ -32,6 +35,7 @@ type Querier interface {
 	CountOverdueTransactions(ctx context.Context) (int64, error)
 	// Renewal-related queries for Phase 6.7
 	CountRenewalsByStudentAndBook(ctx context.Context, arg CountRenewalsByStudentAndBookParams) (int64, error)
+	CountSearchUsers(ctx context.Context, arg CountSearchUsersParams) (int64, error)
 	CountStudents(ctx context.Context) (int64, error)
 	CountStudentsByStatus(ctx context.Context, isActive pgtype.Bool) (int64, error)
 	CountStudentsByYear(ctx context.Context, yearOfStudy int32) (int64, error)
@@ -201,6 +205,7 @@ type Querier interface {
 	SearchBooksByGenre(ctx context.Context, arg SearchBooksByGenreParams) ([]Book, error)
 	SearchStudents(ctx context.Context, arg SearchStudentsParams) ([]Student, error)
 	SearchStudentsIncludingDeleted(ctx context.Context, arg SearchStudentsIncludingDeletedParams) ([]Student, error)
+	SearchUsers(ctx context.Context, arg SearchUsersParams) ([]User, error)
 	SoftDeleteBook(ctx context.Context, id int32) error
 	SoftDeleteStudent(ctx context.Context, id int32) error
 	SoftDeleteUser(ctx context.Context, id int32) error
@@ -232,6 +237,10 @@ type Querier interface {
 	UpdateTransactionReturn(ctx context.Context, arg UpdateTransactionReturnParams) (Transaction, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
 	UpdateUserLastLogin(ctx context.Context, id int32) error
+	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
+	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error)
+	UpdateUserStatus(ctx context.Context, arg UpdateUserStatusParams) (User, error)
+	UpsertUser(ctx context.Context, arg UpsertUserParams) (User, error)
 	WaiveFineByTransactionID(ctx context.Context, arg WaiveFineByTransactionIDParams) (Transaction, error)
 }
 

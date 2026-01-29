@@ -2,6 +2,7 @@ package tests
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -109,6 +110,45 @@ func (m *MockUserService) AddUser(user *models.User) {
 
 func (m *MockUserService) AddStudent(student *models.Student) {
 	m.students[student.StudentID] = student
+}
+
+// User management methods (stubs for interface compliance)
+func (m *MockUserService) ListUsers(ctx context.Context, params *models.UserSearchParams) (*models.UserListResponse, error) {
+	return &models.UserListResponse{Users: []*models.UserResponse{}, Pagination: &models.Pagination{}}, nil
+}
+
+func (m *MockUserService) CreateUserWithPassword(ctx context.Context, req *models.CreateUserRequest, hashedPassword string) (*models.User, error) {
+	return nil, nil
+}
+
+func (m *MockUserService) UpdateUserProfile(ctx context.Context, id int, req *models.UpdateUserRequest) (*models.User, error) {
+	return nil, nil
+}
+
+func (m *MockUserService) UpdateUserStatus(ctx context.Context, id int, currentUserID int, isActive bool) (*models.User, error) {
+	return nil, nil
+}
+
+func (m *MockUserService) ResetUserPassword(ctx context.Context, id int, hashedPassword string) error {
+	return nil
+}
+
+func (m *MockUserService) SoftDeleteUser(ctx context.Context, id int, currentUserID int) error {
+	return nil
+}
+
+func (m *MockUserService) CheckUsernameExists(ctx context.Context, username string, excludeID *int) (bool, error) {
+	_, exists := m.users[username]
+	return exists, nil
+}
+
+func (m *MockUserService) CheckEmailExists(ctx context.Context, email string, excludeID *int) (bool, error) {
+	for _, user := range m.users {
+		if user.Email == email {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func TestAuthenticationFlow(t *testing.T) {

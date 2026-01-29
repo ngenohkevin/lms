@@ -174,11 +174,12 @@ func main() {
 	ratingHandler := handlers.NewRatingHandler(ratingService)
 	categoryHandler := handlers.NewCategoryHandler(db.Queries)
 	fineHandler := handlers.NewFineHandler(fineService)
+	userHandler := handlers.NewUserHandler(userService, authService)
 
 	// Setup routes
 	setupRoutes(router, authHandler, healthHandler, bookHandler, studentHandler,
 		transactionHandler, reservationHandler, notificationHandler,
-		reportHandler, importExportHandler, uploadHandler, ratingHandler, categoryHandler, fineHandler, authMiddleware)
+		reportHandler, importExportHandler, uploadHandler, ratingHandler, categoryHandler, fineHandler, userHandler, authMiddleware)
 
 	// Start scheduler
 	if err := schedulerService.Start(); err != nil {
@@ -259,6 +260,7 @@ func setupRoutes(
 	ratingHandler *handlers.RatingHandler,
 	categoryHandler *handlers.CategoryHandler,
 	fineHandler *handlers.FineHandler,
+	userHandler *handlers.UserHandler,
 	authMiddleware *middleware.AuthMiddleware,
 ) {
 	// Health check endpoints (no auth required)
@@ -445,6 +447,20 @@ func setupRoutes(
 				importExport.GET("/export/students", studentHandler.ExportStudents)
 				importExport.GET("/history", importExportHandler.GetImportHistory)
 				importExport.GET("/templates/:type", importExportHandler.GetImportTemplate)
+			}
+
+			// User management routes (admin only)
+			users := protected.Group("/users")
+			users.Use(authMiddleware.RequireAdmin())
+			{
+				users.GET("", userHandler.ListUsers)
+				users.GET("/roles", userHandler.GetRoles)
+				users.POST("", userHandler.CreateUser)
+				users.GET("/:id", userHandler.GetUser)
+				users.PUT("/:id", userHandler.UpdateUser)
+				users.DELETE("/:id", userHandler.DeleteUser)
+				users.PUT("/:id/status", userHandler.UpdateUserStatus)
+				users.PUT("/:id/password", userHandler.ResetUserPassword)
 			}
 		}
 	}

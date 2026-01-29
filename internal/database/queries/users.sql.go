@@ -11,6 +11,79 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const checkEmailExists = `-- name: CheckEmailExists :one
+SELECT EXISTS(
+    SELECT 1 FROM users
+    WHERE email = $1 AND deleted_at IS NULL AND ($2::int IS NULL OR id != $2)
+)
+`
+
+type CheckEmailExistsParams struct {
+	Email   string `db:"email" json:"email"`
+	Column2 int32  `db:"column_2" json:"column_2"`
+}
+
+func (q *Queries) CheckEmailExists(ctx context.Context, arg CheckEmailExistsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, checkEmailExists, arg.Email, arg.Column2)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const checkUsernameExists = `-- name: CheckUsernameExists :one
+SELECT EXISTS(
+    SELECT 1 FROM users
+    WHERE username = $1 AND deleted_at IS NULL AND ($2::int IS NULL OR id != $2)
+)
+`
+
+type CheckUsernameExistsParams struct {
+	Username string `db:"username" json:"username"`
+	Column2  int32  `db:"column_2" json:"column_2"`
+}
+
+func (q *Queries) CheckUsernameExists(ctx context.Context, arg CheckUsernameExistsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, checkUsernameExists, arg.Username, arg.Column2)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const countAdminUsers = `-- name: CountAdminUsers :one
+SELECT COUNT(*) FROM users
+WHERE role = 'admin' AND is_active = true AND deleted_at IS NULL
+`
+
+func (q *Queries) CountAdminUsers(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countAdminUsers)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSearchUsers = `-- name: CountSearchUsers :one
+SELECT COUNT(*) FROM users
+WHERE deleted_at IS NULL
+  AND ($1::text IS NULL OR $1 = '' OR
+       username ILIKE '%' || $1 || '%' OR
+       email ILIKE '%' || $1 || '%')
+  AND ($2::text IS NULL OR $2 = '' OR role = $2)
+  AND ($3::boolean IS NULL OR is_active = $3)
+`
+
+type CountSearchUsersParams struct {
+	Column1 string `db:"column_1" json:"column_1"`
+	Column2 string `db:"column_2" json:"column_2"`
+	Column3 bool   `db:"column_3" json:"column_3"`
+}
+
+func (q *Queries) CountSearchUsers(ctx context.Context, arg CountSearchUsersParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchUsers, arg.Column1, arg.Column2, arg.Column3)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countUsers = `-- name: CountUsers :one
 SELECT COUNT(*) FROM users
 WHERE deleted_at IS NULL
@@ -171,6 +244,63 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 	return items, nil
 }
 
+const searchUsers = `-- name: SearchUsers :many
+SELECT id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at FROM users
+WHERE deleted_at IS NULL
+  AND ($1::text IS NULL OR $1 = '' OR
+       username ILIKE '%' || $1 || '%' OR
+       email ILIKE '%' || $1 || '%')
+  AND ($2::text IS NULL OR $2 = '' OR role = $2)
+  AND ($3::boolean IS NULL OR is_active = $3)
+ORDER BY created_at DESC
+LIMIT $4 OFFSET $5
+`
+
+type SearchUsersParams struct {
+	Column1 string `db:"column_1" json:"column_1"`
+	Column2 string `db:"column_2" json:"column_2"`
+	Column3 bool   `db:"column_3" json:"column_3"`
+	Limit   int32  `db:"limit" json:"limit"`
+	Offset  int32  `db:"offset" json:"offset"`
+}
+
+func (q *Queries) SearchUsers(ctx context.Context, arg SearchUsersParams) ([]User, error) {
+	rows, err := q.db.Query(ctx, searchUsers,
+		arg.Column1,
+		arg.Column2,
+		arg.Column3,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []User{}
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Username,
+			&i.Email,
+			&i.PasswordHash,
+			&i.Role,
+			&i.IsActive,
+			&i.LastLogin,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const softDeleteUser = `-- name: SoftDeleteUser :exec
 UPDATE users
 SET deleted_at = NOW(), updated_at = NOW()
@@ -230,4 +360,135 @@ WHERE id = $1
 func (q *Queries) UpdateUserLastLogin(ctx context.Context, id int32) error {
 	_, err := q.db.Exec(ctx, updateUserLastLogin, id)
 	return err
+}
+
+const updateUserPassword = `-- name: UpdateUserPassword :exec
+UPDATE users
+SET password_hash = $2, updated_at = NOW()
+WHERE id = $1 AND deleted_at IS NULL
+`
+
+type UpdateUserPasswordParams struct {
+	ID           int32  `db:"id" json:"id"`
+	PasswordHash string `db:"password_hash" json:"password_hash"`
+}
+
+func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
+	_, err := q.db.Exec(ctx, updateUserPassword, arg.ID, arg.PasswordHash)
+	return err
+}
+
+const updateUserProfile = `-- name: UpdateUserProfile :one
+UPDATE users
+SET email = COALESCE($2, email),
+    role = COALESCE($3, role),
+    is_active = COALESCE($4, is_active),
+    updated_at = NOW()
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at
+`
+
+type UpdateUserProfileParams struct {
+	ID       int32       `db:"id" json:"id"`
+	Email    string      `db:"email" json:"email"`
+	Role     pgtype.Text `db:"role" json:"role"`
+	IsActive pgtype.Bool `db:"is_active" json:"is_active"`
+}
+
+func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserProfile,
+		arg.ID,
+		arg.Email,
+		arg.Role,
+		arg.IsActive,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Role,
+		&i.IsActive,
+		&i.LastLogin,
+		&i.DeletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateUserStatus = `-- name: UpdateUserStatus :one
+UPDATE users
+SET is_active = $2, updated_at = NOW()
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at
+`
+
+type UpdateUserStatusParams struct {
+	ID       int32       `db:"id" json:"id"`
+	IsActive pgtype.Bool `db:"is_active" json:"is_active"`
+}
+
+func (q *Queries) UpdateUserStatus(ctx context.Context, arg UpdateUserStatusParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserStatus, arg.ID, arg.IsActive)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Role,
+		&i.IsActive,
+		&i.LastLogin,
+		&i.DeletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const upsertUser = `-- name: UpsertUser :one
+INSERT INTO users (username, email, password_hash, role, is_active)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (username)
+DO UPDATE SET
+    email = EXCLUDED.email,
+    password_hash = EXCLUDED.password_hash,
+    role = EXCLUDED.role,
+    is_active = EXCLUDED.is_active,
+    updated_at = NOW()
+RETURNING id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at
+`
+
+type UpsertUserParams struct {
+	Username     string      `db:"username" json:"username"`
+	Email        string      `db:"email" json:"email"`
+	PasswordHash string      `db:"password_hash" json:"password_hash"`
+	Role         pgtype.Text `db:"role" json:"role"`
+	IsActive     pgtype.Bool `db:"is_active" json:"is_active"`
+}
+
+func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, upsertUser,
+		arg.Username,
+		arg.Email,
+		arg.PasswordHash,
+		arg.Role,
+		arg.IsActive,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Role,
+		&i.IsActive,
+		&i.LastLogin,
+		&i.DeletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

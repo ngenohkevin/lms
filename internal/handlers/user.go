@@ -1,0 +1,419 @@
+package handlers
+
+import (
+	"errors"
+	"net/http"
+	"strconv"
+
+	"github.com/gin-gonic/gin"
+	"github.com/ngenohkevin/lms/internal/middleware"
+	"github.com/ngenohkevin/lms/internal/models"
+	"github.com/ngenohkevin/lms/internal/services"
+)
+
+type UserHandler struct {
+	userService services.UserServiceInterface
+	authService *services.AuthService
+}
+
+func NewUserHandler(userService services.UserServiceInterface, authService *services.AuthService) *UserHandler {
+	return &UserHandler{
+		userService: userService,
+		authService: authService,
+	}
+}
+
+// ListUsers returns a paginated list of users
+// GET /api/v1/users
+func (h *UserHandler) ListUsers(c *gin.Context) {
+	var params models.UserSearchParams
+	if err := c.ShouldBindQuery(&params); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "VALIDATION_ERROR",
+				"message": "Invalid query parameters",
+				"details": err.Error(),
+			},
+		})
+		return
+	}
+
+	result, err := h.userService.ListUsers(c.Request.Context(), &params)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "INTERNAL_ERROR",
+				"message": "Failed to list users",
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    result,
+	})
+}
+
+// GetUser returns a single user by ID
+// GET /api/v1/users/:id
+func (h *UserHandler) GetUser(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "INVALID_ID",
+				"message": "Invalid user ID",
+			},
+		})
+		return
+	}
+
+	user, err := h.userService.GetUserByID(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "USER_NOT_FOUND",
+				"message": "User not found",
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    user.ToResponse(),
+	})
+}
+
+// CreateUser creates a new user
+// POST /api/v1/users
+func (h *UserHandler) CreateUser(c *gin.Context) {
+	var req models.CreateUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "VALIDATION_ERROR",
+				"message": "Invalid request data",
+				"details": err.Error(),
+			},
+		})
+		return
+	}
+
+	// Hash the password
+	hashedPassword, err := h.authService.HashPassword(req.Password)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "INVALID_PASSWORD",
+				"message": "Password must be at least 8 characters long",
+			},
+		})
+		return
+	}
+
+	user, err := h.userService.CreateUserWithPassword(c.Request.Context(), &req, hashedPassword)
+	if err != nil {
+		if errors.Is(err, services.ErrUsernameExists) {
+			c.JSON(http.StatusConflict, gin.H{
+				"success": false,
+				"error": gin.H{
+					"code":    "USERNAME_EXISTS",
+					"message": "Username already exists",
+				},
+			})
+			return
+		}
+		if errors.Is(err, services.ErrUserEmailExists) {
+			c.JSON(http.StatusConflict, gin.H{
+				"success": false,
+				"error": gin.H{
+					"code":    "EMAIL_EXISTS",
+					"message": "Email already exists",
+				},
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "INTERNAL_ERROR",
+				"message": "Failed to create user",
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
+		"data":    user.ToResponse(),
+		"message": "User created successfully",
+	})
+}
+
+// UpdateUser updates a user's profile
+// PUT /api/v1/users/:id
+func (h *UserHandler) UpdateUser(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "INVALID_ID",
+				"message": "Invalid user ID",
+			},
+		})
+		return
+	}
+
+	var req models.UpdateUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "VALIDATION_ERROR",
+				"message": "Invalid request data",
+				"details": err.Error(),
+			},
+		})
+		return
+	}
+
+	user, err := h.userService.UpdateUserProfile(c.Request.Context(), id, &req)
+	if err != nil {
+		if errors.Is(err, services.ErrUserEmailExists) {
+			c.JSON(http.StatusConflict, gin.H{
+				"success": false,
+				"error": gin.H{
+					"code":    "EMAIL_EXISTS",
+					"message": "Email already exists",
+				},
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "INTERNAL_ERROR",
+				"message": "Failed to update user",
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    user.ToResponse(),
+		"message": "User updated successfully",
+	})
+}
+
+// DeleteUser soft-deletes a user
+// DELETE /api/v1/users/:id
+func (h *UserHandler) DeleteUser(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "INVALID_ID",
+				"message": "Invalid user ID",
+			},
+		})
+		return
+	}
+
+	currentUserID := middleware.GetUserID(c)
+
+	err = h.userService.SoftDeleteUser(c.Request.Context(), id, currentUserID)
+	if err != nil {
+		if errors.Is(err, services.ErrCannotDeleteSelf) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"error": gin.H{
+					"code":    "CANNOT_DELETE_SELF",
+					"message": "You cannot delete your own account",
+				},
+			})
+			return
+		}
+		if errors.Is(err, services.ErrLastAdmin) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"error": gin.H{
+					"code":    "LAST_ADMIN",
+					"message": "Cannot delete the last admin user",
+				},
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "INTERNAL_ERROR",
+				"message": "Failed to delete user",
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "User deleted successfully",
+	})
+}
+
+// UpdateUserStatus activates or deactivates a user
+// PUT /api/v1/users/:id/status
+func (h *UserHandler) UpdateUserStatus(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "INVALID_ID",
+				"message": "Invalid user ID",
+			},
+		})
+		return
+	}
+
+	var req models.UpdateUserStatusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "VALIDATION_ERROR",
+				"message": "Invalid request data",
+				"details": err.Error(),
+			},
+		})
+		return
+	}
+
+	currentUserID := middleware.GetUserID(c)
+
+	user, err := h.userService.UpdateUserStatus(c.Request.Context(), id, currentUserID, req.IsActive)
+	if err != nil {
+		if errors.Is(err, services.ErrCannotDeactivateSelf) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"error": gin.H{
+					"code":    "CANNOT_DEACTIVATE_SELF",
+					"message": "You cannot deactivate your own account",
+				},
+			})
+			return
+		}
+		if errors.Is(err, services.ErrLastAdmin) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"error": gin.H{
+					"code":    "LAST_ADMIN",
+					"message": "Cannot deactivate the last admin user",
+				},
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "INTERNAL_ERROR",
+				"message": "Failed to update user status",
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    user.ToResponse(),
+		"message": "User status updated successfully",
+	})
+}
+
+// ResetUserPassword resets a user's password (admin action)
+// PUT /api/v1/users/:id/password
+func (h *UserHandler) ResetUserPassword(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "INVALID_ID",
+				"message": "Invalid user ID",
+			},
+		})
+		return
+	}
+
+	var req models.ResetUserPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "VALIDATION_ERROR",
+				"message": "Invalid request data",
+				"details": err.Error(),
+			},
+		})
+		return
+	}
+
+	// Hash the new password
+	hashedPassword, err := h.authService.HashPassword(req.Password)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "INVALID_PASSWORD",
+				"message": "Password must be at least 8 characters long",
+			},
+		})
+		return
+	}
+
+	err = h.userService.ResetUserPassword(c.Request.Context(), id, hashedPassword)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "INTERNAL_ERROR",
+				"message": "Failed to reset password",
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Password reset successfully",
+	})
+}
+
+// GetRoles returns available roles for user assignment
+// GET /api/v1/users/roles
+func (h *UserHandler) GetRoles(c *gin.Context) {
+	roles := []gin.H{
+		{"value": string(models.RoleAdmin), "label": "Admin", "description": "Full system access"},
+		{"value": string(models.RoleLibrarian), "label": "Librarian", "description": "Library management access"},
+		{"value": string(models.RoleStaff), "label": "Staff", "description": "Basic staff access"},
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    roles,
+	})
+}
