@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -195,6 +196,14 @@ func (s *InviteService) AcceptInvite(ctx context.Context, req *models.AcceptInvi
 		Role:         pgtype.Text{String: dbInvite.Role, Valid: true},
 	})
 	if err != nil {
+		// Check for duplicate username constraint violation
+		if strings.Contains(err.Error(), "users_username_key") {
+			return nil, ErrUsernameExists
+		}
+		// Check for duplicate email constraint violation
+		if strings.Contains(err.Error(), "users_email") {
+			return nil, ErrUserEmailExists
+		}
 		s.logger.Error("Failed to create user from invite", "error", err, "email", dbInvite.Email)
 		return nil, err
 	}
