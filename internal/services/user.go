@@ -474,7 +474,7 @@ func (s *UserService) CreateUserWithPassword(ctx context.Context, req *models.Cr
 	dbUser, err := s.queries.CreateUser(ctx, queries.CreateUserParams{
 		Username:     req.Username,
 		Email:        req.Email,
-		PasswordHash: hashedPassword,
+		PasswordHash: pgtype.Text{String: hashedPassword, Valid: true},
 		Role:         pgtype.Text{String: string(req.Role), Valid: true},
 	})
 	if err != nil {
@@ -568,7 +568,7 @@ func (s *UserService) UpdateUserStatus(ctx context.Context, id int, currentUserI
 func (s *UserService) ResetUserPassword(ctx context.Context, id int, hashedPassword string) error {
 	err := s.queries.UpdateUserPassword(ctx, queries.UpdateUserPasswordParams{
 		ID:           int32(id),
-		PasswordHash: hashedPassword,
+		PasswordHash: pgtype.Text{String: hashedPassword, Valid: true},
 	})
 	if err != nil {
 		s.logger.Error("Error resetting user password", "error", err, "id", id)
@@ -635,13 +635,15 @@ func (s *UserService) CheckEmailExists(ctx context.Context, email string, exclud
 // Helper function to convert database user to model user
 func (s *UserService) dbUserToModel(u *queries.User) *models.User {
 	user := &models.User{
-		ID:           int(u.ID),
-		Username:     u.Username,
-		Email:        u.Email,
-		PasswordHash: u.PasswordHash,
-		IsActive:     u.IsActive.Bool,
-		CreatedAt:    u.CreatedAt.Time,
-		UpdatedAt:    u.UpdatedAt.Time,
+		ID:        int(u.ID),
+		Username:  u.Username,
+		Email:     u.Email,
+		IsActive:  u.IsActive.Bool,
+		CreatedAt: u.CreatedAt.Time,
+		UpdatedAt: u.UpdatedAt.Time,
+	}
+	if u.PasswordHash.Valid {
+		user.PasswordHash = u.PasswordHash.String
 	}
 	if u.Role.Valid {
 		user.Role = models.UserRole(u.Role.String)

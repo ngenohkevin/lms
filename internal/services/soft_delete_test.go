@@ -62,7 +62,7 @@ func TestSoftDeleteService_SoftDeleteUser(t *testing.T) {
 	user, err := q.CreateUser(ctx, queries.CreateUserParams{
 		Username:     "testuser_soft_delete",
 		Email:        "testuser_soft_delete@example.com",
-		PasswordHash: "hashedpassword",
+		PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
 		Role:         pgtype.Text{String: "librarian", Valid: true},
 	})
 	require.NoError(t, err)
@@ -99,6 +99,7 @@ func TestSoftDeleteService_SoftDeleteStudent(t *testing.T) {
 		LastName:    "Student",
 		Email:       pgtype.Text{String: "test.student.soft.delete@student.edu", Valid: true},
 		YearOfStudy: 1,
+		MaxBooks:    5,
 	})
 	require.NoError(t, err)
 
@@ -165,7 +166,7 @@ func TestSoftDeleteService_RestoreUser(t *testing.T) {
 	user, err := q.CreateUser(ctx, queries.CreateUserParams{
 		Username:     fmt.Sprintf("testuser_restore_%d", timestamp),
 		Email:        fmt.Sprintf("testuser_restore_%d@example.com", timestamp),
-		PasswordHash: "hashedpassword",
+		PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
 		Role:         pgtype.Text{String: "librarian", Valid: true},
 	})
 	require.NoError(t, err)
@@ -200,6 +201,7 @@ func TestSoftDeleteService_RestoreStudent(t *testing.T) {
 		LastName:    "Student",
 		Email:       pgtype.Text{String: "test.student.restore@student.edu", Valid: true},
 		YearOfStudy: 1,
+		MaxBooks:    5,
 	})
 	require.NoError(t, err)
 
@@ -262,7 +264,7 @@ func TestSoftDeleteService_PermanentDeleteUser(t *testing.T) {
 	user, err := q.CreateUser(ctx, queries.CreateUserParams{
 		Username:     fmt.Sprintf("testuser_perm_del_%d", timestamp),
 		Email:        fmt.Sprintf("testuser_perm_del_%d@example.com", timestamp),
-		PasswordHash: "hashedpassword",
+		PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
 		Role:         pgtype.Text{String: "librarian", Valid: true},
 	})
 	require.NoError(t, err)
@@ -298,7 +300,7 @@ func TestSoftDeleteService_PermanentDeleteUser_TooRecent(t *testing.T) {
 	user, err := q.CreateUser(ctx, queries.CreateUserParams{
 		Username:     fmt.Sprintf("testuser_del_rec_%d", timestamp),
 		Email:        fmt.Sprintf("testuser_del_rec_%d@example.com", timestamp),
-		PasswordHash: "hashedpassword",
+		PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
 		Role:         pgtype.Text{String: "librarian", Valid: true},
 	})
 	require.NoError(t, err)
@@ -328,7 +330,7 @@ func TestSoftDeleteService_ListDeletedUsers(t *testing.T) {
 		user, err := q.CreateUser(ctx, queries.CreateUserParams{
 			Username:     "deleted_user_" + string(rune(i+'1')),
 			Email:        "deleted_user_" + string(rune(i+'1')) + "@example.com",
-			PasswordHash: "hashedpassword",
+			PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
 			Role:         pgtype.Text{String: "librarian", Valid: true},
 		})
 		require.NoError(t, err)
@@ -369,6 +371,7 @@ func TestSoftDeleteService_ListDeletedStudents(t *testing.T) {
 			FirstName:   "Deleted",
 			LastName:    "Student" + string(rune(i+'1')),
 			YearOfStudy: 1,
+			MaxBooks:    5,
 		})
 		require.NoError(t, err)
 		studentIDs = append(studentIDs, student.ID)
@@ -449,7 +452,7 @@ func BenchmarkSoftDeleteService_SoftDeleteUser(b *testing.B) {
 		user, err := q.CreateUser(ctx, queries.CreateUserParams{
 			Username:     "benchuser_" + string(rune(i)),
 			Email:        "benchuser_" + string(rune(i)) + "@example.com",
-			PasswordHash: "hashedpassword",
+			PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
 			Role:         pgtype.Text{String: "librarian", Valid: true},
 		})
 		require.NoError(b, err)

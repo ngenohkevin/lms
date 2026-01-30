@@ -129,7 +129,7 @@ func (suite *SQLInjectionSecurityTestSuite) createTestData() {
 		_, err = suite.db.CreateUser(ctx, queries.CreateUserParams{
 			Username:     "testuser",
 			Email:        "test@example.com",
-			PasswordHash: hashedPassword,
+			PasswordHash: pgtype.Text{String: hashedPassword, Valid: true},
 			Role:         pgtype.Text{String: "admin", Valid: true},
 		})
 		require.NoError(suite.T(), err)

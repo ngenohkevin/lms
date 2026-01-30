@@ -118,6 +118,8 @@ func main() {
 	ratingService := services.NewRatingService(cacheService, bookService, studentService)
 	importExportService := services.NewImportExportService(bookService, db.Queries, "./uploads")
 	fineService := services.NewFineService(db.Queries, cfg.Borrowing.FinePerDay)
+	inviteService := services.NewInviteService(db.Pool, logger)
+	setupService := services.NewSetupService(db.Pool, logger)
 
 	// Initialize Email Service (optional)
 	var emailService services.EmailServiceInterface
@@ -175,11 +177,13 @@ func main() {
 	categoryHandler := handlers.NewCategoryHandler(db.Queries)
 	fineHandler := handlers.NewFineHandler(fineService)
 	userHandler := handlers.NewUserHandler(userService, authService)
+	inviteHandler := handlers.NewInviteHandler(inviteService, authService, cfg.Server.FrontendURL)
+	setupHandler := handlers.NewSetupHandler(setupService, authService)
 
 	// Setup routes
 	setupRoutes(router, authHandler, healthHandler, bookHandler, studentHandler,
 		transactionHandler, reservationHandler, notificationHandler,
-		reportHandler, importExportHandler, uploadHandler, ratingHandler, categoryHandler, fineHandler, userHandler, authMiddleware)
+		reportHandler, importExportHandler, uploadHandler, ratingHandler, categoryHandler, fineHandler, userHandler, inviteHandler, setupHandler, authMiddleware)
 
 	// Start scheduler
 	if err := schedulerService.Start(); err != nil {
@@ -261,6 +265,8 @@ func setupRoutes(
 	categoryHandler *handlers.CategoryHandler,
 	fineHandler *handlers.FineHandler,
 	userHandler *handlers.UserHandler,
+	inviteHandler *handlers.InviteHandler,
+	setupHandler *handlers.SetupHandler,
 	authMiddleware *middleware.AuthMiddleware,
 ) {
 	// Health check endpoints (no auth required)
@@ -273,6 +279,13 @@ func setupRoutes(
 	// API v1 routes
 	v1 := router.Group("/api/v1")
 	{
+		// Setup routes (no auth required - only works when no users exist)
+		setup := v1.Group("/setup")
+		{
+			setup.GET("/check", setupHandler.CheckSetup)
+			setup.POST("", setupHandler.CreateFirstAdmin)
+		}
+
 		// Authentication routes (no auth required)
 		auth := v1.Group("/auth")
 		{
@@ -281,6 +294,10 @@ func setupRoutes(
 			auth.POST("/logout", authHandler.Logout)
 			auth.POST("/forgot-password", authHandler.ForgotPassword)
 			auth.POST("/reset-password", authHandler.ResetPassword)
+
+			// Invite routes (public - token-based auth)
+			auth.GET("/invite/:token", inviteHandler.ValidateInvite)
+			auth.POST("/invite/accept", inviteHandler.AcceptInvite)
 		}
 
 		// Protected routes (require authentication)
@@ -461,6 +478,17 @@ func setupRoutes(
 				users.DELETE("/:id", userHandler.DeleteUser)
 				users.PUT("/:id/status", userHandler.UpdateUserStatus)
 				users.PUT("/:id/password", userHandler.ResetUserPassword)
+			}
+
+			// Invite management routes (admin only)
+			invites := protected.Group("/invites")
+			invites.Use(authMiddleware.RequireAdmin())
+			{
+				invites.GET("", inviteHandler.ListInvites)
+				invites.POST("", inviteHandler.CreateInvite)
+				invites.GET("/:id", inviteHandler.GetInvite)
+				invites.DELETE("/:id", inviteHandler.DeleteInvite)
+				invites.POST("/:id/resend", inviteHandler.ResendInvite)
 			}
 		}
 	}

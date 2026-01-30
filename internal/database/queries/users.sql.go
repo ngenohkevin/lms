@@ -61,6 +61,33 @@ func (q *Queries) CountAdminUsers(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countAllUsers = `-- name: CountAllUsers :one
+
+SELECT COUNT(*) FROM users WHERE deleted_at IS NULL
+`
+
+// =====================================================
+// User Invites Queries
+// =====================================================
+// Count all users including inactive ones (for setup check)
+func (q *Queries) CountAllUsers(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countAllUsers)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countPendingInvites = `-- name: CountPendingInvites :one
+SELECT COUNT(*) FROM user_invites WHERE accepted_at IS NULL
+`
+
+func (q *Queries) CountPendingInvites(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countPendingInvites)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countSearchUsers = `-- name: CountSearchUsers :one
 SELECT COUNT(*) FROM users
 WHERE deleted_at IS NULL
@@ -96,16 +123,47 @@ func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const createFirstAdmin = `-- name: CreateFirstAdmin :one
+INSERT INTO users (username, email, password_hash, role, is_active)
+VALUES ($1, $2, $3, 'admin', true) RETURNING id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at, invited_by
+`
+
+type CreateFirstAdminParams struct {
+	Username     string      `db:"username" json:"username"`
+	Email        string      `db:"email" json:"email"`
+	PasswordHash pgtype.Text `db:"password_hash" json:"password_hash"`
+}
+
+// For first-run setup when no users exist
+func (q *Queries) CreateFirstAdmin(ctx context.Context, arg CreateFirstAdminParams) (User, error) {
+	row := q.db.QueryRow(ctx, createFirstAdmin, arg.Username, arg.Email, arg.PasswordHash)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Role,
+		&i.IsActive,
+		&i.LastLogin,
+		&i.DeletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.InvitedBy,
+	)
+	return i, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (username, email, password_hash, role)
 VALUES ($1, $2, $3, $4)
-RETURNING id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at
+RETURNING id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at, invited_by
 `
 
 type CreateUserParams struct {
 	Username     string      `db:"username" json:"username"`
 	Email        string      `db:"email" json:"email"`
-	PasswordHash string      `db:"password_hash" json:"password_hash"`
+	PasswordHash pgtype.Text `db:"password_hash" json:"password_hash"`
 	Role         pgtype.Text `db:"role" json:"role"`
 }
 
@@ -128,12 +186,185 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.InvitedBy,
+	)
+	return i, err
+}
+
+const createUserInvite = `-- name: CreateUserInvite :one
+INSERT INTO user_invites (email, name, role, invite_token, invited_by, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, email, name, role, invite_token, invited_by, expires_at, accepted_at, user_id, created_at, updated_at
+`
+
+type CreateUserInviteParams struct {
+	Email       string           `db:"email" json:"email"`
+	Name        string           `db:"name" json:"name"`
+	Role        string           `db:"role" json:"role"`
+	InviteToken string           `db:"invite_token" json:"invite_token"`
+	InvitedBy   int32            `db:"invited_by" json:"invited_by"`
+	ExpiresAt   pgtype.Timestamp `db:"expires_at" json:"expires_at"`
+}
+
+func (q *Queries) CreateUserInvite(ctx context.Context, arg CreateUserInviteParams) (UserInvite, error) {
+	row := q.db.QueryRow(ctx, createUserInvite,
+		arg.Email,
+		arg.Name,
+		arg.Role,
+		arg.InviteToken,
+		arg.InvitedBy,
+		arg.ExpiresAt,
+	)
+	var i UserInvite
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.Role,
+		&i.InviteToken,
+		&i.InvitedBy,
+		&i.ExpiresAt,
+		&i.AcceptedAt,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createUserWithoutPassword = `-- name: CreateUserWithoutPassword :one
+INSERT INTO users (username, email, role, is_active, invited_by)
+VALUES ($1, $2, $3, true, $4) RETURNING id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at, invited_by
+`
+
+type CreateUserWithoutPasswordParams struct {
+	Username  string      `db:"username" json:"username"`
+	Email     string      `db:"email" json:"email"`
+	Role      pgtype.Text `db:"role" json:"role"`
+	InvitedBy pgtype.Int4 `db:"invited_by" json:"invited_by"`
+}
+
+func (q *Queries) CreateUserWithoutPassword(ctx context.Context, arg CreateUserWithoutPasswordParams) (User, error) {
+	row := q.db.QueryRow(ctx, createUserWithoutPassword,
+		arg.Username,
+		arg.Email,
+		arg.Role,
+		arg.InvitedBy,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Role,
+		&i.IsActive,
+		&i.LastLogin,
+		&i.DeletedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.InvitedBy,
+	)
+	return i, err
+}
+
+const deleteInvite = `-- name: DeleteInvite :exec
+DELETE FROM user_invites WHERE id = $1
+`
+
+func (q *Queries) DeleteInvite(ctx context.Context, id int32) error {
+	_, err := q.db.Exec(ctx, deleteInvite, id)
+	return err
+}
+
+const getInviteByEmail = `-- name: GetInviteByEmail :one
+SELECT id, email, name, role, invite_token, invited_by, expires_at, accepted_at, user_id, created_at, updated_at FROM user_invites WHERE email = $1 AND accepted_at IS NULL AND expires_at > NOW()
+`
+
+func (q *Queries) GetInviteByEmail(ctx context.Context, email string) (UserInvite, error) {
+	row := q.db.QueryRow(ctx, getInviteByEmail, email)
+	var i UserInvite
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.Role,
+		&i.InviteToken,
+		&i.InvitedBy,
+		&i.ExpiresAt,
+		&i.AcceptedAt,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getInviteByID = `-- name: GetInviteByID :one
+SELECT ui.id, ui.email, ui.name, ui.role, ui.invite_token, ui.invited_by, ui.expires_at, ui.accepted_at, ui.user_id, ui.created_at, ui.updated_at, u.username as inviter_name FROM user_invites ui
+JOIN users u ON ui.invited_by = u.id
+WHERE ui.id = $1
+`
+
+type GetInviteByIDRow struct {
+	ID          int32            `db:"id" json:"id"`
+	Email       string           `db:"email" json:"email"`
+	Name        string           `db:"name" json:"name"`
+	Role        string           `db:"role" json:"role"`
+	InviteToken string           `db:"invite_token" json:"invite_token"`
+	InvitedBy   int32            `db:"invited_by" json:"invited_by"`
+	ExpiresAt   pgtype.Timestamp `db:"expires_at" json:"expires_at"`
+	AcceptedAt  pgtype.Timestamp `db:"accepted_at" json:"accepted_at"`
+	UserID      pgtype.Int4      `db:"user_id" json:"user_id"`
+	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt   pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	InviterName string           `db:"inviter_name" json:"inviter_name"`
+}
+
+func (q *Queries) GetInviteByID(ctx context.Context, id int32) (GetInviteByIDRow, error) {
+	row := q.db.QueryRow(ctx, getInviteByID, id)
+	var i GetInviteByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.Role,
+		&i.InviteToken,
+		&i.InvitedBy,
+		&i.ExpiresAt,
+		&i.AcceptedAt,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.InviterName,
+	)
+	return i, err
+}
+
+const getInviteByToken = `-- name: GetInviteByToken :one
+SELECT id, email, name, role, invite_token, invited_by, expires_at, accepted_at, user_id, created_at, updated_at FROM user_invites WHERE invite_token = $1 AND accepted_at IS NULL
+`
+
+func (q *Queries) GetInviteByToken(ctx context.Context, inviteToken string) (UserInvite, error) {
+	row := q.db.QueryRow(ctx, getInviteByToken, inviteToken)
+	var i UserInvite
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.Role,
+		&i.InviteToken,
+		&i.InvitedBy,
+		&i.ExpiresAt,
+		&i.AcceptedAt,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at FROM users
+SELECT id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at, invited_by FROM users
 WHERE email = $1 AND deleted_at IS NULL
 `
 
@@ -151,12 +382,13 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.InvitedBy,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at FROM users
+SELECT id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at, invited_by FROM users
 WHERE id = $1 AND deleted_at IS NULL
 `
 
@@ -174,12 +406,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id int32) (User, error) {
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.InvitedBy,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at FROM users
+SELECT id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at, invited_by FROM users
 WHERE username = $1 AND deleted_at IS NULL
 `
 
@@ -197,12 +430,74 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.InvitedBy,
 	)
 	return i, err
 }
 
+const listPendingInvites = `-- name: ListPendingInvites :many
+SELECT ui.id, ui.email, ui.name, ui.role, ui.invite_token, ui.invited_by, ui.expires_at, ui.accepted_at, ui.user_id, ui.created_at, ui.updated_at, u.username as inviter_name FROM user_invites ui
+JOIN users u ON ui.invited_by = u.id
+WHERE ui.accepted_at IS NULL
+ORDER BY ui.created_at DESC
+LIMIT $1 OFFSET $2
+`
+
+type ListPendingInvitesParams struct {
+	Limit  int32 `db:"limit" json:"limit"`
+	Offset int32 `db:"offset" json:"offset"`
+}
+
+type ListPendingInvitesRow struct {
+	ID          int32            `db:"id" json:"id"`
+	Email       string           `db:"email" json:"email"`
+	Name        string           `db:"name" json:"name"`
+	Role        string           `db:"role" json:"role"`
+	InviteToken string           `db:"invite_token" json:"invite_token"`
+	InvitedBy   int32            `db:"invited_by" json:"invited_by"`
+	ExpiresAt   pgtype.Timestamp `db:"expires_at" json:"expires_at"`
+	AcceptedAt  pgtype.Timestamp `db:"accepted_at" json:"accepted_at"`
+	UserID      pgtype.Int4      `db:"user_id" json:"user_id"`
+	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt   pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	InviterName string           `db:"inviter_name" json:"inviter_name"`
+}
+
+func (q *Queries) ListPendingInvites(ctx context.Context, arg ListPendingInvitesParams) ([]ListPendingInvitesRow, error) {
+	rows, err := q.db.Query(ctx, listPendingInvites, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPendingInvitesRow{}
+	for rows.Next() {
+		var i ListPendingInvitesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.Name,
+			&i.Role,
+			&i.InviteToken,
+			&i.InvitedBy,
+			&i.ExpiresAt,
+			&i.AcceptedAt,
+			&i.UserID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.InviterName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at FROM users
+SELECT id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at, invited_by FROM users
 WHERE deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
@@ -233,6 +528,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.InvitedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -244,8 +540,37 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 	return items, nil
 }
 
+const markInviteAccepted = `-- name: MarkInviteAccepted :one
+UPDATE user_invites SET accepted_at = NOW(), user_id = $2, updated_at = NOW()
+WHERE id = $1 RETURNING id, email, name, role, invite_token, invited_by, expires_at, accepted_at, user_id, created_at, updated_at
+`
+
+type MarkInviteAcceptedParams struct {
+	ID     int32       `db:"id" json:"id"`
+	UserID pgtype.Int4 `db:"user_id" json:"user_id"`
+}
+
+func (q *Queries) MarkInviteAccepted(ctx context.Context, arg MarkInviteAcceptedParams) (UserInvite, error) {
+	row := q.db.QueryRow(ctx, markInviteAccepted, arg.ID, arg.UserID)
+	var i UserInvite
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.Role,
+		&i.InviteToken,
+		&i.InvitedBy,
+		&i.ExpiresAt,
+		&i.AcceptedAt,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const searchUsers = `-- name: SearchUsers :many
-SELECT id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at FROM users
+SELECT id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at, invited_by FROM users
 WHERE deleted_at IS NULL
   AND ($1::text IS NULL OR $1 = '' OR
        username ILIKE '%' || $1 || '%' OR
@@ -290,6 +615,7 @@ func (q *Queries) SearchUsers(ctx context.Context, arg SearchUsersParams) ([]Use
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.InvitedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -299,6 +625,20 @@ func (q *Queries) SearchUsers(ctx context.Context, arg SearchUsersParams) ([]Use
 		return nil, err
 	}
 	return items, nil
+}
+
+const setUserPassword = `-- name: SetUserPassword :exec
+UPDATE users SET password_hash = $2, updated_at = NOW() WHERE id = $1
+`
+
+type SetUserPasswordParams struct {
+	ID           int32       `db:"id" json:"id"`
+	PasswordHash pgtype.Text `db:"password_hash" json:"password_hash"`
+}
+
+func (q *Queries) SetUserPassword(ctx context.Context, arg SetUserPasswordParams) error {
+	_, err := q.db.Exec(ctx, setUserPassword, arg.ID, arg.PasswordHash)
+	return err
 }
 
 const softDeleteUser = `-- name: SoftDeleteUser :exec
@@ -312,18 +652,48 @@ func (q *Queries) SoftDeleteUser(ctx context.Context, id int32) error {
 	return err
 }
 
+const updateInviteToken = `-- name: UpdateInviteToken :one
+UPDATE user_invites SET invite_token = $2, expires_at = $3, updated_at = NOW()
+WHERE id = $1 RETURNING id, email, name, role, invite_token, invited_by, expires_at, accepted_at, user_id, created_at, updated_at
+`
+
+type UpdateInviteTokenParams struct {
+	ID          int32            `db:"id" json:"id"`
+	InviteToken string           `db:"invite_token" json:"invite_token"`
+	ExpiresAt   pgtype.Timestamp `db:"expires_at" json:"expires_at"`
+}
+
+func (q *Queries) UpdateInviteToken(ctx context.Context, arg UpdateInviteTokenParams) (UserInvite, error) {
+	row := q.db.QueryRow(ctx, updateInviteToken, arg.ID, arg.InviteToken, arg.ExpiresAt)
+	var i UserInvite
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.Role,
+		&i.InviteToken,
+		&i.InvitedBy,
+		&i.ExpiresAt,
+		&i.AcceptedAt,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateUser = `-- name: UpdateUser :one
 UPDATE users
 SET username = $2, email = $3, password_hash = $4, role = $5, updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at
+RETURNING id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at, invited_by
 `
 
 type UpdateUserParams struct {
 	ID           int32       `db:"id" json:"id"`
 	Username     string      `db:"username" json:"username"`
 	Email        string      `db:"email" json:"email"`
-	PasswordHash string      `db:"password_hash" json:"password_hash"`
+	PasswordHash pgtype.Text `db:"password_hash" json:"password_hash"`
 	Role         pgtype.Text `db:"role" json:"role"`
 }
 
@@ -347,6 +717,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.InvitedBy,
 	)
 	return i, err
 }
@@ -369,8 +740,8 @@ WHERE id = $1 AND deleted_at IS NULL
 `
 
 type UpdateUserPasswordParams struct {
-	ID           int32  `db:"id" json:"id"`
-	PasswordHash string `db:"password_hash" json:"password_hash"`
+	ID           int32       `db:"id" json:"id"`
+	PasswordHash pgtype.Text `db:"password_hash" json:"password_hash"`
 }
 
 func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
@@ -385,7 +756,7 @@ SET email = COALESCE($2, email),
     is_active = COALESCE($4, is_active),
     updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at
+RETURNING id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at, invited_by
 `
 
 type UpdateUserProfileParams struct {
@@ -414,6 +785,7 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.InvitedBy,
 	)
 	return i, err
 }
@@ -422,7 +794,7 @@ const updateUserStatus = `-- name: UpdateUserStatus :one
 UPDATE users
 SET is_active = $2, updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at
+RETURNING id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at, invited_by
 `
 
 type UpdateUserStatusParams struct {
@@ -444,6 +816,7 @@ func (q *Queries) UpdateUserStatus(ctx context.Context, arg UpdateUserStatusPara
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.InvitedBy,
 	)
 	return i, err
 }
@@ -458,13 +831,13 @@ DO UPDATE SET
     role = EXCLUDED.role,
     is_active = EXCLUDED.is_active,
     updated_at = NOW()
-RETURNING id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at
+RETURNING id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at, invited_by
 `
 
 type UpsertUserParams struct {
 	Username     string      `db:"username" json:"username"`
 	Email        string      `db:"email" json:"email"`
-	PasswordHash string      `db:"password_hash" json:"password_hash"`
+	PasswordHash pgtype.Text `db:"password_hash" json:"password_hash"`
 	Role         pgtype.Text `db:"role" json:"role"`
 	IsActive     pgtype.Bool `db:"is_active" json:"is_active"`
 }
@@ -489,6 +862,7 @@ func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (User, e
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.InvitedBy,
 	)
 	return i, err
 }

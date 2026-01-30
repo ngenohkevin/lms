@@ -90,7 +90,7 @@ func (suite *DatabaseIntegrationTestSuite) TestCompleteUserWorkflow() {
 	user, err := suite.queries.CreateUser(suite.ctx, queries.CreateUserParams{
 		Username:     username,
 		Email:        email,
-		PasswordHash: "hashedpassword",
+		PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
 		Role:         pgtype.Text{String: "librarian", Valid: true},
 	})
 	require.NoError(suite.T(), err)
@@ -112,7 +112,7 @@ func (suite *DatabaseIntegrationTestSuite) TestCompleteUserWorkflow() {
 		ID:           user.ID,
 		Username:     updatedUsername,
 		Email:        updatedEmail,
-		PasswordHash: "newhashedpassword",
+		PasswordHash: pgtype.Text{String: "newhashedpassword", Valid: true},
 		Role:         pgtype.Text{String: "admin", Valid: true},
 	})
 	require.NoError(suite.T(), err)
@@ -301,7 +301,7 @@ func (suite *DatabaseIntegrationTestSuite) TestTransactionOperations() {
 	librarian, err := suite.queries.CreateUser(suite.ctx, queries.CreateUserParams{
 		Username:     fmt.Sprintf("test_lib_trans_%d", timestamp),
 		Email:        fmt.Sprintf("test_lib_trans_%d@example.com", timestamp),
-		PasswordHash: "hashedpassword",
+		PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
 		Role:         pgtype.Text{String: "librarian", Valid: true},
 	})
 	require.NoError(suite.T(), err)
@@ -493,7 +493,7 @@ func (suite *DatabaseIntegrationTestSuite) TestConcurrentOperations() {
 			user, err := suite.queries.CreateUser(suite.ctx, queries.CreateUserParams{
 				Username:     fmt.Sprintf("concurrent_user_%d", index),
 				Email:        fmt.Sprintf("concurrent_user_%d@example.com", index),
-				PasswordHash: "hashedpassword",
+				PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
 				Role:         pgtype.Text{String: "librarian", Valid: true},
 			})
 			if err != nil {

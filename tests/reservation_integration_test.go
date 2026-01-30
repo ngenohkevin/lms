@@ -390,7 +390,7 @@ func createTestLibrarian(t *testing.T, querier *queries.Queries, username, email
 	user, err := querier.CreateUser(context.Background(), queries.CreateUserParams{
 		Username:     username,
 		Email:        email,
-		PasswordHash: "hashedpassword",
+		PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
 		Role:         pgtype.Text{String: "librarian", Valid: true},
 	})
 	require.NoError(t, err)

@@ -99,7 +99,7 @@ func (suite *TransactionIntegrationTestSuite) SetupTest() {
 	testUser, err := suite.queries.CreateUser(suite.ctx, queries.CreateUserParams{
 		Username:     "test_librarian",
 		Email:        "librarian@test.com",
-		PasswordHash: "$2a$10$abcdefghijklmnopqrstuv",
+		PasswordHash: pgtype.Text{String: "$2a$10$abcdefghijklmnopqrstuv", Valid: true},
 		Role:         pgtype.Text{String: "librarian", Valid: true},
 	})
 	require.NoError(suite.T(), err)

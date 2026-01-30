@@ -48,7 +48,7 @@ func TestImportExportIntegration(t *testing.T) {
 	user, err := db.Queries.CreateUser(context.Background(), queries.CreateUserParams{
 		Username:     "admin",
 		Email:        "admin@example.com",
-		PasswordHash: "hashedpassword",
+		PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
 		Role:         pgtype.Text{String: "admin", Valid: true},
 	})
 	if err != nil {
@@ -56,7 +56,7 @@ func TestImportExportIntegration(t *testing.T) {
 		user, err = db.Queries.CreateUser(context.Background(), queries.CreateUserParams{
 			Username:     "admin" + fmt.Sprintf("%d", time.Now().Unix()),
 			Email:        "admin" + fmt.Sprintf("%d", time.Now().Unix()) + "@example.com",
-			PasswordHash: "hashedpassword",
+			PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
 			Role:         pgtype.Text{String: "admin", Valid: true},
 		})
 		if err != nil {
@@ -382,7 +382,7 @@ func TestImportExportFileOperations(t *testing.T) {
 		user, err := db.Queries.CreateUser(context.Background(), queries.CreateUserParams{
 			Username:     fmt.Sprintf("testuser_size_%d", timestamp),
 			Email:        fmt.Sprintf("testuser_size_%d@example.com", timestamp),
-			PasswordHash: "hashedpassword",
+			PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
 			Role:         pgtype.Text{String: "admin", Valid: true},
 		})
 		require.NoError(t, err)
@@ -448,7 +448,7 @@ func TestImportExportFileOperations(t *testing.T) {
 		user, err := db.Queries.CreateUser(context.Background(), queries.CreateUserParams{
 			Username:     fmt.Sprintf("testuser_empty_%d", timestamp),
 			Email:        fmt.Sprintf("testuser_empty_%d@example.com", timestamp),
-			PasswordHash: "hashedpassword",
+			PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
 			Role:         pgtype.Text{String: "admin", Valid: true},
 		})
 		require.NoError(t, err)
@@ -523,7 +523,7 @@ func TestImportExportPersistence(t *testing.T) {
 		user, err := db.Queries.CreateUser(context.Background(), queries.CreateUserParams{
 			Username:     fmt.Sprintf("testuser_persist_%d", userTimestamp),
 			Email:        fmt.Sprintf("testuser_persist_%d@example.com", userTimestamp),
-			PasswordHash: "hashedpassword",
+			PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
 			Role:         pgtype.Text{String: "admin", Valid: true},
 		})
 		require.NoError(t, err)

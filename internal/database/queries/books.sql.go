@@ -38,7 +38,7 @@ func (q *Queries) CountBooks(ctx context.Context) (int64, error) {
 const createBook = `-- name: CreateBook :one
 INSERT INTO books (book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-RETURNING id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition
+RETURNING id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition, category_id
 `
 
 type CreateBookParams struct {
@@ -91,6 +91,7 @@ func (q *Queries) CreateBook(ctx context.Context, arg CreateBookParams) (Book, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Condition,
+		&i.CategoryID,
 	)
 	return i, err
 }
@@ -111,7 +112,7 @@ func (q *Queries) DecrementBookAvailability(ctx context.Context, id int32) (pgty
 }
 
 const getBookByBookID = `-- name: GetBookByBookID :one
-SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition FROM books
+SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition, category_id FROM books
 WHERE book_id = $1 AND deleted_at IS NULL
 `
 
@@ -137,12 +138,13 @@ func (q *Queries) GetBookByBookID(ctx context.Context, bookID string) (Book, err
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Condition,
+		&i.CategoryID,
 	)
 	return i, err
 }
 
 const getBookByID = `-- name: GetBookByID :one
-SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition FROM books
+SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition, category_id FROM books
 WHERE id = $1 AND deleted_at IS NULL
 `
 
@@ -168,12 +170,13 @@ func (q *Queries) GetBookByID(ctx context.Context, id int32) (Book, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Condition,
+		&i.CategoryID,
 	)
 	return i, err
 }
 
 const getBookByISBN = `-- name: GetBookByISBN :one
-SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition FROM books
+SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition, category_id FROM books
 WHERE isbn = $1 AND deleted_at IS NULL
 `
 
@@ -199,6 +202,7 @@ func (q *Queries) GetBookByISBN(ctx context.Context, isbn pgtype.Text) (Book, er
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Condition,
+		&i.CategoryID,
 	)
 	return i, err
 }
@@ -219,7 +223,7 @@ func (q *Queries) IncrementBookAvailability(ctx context.Context, id int32) (pgty
 }
 
 const listAvailableBooks = `-- name: ListAvailableBooks :many
-SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition FROM books
+SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition, category_id FROM books
 WHERE available_copies > 0 AND deleted_at IS NULL
 ORDER BY title
 LIMIT $1 OFFSET $2
@@ -258,6 +262,7 @@ func (q *Queries) ListAvailableBooks(ctx context.Context, arg ListAvailableBooks
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Condition,
+			&i.CategoryID,
 		); err != nil {
 			return nil, err
 		}
@@ -270,7 +275,7 @@ func (q *Queries) ListAvailableBooks(ctx context.Context, arg ListAvailableBooks
 }
 
 const listBooks = `-- name: ListBooks :many
-SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition FROM books
+SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition, category_id FROM books
 WHERE deleted_at IS NULL
 ORDER BY title
 LIMIT $1 OFFSET $2
@@ -309,6 +314,7 @@ func (q *Queries) ListBooks(ctx context.Context, arg ListBooksParams) ([]Book, e
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Condition,
+			&i.CategoryID,
 		); err != nil {
 			return nil, err
 		}
@@ -321,7 +327,7 @@ func (q *Queries) ListBooks(ctx context.Context, arg ListBooksParams) ([]Book, e
 }
 
 const searchBooks = `-- name: SearchBooks :many
-SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition FROM books
+SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition, category_id FROM books
 WHERE (title ILIKE $1 OR author ILIKE $1 OR book_id ILIKE $1 OR isbn ILIKE $1)
 AND deleted_at IS NULL
 ORDER BY title
@@ -362,6 +368,7 @@ func (q *Queries) SearchBooks(ctx context.Context, arg SearchBooksParams) ([]Boo
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Condition,
+			&i.CategoryID,
 		); err != nil {
 			return nil, err
 		}
@@ -374,7 +381,7 @@ func (q *Queries) SearchBooks(ctx context.Context, arg SearchBooksParams) ([]Boo
 }
 
 const searchBooksByGenre = `-- name: SearchBooksByGenre :many
-SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition FROM books
+SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition, category_id FROM books
 WHERE genre = $1 AND deleted_at IS NULL
 ORDER BY title
 LIMIT $2 OFFSET $3
@@ -414,6 +421,7 @@ func (q *Queries) SearchBooksByGenre(ctx context.Context, arg SearchBooksByGenre
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Condition,
+			&i.CategoryID,
 		); err != nil {
 			return nil, err
 		}
@@ -440,7 +448,7 @@ const updateBook = `-- name: UpdateBook :one
 UPDATE books
 SET book_id = $2, isbn = $3, title = $4, author = $5, publisher = $6, published_year = $7, genre = $8, description = $9, cover_image_url = $10, total_copies = $11, available_copies = $12, shelf_location = $13, updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition
+RETURNING id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition, category_id
 `
 
 type UpdateBookParams struct {
@@ -495,6 +503,7 @@ func (q *Queries) UpdateBook(ctx context.Context, arg UpdateBookParams) (Book, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Condition,
+		&i.CategoryID,
 	)
 	return i, err
 }

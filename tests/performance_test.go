@@ -42,7 +42,7 @@ func BenchmarkDatabaseOperations(b *testing.B) {
 			_, err := q.CreateUser(ctx, queries.CreateUserParams{
 				Username:     fmt.Sprintf("perf_user_%s_%d", benchID, i),
 				Email:        fmt.Sprintf("perf_user_%s_%d@example.com", benchID, i),
-				PasswordHash: "hashedpassword123",
+				PasswordHash: pgtype.Text{String: "hashedpassword123", Valid: true},
 				Role:         pgtype.Text{String: "librarian", Valid: true},
 			})
 			if err != nil {
@@ -156,7 +156,7 @@ func TestConcurrentUsers(t *testing.T) {
 		librarian, err := q.CreateUser(ctx, queries.CreateUserParams{
 			Username:     fmt.Sprintf("conc_lib_%s", testID),
 			Email:        fmt.Sprintf("conc_lib_%s@example.com", testID),
-			PasswordHash: "hashedpassword123",
+			PasswordHash: pgtype.Text{String: "hashedpassword123", Valid: true},
 			Role:         pgtype.Text{String: "librarian", Valid: true},
 		})
 		require.NoError(t, err)
@@ -250,7 +250,7 @@ func TestConcurrentUsers(t *testing.T) {
 				_, err := q.CreateUser(ctx, queries.CreateUserParams{
 					Username:     fmt.Sprintf("conc_user_%s_%d", testID, userIndex),
 					Email:        fmt.Sprintf("conc_user_%s_%d@example.com", testID, userIndex),
-					PasswordHash: "hashedpassword123",
+					PasswordHash: pgtype.Text{String: "hashedpassword123", Valid: true},
 					Role:         pgtype.Text{String: "librarian", Valid: true},
 				})
 

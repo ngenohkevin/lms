@@ -169,7 +169,7 @@ func runCreateAdmin(cmd *cobra.Command, args []string) error {
 	user, err := db.Queries.UpsertUser(ctx, queries.UpsertUserParams{
 		Username:     username,
 		Email:        email,
-		PasswordHash: hashedPassword,
+		PasswordHash: pgtype.Text{String: hashedPassword, Valid: true},
 		Role:         pgtype.Text{String: role, Valid: true},
 		IsActive:     pgtype.Bool{Bool: true, Valid: true},
 	})

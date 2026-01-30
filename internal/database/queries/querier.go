@@ -24,6 +24,11 @@ type Querier interface {
 	CountActiveReservationsByStudent(ctx context.Context, studentID int32) (int64, error)
 	CountActiveTransactionsByBook(ctx context.Context, bookID int32) (int64, error)
 	CountAdminUsers(ctx context.Context) (int64, error)
+	// =====================================================
+	// User Invites Queries
+	// =====================================================
+	// Count all users including inactive ones (for setup check)
+	CountAllUsers(ctx context.Context) (int64, error)
 	CountAuditLogs(ctx context.Context) (int64, error)
 	CountAuditLogsByTable(ctx context.Context, tableName string) (int64, error)
 	CountAvailableBooks(ctx context.Context) (int64, error)
@@ -33,6 +38,7 @@ type Querier interface {
 	CountImportHistoryByFilters(ctx context.Context, arg CountImportHistoryByFiltersParams) (int64, error)
 	CountNotificationsByType(ctx context.Context, type_ string) (int64, error)
 	CountOverdueTransactions(ctx context.Context) (int64, error)
+	CountPendingInvites(ctx context.Context) (int64, error)
 	// Renewal-related queries for Phase 6.7
 	CountRenewalsByStudentAndBook(ctx context.Context, arg CountRenewalsByStudentAndBookParams) (int64, error)
 	CountSearchUsers(ctx context.Context, arg CountSearchUsersParams) (int64, error)
@@ -57,6 +63,8 @@ type Querier interface {
 	// Phase 7.4: Email Integration - Queue Processing
 	CreateEmailQueueItem(ctx context.Context, arg CreateEmailQueueItemParams) (EmailQueue, error)
 	CreateExportFile(ctx context.Context, arg CreateExportFileParams) (ExportFile, error)
+	// For first-run setup when no users exist
+	CreateFirstAdmin(ctx context.Context, arg CreateFirstAdminParams) (User, error)
 	CreateImportError(ctx context.Context, arg CreateImportErrorParams) (ImportError, error)
 	CreateImportHistory(ctx context.Context, arg CreateImportHistoryParams) (ImportHistory, error)
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) (Notification, error)
@@ -64,10 +72,13 @@ type Querier interface {
 	CreateStudent(ctx context.Context, arg CreateStudentParams) (Student, error)
 	CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	CreateUserInvite(ctx context.Context, arg CreateUserInviteParams) (UserInvite, error)
+	CreateUserWithoutPassword(ctx context.Context, arg CreateUserWithoutPasswordParams) (User, error)
 	DeactivateCategory(ctx context.Context, id int32) error
 	// Atomically decrement available copies. Returns the new count, or no rows if book unavailable.
 	DecrementBookAvailability(ctx context.Context, id int32) (pgtype.Int4, error)
 	DeleteCategory(ctx context.Context, id int32) error
+	DeleteInvite(ctx context.Context, id int32) error
 	DeleteNotification(ctx context.Context, id int32) error
 	DeleteOldAuditLogs(ctx context.Context, createdAt pgtype.Timestamp) error
 	DeleteOldEmailDeliveries(ctx context.Context, createdAt pgtype.Timestamp) error
@@ -106,6 +117,9 @@ type Querier interface {
 	GetImportHistoryByUserID(ctx context.Context, arg GetImportHistoryByUserIDParams) ([]ImportHistory, error)
 	GetImportHistoryStats(ctx context.Context, userID int32) (GetImportHistoryStatsRow, error)
 	GetInventoryStatus(ctx context.Context) ([]GetInventoryStatusRow, error)
+	GetInviteByEmail(ctx context.Context, email string) (UserInvite, error)
+	GetInviteByID(ctx context.Context, id int32) (GetInviteByIDRow, error)
+	GetInviteByToken(ctx context.Context, inviteToken string) (UserInvite, error)
 	GetLibraryOverview(ctx context.Context) (GetLibraryOverviewRow, error)
 	GetMonthlyTrends(ctx context.Context, arg GetMonthlyTrendsParams) ([]GetMonthlyTrendsRow, error)
 	GetNextQueueItems(ctx context.Context, limit int32) ([]EmailQueue, error)
@@ -175,6 +189,7 @@ type Querier interface {
 	ListNotificationsByRecipient(ctx context.Context, arg ListNotificationsByRecipientParams) ([]Notification, error)
 	ListNotificationsByType(ctx context.Context, arg ListNotificationsByTypeParams) ([]Notification, error)
 	ListOverdueTransactions(ctx context.Context) ([]ListOverdueTransactionsRow, error)
+	ListPendingInvites(ctx context.Context, arg ListPendingInvitesParams) ([]ListPendingInvitesRow, error)
 	ListRenewalsByStudentAndBook(ctx context.Context, arg ListRenewalsByStudentAndBookParams) ([]ListRenewalsByStudentAndBookRow, error)
 	ListReservations(ctx context.Context, arg ListReservationsParams) ([]ListReservationsRow, error)
 	ListReservationsByBook(ctx context.Context, bookID int32) ([]ListReservationsByBookRow, error)
@@ -195,6 +210,7 @@ type Querier interface {
 	ListUnreadNotificationsByRecipient(ctx context.Context, arg ListUnreadNotificationsByRecipientParams) ([]Notification, error)
 	ListUnsentNotifications(ctx context.Context, limit int32) ([]Notification, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
+	MarkInviteAccepted(ctx context.Context, arg MarkInviteAcceptedParams) (UserInvite, error)
 	MarkNotificationAsRead(ctx context.Context, id int32) error
 	MarkNotificationAsSent(ctx context.Context, id int32) error
 	PayFineByTransactionID(ctx context.Context, id int32) (Transaction, error)
@@ -206,6 +222,7 @@ type Querier interface {
 	SearchStudents(ctx context.Context, arg SearchStudentsParams) ([]Student, error)
 	SearchStudentsIncludingDeleted(ctx context.Context, arg SearchStudentsIncludingDeletedParams) ([]Student, error)
 	SearchUsers(ctx context.Context, arg SearchUsersParams) ([]User, error)
+	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) error
 	SoftDeleteBook(ctx context.Context, id int32) error
 	SoftDeleteStudent(ctx context.Context, id int32) error
 	SoftDeleteUser(ctx context.Context, id int32) error
@@ -222,6 +239,7 @@ type Querier interface {
 	UpdateExportFileDownload(ctx context.Context, id int32) (ExportFile, error)
 	UpdateFineAmount(ctx context.Context, arg UpdateFineAmountParams) error
 	UpdateImportHistory(ctx context.Context, arg UpdateImportHistoryParams) (ImportHistory, error)
+	UpdateInviteToken(ctx context.Context, arg UpdateInviteTokenParams) (UserInvite, error)
 	UpdateQueueItemError(ctx context.Context, arg UpdateQueueItemErrorParams) (EmailQueue, error)
 	// Items processing longer than threshold
 	UpdateQueueItemStatus(ctx context.Context, arg UpdateQueueItemStatusParams) (EmailQueue, error)

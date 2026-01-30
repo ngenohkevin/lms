@@ -249,7 +249,7 @@ func (suite *StudentIntegrationTestSuite) createTestUser() {
 	userParams := queries.CreateUserParams{
 		Username:     testUsername,
 		Email:        testEmail,
-		PasswordHash: hashedPassword,
+		PasswordHash: pgtype.Text{String: hashedPassword, Valid: true},
 		Role:         role,
 	}
 

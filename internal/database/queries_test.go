@@ -46,7 +46,7 @@ func TestQueries_UserOperations(t *testing.T) {
 	user, err := q.CreateUser(ctx, queries.CreateUserParams{
 		Username:     "testuser_queries",
 		Email:        "testqueries@example.com",
-		PasswordHash: "hashedpassword",
+		PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
 		Role:         pgtype.Text{String: "librarian", Valid: true},
 	})
 	require.NoError(t, err)
@@ -76,7 +76,7 @@ func TestQueries_UserOperations(t *testing.T) {
 		ID:           user.ID,
 		Username:     "updateduser",
 		Email:        "updated@example.com",
-		PasswordHash: "newhashedpassword",
+		PasswordHash: pgtype.Text{String: "newhashedpassword", Valid: true},
 		Role:         pgtype.Text{String: "admin", Valid: true},
 	})
 	require.NoError(t, err)
@@ -355,7 +355,7 @@ func BenchmarkQueries_CreateUser(b *testing.B) {
 		user, err := q.CreateUser(ctx, queries.CreateUserParams{
 			Username:     username,
 			Email:        email,
-			PasswordHash: "hashedpassword",
+			PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
 			Role:         pgtype.Text{String: "librarian", Valid: true},
 		})
 		if err != nil {

@@ -25,6 +25,7 @@ type ServerConfig struct {
 	Port           string   `mapstructure:"port"`
 	Mode           string   `mapstructure:"mode"`
 	AllowedOrigins []string `mapstructure:"allowed_origins"`
+	FrontendURL    string   `mapstructure:"frontend_url"` // Base URL for invite links
 }
 
 type DatabaseConfig struct {
@@ -117,6 +118,7 @@ func Load() (*Config, error) {
 		"http://localhost:3001",
 		"http://127.0.0.1:3000",
 	})
+	viper.SetDefault("server.frontend_url", "http://localhost:3000")
 	viper.SetDefault("database.host", "localhost")
 	viper.SetDefault("database.port", 5432)
 	viper.SetDefault("database.ssl_mode", "disable")
@@ -185,6 +187,11 @@ func Load() (*Config, error) {
 			origins[i] = strings.TrimSpace(origin)
 		}
 		viper.Set("server.allowed_origins", origins)
+	}
+
+	// Frontend URL from environment
+	if frontendURL := os.Getenv("LMS_FRONTEND_URL"); frontendURL != "" {
+		viper.Set("server.frontend_url", frontendURL)
 	}
 
 	// Email configuration from environment

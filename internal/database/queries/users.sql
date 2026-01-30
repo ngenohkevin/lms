@@ -108,3 +108,59 @@ SELECT EXISTS(
     SELECT 1 FROM users
     WHERE email = $1 AND deleted_at IS NULL AND ($2::int IS NULL OR id != $2)
 );
+
+-- =====================================================
+-- User Invites Queries
+-- =====================================================
+
+-- name: CountAllUsers :one
+-- Count all users including inactive ones (for setup check)
+SELECT COUNT(*) FROM users WHERE deleted_at IS NULL;
+
+-- name: CreateUserInvite :one
+INSERT INTO user_invites (email, name, role, invite_token, invited_by, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6) RETURNING *;
+
+-- name: GetInviteByToken :one
+SELECT * FROM user_invites WHERE invite_token = $1 AND accepted_at IS NULL;
+
+-- name: GetInviteByEmail :one
+SELECT * FROM user_invites WHERE email = $1 AND accepted_at IS NULL AND expires_at > NOW();
+
+-- name: MarkInviteAccepted :one
+UPDATE user_invites SET accepted_at = NOW(), user_id = $2, updated_at = NOW()
+WHERE id = $1 RETURNING *;
+
+-- name: ListPendingInvites :many
+SELECT ui.*, u.username as inviter_name FROM user_invites ui
+JOIN users u ON ui.invited_by = u.id
+WHERE ui.accepted_at IS NULL
+ORDER BY ui.created_at DESC
+LIMIT $1 OFFSET $2;
+
+-- name: CountPendingInvites :one
+SELECT COUNT(*) FROM user_invites WHERE accepted_at IS NULL;
+
+-- name: DeleteInvite :exec
+DELETE FROM user_invites WHERE id = $1;
+
+-- name: UpdateInviteToken :one
+UPDATE user_invites SET invite_token = $2, expires_at = $3, updated_at = NOW()
+WHERE id = $1 RETURNING *;
+
+-- name: GetInviteByID :one
+SELECT ui.*, u.username as inviter_name FROM user_invites ui
+JOIN users u ON ui.invited_by = u.id
+WHERE ui.id = $1;
+
+-- name: CreateUserWithoutPassword :one
+INSERT INTO users (username, email, role, is_active, invited_by)
+VALUES ($1, $2, $3, true, $4) RETURNING *;
+
+-- name: SetUserPassword :exec
+UPDATE users SET password_hash = $2, updated_at = NOW() WHERE id = $1;
+
+-- name: CreateFirstAdmin :one
+-- For first-run setup when no users exist
+INSERT INTO users (username, email, password_hash, role, is_active)
+VALUES ($1, $2, $3, 'admin', true) RETURNING *;

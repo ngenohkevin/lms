@@ -62,7 +62,7 @@ func TestDatabaseCoverageSimple(t *testing.T) {
 		user, err := q.CreateUser(ctx, queries.CreateUserParams{
 			Username:     "covtest_user1",
 			Email:        "covtest1@example.com",
-			PasswordHash: "hashedpassword",
+			PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
 			Role:         pgtype.Text{String: "librarian", Valid: true},
 		})
 		require.NoError(t, err)
@@ -228,7 +228,7 @@ func TestDatabaseCoverageSimple(t *testing.T) {
 		user, err := q.CreateUser(ctx, queries.CreateUserParams{
 			Username:     "covtest_user2",
 			Email:        "covtest2@example.com",
-			PasswordHash: "hashedpassword",
+			PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
 			Role:         pgtype.Text{String: "librarian", Valid: true},
 		})
 		require.NoError(t, err)
@@ -403,7 +403,7 @@ func TestDatabaseCoverageSimple(t *testing.T) {
 		user, err := q.CreateUser(ctx, queries.CreateUserParams{
 			Username:     "covtest_audit_user",
 			Email:        "covtest_audit@example.com",
-			PasswordHash: "hashedpassword",
+			PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
 			Role:         pgtype.Text{String: "admin", Valid: true},
 		})
 		require.NoError(t, err)

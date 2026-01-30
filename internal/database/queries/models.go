@@ -43,6 +43,7 @@ type Book struct {
 	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
 	Condition       pgtype.Text      `db:"condition" json:"condition"`
+	CategoryID      pgtype.Int4      `db:"category_id" json:"category_id"`
 }
 
 type Category struct {
@@ -182,7 +183,11 @@ type Student struct {
 	CreatedAt      pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt      pgtype.Timestamp `db:"updated_at" json:"updated_at"`
 	// Maximum number of books this student can borrow at once
-	MaxBooks int32 `db:"max_books" json:"max_books"`
+	MaxBooks         int32            `db:"max_books" json:"max_books"`
+	Status           pgtype.Text      `db:"status" json:"status"`
+	SuspensionReason pgtype.Text      `db:"suspension_reason" json:"suspension_reason"`
+	GraduatedAt      pgtype.Timestamp `db:"graduated_at" json:"graduated_at"`
+	AdminNotes       pgtype.Text      `db:"admin_notes" json:"admin_notes"`
 }
 
 type Transaction struct {
@@ -212,11 +217,26 @@ type User struct {
 	ID           int32            `db:"id" json:"id"`
 	Username     string           `db:"username" json:"username"`
 	Email        string           `db:"email" json:"email"`
-	PasswordHash string           `db:"password_hash" json:"password_hash"`
+	PasswordHash pgtype.Text      `db:"password_hash" json:"password_hash"`
 	Role         pgtype.Text      `db:"role" json:"role"`
 	IsActive     pgtype.Bool      `db:"is_active" json:"is_active"`
 	LastLogin    pgtype.Timestamp `db:"last_login" json:"last_login"`
 	DeletedAt    pgtype.Timestamp `db:"deleted_at" json:"deleted_at"`
 	CreatedAt    pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt    pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	InvitedBy    pgtype.Int4      `db:"invited_by" json:"invited_by"`
+}
+
+type UserInvite struct {
+	ID          int32            `db:"id" json:"id"`
+	Email       string           `db:"email" json:"email"`
+	Name        string           `db:"name" json:"name"`
+	Role        string           `db:"role" json:"role"`
+	InviteToken string           `db:"invite_token" json:"invite_token"`
+	InvitedBy   int32            `db:"invited_by" json:"invited_by"`
+	ExpiresAt   pgtype.Timestamp `db:"expires_at" json:"expires_at"`
+	AcceptedAt  pgtype.Timestamp `db:"accepted_at" json:"accepted_at"`
+	UserID      pgtype.Int4      `db:"user_id" json:"user_id"`
+	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt   pgtype.Timestamp `db:"updated_at" json:"updated_at"`
 }

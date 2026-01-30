@@ -434,6 +434,7 @@ func TestEmailDeliveryService_GetPendingDeliveries(t *testing.T) {
 		FirstName:   "Test",
 		LastName:    "Student",
 		YearOfStudy: 1,
+		MaxBooks:    5,
 	})
 	require.NoError(t, err)
 
@@ -493,6 +494,7 @@ func TestEmailDeliveryService_GetFailedDeliveries(t *testing.T) {
 		FirstName:   "Test",
 		LastName:    "Student",
 		YearOfStudy: 1,
+		MaxBooks:    5,
 	})
 	require.NoError(t, err)
 
@@ -554,6 +556,7 @@ func TestEmailDeliveryService_GetDeliveryStats(t *testing.T) {
 		FirstName:   "Test",
 		LastName:    "Student",
 		YearOfStudy: 1,
+		MaxBooks:    5,
 	})
 	require.NoError(t, err)
 
@@ -626,6 +629,7 @@ func TestEmailDeliveryService_UpdateProviderInfo(t *testing.T) {
 		FirstName:   "Test",
 		LastName:    "Student",
 		YearOfStudy: 1,
+		MaxBooks:    5,
 	})
 	require.NoError(t, err)
 

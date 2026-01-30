@@ -195,7 +195,7 @@ func (suite *PenetrationTestSuite) createTestUsers() {
 		_, err = suite.db.CreateUser(ctx, queries.CreateUserParams{
 			Username:     "testuser",
 			Email:        "test@example.com",
-			PasswordHash: hashedPassword,
+			PasswordHash: pgtype.Text{String: hashedPassword, Valid: true},
 			Role:         pgtype.Text{String: "librarian", Valid: true},
 		})
 		require.NoError(suite.T(), err)
@@ -211,7 +211,7 @@ func (suite *PenetrationTestSuite) createTestUsers() {
 		_, err = suite.db.CreateUser(ctx, queries.CreateUserParams{
 			Username:     "admin",
 			Email:        "admin@example.com",
-			PasswordHash: adminPassword,
+			PasswordHash: pgtype.Text{String: adminPassword, Valid: true},
 			Role:         pgtype.Text{String: "admin", Valid: true},
 		})
 		require.NoError(suite.T(), err)
@@ -294,7 +294,7 @@ func (suite *PenetrationTestSuite) TestAuthorizationEscalation() {
 		regularUser, err := suite.db.CreateUser(ctx, queries.CreateUserParams{
 			Username:     uniqueUsername,
 			Email:        uniqueUsername + "@test.com",
-			PasswordHash: "$2a$10$testedhash",
+			PasswordHash: pgtype.Text{String: "$2a$10$testedhash", Valid: true},
 			Role:         pgtype.Text{String: "librarian", Valid: true},
 		})
 		require.NoError(suite.T(), err)

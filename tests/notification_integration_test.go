@@ -95,7 +95,7 @@ func (suite *NotificationIntegrationTestSuite) createTestData() {
 	suite.testUser, err = suite.queries.CreateUser(suite.ctx, queries.CreateUserParams{
 		Username:     "inttest_librarian",
 		Email:        "inttest@example.com",
-		PasswordHash: "hashedpassword",
+		PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
 		Role:         pgtype.Text{String: "librarian", Valid: true},
 	})
 	require.NoError(suite.T(), err)

@@ -161,3 +161,89 @@ type UserListResponse struct {
 
 // Available roles for dropdown selection
 var AvailableRoles = []UserRole{RoleAdmin, RoleLibrarian, RoleStaff}
+
+// =====================================================
+// User Invite Types
+// =====================================================
+
+// InviteStatus represents the status of an invite
+type InviteStatus string
+
+const (
+	InviteStatusPending  InviteStatus = "pending"
+	InviteStatusAccepted InviteStatus = "accepted"
+	InviteStatusExpired  InviteStatus = "expired"
+)
+
+// UserInvite represents an invitation to join the system
+type UserInvite struct {
+	ID          int          `json:"id"`
+	Email       string       `json:"email"`
+	Name        string       `json:"name"`
+	Role        UserRole     `json:"role"`
+	InviteToken string       `json:"-"` // Never expose token in JSON
+	InvitedBy   int          `json:"invited_by"`
+	InviterName string       `json:"inviter_name,omitempty"`
+	ExpiresAt   time.Time    `json:"expires_at"`
+	AcceptedAt  *time.Time   `json:"accepted_at,omitempty"`
+	UserID      *int         `json:"user_id,omitempty"`
+	Status      InviteStatus `json:"status"`
+	CreatedAt   time.Time    `json:"created_at"`
+	UpdatedAt   time.Time    `json:"updated_at"`
+}
+
+// CreateInviteRequest represents the request to invite a new user
+type CreateInviteRequest struct {
+	Email string   `json:"email" binding:"required,email"`
+	Name  string   `json:"name" binding:"required,min=2,max=100"`
+	Role  UserRole `json:"role" binding:"required,oneof=admin librarian staff"`
+}
+
+// CreateInviteResponse represents the response after creating an invite
+type CreateInviteResponse struct {
+	Invite    *UserInvite `json:"invite"`
+	InviteURL string      `json:"invite_url"`
+}
+
+// AcceptInviteRequest represents the request to accept an invite
+type AcceptInviteRequest struct {
+	Token           string `json:"token" binding:"required"`
+	Username        string `json:"username" binding:"required,min=3,max=50"`
+	Password        string `json:"password" binding:"required,min=8"`
+	ConfirmPassword string `json:"confirm_password" binding:"required,min=8"`
+}
+
+// ValidateInviteResponse represents the response when validating an invite token
+type ValidateInviteResponse struct {
+	Valid   bool      `json:"valid"`
+	Email   string    `json:"email,omitempty"`
+	Name    string    `json:"name,omitempty"`
+	Role    *UserRole `json:"role,omitempty"`
+	Message string    `json:"message,omitempty"`
+}
+
+// SetupRequest represents the request to create the first admin user
+type SetupRequest struct {
+	Username        string `json:"username" binding:"required,min=3,max=50"`
+	Email           string `json:"email" binding:"required,email"`
+	Password        string `json:"password" binding:"required,min=8"`
+	ConfirmPassword string `json:"confirm_password" binding:"required,min=8"`
+}
+
+// SetupCheckResponse represents the response for checking if setup is needed
+type SetupCheckResponse struct {
+	SetupRequired bool   `json:"setup_required"`
+	Message       string `json:"message"`
+}
+
+// InviteListResponse represents a paginated list of invites
+type InviteListResponse struct {
+	Invites    []*UserInvite `json:"invites"`
+	Pagination *Pagination   `json:"pagination"`
+}
+
+// InviteSearchParams represents search/filter parameters for listing invites
+type InviteSearchParams struct {
+	Page  int `form:"page,default=1"`
+	Limit int `form:"limit,default=20"`
+}

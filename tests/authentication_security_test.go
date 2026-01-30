@@ -194,7 +194,7 @@ func (suite *AuthenticationSecurityTestSuite) createTestUser() {
 		_, err = suite.queries.CreateUser(ctx, queries.CreateUserParams{
 			Username:     "testuser",
 			Email:        "test@example.com",
-			PasswordHash: hashedPassword,
+			PasswordHash: pgtype.Text{String: hashedPassword, Valid: true},
 			Role:         role,
 		})
 		if err == nil {
