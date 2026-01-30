@@ -416,6 +416,16 @@ func (h *InviteHandler) AcceptInvite(c *gin.Context) {
 			})
 			return
 		}
+		if errors.Is(err, services.ErrUserEmailExists) {
+			c.JSON(http.StatusConflict, gin.H{
+				"success": false,
+				"error": gin.H{
+					"code":    "EMAIL_EXISTS",
+					"message": "A user with this email already exists",
+				},
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error": gin.H{

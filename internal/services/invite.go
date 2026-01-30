@@ -169,6 +169,18 @@ func (s *InviteService) AcceptInvite(ctx context.Context, req *models.AcceptInvi
 		return nil, ErrUsernameExists
 	}
 
+	// Check if email already exists (user may have been created by another invite)
+	emailExists, err := s.queries.CheckEmailExists(ctx, queries.CheckEmailExistsParams{
+		Email:   dbInvite.Email,
+		Column2: 0,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if emailExists {
+		return nil, ErrUserEmailExists
+	}
+
 	// Create user with password
 	dbUser, err := s.queries.CreateUser(ctx, queries.CreateUserParams{
 		Username:     req.Username,
