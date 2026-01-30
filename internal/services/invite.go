@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/ngenohkevin/lms/internal/database/queries"
@@ -61,6 +62,11 @@ func (s *InviteService) CreateInvite(ctx context.Context, req *models.CreateInvi
 	_, err = s.queries.GetInviteByEmail(ctx, req.Email)
 	if err == nil {
 		return nil, ErrEmailAlreadyInvited
+	}
+	// If error is not "no rows", it's a real error
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		s.logger.Error("Failed to check existing invite", "error", err, "email", req.Email)
+		return nil, err
 	}
 
 	// Generate invite token
