@@ -296,8 +296,9 @@ func setupRoutes(
 			auth.POST("/reset-password", authHandler.ResetPassword)
 
 			// Invite routes (public - token-based auth)
-			auth.GET("/invite/:token", inviteHandler.ValidateInvite)
+			// NOTE: /invite/accept must come before /invite/:token to avoid route conflict
 			auth.POST("/invite/accept", inviteHandler.AcceptInvite)
+			auth.GET("/invite/:token", inviteHandler.ValidateInvite)
 		}
 
 		// Protected routes (require authentication)
