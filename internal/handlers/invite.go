@@ -91,7 +91,7 @@ func (h *InviteHandler) CreateInvite(c *gin.Context) {
 		return
 	}
 
-	inviteURL := fmt.Sprintf("%s/accept-invite?token=%s", h.baseURL, token)
+	inviteURL := fmt.Sprintf("%s/accept-invite/%s", h.baseURL, token)
 
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
@@ -180,7 +180,7 @@ func (h *InviteHandler) GetInvite(c *gin.Context) {
 	if invite.Status == models.InviteStatusPending {
 		token, err := h.inviteService.GetInviteToken(c.Request.Context(), id)
 		if err == nil {
-			inviteURL = fmt.Sprintf("%s/accept-invite?token=%s", h.baseURL, token)
+			inviteURL = fmt.Sprintf("%s/accept-invite/%s", h.baseURL, token)
 		}
 	}
 
@@ -288,7 +288,7 @@ func (h *InviteHandler) ResendInvite(c *gin.Context) {
 		return
 	}
 
-	inviteURL := fmt.Sprintf("%s/accept-invite?token=%s", h.baseURL, token)
+	inviteURL := fmt.Sprintf("%s/accept-invite/%s", h.baseURL, token)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
