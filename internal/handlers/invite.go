@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -348,6 +349,13 @@ func (h *InviteHandler) AcceptInvite(c *gin.Context) {
 		})
 		return
 	}
+
+	// Debug logging for token received
+	slog.Info("AcceptInvite request received",
+		"token_length", len(req.Token),
+		"token_first_10", req.Token[:min(10, len(req.Token))],
+		"username", req.Username,
+	)
 
 	// Validate passwords match
 	if req.Password != req.ConfirmPassword {
