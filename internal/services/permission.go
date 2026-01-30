@@ -221,7 +221,7 @@ func (s *PermissionService) UpdateRolePermissions(ctx context.Context, role mode
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	qtx := s.queries.WithTx(tx)
 
