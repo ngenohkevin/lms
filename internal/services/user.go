@@ -130,8 +130,8 @@ func (s *UserService) GetUserByID(id int) (*models.User, error) {
 	ctx := context.Background()
 	query := `
 		SELECT id, username, email, password_hash, role, is_active, last_login, created_at, updated_at
-		FROM users 
-		WHERE id = $1
+		FROM users
+		WHERE id = $1 AND deleted_at IS NULL
 	`
 
 	var user models.User
