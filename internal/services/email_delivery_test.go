@@ -82,6 +82,12 @@ func setupEmailDeliveryTest(t *testing.T) (*EmailDeliveryService, func()) {
 	if testing.Short() {
 		t.Skip("Skipping email delivery integration test in short mode")
 	}
+
+	// Skip if database is not configured
+	if os.Getenv("DATABASE_URL") == "" && os.Getenv("LMS_DATABASE_PASSWORD") == "" {
+		t.Skip("Database not configured, skipping email delivery integration test")
+	}
+
 	// Load test configuration
 	cfg, err := config.Load()
 	require.NoError(t, err)

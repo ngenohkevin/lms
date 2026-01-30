@@ -30,8 +30,8 @@ func setupTestDB(t *testing.T) *pgxpool.Pool {
 		t.Skip("Skipping integration test in short mode")
 	}
 
-	if os.Getenv("DATABASE_URL") == "" {
-		t.Skip("DATABASE_URL not set, skipping database integration test")
+	if shouldSkipIntegrationTest() {
+		t.Skip("Database not configured, skipping integration test")
 	}
 
 	cfg, err := config.Load()
@@ -85,10 +85,16 @@ func generateTestRSAKey() string {
 	return string(pem.EncodeToMemory(privateKeyPEM))
 }
 
+// shouldSkipIntegrationTest returns true if integration tests should be skipped
+func shouldSkipIntegrationTest() bool {
+	return os.Getenv("DATABASE_URL") == "" && os.Getenv("LMS_DATABASE_PASSWORD") == ""
+}
+
 // SetupTestEnvironment creates test database and redis connections
+// Returns nil values if database is not configured (for skipping tests)
 func SetupTestEnvironment() (*queries.Queries, *database.RedisClient, func()) {
-	if os.Getenv("DATABASE_URL") == "" {
-		panic("DATABASE_URL not set for tests")
+	if shouldSkipIntegrationTest() {
+		return nil, nil, func() {}
 	}
 
 	cfg, err := config.Load()
@@ -130,9 +136,10 @@ func SetupTestEnvironment() (*queries.Queries, *database.RedisClient, func()) {
 }
 
 // setupTestEnvironmentWithPool creates test database and redis connections and returns pool
+// Returns nil values if database is not configured (for skipping tests)
 func setupTestEnvironmentWithPool() (*queries.Queries, *pgxpool.Pool, *database.RedisClient, func()) {
-	if os.Getenv("DATABASE_URL") == "" {
-		panic("DATABASE_URL not set for tests")
+	if shouldSkipIntegrationTest() {
+		return nil, nil, nil, func() {}
 	}
 
 	cfg, err := config.Load()

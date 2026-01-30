@@ -12,12 +12,19 @@ import (
 
 type Querier interface {
 	ActivateCategory(ctx context.Context, id int32) error
+	AddRolePermission(ctx context.Context, arg AddRolePermissionParams) error
 	BulkUpdateStudentStatus(ctx context.Context, arg BulkUpdateStudentStatusParams) error
 	CancelQueueItem(ctx context.Context, id int32) (EmailQueue, error)
 	CancelReservation(ctx context.Context, id int32) (Reservation, error)
 	CheckEmailExists(ctx context.Context, arg CheckEmailExistsParams) (bool, error)
+	CheckRoleHasPermission(ctx context.Context, arg CheckRoleHasPermissionParams) (bool, error)
+	// Check if a user has a specific permission (considering role + overrides)
+	CheckUserHasPermission(ctx context.Context, arg CheckUserHasPermissionParams) (bool, error)
 	CheckUsernameExists(ctx context.Context, arg CheckUsernameExistsParams) (bool, error)
 	CleanupExpiredExportFiles(ctx context.Context) ([]ExportFile, error)
+	CleanupExpiredOverrides(ctx context.Context) error
+	ClearRolePermissions(ctx context.Context, role string) error
+	ClearUserOverrides(ctx context.Context, userID int32) error
 	CompleteQueueItem(ctx context.Context, id int32) (EmailQueue, error)
 	CountActiveBorrowingsByStudent(ctx context.Context, studentID int32) (int64, error)
 	CountActiveReservationsByBook(ctx context.Context, bookID int32) (int64, error)
@@ -39,6 +46,7 @@ type Querier interface {
 	CountNotificationsByType(ctx context.Context, type_ string) (int64, error)
 	CountOverdueTransactions(ctx context.Context) (int64, error)
 	CountPendingInvites(ctx context.Context) (int64, error)
+	CountPermissions(ctx context.Context) (int64, error)
 	// Renewal-related queries for Phase 6.7
 	CountRenewalsByStudentAndBook(ctx context.Context, arg CountRenewalsByStudentAndBookParams) (int64, error)
 	CountSearchUsers(ctx context.Context, arg CountSearchUsersParams) (int64, error)
@@ -68,11 +76,13 @@ type Querier interface {
 	CreateImportError(ctx context.Context, arg CreateImportErrorParams) (ImportError, error)
 	CreateImportHistory(ctx context.Context, arg CreateImportHistoryParams) (ImportHistory, error)
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) (Notification, error)
+	CreatePermission(ctx context.Context, arg CreatePermissionParams) (Permission, error)
 	CreateReservation(ctx context.Context, arg CreateReservationParams) (Reservation, error)
 	CreateStudent(ctx context.Context, arg CreateStudentParams) (Student, error)
 	CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserInvite(ctx context.Context, arg CreateUserInviteParams) (UserInvite, error)
+	CreateUserOverride(ctx context.Context, arg CreateUserOverrideParams) (UserPermissionOverride, error)
 	CreateUserWithoutPassword(ctx context.Context, arg CreateUserWithoutPasswordParams) (User, error)
 	DeactivateCategory(ctx context.Context, id int32) error
 	// Atomically decrement available copies. Returns the new count, or no rows if book unavailable.
@@ -84,6 +94,9 @@ type Querier interface {
 	DeleteOldEmailDeliveries(ctx context.Context, createdAt pgtype.Timestamp) error
 	DeleteOldNotifications(ctx context.Context, createdAt pgtype.Timestamp) error
 	DeleteOldQueueItems(ctx context.Context, createdAt pgtype.Timestamp) error
+	DeletePermission(ctx context.Context, id int32) error
+	DeleteUserOverride(ctx context.Context, arg DeleteUserOverrideParams) error
+	DeleteUserOverrideByCode(ctx context.Context, arg DeleteUserOverrideByCodeParams) error
 	GetAcademicYearAnalytics(ctx context.Context, arg GetAcademicYearAnalyticsParams) (GetAcademicYearAnalyticsRow, error)
 	GetActiveExportFiles(ctx context.Context) ([]ExportFile, error)
 	GetBookByBookID(ctx context.Context, bookID string) (Book, error)
@@ -128,6 +141,9 @@ type Querier interface {
 	GetOverdueBooksByYear(ctx context.Context, arg GetOverdueBooksByYearParams) ([]GetOverdueBooksByYearRow, error)
 	GetOverdueTransactionsForFineCalculation(ctx context.Context) ([]GetOverdueTransactionsForFineCalculationRow, error)
 	GetPendingEmailDeliveries(ctx context.Context, limit int32) ([]EmailDelivery, error)
+	GetPermissionByCode(ctx context.Context, code string) (Permission, error)
+	GetPermissionByID(ctx context.Context, id int32) (Permission, error)
+	GetPermissionsByCategory(ctx context.Context, category string) ([]Permission, error)
 	GetPopularBooks(ctx context.Context, arg GetPopularBooksParams) ([]GetPopularBooksRow, error)
 	GetProcessingQueueItems(ctx context.Context, processingStartedAt pgtype.Timestamp) ([]EmailQueue, error)
 	GetQueueItemsByNotification(ctx context.Context, notificationID int32) ([]EmailQueue, error)
@@ -136,6 +152,7 @@ type Querier interface {
 	GetRenewalStatisticsByStudent(ctx context.Context, studentID int32) (GetRenewalStatisticsByStudentRow, error)
 	GetReservationByID(ctx context.Context, id int32) (GetReservationByIDRow, error)
 	GetRiskAnalysis(ctx context.Context) ([]GetRiskAnalysisRow, error)
+	GetRolePermissionCodes(ctx context.Context, role string) ([]string, error)
 	GetSeasonalTrends(ctx context.Context, arg GetSeasonalTrendsParams) ([]GetSeasonalTrendsRow, error)
 	GetStudentActivity(ctx context.Context, arg GetStudentActivityParams) ([]GetStudentActivityRow, error)
 	GetStudentBehaviorAnalysis(ctx context.Context, arg GetStudentBehaviorAnalysisParams) ([]GetStudentBehaviorAnalysisRow, error)
@@ -159,6 +176,14 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id int32) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
+	GetUserDeniedOverrides(ctx context.Context, userID int32) ([]string, error)
+	// =====================================================
+	// Combined Permission Check Queries
+	// =====================================================
+	// Get all effective permissions for a user (role permissions + grants - denials)
+	GetUserEffectivePermissions(ctx context.Context, id int32) ([]string, error)
+	GetUserGrantedOverrides(ctx context.Context, userID int32) ([]string, error)
+	GetUserOverride(ctx context.Context, arg GetUserOverrideParams) (GetUserOverrideRow, error)
 	GetYearBasedOverdueAnalysis(ctx context.Context, arg GetYearBasedOverdueAnalysisParams) ([]GetYearBasedOverdueAnalysisRow, error)
 	GetYearEndSummary(ctx context.Context) (GetYearEndSummaryRow, error)
 	GetYearOverYearComparison(ctx context.Context, dollar_1 []int32) ([]GetYearOverYearComparisonRow, error)
@@ -173,6 +198,7 @@ type Querier interface {
 	ListActiveReservationsForAvailableBook(ctx context.Context, bookID int32) ([]ListActiveReservationsForAvailableBookRow, error)
 	ListActiveTransactionsByStudent(ctx context.Context, studentID int32) ([]ListActiveTransactionsByStudentRow, error)
 	ListAllCategories(ctx context.Context) ([]Category, error)
+	ListAllRolePermissions(ctx context.Context) ([]ListAllRolePermissionsRow, error)
 	ListAuditLogs(ctx context.Context, arg ListAuditLogsParams) ([]AuditLog, error)
 	ListAuditLogsByAction(ctx context.Context, arg ListAuditLogsByActionParams) ([]AuditLog, error)
 	ListAuditLogsByDateRange(ctx context.Context, arg ListAuditLogsByDateRangeParams) ([]AuditLog, error)
@@ -190,10 +216,18 @@ type Querier interface {
 	ListNotificationsByType(ctx context.Context, arg ListNotificationsByTypeParams) ([]Notification, error)
 	ListOverdueTransactions(ctx context.Context) ([]ListOverdueTransactionsRow, error)
 	ListPendingInvites(ctx context.Context, arg ListPendingInvitesParams) ([]ListPendingInvitesRow, error)
+	// =====================================================
+	// Permission Queries
+	// =====================================================
+	ListPermissions(ctx context.Context) ([]Permission, error)
 	ListRenewalsByStudentAndBook(ctx context.Context, arg ListRenewalsByStudentAndBookParams) ([]ListRenewalsByStudentAndBookRow, error)
 	ListReservations(ctx context.Context, arg ListReservationsParams) ([]ListReservationsRow, error)
 	ListReservationsByBook(ctx context.Context, bookID int32) ([]ListReservationsByBookRow, error)
 	ListReservationsByStudent(ctx context.Context, arg ListReservationsByStudentParams) ([]ListReservationsByStudentRow, error)
+	// =====================================================
+	// Role Permission Queries
+	// =====================================================
+	ListRolePermissions(ctx context.Context, role string) ([]Permission, error)
 	ListStudents(ctx context.Context, arg ListStudentsParams) ([]Student, error)
 	ListStudentsByYear(ctx context.Context, arg ListStudentsByYearParams) ([]Student, error)
 	// Fine and Overdue Filtering Queries
@@ -209,12 +243,17 @@ type Querier interface {
 	ListTransactionsWithUnpaidFines(ctx context.Context) ([]ListTransactionsWithUnpaidFinesRow, error)
 	ListUnreadNotificationsByRecipient(ctx context.Context, arg ListUnreadNotificationsByRecipientParams) ([]Notification, error)
 	ListUnsentNotifications(ctx context.Context, limit int32) ([]Notification, error)
+	// =====================================================
+	// User Permission Override Queries
+	// =====================================================
+	ListUserOverrides(ctx context.Context, userID int32) ([]ListUserOverridesRow, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
 	MarkInviteAccepted(ctx context.Context, arg MarkInviteAcceptedParams) (UserInvite, error)
 	MarkNotificationAsRead(ctx context.Context, id int32) error
 	MarkNotificationAsSent(ctx context.Context, id int32) error
 	PayFineByTransactionID(ctx context.Context, id int32) (Transaction, error)
 	PayTransactionFine(ctx context.Context, id int32) error
+	RemoveRolePermission(ctx context.Context, arg RemoveRolePermissionParams) error
 	ResetStuckQueueItems(ctx context.Context, processingStartedAt pgtype.Timestamp) error
 	ReturnBook(ctx context.Context, arg ReturnBookParams) (Transaction, error)
 	SearchBooks(ctx context.Context, arg SearchBooksParams) ([]Book, error)
@@ -240,6 +279,7 @@ type Querier interface {
 	UpdateFineAmount(ctx context.Context, arg UpdateFineAmountParams) error
 	UpdateImportHistory(ctx context.Context, arg UpdateImportHistoryParams) (ImportHistory, error)
 	UpdateInviteToken(ctx context.Context, arg UpdateInviteTokenParams) (UserInvite, error)
+	UpdatePermission(ctx context.Context, arg UpdatePermissionParams) (Permission, error)
 	UpdateQueueItemError(ctx context.Context, arg UpdateQueueItemErrorParams) (EmailQueue, error)
 	// Items processing longer than threshold
 	UpdateQueueItemStatus(ctx context.Context, arg UpdateQueueItemStatusParams) (EmailQueue, error)

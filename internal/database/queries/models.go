@@ -155,6 +155,17 @@ type Notification struct {
 	CreatedAt     pgtype.Timestamp `db:"created_at" json:"created_at"`
 }
 
+type Permission struct {
+	ID          int32            `db:"id" json:"id"`
+	Code        string           `db:"code" json:"code"`
+	Name        string           `db:"name" json:"name"`
+	Description pgtype.Text      `db:"description" json:"description"`
+	Category    string           `db:"category" json:"category"`
+	IsSystem    pgtype.Bool      `db:"is_system" json:"is_system"`
+	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt   pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+}
+
 type Reservation struct {
 	ID          int32            `db:"id" json:"id"`
 	StudentID   int32            `db:"student_id" json:"student_id"`
@@ -165,6 +176,14 @@ type Reservation struct {
 	FulfilledAt pgtype.Timestamp `db:"fulfilled_at" json:"fulfilled_at"`
 	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt   pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+}
+
+type RolePermission struct {
+	ID           int32            `db:"id" json:"id"`
+	Role         string           `db:"role" json:"role"`
+	PermissionID int32            `db:"permission_id" json:"permission_id"`
+	GrantedBy    pgtype.Int4      `db:"granted_by" json:"granted_by"`
+	CreatedAt    pgtype.Timestamp `db:"created_at" json:"created_at"`
 }
 
 type Student struct {
@@ -239,4 +258,16 @@ type UserInvite struct {
 	UserID      pgtype.Int4      `db:"user_id" json:"user_id"`
 	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt   pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+}
+
+type UserPermissionOverride struct {
+	ID           int32            `db:"id" json:"id"`
+	UserID       int32            `db:"user_id" json:"user_id"`
+	PermissionID int32            `db:"permission_id" json:"permission_id"`
+	OverrideType string           `db:"override_type" json:"override_type"`
+	Reason       pgtype.Text      `db:"reason" json:"reason"`
+	GrantedBy    pgtype.Int4      `db:"granted_by" json:"granted_by"`
+	ExpiresAt    pgtype.Timestamp `db:"expires_at" json:"expires_at"`
+	CreatedAt    pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt    pgtype.Timestamp `db:"updated_at" json:"updated_at"`
 }

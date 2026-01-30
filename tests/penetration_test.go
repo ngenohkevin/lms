@@ -45,6 +45,10 @@ func (suite *PenetrationTestSuite) SetupSuite() {
 
 	// Setup test environment
 	testDB, pool, testRedis, cleanup := setupTestEnvironmentWithPool()
+	if testDB == nil {
+		suite.T().Skip("Database not configured, skipping integration tests")
+		return
+	}
 	suite.db = testDB
 	suite.cleanup = cleanup
 

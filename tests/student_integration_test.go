@@ -82,6 +82,12 @@ func (suite *StudentIntegrationTestSuite) SetupSuite() {
 	// Set Gin to test mode
 	gin.SetMode(gin.TestMode)
 
+	// Skip if database not configured
+	if shouldSkipIntegrationTest() {
+		suite.T().Skip("Database not configured, skipping integration tests")
+		return
+	}
+
 	// Load test configuration from environment variables
 	cfg, err := config.Load()
 	require.NoError(suite.T(), err)

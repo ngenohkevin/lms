@@ -23,6 +23,10 @@ func BenchmarkDatabaseOperations(b *testing.B) {
 		b.Skip("Skipping performance benchmark in short mode")
 	}
 
+	if shouldSkipIntegrationTest() {
+		b.Skip("Database not configured, skipping performance benchmark")
+	}
+
 	// Setup database connection
 	cfg, err := config.Load()
 	require.NoError(b, err)
@@ -136,6 +140,10 @@ func BenchmarkAPIEndpoints(b *testing.B) {
 func TestConcurrentUsers(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping concurrent user test in short mode")
+	}
+
+	if shouldSkipIntegrationTest() {
+		t.Skip("Database not configured, skipping concurrent user test")
 	}
 
 	cfg, err := config.Load()
@@ -273,6 +281,10 @@ func TestConcurrentUsers(t *testing.T) {
 func TestLoadScenarios(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping load scenarios in short mode")
+	}
+
+	if shouldSkipIntegrationTest() {
+		t.Skip("Database not configured, skipping load scenarios test")
 	}
 
 	cfg, err := config.Load()

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
@@ -46,9 +45,9 @@ func (suite *TransactionIntegrationTestSuite) SetupSuite() {
 		suite.T().Skip("Skipping integration test in short mode")
 	}
 
-	// Check if DATABASE_URL is set
-	if os.Getenv("DATABASE_URL") == "" {
-		suite.T().Skip("DATABASE_URL not set, skipping transaction integration tests")
+	// Check if database is configured
+	if shouldSkipIntegrationTest() {
+		suite.T().Skip("Database not configured, skipping transaction integration tests")
 	}
 
 	var err error

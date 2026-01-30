@@ -34,6 +34,12 @@ func TestEmailIntegrationTestSuite(t *testing.T) {
 }
 
 func (suite *EmailIntegrationTestSuite) SetupSuite() {
+	// Skip if database not configured
+	if shouldSkipIntegrationTest() {
+		suite.T().Skip("Database not configured, skipping integration tests")
+		return
+	}
+
 	// Load configuration
 	cfg, err := config.Load()
 	require.NoError(suite.T(), err)

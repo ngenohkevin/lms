@@ -42,6 +42,12 @@ type AuthenticationSecurityTestSuite struct {
 func (suite *AuthenticationSecurityTestSuite) SetupSuite() {
 	gin.SetMode(gin.TestMode)
 
+	// Skip if database not configured
+	if shouldSkipIntegrationTest() {
+		suite.T().Skip("Database not configured, skipping integration tests")
+		return
+	}
+
 	// Setup test environment
 	cfg, err := config.Load()
 	require.NoError(suite.T(), err)

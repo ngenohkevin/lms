@@ -33,8 +33,8 @@ func (suite *DatabaseIntegrationTestSuite) SetupSuite() {
 		suite.T().Skip("Skipping integration tests in short mode")
 	}
 
-	if os.Getenv("DATABASE_URL") == "" {
-		suite.T().Skip("DATABASE_URL not set, skipping database integration tests")
+	if shouldSkipIntegrationTest() {
+		suite.T().Skip("Database not configured, skipping database integration tests")
 	}
 
 	cfg, err := config.Load()

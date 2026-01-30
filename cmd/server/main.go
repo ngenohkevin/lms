@@ -121,6 +121,10 @@ func main() {
 	inviteService := services.NewInviteService(db.Pool, logger)
 	setupService := services.NewSetupService(db.Pool, logger)
 
+	// Initialize Permission Cache and Service
+	permissionCache := services.NewPermissionCache(redisClient)
+	permissionService := services.NewPermissionService(db.Pool, permissionCache, logger)
+
 	// Initialize Email Service (optional)
 	var emailService services.EmailServiceInterface
 	if cfg.Email.SMTPHost != "" && cfg.Email.SMTPUsername != "" {
@@ -162,6 +166,9 @@ func main() {
 		logger,
 	)
 
+	// Initialize permission middleware
+	permissionMiddleware := middleware.NewPermissionMiddleware(permissionService)
+
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authService, userService, emailService)
 	healthHandler := handlers.NewHealthHandler(db, redisClient, emailService, cacheService)
@@ -179,11 +186,12 @@ func main() {
 	userHandler := handlers.NewUserHandler(userService, authService)
 	inviteHandler := handlers.NewInviteHandler(inviteService, authService, cfg.Server.FrontendURL)
 	setupHandler := handlers.NewSetupHandler(setupService, authService)
+	permissionHandler := handlers.NewPermissionHandler(permissionService, userService)
 
 	// Setup routes
 	setupRoutes(router, authHandler, healthHandler, bookHandler, studentHandler,
 		transactionHandler, reservationHandler, notificationHandler,
-		reportHandler, importExportHandler, uploadHandler, ratingHandler, categoryHandler, fineHandler, userHandler, inviteHandler, setupHandler, authMiddleware)
+		reportHandler, importExportHandler, uploadHandler, ratingHandler, categoryHandler, fineHandler, userHandler, inviteHandler, setupHandler, permissionHandler, authMiddleware, permissionMiddleware)
 
 	// Start scheduler
 	if err := schedulerService.Start(); err != nil {
@@ -267,8 +275,13 @@ func setupRoutes(
 	userHandler *handlers.UserHandler,
 	inviteHandler *handlers.InviteHandler,
 	setupHandler *handlers.SetupHandler,
+	permissionHandler *handlers.PermissionHandler,
 	authMiddleware *middleware.AuthMiddleware,
+	permissionMiddleware *middleware.PermissionMiddleware,
 ) {
+	// Note: permissionMiddleware is available for use with RequirePermission()
+	// Example: permissionMiddleware.RequirePermission("books.create")
+	_ = permissionMiddleware // Suppress unused warning until routes are added
 	// Health check endpoints (no auth required)
 	router.GET("/health", healthHandler.Health)
 	router.GET("/ping", healthHandler.Ping)
@@ -490,6 +503,32 @@ func setupRoutes(
 				invites.GET("/:id", inviteHandler.GetInvite)
 				invites.DELETE("/:id", inviteHandler.DeleteInvite)
 				invites.POST("/:id/resend", inviteHandler.ResendInvite)
+			}
+
+			// Permission management routes
+			permissions := protected.Group("/permissions")
+			{
+				// Current user's permissions (any authenticated user)
+				permissions.GET("/me", permissionHandler.GetMyPermissions)
+
+				// Admin only routes
+				adminPerms := permissions.Group("")
+				adminPerms.Use(authMiddleware.RequireAdmin())
+				{
+					// List all permissions
+					adminPerms.GET("", permissionHandler.ListPermissions)
+					adminPerms.GET("/matrix", permissionHandler.GetPermissionMatrix)
+
+					// Role permissions
+					adminPerms.GET("/roles/:role", permissionHandler.GetRolePermissions)
+					adminPerms.PUT("/roles/:role", permissionHandler.UpdateRolePermissions)
+
+					// User permissions and overrides
+					adminPerms.GET("/users/:id", permissionHandler.GetUserPermissions)
+					adminPerms.GET("/users/:id/overrides", permissionHandler.ListUserOverrides)
+					adminPerms.POST("/users/:id/overrides", permissionHandler.CreateUserOverride)
+					adminPerms.DELETE("/users/:id/overrides/:code", permissionHandler.DeleteUserOverride)
+				}
 			}
 		}
 	}

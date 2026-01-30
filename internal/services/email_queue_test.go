@@ -82,6 +82,12 @@ func setupEmailQueueTest(t *testing.T) (*EmailQueueService, func()) {
 	if testing.Short() {
 		t.Skip("Skipping email queue integration test in short mode")
 	}
+
+	// Skip if database is not configured
+	if os.Getenv("DATABASE_URL") == "" && os.Getenv("LMS_DATABASE_PASSWORD") == "" {
+		t.Skip("Database not configured, skipping email queue integration test")
+	}
+
 	// Load test configuration
 	cfg, err := config.Load()
 	require.NoError(t, err)

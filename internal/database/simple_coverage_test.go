@@ -13,7 +13,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// skipIfNoDatabase skips the test if database credentials are not provided
+func skipIfNoDatabase(t *testing.T) {
+	t.Helper()
+	if os.Getenv("LMS_DATABASE_PASSWORD") == "" && os.Getenv("DATABASE_URL") == "" {
+		t.Skip("Database not configured (LMS_DATABASE_PASSWORD or DATABASE_URL not set), skipping test")
+	}
+}
+
 func TestDatabaseCoverageSimple(t *testing.T) {
+	skipIfNoDatabase(t)
+
 	// Get test database credentials from environment variables
 	testUser := os.Getenv("LMS_DATABASE_USER")
 	testPassword := os.Getenv("LMS_DATABASE_PASSWORD")
@@ -438,6 +448,8 @@ func TestDatabaseCoverageSimple(t *testing.T) {
 }
 
 func TestDatabaseConnectionWithoutURL(t *testing.T) {
+	skipIfNoDatabase(t)
+
 	// Get test database credentials from environment variables
 	testUser := os.Getenv("LMS_DATABASE_USER")
 	testPassword := os.Getenv("LMS_DATABASE_PASSWORD")

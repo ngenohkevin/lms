@@ -35,6 +35,10 @@ func (suite *InputValidationSecurityTestSuite) SetupSuite() {
 
 	// Setup test environment
 	testDB, pool, testRedis, cleanup := setupTestEnvironmentWithPool()
+	if testDB == nil {
+		suite.T().Skip("Database not configured, skipping integration tests")
+		return
+	}
 	suite.testDB = testDB
 	suite.cleanup = cleanup
 
