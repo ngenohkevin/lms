@@ -95,13 +95,13 @@ WHERE deleted_at IS NULL
        username ILIKE '%' || $1 || '%' OR
        email ILIKE '%' || $1 || '%')
   AND ($2::text IS NULL OR $2 = '' OR role = $2)
-  AND ($3::boolean IS NULL OR is_active = $3)
+  AND ($3::text IS NULL OR $3 = '' OR is_active = ($3 = 'true'))
 `
 
 type CountSearchUsersParams struct {
 	Column1 string `db:"column_1" json:"column_1"`
 	Column2 string `db:"column_2" json:"column_2"`
-	Column3 bool   `db:"column_3" json:"column_3"`
+	Column3 string `db:"column_3" json:"column_3"`
 }
 
 func (q *Queries) CountSearchUsers(ctx context.Context, arg CountSearchUsersParams) (int64, error) {
@@ -576,7 +576,7 @@ WHERE deleted_at IS NULL
        username ILIKE '%' || $1 || '%' OR
        email ILIKE '%' || $1 || '%')
   AND ($2::text IS NULL OR $2 = '' OR role = $2)
-  AND ($3::boolean IS NULL OR is_active = $3)
+  AND ($3::text IS NULL OR $3 = '' OR is_active = ($3 = 'true'))
 ORDER BY created_at DESC
 LIMIT $4 OFFSET $5
 `
@@ -584,7 +584,7 @@ LIMIT $4 OFFSET $5
 type SearchUsersParams struct {
 	Column1 string `db:"column_1" json:"column_1"`
 	Column2 string `db:"column_2" json:"column_2"`
-	Column3 bool   `db:"column_3" json:"column_3"`
+	Column3 string `db:"column_3" json:"column_3"`
 	Limit   int32  `db:"limit" json:"limit"`
 	Offset  int32  `db:"offset" json:"offset"`
 }

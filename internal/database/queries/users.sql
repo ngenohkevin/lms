@@ -48,7 +48,7 @@ WHERE deleted_at IS NULL
        username ILIKE '%' || $1 || '%' OR
        email ILIKE '%' || $1 || '%')
   AND ($2::text IS NULL OR $2 = '' OR role = $2)
-  AND ($3::boolean IS NULL OR is_active = $3)
+  AND ($3::text IS NULL OR $3 = '' OR is_active = ($3 = 'true'))
 ORDER BY created_at DESC
 LIMIT $4 OFFSET $5;
 
@@ -59,7 +59,7 @@ WHERE deleted_at IS NULL
        username ILIKE '%' || $1 || '%' OR
        email ILIKE '%' || $1 || '%')
   AND ($2::text IS NULL OR $2 = '' OR role = $2)
-  AND ($3::boolean IS NULL OR is_active = $3);
+  AND ($3::text IS NULL OR $3 = '' OR is_active = ($3 = 'true'));
 
 -- name: UpdateUserProfile :one
 UPDATE users

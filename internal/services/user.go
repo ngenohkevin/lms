@@ -399,16 +399,21 @@ func (s *UserService) ListUsers(ctx context.Context, params *models.UserSearchPa
 		roleStr = string(*params.Role)
 	}
 
-	isActive := false
+	// Convert isActive to string: "" for all, "true" for active, "false" for inactive
+	isActiveStr := ""
 	if params.IsActive != nil {
-		isActive = *params.IsActive
+		if *params.IsActive {
+			isActiveStr = "true"
+		} else {
+			isActiveStr = "false"
+		}
 	}
 
 	// Search users
 	dbUsers, err := s.queries.SearchUsers(ctx, queries.SearchUsersParams{
 		Column1: params.Query,
 		Column2: roleStr,
-		Column3: isActive,
+		Column3: isActiveStr,
 		Limit:   int32(params.Limit),
 		Offset:  int32(offset),
 	})
@@ -421,7 +426,7 @@ func (s *UserService) ListUsers(ctx context.Context, params *models.UserSearchPa
 	total, err := s.queries.CountSearchUsers(ctx, queries.CountSearchUsersParams{
 		Column1: params.Query,
 		Column2: roleStr,
-		Column3: isActive,
+		Column3: isActiveStr,
 	})
 	if err != nil {
 		s.logger.Error("Error counting users", "error", err)
