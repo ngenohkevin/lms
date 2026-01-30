@@ -60,8 +60,8 @@ func (s *UserService) GetUserByUsername(username string) (*models.User, error) {
 	ctx := context.Background()
 	query := `
 		SELECT id, username, email, password_hash, role, is_active, last_login, created_at, updated_at
-		FROM users 
-		WHERE username = $1 AND is_active = true
+		FROM users
+		WHERE (username = $1 OR email = $1) AND is_active = true
 	`
 
 	var user models.User
