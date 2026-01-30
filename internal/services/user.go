@@ -61,7 +61,7 @@ func (s *UserService) GetUserByUsername(username string) (*models.User, error) {
 	query := `
 		SELECT id, username, email, password_hash, role, is_active, last_login, created_at, updated_at
 		FROM users
-		WHERE (username = $1 OR email = $1) AND is_active = true
+		WHERE (username = $1 OR email = $1) AND is_active = true AND deleted_at IS NULL
 	`
 
 	var user models.User
@@ -95,8 +95,8 @@ func (s *UserService) GetUserByEmail(email string) (*models.User, error) {
 	ctx := context.Background()
 	query := `
 		SELECT id, username, email, password_hash, role, is_active, last_login, created_at, updated_at
-		FROM users 
-		WHERE email = $1 AND is_active = true
+		FROM users
+		WHERE email = $1 AND is_active = true AND deleted_at IS NULL
 	`
 
 	var user models.User
