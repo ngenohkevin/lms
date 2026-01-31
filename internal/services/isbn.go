@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -22,7 +23,8 @@ type ISBNServiceInterface interface {
 
 // ISBNService handles ISBN-related operations
 type ISBNService struct {
-	httpClient *http.Client
+	httpClient       *http.Client
+	googleBooksAPIKey string
 }
 
 // NewISBNService creates a new ISBN service
@@ -31,6 +33,7 @@ func NewISBNService() *ISBNService {
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second, // Per-request timeout for speed
 		},
+		googleBooksAPIKey: os.Getenv("GOOGLE_BOOKS_API_KEY"),
 	}
 }
 
@@ -239,6 +242,11 @@ func (s *ISBNService) fetchFromGoogleBooks(ctx context.Context, isbn string) (*m
 	baseURL := "https://www.googleapis.com/books/v1/volumes"
 	query := url.QueryEscape("isbn:" + isbn)
 	requestURL := fmt.Sprintf("%s?q=%s", baseURL, query)
+
+	// Add API key if available (higher quota limits)
+	if s.googleBooksAPIKey != "" {
+		requestURL += "&key=" + s.googleBooksAPIKey
+	}
 
 	req, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
 	if err != nil {
