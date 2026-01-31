@@ -281,6 +281,7 @@ type Transaction struct {
 	FineWaivedBy     pgtype.Int4      `db:"fine_waived_by" json:"fine_waived_by"`
 	FineWaivedReason pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
 	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
+	CopyID           pgtype.Int4      `db:"copy_id" json:"copy_id"`
 }
 
 type User struct {

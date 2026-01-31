@@ -33,6 +33,38 @@ func (m *MockTransactionService) BorrowBook(ctx context.Context, studentID, book
 	return args.Get(0).(*services.TransactionResponse), args.Error(1)
 }
 
+func (m *MockTransactionService) BorrowBookWithCopy(ctx context.Context, req services.BorrowBookWithCopyRequest) (*services.TransactionResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*services.TransactionResponse), args.Error(1)
+}
+
+func (m *MockTransactionService) BorrowByBarcode(ctx context.Context, req services.BorrowByBarcodeRequest) (*services.TransactionResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*services.TransactionResponse), args.Error(1)
+}
+
+func (m *MockTransactionService) ReturnByBarcode(ctx context.Context, req services.ReturnByBarcodeRequest) (*services.TransactionResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*services.TransactionResponse), args.Error(1)
+}
+
+func (m *MockTransactionService) ScanBarcode(ctx context.Context, barcode string) (*services.BarcodeScanResult, error) {
+	args := m.Called(ctx, barcode)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*services.BarcodeScanResult), args.Error(1)
+}
+
 func (m *MockTransactionService) ReturnBook(ctx context.Context, transactionID int32) (*services.TransactionResponse, error) {
 	args := m.Called(ctx, transactionID)
 	if args.Get(0) == nil {
@@ -156,8 +188,8 @@ func TestTransactionHandler_BorrowBook_Success(t *testing.T) {
 
 	expectedResponse := createTestTransactionResponse()
 
-	// Setup mock
-	mockService.On("BorrowBook", mock.Anything, int32(1), int32(1), int32(1), "Test borrow").Return(expectedResponse, nil)
+	// Setup mock - handler now calls BorrowBookWithCopy
+	mockService.On("BorrowBookWithCopy", mock.Anything, mock.AnythingOfType("services.BorrowBookWithCopyRequest")).Return(expectedResponse, nil)
 
 	// Create request
 	jsonBody, _ := json.Marshal(requestBody)
@@ -219,8 +251,8 @@ func TestTransactionHandler_BorrowBook_ServiceError(t *testing.T) {
 		"notes":        "Test borrow",
 	}
 
-	// Setup mock to return error
-	mockService.On("BorrowBook", mock.Anything, int32(1), int32(1), int32(1), "Test borrow").Return(nil, errors.New("book not available"))
+	// Setup mock to return error - handler now calls BorrowBookWithCopy
+	mockService.On("BorrowBookWithCopy", mock.Anything, mock.AnythingOfType("services.BorrowBookWithCopyRequest")).Return(nil, errors.New("book not available"))
 
 	// Create request
 	jsonBody, _ := json.Marshal(requestBody)

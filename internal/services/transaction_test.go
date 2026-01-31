@@ -141,6 +141,62 @@ func (m *MockTransactionQueries) IncrementBookAvailability(ctx context.Context, 
 	return args.Get(0).(pgtype.Int4), args.Error(1)
 }
 
+// Copy-level tracking methods
+func (m *MockTransactionQueries) CreateTransactionWithCopy(ctx context.Context, arg queries.CreateTransactionWithCopyParams) (queries.Transaction, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(queries.Transaction), args.Error(1)
+}
+
+func (m *MockTransactionQueries) GetTransactionByIDWithCopy(ctx context.Context, id int32) (queries.GetTransactionByIDWithCopyRow, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(queries.GetTransactionByIDWithCopyRow), args.Error(1)
+}
+
+func (m *MockTransactionQueries) GetActiveTransactionByCopy(ctx context.Context, copyID pgtype.Int4) (queries.Transaction, error) {
+	args := m.Called(ctx, copyID)
+	return args.Get(0).(queries.Transaction), args.Error(1)
+}
+
+func (m *MockTransactionQueries) GetFirstAvailableCopy(ctx context.Context, bookID int32) (queries.BookCopy, error) {
+	args := m.Called(ctx, bookID)
+	return args.Get(0).(queries.BookCopy), args.Error(1)
+}
+
+func (m *MockTransactionQueries) GetCopyByBarcodeWithBookInfo(ctx context.Context, barcode pgtype.Text) (queries.GetCopyByBarcodeWithBookInfoRow, error) {
+	args := m.Called(ctx, barcode)
+	return args.Get(0).(queries.GetCopyByBarcodeWithBookInfoRow), args.Error(1)
+}
+
+func (m *MockTransactionQueries) UpdateBookCopyStatus(ctx context.Context, arg queries.UpdateBookCopyStatusParams) (queries.BookCopy, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(queries.BookCopy), args.Error(1)
+}
+
+func (m *MockTransactionQueries) UpdateBookCopyStatusAndCondition(ctx context.Context, arg queries.UpdateBookCopyStatusAndConditionParams) (queries.BookCopy, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(queries.BookCopy), args.Error(1)
+}
+
+func (m *MockTransactionQueries) GetBookCopyByID(ctx context.Context, id int32) (queries.BookCopy, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(queries.BookCopy), args.Error(1)
+}
+
+func (m *MockTransactionQueries) GetActiveBorrowingByCopy(ctx context.Context, copyID pgtype.Int4) (queries.GetActiveBorrowingByCopyRow, error) {
+	args := m.Called(ctx, copyID)
+	return args.Get(0).(queries.GetActiveBorrowingByCopyRow), args.Error(1)
+}
+
+func (m *MockTransactionQueries) ListTransactionsWithCopies(ctx context.Context, arg queries.ListTransactionsWithCopiesParams) ([]queries.ListTransactionsWithCopiesRow, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).([]queries.ListTransactionsWithCopiesRow), args.Error(1)
+}
+
+func (m *MockTransactionQueries) SyncBookCopyCounts(ctx context.Context, id int32) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
 // Test helper functions
 func createTestTransaction() queries.Transaction {
 	now := time.Now()
@@ -210,13 +266,27 @@ func TestTransactionService_BorrowBook_Success(t *testing.T) {
 	student := createTestStudent()
 	transaction := createTestTransaction()
 
+	// Create a test book copy
+	bookCopy := queries.BookCopy{
+		ID:         1,
+		BookID:     bookID,
+		CopyNumber: "COPY-001",
+		Status:     pgtype.Text{String: "available", Valid: true},
+		Condition:  pgtype.Text{String: "good", Valid: true},
+	}
+
 	mockQueries.On("GetBookByID", ctx, bookID).Return(book, nil)
 	mockQueries.On("GetStudentByID", ctx, studentID).Return(student, nil)
 	mockQueries.On("ListActiveTransactionsByStudent", ctx, studentID).Return([]queries.ListActiveTransactionsByStudentRow{}, nil)
-	mockQueries.On("GetTotalUnpaidFinesByStudent", ctx, studentID).Return(pgtype.Numeric{Int: big.NewInt(0), Valid: false}, nil) // No unpaid fines
-	// Atomic decrement (returns new availability count)
-	mockQueries.On("DecrementBookAvailability", ctx, bookID).Return(pgtype.Int4{Int32: 2, Valid: true}, nil)
-	mockQueries.On("CreateTransaction", ctx, mock.AnythingOfType("queries.CreateTransactionParams")).Return(transaction, nil)
+	mockQueries.On("GetTotalUnpaidFinesByStudent", ctx, studentID).Return(pgtype.Numeric{Int: big.NewInt(0), Valid: false}, nil)
+	// Copy-level tracking: get first available copy
+	mockQueries.On("GetFirstAvailableCopy", ctx, bookID).Return(bookCopy, nil)
+	// Copy-level tracking: mark copy as borrowed
+	mockQueries.On("UpdateBookCopyStatus", ctx, mock.AnythingOfType("queries.UpdateBookCopyStatusParams")).Return(bookCopy, nil)
+	// Copy-level tracking: sync book counts
+	mockQueries.On("SyncBookCopyCounts", ctx, bookID).Return(nil)
+	// Create transaction with copy
+	mockQueries.On("CreateTransactionWithCopy", ctx, mock.AnythingOfType("queries.CreateTransactionWithCopyParams")).Return(transaction, nil)
 
 	// Execute
 	result, err := service.BorrowBook(ctx, studentID, bookID, librarianID, "")
@@ -369,29 +439,34 @@ func TestTransactionService_ReturnBook_Success(t *testing.T) {
 
 	ctx := context.Background()
 	transactionID := int32(1)
+	bookID := int32(1)
+	copyID := int32(1)
 
-	// Create a transaction that's not overdue
+	// Create a transaction with copy that's not overdue
 	now := time.Now()
-	transaction := queries.GetTransactionByIDRow{
+	transactionWithCopy := queries.GetTransactionByIDWithCopyRow{
 		ID:              transactionID,
 		StudentID:       1,
-		BookID:          1,
+		BookID:          bookID,
 		TransactionType: "borrow",
 		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, 1), Valid: true},
 		ReturnedDate:    pgtype.Timestamp{Valid: false},
+		CopyID:          pgtype.Int4{Int32: copyID, Valid: true},
 	}
 
 	returnedTransaction := createTestTransaction()
 	returnedTransaction.ReturnedDate = pgtype.Timestamp{Time: now, Valid: true}
 
 	book := createTestBook()
+	bookCopy := queries.BookCopy{ID: copyID, BookID: bookID, Status: pgtype.Text{String: "available", Valid: true}}
 
-	// Setup mocks
-	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+	// Setup mocks - using GetTransactionByIDWithCopy for copy-level tracking
+	mockQueries.On("GetTransactionByIDWithCopy", ctx, transactionID).Return(transactionWithCopy, nil)
 	mockQueries.On("ReturnBook", ctx, mock.AnythingOfType("queries.ReturnBookParams")).Return(returnedTransaction, nil)
-	// Atomic increment (returns new availability count)
-	mockQueries.On("IncrementBookAvailability", ctx, int32(1)).Return(pgtype.Int4{Int32: 4, Valid: true}, nil)
-	mockQueries.On("GetBookByID", ctx, int32(1)).Return(book, nil)
+	// Copy-level tracking: update copy status and sync counts
+	mockQueries.On("UpdateBookCopyStatusAndCondition", ctx, mock.AnythingOfType("queries.UpdateBookCopyStatusAndConditionParams")).Return(bookCopy, nil)
+	mockQueries.On("SyncBookCopyCounts", ctx, bookID).Return(nil)
+	mockQueries.On("GetBookByID", ctx, bookID).Return(book, nil)
 
 	// Execute
 	result, err := service.ReturnBook(ctx, transactionID)
@@ -411,7 +486,7 @@ func TestTransactionService_ReturnBook_TransactionNotFound(t *testing.T) {
 	transactionID := int32(999)
 
 	// Setup mock to return transaction not found
-	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(queries.GetTransactionByIDRow{}, sql.ErrNoRows)
+	mockQueries.On("GetTransactionByIDWithCopy", ctx, transactionID).Return(queries.GetTransactionByIDWithCopyRow{}, sql.ErrNoRows)
 
 	// Execute
 	_, err := service.ReturnBook(ctx, transactionID)
@@ -431,17 +506,18 @@ func TestTransactionService_ReturnBook_AlreadyReturned(t *testing.T) {
 
 	// Create a transaction that's already returned
 	now := time.Now()
-	transaction := queries.GetTransactionByIDRow{
+	transactionWithCopy := queries.GetTransactionByIDWithCopyRow{
 		ID:              transactionID,
 		StudentID:       1,
 		BookID:          1,
 		TransactionType: "borrow",
 		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, 1), Valid: true},
 		ReturnedDate:    pgtype.Timestamp{Time: now, Valid: true},
+		CopyID:          pgtype.Int4{Int32: 1, Valid: true},
 	}
 
 	// Setup mock
-	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+	mockQueries.On("GetTransactionByIDWithCopy", ctx, transactionID).Return(transactionWithCopy, nil)
 
 	// Execute
 	_, err := service.ReturnBook(ctx, transactionID)
@@ -831,17 +907,20 @@ func TestTransactionService_ReturnBook_WithOverdueFine(t *testing.T) {
 
 	ctx := context.Background()
 	transactionID := int32(1)
+	bookID := int32(1)
+	copyID := int32(1)
 
 	// Create a transaction that's overdue by 5 days
 	now := time.Now()
 	dueDate := now.AddDate(0, 0, -5) // 5 days overdue
-	transaction := queries.GetTransactionByIDRow{
+	transactionWithCopy := queries.GetTransactionByIDWithCopyRow{
 		ID:              transactionID,
 		StudentID:       1,
-		BookID:          1,
+		BookID:          bookID,
 		TransactionType: "borrow",
 		DueDate:         pgtype.Timestamp{Time: dueDate, Valid: true},
 		ReturnedDate:    pgtype.Timestamp{Valid: false},
+		CopyID:          pgtype.Int4{Int32: copyID, Valid: true},
 	}
 
 	returnedTransaction := createTestTransaction()
@@ -855,13 +934,15 @@ func TestTransactionService_ReturnBook_WithOverdueFine(t *testing.T) {
 	}
 
 	book := createTestBook()
+	bookCopy := queries.BookCopy{ID: copyID, BookID: bookID, Status: pgtype.Text{String: "available", Valid: true}}
 
 	// Setup mocks
-	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+	mockQueries.On("GetTransactionByIDWithCopy", ctx, transactionID).Return(transactionWithCopy, nil)
 	mockQueries.On("ReturnBook", ctx, mock.AnythingOfType("queries.ReturnBookParams")).Return(returnedTransaction, nil)
-	// Atomic increment (returns new availability count)
-	mockQueries.On("IncrementBookAvailability", ctx, int32(1)).Return(pgtype.Int4{Int32: 4, Valid: true}, nil)
-	mockQueries.On("GetBookByID", ctx, int32(1)).Return(book, nil)
+	// Copy-level tracking: update copy status and sync counts
+	mockQueries.On("UpdateBookCopyStatusAndCondition", ctx, mock.AnythingOfType("queries.UpdateBookCopyStatusAndConditionParams")).Return(bookCopy, nil)
+	mockQueries.On("SyncBookCopyCounts", ctx, bookID).Return(nil)
+	mockQueries.On("GetBookByID", ctx, bookID).Return(book, nil)
 
 	// Execute
 	result, err := service.ReturnBook(ctx, transactionID)
@@ -883,17 +964,18 @@ func TestTransactionService_ReturnBook_ValidationFailure(t *testing.T) {
 
 	// Create a transaction that's of type "return" (should fail validation)
 	now := time.Now()
-	transaction := queries.GetTransactionByIDRow{
+	transactionWithCopy := queries.GetTransactionByIDWithCopyRow{
 		ID:              transactionID,
 		StudentID:       1,
 		BookID:          1,
 		TransactionType: "return",
 		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, 1), Valid: true},
 		ReturnedDate:    pgtype.Timestamp{Valid: false},
+		CopyID:          pgtype.Int4{Int32: 1, Valid: true},
 	}
 
-	// Setup mock - only need to mock GetTransactionByID since validation will fail
-	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+	// Setup mock - only need to mock GetTransactionByIDWithCopy since validation will fail
+	mockQueries.On("GetTransactionByIDWithCopy", ctx, transactionID).Return(transactionWithCopy, nil)
 
 	// Execute
 	_, err := service.ReturnBook(ctx, transactionID)
@@ -904,38 +986,41 @@ func TestTransactionService_ReturnBook_ValidationFailure(t *testing.T) {
 	mockQueries.AssertExpectations(t)
 }
 
-func TestTransactionService_ReturnBook_BookAvailabilityUpdateFailure(t *testing.T) {
+func TestTransactionService_ReturnBook_CopyStatusUpdateFailure(t *testing.T) {
 	mockQueries := &MockTransactionQueries{}
 	service := NewTransactionService(mockQueries)
 
 	ctx := context.Background()
 	transactionID := int32(1)
+	bookID := int32(1)
+	copyID := int32(1)
 
-	// Create a valid transaction
+	// Create a valid transaction with copy
 	now := time.Now()
-	transaction := queries.GetTransactionByIDRow{
+	transactionWithCopy := queries.GetTransactionByIDWithCopyRow{
 		ID:              transactionID,
 		StudentID:       1,
-		BookID:          1,
+		BookID:          bookID,
 		TransactionType: "borrow",
 		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, 1), Valid: true},
 		ReturnedDate:    pgtype.Timestamp{Valid: false},
+		CopyID:          pgtype.Int4{Int32: copyID, Valid: true},
 	}
 
 	returnedTransaction := createTestTransaction()
 	returnedTransaction.ReturnedDate = pgtype.Timestamp{Time: now, Valid: true}
 
-	// Setup mocks - atomic book availability increment will fail
-	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+	// Setup mocks - copy status update will fail
+	mockQueries.On("GetTransactionByIDWithCopy", ctx, transactionID).Return(transactionWithCopy, nil)
 	mockQueries.On("ReturnBook", ctx, mock.AnythingOfType("queries.ReturnBookParams")).Return(returnedTransaction, nil)
-	mockQueries.On("IncrementBookAvailability", ctx, int32(1)).Return(pgtype.Int4{}, assert.AnError)
+	mockQueries.On("UpdateBookCopyStatusAndCondition", ctx, mock.AnythingOfType("queries.UpdateBookCopyStatusAndConditionParams")).Return(queries.BookCopy{}, assert.AnError)
 
 	// Execute
 	_, err := service.ReturnBook(ctx, transactionID)
 
 	// Assert
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to update book availability")
+	assert.Contains(t, err.Error(), "failed to update copy status")
 	mockQueries.AssertExpectations(t)
 }
 
@@ -945,28 +1030,33 @@ func TestTransactionService_ReturnBook_GetBookFailure(t *testing.T) {
 
 	ctx := context.Background()
 	transactionID := int32(1)
+	bookID := int32(1)
+	copyID := int32(1)
 
-	// Create a valid transaction
+	// Create a valid transaction with copy
 	now := time.Now()
-	transaction := queries.GetTransactionByIDRow{
+	transactionWithCopy := queries.GetTransactionByIDWithCopyRow{
 		ID:              transactionID,
 		StudentID:       1,
-		BookID:          1,
+		BookID:          bookID,
 		TransactionType: "borrow",
 		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, 1), Valid: true},
 		ReturnedDate:    pgtype.Timestamp{Valid: false},
+		CopyID:          pgtype.Int4{Int32: copyID, Valid: true},
 	}
 
 	returnedTransaction := createTestTransaction()
 	returnedTransaction.ReturnedDate = pgtype.Timestamp{Time: now, Valid: true}
+	bookCopy := queries.BookCopy{ID: copyID, BookID: bookID, Status: pgtype.Text{String: "available", Valid: true}}
 
-	// Setup mocks - GetBookByID will fail (called after availability increment for condition update)
-	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+	// Setup mocks - GetBookByID will fail (called after copy status update for condition update)
+	mockQueries.On("GetTransactionByIDWithCopy", ctx, transactionID).Return(transactionWithCopy, nil)
 	mockQueries.On("ReturnBook", ctx, mock.AnythingOfType("queries.ReturnBookParams")).Return(returnedTransaction, nil)
-	// Atomic increment succeeds
-	mockQueries.On("IncrementBookAvailability", ctx, int32(1)).Return(pgtype.Int4{Int32: 4, Valid: true}, nil)
+	// Copy status update succeeds
+	mockQueries.On("UpdateBookCopyStatusAndCondition", ctx, mock.AnythingOfType("queries.UpdateBookCopyStatusAndConditionParams")).Return(bookCopy, nil)
+	mockQueries.On("SyncBookCopyCounts", ctx, bookID).Return(nil)
 	// GetBookByID for condition update fails
-	mockQueries.On("GetBookByID", ctx, int32(1)).Return(queries.Book{}, assert.AnError)
+	mockQueries.On("GetBookByID", ctx, bookID).Return(queries.Book{}, assert.AnError)
 
 	// Execute
 	_, err := service.ReturnBook(ctx, transactionID)
@@ -984,19 +1074,20 @@ func TestTransactionService_ReturnBook_ReturnOperationFailure(t *testing.T) {
 	ctx := context.Background()
 	transactionID := int32(1)
 
-	// Create a valid transaction
+	// Create a valid transaction with copy
 	now := time.Now()
-	transaction := queries.GetTransactionByIDRow{
+	transactionWithCopy := queries.GetTransactionByIDWithCopyRow{
 		ID:              transactionID,
 		StudentID:       1,
 		BookID:          1,
 		TransactionType: "borrow",
 		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, 1), Valid: true},
 		ReturnedDate:    pgtype.Timestamp{Valid: false},
+		CopyID:          pgtype.Int4{Int32: 1, Valid: true},
 	}
 
 	// Setup mocks - ReturnBook operation will fail
-	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+	mockQueries.On("GetTransactionByIDWithCopy", ctx, transactionID).Return(transactionWithCopy, nil)
 	mockQueries.On("ReturnBook", ctx, mock.AnythingOfType("queries.ReturnBookParams")).Return(queries.Transaction{}, assert.AnError)
 
 	// Execute
@@ -1203,18 +1294,21 @@ func TestTransactionService_ReturnBookWithCondition_Success(t *testing.T) {
 
 	ctx := context.Background()
 	transactionID := int32(1)
+	bookID := int32(1)
+	copyID := int32(1)
 	returnCondition := "fair"
 	conditionNotes := "Minor wear on cover"
 
-	// Create a transaction that's not overdue
+	// Create a transaction with copy that's not overdue
 	now := time.Now()
-	transaction := queries.GetTransactionByIDRow{
+	transactionWithCopy := queries.GetTransactionByIDWithCopyRow{
 		ID:              transactionID,
 		StudentID:       1,
-		BookID:          1,
+		BookID:          bookID,
 		TransactionType: "borrow",
 		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, 1), Valid: true},
 		ReturnedDate:    pgtype.Timestamp{Valid: false},
+		CopyID:          pgtype.Int4{Int32: copyID, Valid: true},
 	}
 
 	returnedTransaction := createTestTransaction()
@@ -1224,13 +1318,15 @@ func TestTransactionService_ReturnBookWithCondition_Success(t *testing.T) {
 
 	book := createTestBook()
 	book.Condition = pgtype.Text{String: "good", Valid: true}
+	bookCopy := queries.BookCopy{ID: copyID, BookID: bookID, Status: pgtype.Text{String: "available", Valid: true}}
 
 	// Setup mocks
-	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+	mockQueries.On("GetTransactionByIDWithCopy", ctx, transactionID).Return(transactionWithCopy, nil)
 	mockQueries.On("ReturnBook", ctx, mock.AnythingOfType("queries.ReturnBookParams")).Return(returnedTransaction, nil)
-	// Atomic increment (returns new availability count)
-	mockQueries.On("IncrementBookAvailability", ctx, int32(1)).Return(pgtype.Int4{Int32: 4, Valid: true}, nil)
-	mockQueries.On("GetBookByID", ctx, int32(1)).Return(book, nil)
+	// Copy-level tracking: update copy status and sync counts
+	mockQueries.On("UpdateBookCopyStatusAndCondition", ctx, mock.AnythingOfType("queries.UpdateBookCopyStatusAndConditionParams")).Return(bookCopy, nil)
+	mockQueries.On("SyncBookCopyCounts", ctx, bookID).Return(nil)
+	mockQueries.On("GetBookByID", ctx, bookID).Return(book, nil)
 	mockQueries.On("UpdateBookCondition", ctx, mock.AnythingOfType("queries.UpdateBookConditionParams")).Return(nil)
 
 	// Execute
@@ -1252,19 +1348,20 @@ func TestTransactionService_ReturnBookWithCondition_InvalidCondition(t *testing.
 	ctx := context.Background()
 	transactionID := int32(1)
 
-	// Create a valid transaction
+	// Create a valid transaction with copy
 	now := time.Now()
-	transaction := queries.GetTransactionByIDRow{
+	transactionWithCopy := queries.GetTransactionByIDWithCopyRow{
 		ID:              transactionID,
 		StudentID:       1,
 		BookID:          1,
 		TransactionType: "borrow",
 		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, 1), Valid: true},
 		ReturnedDate:    pgtype.Timestamp{Valid: false},
+		CopyID:          pgtype.Int4{Int32: 1, Valid: true},
 	}
 
-	// Setup mock - only need to mock GetTransactionByID since validation will fail
-	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+	// Setup mock - only need to mock GetTransactionByIDWithCopy since validation will fail
+	mockQueries.On("GetTransactionByIDWithCopy", ctx, transactionID).Return(transactionWithCopy, nil)
 
 	// Execute with invalid condition
 	_, err := service.ReturnBookWithCondition(ctx, transactionID, "invalid", "")
@@ -1283,30 +1380,35 @@ func TestTransactionService_ReturnBook_AvailabilityUpdate_Success(t *testing.T) 
 
 	ctx := context.Background()
 	transactionID := int32(1)
+	bookID := int32(1)
+	copyID := int32(1)
 
-	// Create a valid transaction
+	// Create a valid transaction with copy
 	now := time.Now()
-	transaction := queries.GetTransactionByIDRow{
+	transactionWithCopy := queries.GetTransactionByIDWithCopyRow{
 		ID:              transactionID,
 		StudentID:       1,
-		BookID:          1,
+		BookID:          bookID,
 		TransactionType: "borrow",
 		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, 1), Valid: true},
 		ReturnedDate:    pgtype.Timestamp{Valid: false},
+		CopyID:          pgtype.Int4{Int32: copyID, Valid: true},
 	}
 
 	returnedTransaction := createTestTransaction()
 	returnedTransaction.ReturnedDate = pgtype.Timestamp{Time: now, Valid: true}
 
 	book := createTestBook()
-	book.AvailableCopies = pgtype.Int4{Int32: 3, Valid: true} // After increment
+	book.AvailableCopies = pgtype.Int4{Int32: 3, Valid: true} // After sync
+	bookCopy := queries.BookCopy{ID: copyID, BookID: bookID, Status: pgtype.Text{String: "available", Valid: true}}
 
 	// Setup mocks
-	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+	mockQueries.On("GetTransactionByIDWithCopy", ctx, transactionID).Return(transactionWithCopy, nil)
 	mockQueries.On("ReturnBook", ctx, mock.AnythingOfType("queries.ReturnBookParams")).Return(returnedTransaction, nil)
-	// Atomic increment returns new availability (was 2, now 3)
-	mockQueries.On("IncrementBookAvailability", ctx, int32(1)).Return(pgtype.Int4{Int32: 3, Valid: true}, nil)
-	mockQueries.On("GetBookByID", ctx, int32(1)).Return(book, nil)
+	// Copy-level tracking: update copy status and sync counts
+	mockQueries.On("UpdateBookCopyStatusAndCondition", ctx, mock.AnythingOfType("queries.UpdateBookCopyStatusAndConditionParams")).Return(bookCopy, nil)
+	mockQueries.On("SyncBookCopyCounts", ctx, bookID).Return(nil)
+	mockQueries.On("GetBookByID", ctx, bookID).Return(book, nil)
 
 	// Execute
 	result, err := service.ReturnBook(ctx, transactionID)
@@ -1333,13 +1435,27 @@ func TestTransactionService_BorrowBook_AvailabilityUpdate_Success(t *testing.T) 
 	student := createTestStudent()
 	transaction := createTestTransaction()
 
+	// Create a test book copy
+	bookCopy := queries.BookCopy{
+		ID:         1,
+		BookID:     bookID,
+		CopyNumber: "COPY-001",
+		Status:     pgtype.Text{String: "available", Valid: true},
+		Condition:  pgtype.Text{String: "good", Valid: true},
+	}
+
 	mockQueries.On("GetBookByID", ctx, bookID).Return(book, nil)
 	mockQueries.On("GetStudentByID", ctx, studentID).Return(student, nil)
 	mockQueries.On("ListActiveTransactionsByStudent", ctx, studentID).Return([]queries.ListActiveTransactionsByStudentRow{}, nil)
 	mockQueries.On("GetTotalUnpaidFinesByStudent", ctx, studentID).Return(pgtype.Numeric{Int: big.NewInt(0), Valid: false}, nil) // No unpaid fines
-	// Atomic decrement returns new availability (was 3, now 2)
-	mockQueries.On("DecrementBookAvailability", ctx, bookID).Return(pgtype.Int4{Int32: 2, Valid: true}, nil)
-	mockQueries.On("CreateTransaction", ctx, mock.AnythingOfType("queries.CreateTransactionParams")).Return(transaction, nil)
+	// Copy-level tracking: get first available copy
+	mockQueries.On("GetFirstAvailableCopy", ctx, bookID).Return(bookCopy, nil)
+	// Copy-level tracking: mark copy as borrowed
+	mockQueries.On("UpdateBookCopyStatus", ctx, mock.AnythingOfType("queries.UpdateBookCopyStatusParams")).Return(bookCopy, nil)
+	// Copy-level tracking: sync book counts
+	mockQueries.On("SyncBookCopyCounts", ctx, bookID).Return(nil)
+	// Create transaction with copy
+	mockQueries.On("CreateTransactionWithCopy", ctx, mock.AnythingOfType("queries.CreateTransactionWithCopyParams")).Return(transaction, nil)
 
 	// Execute
 	result, err := service.BorrowBook(ctx, studentID, bookID, librarianID, "")
@@ -1358,32 +1474,36 @@ func TestTransactionService_ReturnBook_AvailabilityUpdate_BoundaryConditions(t *
 	ctx := context.Background()
 	transactionID := int32(1)
 	bookID := int32(1)
+	copyID := int32(1)
 
-	// Create a valid transaction
+	// Create a valid transaction with copy
 	now := time.Now()
-	transaction := queries.GetTransactionByIDRow{
+	transactionWithCopy := queries.GetTransactionByIDWithCopyRow{
 		ID:              transactionID,
 		StudentID:       1,
 		BookID:          bookID,
 		TransactionType: "borrow",
 		DueDate:         pgtype.Timestamp{Time: now.AddDate(0, 0, 1), Valid: true},
 		ReturnedDate:    pgtype.Timestamp{Valid: false},
+		CopyID:          pgtype.Int4{Int32: copyID, Valid: true},
 	}
 
 	returnedTransaction := createTestTransaction()
 	returnedTransaction.ReturnedDate = pgtype.Timestamp{Time: now, Valid: true}
 
-	// Book starts with zero available copies
+	// Book starts with zero available copies (boundary condition)
 	book := createTestBook()
 	book.AvailableCopies = pgtype.Int4{Int32: 0, Valid: true}
+	bookCopy := queries.BookCopy{ID: copyID, BookID: bookID, Status: pgtype.Text{String: "available", Valid: true}}
 
 	// Setup mocks in order of execution:
-	// 1. Get transaction to verify it exists
-	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+	// 1. Get transaction with copy info to verify it exists
+	mockQueries.On("GetTransactionByIDWithCopy", ctx, transactionID).Return(transactionWithCopy, nil)
 	// 2. Return the book (update transaction record)
 	mockQueries.On("ReturnBook", ctx, mock.AnythingOfType("queries.ReturnBookParams")).Return(returnedTransaction, nil)
-	// 3. ATOMIC: Increment book availability (returns new value of 1)
-	mockQueries.On("IncrementBookAvailability", ctx, bookID).Return(pgtype.Int4{Int32: 1, Valid: true}, nil)
+	// 3. Copy-level tracking: update copy status and sync counts
+	mockQueries.On("UpdateBookCopyStatusAndCondition", ctx, mock.AnythingOfType("queries.UpdateBookCopyStatusAndConditionParams")).Return(bookCopy, nil)
+	mockQueries.On("SyncBookCopyCounts", ctx, bookID).Return(nil)
 	// 4. Get book to check if condition update is needed
 	mockQueries.On("GetBookByID", ctx, bookID).Return(book, nil)
 

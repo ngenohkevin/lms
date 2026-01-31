@@ -15,7 +15,9 @@ import (
 // TransactionQuerier defines the interface for transaction database operations
 type TransactionQuerier interface {
 	CreateTransaction(ctx context.Context, arg queries.CreateTransactionParams) (queries.Transaction, error)
+	CreateTransactionWithCopy(ctx context.Context, arg queries.CreateTransactionWithCopyParams) (queries.Transaction, error)
 	GetTransactionByID(ctx context.Context, id int32) (queries.GetTransactionByIDRow, error)
+	GetTransactionByIDWithCopy(ctx context.Context, id int32) (queries.GetTransactionByIDWithCopyRow, error)
 	ListTransactions(ctx context.Context, arg queries.ListTransactionsParams) ([]queries.ListTransactionsRow, error)
 	ListTransactionsByStudent(ctx context.Context, arg queries.ListTransactionsByStudentParams) ([]queries.ListTransactionsByStudentRow, error)
 	ListActiveTransactionsByStudent(ctx context.Context, studentID int32) ([]queries.ListActiveTransactionsByStudentRow, error)
@@ -42,6 +44,15 @@ type TransactionQuerier interface {
 	CountTodayBorrowings(ctx context.Context) (int64, error)
 	// Fine queries
 	GetTotalUnpaidFinesByStudent(ctx context.Context, studentID int32) (pgtype.Numeric, error)
+	// Copy-level transaction queries
+	GetFirstAvailableCopy(ctx context.Context, bookID int32) (queries.BookCopy, error)
+	GetCopyByBarcodeWithBookInfo(ctx context.Context, barcode pgtype.Text) (queries.GetCopyByBarcodeWithBookInfoRow, error)
+	GetBookCopyByID(ctx context.Context, id int32) (queries.BookCopy, error)
+	UpdateBookCopyStatus(ctx context.Context, arg queries.UpdateBookCopyStatusParams) (queries.BookCopy, error)
+	UpdateBookCopyStatusAndCondition(ctx context.Context, arg queries.UpdateBookCopyStatusAndConditionParams) (queries.BookCopy, error)
+	GetActiveTransactionByCopy(ctx context.Context, copyID pgtype.Int4) (queries.Transaction, error)
+	GetActiveBorrowingByCopy(ctx context.Context, copyID pgtype.Int4) (queries.GetActiveBorrowingByCopyRow, error)
+	SyncBookCopyCounts(ctx context.Context, id int32) error
 }
 
 // TransactionService handles all business logic related to book transactions
@@ -120,10 +131,91 @@ type TransactionResponse struct {
 	ConditionNotes  string          `json:"condition_notes,omitempty"`
 	CreatedAt       time.Time       `json:"created_at"`
 	UpdatedAt       time.Time       `json:"updated_at"`
+	// Copy-level tracking fields
+	CopyID        *int32  `json:"copy_id,omitempty"`
+	CopyNumber    *string `json:"copy_number,omitempty"`
+	CopyBarcode   *string `json:"copy_barcode,omitempty"`
+	CopyCondition *string `json:"copy_condition,omitempty"`
 }
 
-// BorrowBook processes a book borrowing request
+// BorrowBookWithCopyRequest represents a book borrowing request with optional copy specification
+type BorrowBookWithCopyRequest struct {
+	StudentID   int32   `json:"student_id" validate:"required"`
+	BookID      int32   `json:"book_id" validate:"required"`
+	LibrarianID int32   `json:"librarian_id" validate:"required"`
+	CopyID      *int32  `json:"copy_id,omitempty"`
+	Barcode     *string `json:"barcode,omitempty"`
+	Notes       string  `json:"notes"`
+}
+
+// BorrowByBarcodeRequest represents a quick checkout by barcode
+type BorrowByBarcodeRequest struct {
+	Barcode     string `json:"barcode" validate:"required"`
+	StudentID   int32  `json:"student_id" validate:"required"`
+	LibrarianID int32  `json:"librarian_id" validate:"required"`
+	Notes       string `json:"notes"`
+}
+
+// ReturnByBarcodeRequest represents a quick return by barcode
+type ReturnByBarcodeRequest struct {
+	Barcode         string `json:"barcode" validate:"required"`
+	ReturnCondition string `json:"return_condition" validate:"omitempty,oneof=excellent good fair poor damaged"`
+	ConditionNotes  string `json:"condition_notes"`
+}
+
+// BarcodeScanResult represents the result of scanning a barcode
+type BarcodeScanResult struct {
+	CopyID          int32   `json:"copy_id"`
+	CopyNumber      string  `json:"copy_number"`
+	Barcode         string  `json:"barcode"`
+	Condition       string  `json:"condition"`
+	Status          string  `json:"status"`
+	BookID          int32   `json:"book_id"`
+	BookTitle       string  `json:"book_title"`
+	BookAuthor      string  `json:"book_author"`
+	BookCode        string  `json:"book_code"`
+	ISBN            *string `json:"isbn,omitempty"`
+	IsBorrowed      bool    `json:"is_borrowed"`
+	CanBorrow       bool    `json:"can_borrow"`
+	CurrentBorrower *CurrentBorrowerInfo `json:"current_borrower,omitempty"`
+}
+
+// CurrentBorrowerInfo contains information about who currently has a copy borrowed
+type CurrentBorrowerInfo struct {
+	TransactionID int32     `json:"transaction_id"`
+	StudentName   string    `json:"student_name"`
+	StudentCode   string    `json:"student_code"`
+	DueDate       time.Time `json:"due_date"`
+}
+
+// BorrowBook processes a book borrowing request (backward compatible - auto-selects copy)
 func (s *TransactionService) BorrowBook(ctx context.Context, studentID, bookID, librarianID int32, notes string) (*TransactionResponse, error) {
+	return s.BorrowBookWithCopy(ctx, BorrowBookWithCopyRequest{
+		StudentID:   studentID,
+		BookID:      bookID,
+		LibrarianID: librarianID,
+		Notes:       notes,
+	})
+}
+
+// BorrowBookWithCopy processes a book borrowing request with optional copy specification
+func (s *TransactionService) BorrowBookWithCopy(ctx context.Context, req BorrowBookWithCopyRequest) (*TransactionResponse, error) {
+	var bookID int32 = req.BookID
+	var copyID *int32 = req.CopyID
+
+	// If barcode is provided, look up the copy and book
+	if req.Barcode != nil && *req.Barcode != "" {
+		copyInfo, err := s.queries.GetCopyByBarcodeWithBookInfo(ctx, pgtype.Text{String: *req.Barcode, Valid: true})
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return nil, fmt.Errorf("no copy found with barcode: %s", *req.Barcode)
+			}
+			return nil, fmt.Errorf("failed to look up barcode: %w", err)
+		}
+		bookID = copyInfo.BookID
+		copyID = &copyInfo.ID
+	}
+
 	// Validate book exists
 	book, err := s.queries.GetBookByID(ctx, bookID)
 	if err != nil {
@@ -134,7 +226,7 @@ func (s *TransactionService) BorrowBook(ctx context.Context, studentID, bookID, 
 	}
 
 	// Validate student exists and is active
-	student, err := s.queries.GetStudentByID(ctx, studentID)
+	student, err := s.queries.GetStudentByID(ctx, req.StudentID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("student not found")
@@ -143,39 +235,99 @@ func (s *TransactionService) BorrowBook(ctx context.Context, studentID, bookID, 
 	}
 
 	// Enhanced validation with comprehensive business rules
-	if err := s.validateBorrowingEligibility(ctx, student, book, studentID, bookID); err != nil {
+	if err := s.validateBorrowingEligibility(ctx, student, book, req.StudentID, bookID); err != nil {
 		return nil, err
+	}
+
+	// Determine which copy to use
+	var selectedCopy *queries.BookCopy
+	if copyID != nil {
+		// Validate the specified copy
+		copy, err := s.queries.GetBookCopyByID(ctx, *copyID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return nil, fmt.Errorf("copy not found")
+			}
+			return nil, fmt.Errorf("failed to get copy: %w", err)
+		}
+		if copy.BookID != bookID {
+			return nil, fmt.Errorf("copy does not belong to the specified book")
+		}
+		if copy.Status.String != "available" {
+			return nil, fmt.Errorf("copy is not available (status: %s)", copy.Status.String)
+		}
+		selectedCopy = &copy
+	} else {
+		// Auto-select first available copy
+		copy, err := s.queries.GetFirstAvailableCopy(ctx, bookID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return nil, fmt.Errorf("no available copies")
+			}
+			return nil, fmt.Errorf("failed to get available copy: %w", err)
+		}
+		selectedCopy = &copy
 	}
 
 	// Calculate due date based on student year and borrowing rules
 	dueDate := s.calculateDueDate(student)
 
-	// ATOMIC: Decrement book availability first to prevent race conditions
-	// This will fail if no copies are available (WHERE available_copies > 0)
-	_, err = s.queries.DecrementBookAvailability(ctx, bookID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("book not available")
-		}
-		return nil, fmt.Errorf("failed to update book availability: %w", err)
-	}
-
-	// Create transaction after successful availability decrement
-	transaction, err := s.queries.CreateTransaction(ctx, queries.CreateTransactionParams{
-		StudentID:       studentID,
-		BookID:          bookID,
-		TransactionType: "borrow",
-		DueDate:         pgtype.Timestamp{Time: dueDate, Valid: true},
-		LibrarianID:     pgtype.Int4{Int32: librarianID, Valid: true},
-		Notes:           pgtype.Text{String: notes, Valid: notes != ""},
+	// Update copy status to "borrowed"
+	_, err = s.queries.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
+		ID:     selectedCopy.ID,
+		Status: pgtype.Text{String: "borrowed", Valid: true},
 	})
 	if err != nil {
-		// Rollback: increment availability back since transaction creation failed
-		_, _ = s.queries.IncrementBookAvailability(ctx, bookID)
+		return nil, fmt.Errorf("failed to update copy status: %w", err)
+	}
+
+	// Create transaction with copy_id
+	transaction, err := s.queries.CreateTransactionWithCopy(ctx, queries.CreateTransactionWithCopyParams{
+		StudentID:       req.StudentID,
+		BookID:          bookID,
+		CopyID:          pgtype.Int4{Int32: selectedCopy.ID, Valid: true},
+		TransactionType: "borrow",
+		DueDate:         pgtype.Timestamp{Time: dueDate, Valid: true},
+		LibrarianID:     pgtype.Int4{Int32: req.LibrarianID, Valid: true},
+		Notes:           pgtype.Text{String: req.Notes, Valid: req.Notes != ""},
+	})
+	if err != nil {
+		// Rollback: revert copy status
+		_, _ = s.queries.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
+			ID:     selectedCopy.ID,
+			Status: pgtype.Text{String: "available", Valid: true},
+		})
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}
 
-	return s.convertToTransactionResponse(transaction), nil
+	// Sync book's available_copies count
+	_ = s.queries.SyncBookCopyCounts(ctx, bookID)
+
+	// Build response with copy info
+	response := s.convertToTransactionResponse(transaction)
+	response.CopyID = &selectedCopy.ID
+	copyNumber := selectedCopy.CopyNumber
+	response.CopyNumber = &copyNumber
+	if selectedCopy.Barcode.Valid {
+		response.CopyBarcode = &selectedCopy.Barcode.String
+	}
+	if selectedCopy.Condition.Valid {
+		response.CopyCondition = &selectedCopy.Condition.String
+	}
+
+	return response, nil
+}
+
+// BorrowByBarcode processes a quick checkout by scanning barcode
+func (s *TransactionService) BorrowByBarcode(ctx context.Context, req BorrowByBarcodeRequest) (*TransactionResponse, error) {
+	barcode := req.Barcode
+	return s.BorrowBookWithCopy(ctx, BorrowBookWithCopyRequest{
+		StudentID:   req.StudentID,
+		BookID:      0, // Will be determined from barcode
+		LibrarianID: req.LibrarianID,
+		Barcode:     &barcode,
+		Notes:       req.Notes,
+	})
 }
 
 // ReturnBook processes a book return with enhanced validation (backward compatibility)
@@ -185,8 +337,8 @@ func (s *TransactionService) ReturnBook(ctx context.Context, transactionID int32
 
 // ReturnBookWithCondition processes a book return with condition assessment
 func (s *TransactionService) ReturnBookWithCondition(ctx context.Context, transactionID int32, returnCondition, conditionNotes string) (*TransactionResponse, error) {
-	// Get transaction
-	transactionRow, err := s.queries.GetTransactionByID(ctx, transactionID)
+	// Get transaction with copy info
+	transactionRow, err := s.queries.GetTransactionByIDWithCopy(ctx, transactionID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("transaction not found")
@@ -195,7 +347,7 @@ func (s *TransactionService) ReturnBookWithCondition(ctx context.Context, transa
 	}
 
 	// Enhanced validation for return processing
-	if err := s.validateReturnTransaction(transactionRow); err != nil {
+	if err := s.validateReturnTransactionWithCopy(transactionRow); err != nil {
 		return nil, err
 	}
 
@@ -231,10 +383,26 @@ func (s *TransactionService) ReturnBookWithCondition(ctx context.Context, transa
 		return nil, fmt.Errorf("failed to return book: %w", err)
 	}
 
-	// ATOMIC: Increment book availability (race-condition safe)
-	_, err = s.queries.IncrementBookAvailability(ctx, transactionRow.BookID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to update book availability: %w", err)
+	// If transaction has a copy_id, update copy status and condition
+	if transactionRow.CopyID.Valid {
+		// Update copy status to "available" and condition if deteriorated
+		_, err = s.queries.UpdateBookCopyStatusAndCondition(ctx, queries.UpdateBookCopyStatusAndConditionParams{
+			ID:        transactionRow.CopyID.Int32,
+			Status:    pgtype.Text{String: "available", Valid: true},
+			Condition: pgtype.Text{String: returnCondition, Valid: true},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to update copy status: %w", err)
+		}
+
+		// Sync book's available_copies count
+		_ = s.queries.SyncBookCopyCounts(ctx, transactionRow.BookID)
+	} else {
+		// Legacy: no copy_id, use the old availability increment
+		_, err = s.queries.IncrementBookAvailability(ctx, transactionRow.BookID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to update book availability: %w", err)
+		}
 	}
 
 	// Get book for condition update
@@ -248,7 +416,111 @@ func (s *TransactionService) ReturnBookWithCondition(ctx context.Context, transa
 		return nil, fmt.Errorf("failed to update book condition: %w", err)
 	}
 
-	return s.convertToTransactionResponse(transaction), nil
+	response := s.convertToTransactionResponse(transaction)
+
+	// Add copy info to response if available
+	if transactionRow.CopyID.Valid {
+		response.CopyID = &transactionRow.CopyID.Int32
+		if transactionRow.CopyNumber.Valid {
+			response.CopyNumber = &transactionRow.CopyNumber.String
+		}
+		if transactionRow.CopyBarcode.Valid {
+			response.CopyBarcode = &transactionRow.CopyBarcode.String
+		}
+		if transactionRow.CopyCondition.Valid {
+			response.CopyCondition = &transactionRow.CopyCondition.String
+		}
+	}
+
+	return response, nil
+}
+
+// ReturnByBarcode processes a quick return by scanning barcode
+func (s *TransactionService) ReturnByBarcode(ctx context.Context, req ReturnByBarcodeRequest) (*TransactionResponse, error) {
+	// Look up the copy by barcode
+	copyInfo, err := s.queries.GetCopyByBarcodeWithBookInfo(ctx, pgtype.Text{String: req.Barcode, Valid: true})
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("no copy found with barcode: %s", req.Barcode)
+		}
+		return nil, fmt.Errorf("failed to look up barcode: %w", err)
+	}
+
+	// Check if copy is borrowed
+	if copyInfo.Status.String != "borrowed" {
+		return nil, fmt.Errorf("copy is not currently borrowed (status: %s)", copyInfo.Status.String)
+	}
+
+	// Find the active transaction for this copy
+	transaction, err := s.queries.GetActiveTransactionByCopy(ctx, pgtype.Int4{Int32: copyInfo.ID, Valid: true})
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("no active transaction found for this copy")
+		}
+		return nil, fmt.Errorf("failed to find transaction: %w", err)
+	}
+
+	// Use default condition if not specified
+	returnCondition := req.ReturnCondition
+	if returnCondition == "" {
+		returnCondition = "good"
+	}
+
+	return s.ReturnBookWithCondition(ctx, transaction.ID, returnCondition, req.ConditionNotes)
+}
+
+// ScanBarcode looks up a copy by barcode and returns detailed information
+func (s *TransactionService) ScanBarcode(ctx context.Context, barcode string) (*BarcodeScanResult, error) {
+	// Look up the copy by barcode
+	copyInfo, err := s.queries.GetCopyByBarcodeWithBookInfo(ctx, pgtype.Text{String: barcode, Valid: true})
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("no copy found with barcode: %s", barcode)
+		}
+		return nil, fmt.Errorf("failed to look up barcode: %w", err)
+	}
+
+	result := &BarcodeScanResult{
+		CopyID:     copyInfo.ID,
+		CopyNumber: copyInfo.CopyNumber,
+		Barcode:    barcode,
+		Condition:  copyInfo.Condition.String,
+		Status:     copyInfo.Status.String,
+		BookID:     copyInfo.BookID,
+		BookTitle:  copyInfo.Title,
+		BookAuthor: copyInfo.Author,
+		BookCode:   copyInfo.BookCode,
+		IsBorrowed: copyInfo.Status.String == "borrowed",
+		CanBorrow:  copyInfo.Status.String == "available",
+	}
+
+	if copyInfo.Isbn.Valid {
+		result.ISBN = &copyInfo.Isbn.String
+	}
+
+	// If borrowed, get current borrower info
+	if result.IsBorrowed {
+		borrowing, err := s.queries.GetActiveBorrowingByCopy(ctx, pgtype.Int4{Int32: copyInfo.ID, Valid: true})
+		if err == nil {
+			result.CurrentBorrower = &CurrentBorrowerInfo{
+				TransactionID: borrowing.ID,
+				StudentName:   borrowing.FirstName + " " + borrowing.LastName,
+				StudentCode:   borrowing.StudentCode,
+				DueDate:       borrowing.DueDate.Time,
+			}
+		}
+	}
+
+	return result, nil
+}
+
+// GetActiveBorrowingByCopy looks up current borrower for a copy - needed by the service interface
+func (s *TransactionService) GetActiveBorrowingByCopy(ctx context.Context, copyID int32) (*queries.GetActiveBorrowingByCopyRow, error) {
+	result, err := s.queries.GetActiveBorrowingByCopy(ctx, pgtype.Int4{Int32: copyID, Valid: true})
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // RenewBook renews a borrowed book with comprehensive validation
@@ -462,6 +734,21 @@ func (s *TransactionService) calculateDueDate(student queries.Student) time.Time
 
 // validateReturnTransaction validates a transaction for return processing
 func (s *TransactionService) validateReturnTransaction(tx queries.GetTransactionByIDRow) error {
+	// Check if already returned
+	if tx.ReturnedDate.Valid {
+		return fmt.Errorf("book already returned")
+	}
+
+	// Validate transaction type - should be "borrow" or "renew"
+	if tx.TransactionType != "borrow" && tx.TransactionType != "renew" {
+		return fmt.Errorf("invalid transaction type for return: %s", tx.TransactionType)
+	}
+
+	return nil
+}
+
+// validateReturnTransactionWithCopy validates a transaction with copy info for return processing
+func (s *TransactionService) validateReturnTransactionWithCopy(tx queries.GetTransactionByIDWithCopyRow) error {
 	// Check if already returned
 	if tx.ReturnedDate.Valid {
 		return fmt.Errorf("book already returned")

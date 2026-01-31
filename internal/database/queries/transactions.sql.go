@@ -92,7 +92,7 @@ func (q *Queries) CountTransactions(ctx context.Context) (int64, error) {
 const createTransaction = `-- name: CreateTransaction :one
 INSERT INTO transactions (student_id, book_id, transaction_type, due_date, librarian_id, notes)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at
+RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id
 `
 
 type CreateTransactionParams struct {
@@ -135,6 +135,95 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 		&i.FineWaivedBy,
 		&i.FineWaivedReason,
 		&i.FinePaidAt,
+		&i.CopyID,
+	)
+	return i, err
+}
+
+const createTransactionWithCopy = `-- name: CreateTransactionWithCopy :one
+INSERT INTO transactions (student_id, book_id, copy_id, transaction_type, due_date, librarian_id, notes)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id
+`
+
+type CreateTransactionWithCopyParams struct {
+	StudentID       int32            `db:"student_id" json:"student_id"`
+	BookID          int32            `db:"book_id" json:"book_id"`
+	CopyID          pgtype.Int4      `db:"copy_id" json:"copy_id"`
+	TransactionType string           `db:"transaction_type" json:"transaction_type"`
+	DueDate         pgtype.Timestamp `db:"due_date" json:"due_date"`
+	LibrarianID     pgtype.Int4      `db:"librarian_id" json:"librarian_id"`
+	Notes           pgtype.Text      `db:"notes" json:"notes"`
+}
+
+func (q *Queries) CreateTransactionWithCopy(ctx context.Context, arg CreateTransactionWithCopyParams) (Transaction, error) {
+	row := q.db.QueryRow(ctx, createTransactionWithCopy,
+		arg.StudentID,
+		arg.BookID,
+		arg.CopyID,
+		arg.TransactionType,
+		arg.DueDate,
+		arg.LibrarianID,
+		arg.Notes,
+	)
+	var i Transaction
+	err := row.Scan(
+		&i.ID,
+		&i.StudentID,
+		&i.BookID,
+		&i.TransactionType,
+		&i.TransactionDate,
+		&i.DueDate,
+		&i.ReturnedDate,
+		&i.LibrarianID,
+		&i.FineAmount,
+		&i.FinePaid,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ReturnCondition,
+		&i.ConditionNotes,
+		&i.FineWaived,
+		&i.FineWaivedAt,
+		&i.FineWaivedBy,
+		&i.FineWaivedReason,
+		&i.FinePaidAt,
+		&i.CopyID,
+	)
+	return i, err
+}
+
+const getActiveTransactionByCopy = `-- name: GetActiveTransactionByCopy :one
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id FROM transactions t
+WHERE t.copy_id = $1 AND t.returned_date IS NULL
+LIMIT 1
+`
+
+func (q *Queries) GetActiveTransactionByCopy(ctx context.Context, copyID pgtype.Int4) (Transaction, error) {
+	row := q.db.QueryRow(ctx, getActiveTransactionByCopy, copyID)
+	var i Transaction
+	err := row.Scan(
+		&i.ID,
+		&i.StudentID,
+		&i.BookID,
+		&i.TransactionType,
+		&i.TransactionDate,
+		&i.DueDate,
+		&i.ReturnedDate,
+		&i.LibrarianID,
+		&i.FineAmount,
+		&i.FinePaid,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ReturnCondition,
+		&i.ConditionNotes,
+		&i.FineWaived,
+		&i.FineWaivedAt,
+		&i.FineWaivedBy,
+		&i.FineWaivedReason,
+		&i.FinePaidAt,
+		&i.CopyID,
 	)
 	return i, err
 }
@@ -227,7 +316,7 @@ func (q *Queries) GetStudentTotalBorrowed(ctx context.Context, studentID int32) 
 }
 
 const getTransactionByID = `-- name: GetTransactionByID :one
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
@@ -255,6 +344,7 @@ type GetTransactionByIDRow struct {
 	FineWaivedBy     pgtype.Int4      `db:"fine_waived_by" json:"fine_waived_by"`
 	FineWaivedReason pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
 	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
+	CopyID           pgtype.Int4      `db:"copy_id" json:"copy_id"`
 	FirstName        string           `db:"first_name" json:"first_name"`
 	LastName         string           `db:"last_name" json:"last_name"`
 	StudentID_2      string           `db:"student_id_2" json:"student_id_2"`
@@ -287,12 +377,98 @@ func (q *Queries) GetTransactionByID(ctx context.Context, id int32) (GetTransact
 		&i.FineWaivedBy,
 		&i.FineWaivedReason,
 		&i.FinePaidAt,
+		&i.CopyID,
 		&i.FirstName,
 		&i.LastName,
 		&i.StudentID_2,
 		&i.Title,
 		&i.Author,
 		&i.BookID_2,
+	)
+	return i, err
+}
+
+const getTransactionByIDWithCopy = `-- name: GetTransactionByIDWithCopy :one
+
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id,
+       s.first_name, s.last_name, s.student_id,
+       b.title, b.author, b.book_id,
+       bc.copy_number, bc.barcode as copy_barcode, bc.condition as copy_condition
+FROM transactions t
+JOIN students s ON t.student_id = s.id
+JOIN books b ON t.book_id = b.id
+LEFT JOIN book_copies bc ON t.copy_id = bc.id
+WHERE t.id = $1
+`
+
+type GetTransactionByIDWithCopyRow struct {
+	ID               int32            `db:"id" json:"id"`
+	StudentID        int32            `db:"student_id" json:"student_id"`
+	BookID           int32            `db:"book_id" json:"book_id"`
+	TransactionType  string           `db:"transaction_type" json:"transaction_type"`
+	TransactionDate  pgtype.Timestamp `db:"transaction_date" json:"transaction_date"`
+	DueDate          pgtype.Timestamp `db:"due_date" json:"due_date"`
+	ReturnedDate     pgtype.Timestamp `db:"returned_date" json:"returned_date"`
+	LibrarianID      pgtype.Int4      `db:"librarian_id" json:"librarian_id"`
+	FineAmount       pgtype.Numeric   `db:"fine_amount" json:"fine_amount"`
+	FinePaid         pgtype.Bool      `db:"fine_paid" json:"fine_paid"`
+	Notes            pgtype.Text      `db:"notes" json:"notes"`
+	CreatedAt        pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt        pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	ReturnCondition  pgtype.Text      `db:"return_condition" json:"return_condition"`
+	ConditionNotes   pgtype.Text      `db:"condition_notes" json:"condition_notes"`
+	FineWaived       pgtype.Bool      `db:"fine_waived" json:"fine_waived"`
+	FineWaivedAt     pgtype.Timestamp `db:"fine_waived_at" json:"fine_waived_at"`
+	FineWaivedBy     pgtype.Int4      `db:"fine_waived_by" json:"fine_waived_by"`
+	FineWaivedReason pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
+	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
+	CopyID           pgtype.Int4      `db:"copy_id" json:"copy_id"`
+	FirstName        string           `db:"first_name" json:"first_name"`
+	LastName         string           `db:"last_name" json:"last_name"`
+	StudentID_2      string           `db:"student_id_2" json:"student_id_2"`
+	Title            string           `db:"title" json:"title"`
+	Author           string           `db:"author" json:"author"`
+	BookID_2         string           `db:"book_id_2" json:"book_id_2"`
+	CopyNumber       pgtype.Text      `db:"copy_number" json:"copy_number"`
+	CopyBarcode      pgtype.Text      `db:"copy_barcode" json:"copy_barcode"`
+	CopyCondition    pgtype.Text      `db:"copy_condition" json:"copy_condition"`
+}
+
+// Copy-level transaction tracking queries
+func (q *Queries) GetTransactionByIDWithCopy(ctx context.Context, id int32) (GetTransactionByIDWithCopyRow, error) {
+	row := q.db.QueryRow(ctx, getTransactionByIDWithCopy, id)
+	var i GetTransactionByIDWithCopyRow
+	err := row.Scan(
+		&i.ID,
+		&i.StudentID,
+		&i.BookID,
+		&i.TransactionType,
+		&i.TransactionDate,
+		&i.DueDate,
+		&i.ReturnedDate,
+		&i.LibrarianID,
+		&i.FineAmount,
+		&i.FinePaid,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ReturnCondition,
+		&i.ConditionNotes,
+		&i.FineWaived,
+		&i.FineWaivedAt,
+		&i.FineWaivedBy,
+		&i.FineWaivedReason,
+		&i.FinePaidAt,
+		&i.CopyID,
+		&i.FirstName,
+		&i.LastName,
+		&i.StudentID_2,
+		&i.Title,
+		&i.Author,
+		&i.BookID_2,
+		&i.CopyNumber,
+		&i.CopyBarcode,
+		&i.CopyCondition,
 	)
 	return i, err
 }
@@ -317,7 +493,7 @@ func (q *Queries) HasActiveReservationsByOtherStudents(ctx context.Context, arg 
 }
 
 const listActiveBorrowings = `-- name: ListActiveBorrowings :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
@@ -352,6 +528,7 @@ type ListActiveBorrowingsRow struct {
 	FineWaivedBy     pgtype.Int4      `db:"fine_waived_by" json:"fine_waived_by"`
 	FineWaivedReason pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
 	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
+	CopyID           pgtype.Int4      `db:"copy_id" json:"copy_id"`
 	FirstName        string           `db:"first_name" json:"first_name"`
 	LastName         string           `db:"last_name" json:"last_name"`
 	StudentID_2      string           `db:"student_id_2" json:"student_id_2"`
@@ -390,6 +567,7 @@ func (q *Queries) ListActiveBorrowings(ctx context.Context, arg ListActiveBorrow
 			&i.FineWaivedBy,
 			&i.FineWaivedReason,
 			&i.FinePaidAt,
+			&i.CopyID,
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentID_2,
@@ -408,7 +586,7 @@ func (q *Queries) ListActiveBorrowings(ctx context.Context, arg ListActiveBorrow
 }
 
 const listActiveTransactionsByStudent = `-- name: ListActiveTransactionsByStudent :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, b.title, b.author, b.book_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, b.title, b.author, b.book_id
 FROM transactions t
 JOIN books b ON t.book_id = b.id
 WHERE t.student_id = $1 AND t.returned_date IS NULL
@@ -436,6 +614,7 @@ type ListActiveTransactionsByStudentRow struct {
 	FineWaivedBy     pgtype.Int4      `db:"fine_waived_by" json:"fine_waived_by"`
 	FineWaivedReason pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
 	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
+	CopyID           pgtype.Int4      `db:"copy_id" json:"copy_id"`
 	Title            string           `db:"title" json:"title"`
 	Author           string           `db:"author" json:"author"`
 	BookID_2         string           `db:"book_id_2" json:"book_id_2"`
@@ -471,6 +650,7 @@ func (q *Queries) ListActiveTransactionsByStudent(ctx context.Context, studentID
 			&i.FineWaivedBy,
 			&i.FineWaivedReason,
 			&i.FinePaidAt,
+			&i.CopyID,
 			&i.Title,
 			&i.Author,
 			&i.BookID_2,
@@ -486,7 +666,7 @@ func (q *Queries) ListActiveTransactionsByStudent(ctx context.Context, studentID
 }
 
 const listOverdueTransactions = `-- name: ListOverdueTransactions :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
@@ -515,6 +695,7 @@ type ListOverdueTransactionsRow struct {
 	FineWaivedBy     pgtype.Int4      `db:"fine_waived_by" json:"fine_waived_by"`
 	FineWaivedReason pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
 	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
+	CopyID           pgtype.Int4      `db:"copy_id" json:"copy_id"`
 	FirstName        string           `db:"first_name" json:"first_name"`
 	LastName         string           `db:"last_name" json:"last_name"`
 	StudentID_2      string           `db:"student_id_2" json:"student_id_2"`
@@ -553,6 +734,7 @@ func (q *Queries) ListOverdueTransactions(ctx context.Context) ([]ListOverdueTra
 			&i.FineWaivedBy,
 			&i.FineWaivedReason,
 			&i.FinePaidAt,
+			&i.CopyID,
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentID_2,
@@ -571,7 +753,7 @@ func (q *Queries) ListOverdueTransactions(ctx context.Context) ([]ListOverdueTra
 }
 
 const listRenewalsByStudentAndBook = `-- name: ListRenewalsByStudentAndBook :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, b.title, b.author, b.book_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, b.title, b.author, b.book_id
 FROM transactions t
 JOIN books b ON t.book_id = b.id
 WHERE t.student_id = $1 AND t.book_id = $2 AND t.transaction_type = 'renew'
@@ -604,6 +786,7 @@ type ListRenewalsByStudentAndBookRow struct {
 	FineWaivedBy     pgtype.Int4      `db:"fine_waived_by" json:"fine_waived_by"`
 	FineWaivedReason pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
 	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
+	CopyID           pgtype.Int4      `db:"copy_id" json:"copy_id"`
 	Title            string           `db:"title" json:"title"`
 	Author           string           `db:"author" json:"author"`
 	BookID_2         string           `db:"book_id_2" json:"book_id_2"`
@@ -639,6 +822,7 @@ func (q *Queries) ListRenewalsByStudentAndBook(ctx context.Context, arg ListRene
 			&i.FineWaivedBy,
 			&i.FineWaivedReason,
 			&i.FinePaidAt,
+			&i.CopyID,
 			&i.Title,
 			&i.Author,
 			&i.BookID_2,
@@ -654,7 +838,7 @@ func (q *Queries) ListRenewalsByStudentAndBook(ctx context.Context, arg ListRene
 }
 
 const listTransactions = `-- name: ListTransactions :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
@@ -688,6 +872,7 @@ type ListTransactionsRow struct {
 	FineWaivedBy     pgtype.Int4      `db:"fine_waived_by" json:"fine_waived_by"`
 	FineWaivedReason pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
 	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
+	CopyID           pgtype.Int4      `db:"copy_id" json:"copy_id"`
 	FirstName        string           `db:"first_name" json:"first_name"`
 	LastName         string           `db:"last_name" json:"last_name"`
 	StudentID_2      string           `db:"student_id_2" json:"student_id_2"`
@@ -726,6 +911,7 @@ func (q *Queries) ListTransactions(ctx context.Context, arg ListTransactionsPara
 			&i.FineWaivedBy,
 			&i.FineWaivedReason,
 			&i.FinePaidAt,
+			&i.CopyID,
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentID_2,
@@ -744,7 +930,7 @@ func (q *Queries) ListTransactions(ctx context.Context, arg ListTransactionsPara
 }
 
 const listTransactionsByBook = `-- name: ListTransactionsByBook :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, s.first_name, s.last_name, s.student_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, s.first_name, s.last_name, s.student_id
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 WHERE t.book_id = $1
@@ -779,6 +965,7 @@ type ListTransactionsByBookRow struct {
 	FineWaivedBy     pgtype.Int4      `db:"fine_waived_by" json:"fine_waived_by"`
 	FineWaivedReason pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
 	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
+	CopyID           pgtype.Int4      `db:"copy_id" json:"copy_id"`
 	FirstName        string           `db:"first_name" json:"first_name"`
 	LastName         string           `db:"last_name" json:"last_name"`
 	StudentID_2      string           `db:"student_id_2" json:"student_id_2"`
@@ -814,6 +1001,7 @@ func (q *Queries) ListTransactionsByBook(ctx context.Context, arg ListTransactio
 			&i.FineWaivedBy,
 			&i.FineWaivedReason,
 			&i.FinePaidAt,
+			&i.CopyID,
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentID_2,
@@ -829,7 +1017,7 @@ func (q *Queries) ListTransactionsByBook(ctx context.Context, arg ListTransactio
 }
 
 const listTransactionsByStudent = `-- name: ListTransactionsByStudent :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, b.title, b.author, b.book_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, b.title, b.author, b.book_id
 FROM transactions t
 JOIN books b ON t.book_id = b.id
 WHERE t.student_id = $1
@@ -864,6 +1052,7 @@ type ListTransactionsByStudentRow struct {
 	FineWaivedBy     pgtype.Int4      `db:"fine_waived_by" json:"fine_waived_by"`
 	FineWaivedReason pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
 	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
+	CopyID           pgtype.Int4      `db:"copy_id" json:"copy_id"`
 	Title            string           `db:"title" json:"title"`
 	Author           string           `db:"author" json:"author"`
 	BookID_2         string           `db:"book_id_2" json:"book_id_2"`
@@ -899,6 +1088,7 @@ func (q *Queries) ListTransactionsByStudent(ctx context.Context, arg ListTransac
 			&i.FineWaivedBy,
 			&i.FineWaivedReason,
 			&i.FinePaidAt,
+			&i.CopyID,
 			&i.Title,
 			&i.Author,
 			&i.BookID_2,
@@ -915,7 +1105,7 @@ func (q *Queries) ListTransactionsByStudent(ctx context.Context, arg ListTransac
 
 const listTransactionsDueSoon = `-- name: ListTransactionsDueSoon :many
 
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
@@ -947,6 +1137,7 @@ type ListTransactionsDueSoonRow struct {
 	FineWaivedBy     pgtype.Int4      `db:"fine_waived_by" json:"fine_waived_by"`
 	FineWaivedReason pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
 	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
+	CopyID           pgtype.Int4      `db:"copy_id" json:"copy_id"`
 	FirstName        string           `db:"first_name" json:"first_name"`
 	LastName         string           `db:"last_name" json:"last_name"`
 	StudentID_2      string           `db:"student_id_2" json:"student_id_2"`
@@ -987,6 +1178,7 @@ func (q *Queries) ListTransactionsDueSoon(ctx context.Context) ([]ListTransactio
 			&i.FineWaivedBy,
 			&i.FineWaivedReason,
 			&i.FinePaidAt,
+			&i.CopyID,
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentID_2,
@@ -1006,7 +1198,7 @@ func (q *Queries) ListTransactionsDueSoon(ctx context.Context) ([]ListTransactio
 }
 
 const listTransactionsOverdue = `-- name: ListTransactionsOverdue :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
@@ -1037,6 +1229,7 @@ type ListTransactionsOverdueRow struct {
 	FineWaivedBy     pgtype.Int4      `db:"fine_waived_by" json:"fine_waived_by"`
 	FineWaivedReason pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
 	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
+	CopyID           pgtype.Int4      `db:"copy_id" json:"copy_id"`
 	FirstName        string           `db:"first_name" json:"first_name"`
 	LastName         string           `db:"last_name" json:"last_name"`
 	StudentID_2      string           `db:"student_id_2" json:"student_id_2"`
@@ -1076,6 +1269,7 @@ func (q *Queries) ListTransactionsOverdue(ctx context.Context) ([]ListTransactio
 			&i.FineWaivedBy,
 			&i.FineWaivedReason,
 			&i.FinePaidAt,
+			&i.CopyID,
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentID_2,
@@ -1094,8 +1288,110 @@ func (q *Queries) ListTransactionsOverdue(ctx context.Context) ([]ListTransactio
 	return items, nil
 }
 
+const listTransactionsWithCopies = `-- name: ListTransactionsWithCopies :many
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id,
+       s.first_name, s.last_name, s.student_id,
+       b.title, b.author, b.book_id,
+       bc.copy_number, bc.barcode as copy_barcode, bc.condition as copy_condition
+FROM transactions t
+JOIN students s ON t.student_id = s.id
+JOIN books b ON t.book_id = b.id
+LEFT JOIN book_copies bc ON t.copy_id = bc.id
+ORDER BY t.transaction_date DESC
+LIMIT $1 OFFSET $2
+`
+
+type ListTransactionsWithCopiesParams struct {
+	Limit  int32 `db:"limit" json:"limit"`
+	Offset int32 `db:"offset" json:"offset"`
+}
+
+type ListTransactionsWithCopiesRow struct {
+	ID               int32            `db:"id" json:"id"`
+	StudentID        int32            `db:"student_id" json:"student_id"`
+	BookID           int32            `db:"book_id" json:"book_id"`
+	TransactionType  string           `db:"transaction_type" json:"transaction_type"`
+	TransactionDate  pgtype.Timestamp `db:"transaction_date" json:"transaction_date"`
+	DueDate          pgtype.Timestamp `db:"due_date" json:"due_date"`
+	ReturnedDate     pgtype.Timestamp `db:"returned_date" json:"returned_date"`
+	LibrarianID      pgtype.Int4      `db:"librarian_id" json:"librarian_id"`
+	FineAmount       pgtype.Numeric   `db:"fine_amount" json:"fine_amount"`
+	FinePaid         pgtype.Bool      `db:"fine_paid" json:"fine_paid"`
+	Notes            pgtype.Text      `db:"notes" json:"notes"`
+	CreatedAt        pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt        pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	ReturnCondition  pgtype.Text      `db:"return_condition" json:"return_condition"`
+	ConditionNotes   pgtype.Text      `db:"condition_notes" json:"condition_notes"`
+	FineWaived       pgtype.Bool      `db:"fine_waived" json:"fine_waived"`
+	FineWaivedAt     pgtype.Timestamp `db:"fine_waived_at" json:"fine_waived_at"`
+	FineWaivedBy     pgtype.Int4      `db:"fine_waived_by" json:"fine_waived_by"`
+	FineWaivedReason pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
+	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
+	CopyID           pgtype.Int4      `db:"copy_id" json:"copy_id"`
+	FirstName        string           `db:"first_name" json:"first_name"`
+	LastName         string           `db:"last_name" json:"last_name"`
+	StudentID_2      string           `db:"student_id_2" json:"student_id_2"`
+	Title            string           `db:"title" json:"title"`
+	Author           string           `db:"author" json:"author"`
+	BookID_2         string           `db:"book_id_2" json:"book_id_2"`
+	CopyNumber       pgtype.Text      `db:"copy_number" json:"copy_number"`
+	CopyBarcode      pgtype.Text      `db:"copy_barcode" json:"copy_barcode"`
+	CopyCondition    pgtype.Text      `db:"copy_condition" json:"copy_condition"`
+}
+
+func (q *Queries) ListTransactionsWithCopies(ctx context.Context, arg ListTransactionsWithCopiesParams) ([]ListTransactionsWithCopiesRow, error) {
+	rows, err := q.db.Query(ctx, listTransactionsWithCopies, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListTransactionsWithCopiesRow{}
+	for rows.Next() {
+		var i ListTransactionsWithCopiesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.StudentID,
+			&i.BookID,
+			&i.TransactionType,
+			&i.TransactionDate,
+			&i.DueDate,
+			&i.ReturnedDate,
+			&i.LibrarianID,
+			&i.FineAmount,
+			&i.FinePaid,
+			&i.Notes,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ReturnCondition,
+			&i.ConditionNotes,
+			&i.FineWaived,
+			&i.FineWaivedAt,
+			&i.FineWaivedBy,
+			&i.FineWaivedReason,
+			&i.FinePaidAt,
+			&i.CopyID,
+			&i.FirstName,
+			&i.LastName,
+			&i.StudentID_2,
+			&i.Title,
+			&i.Author,
+			&i.BookID_2,
+			&i.CopyNumber,
+			&i.CopyBarcode,
+			&i.CopyCondition,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTransactionsWithUnpaidFines = `-- name: ListTransactionsWithUnpaidFines :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
@@ -1126,6 +1422,7 @@ type ListTransactionsWithUnpaidFinesRow struct {
 	FineWaivedBy     pgtype.Int4      `db:"fine_waived_by" json:"fine_waived_by"`
 	FineWaivedReason pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
 	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
+	CopyID           pgtype.Int4      `db:"copy_id" json:"copy_id"`
 	FirstName        string           `db:"first_name" json:"first_name"`
 	LastName         string           `db:"last_name" json:"last_name"`
 	StudentID_2      string           `db:"student_id_2" json:"student_id_2"`
@@ -1165,6 +1462,7 @@ func (q *Queries) ListTransactionsWithUnpaidFines(ctx context.Context) ([]ListTr
 			&i.FineWaivedBy,
 			&i.FineWaivedReason,
 			&i.FinePaidAt,
+			&i.CopyID,
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentID_2,
@@ -1198,7 +1496,7 @@ const returnBook = `-- name: ReturnBook :one
 UPDATE transactions
 SET returned_date = NOW(), fine_amount = $2, return_condition = $3, condition_notes = $4, updated_at = NOW()
 WHERE id = $1
-RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at
+RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id
 `
 
 type ReturnBookParams struct {
@@ -1237,6 +1535,7 @@ func (q *Queries) ReturnBook(ctx context.Context, arg ReturnBookParams) (Transac
 		&i.FineWaivedBy,
 		&i.FineWaivedReason,
 		&i.FinePaidAt,
+		&i.CopyID,
 	)
 	return i, err
 }
@@ -1261,7 +1560,7 @@ const updateTransactionReturn = `-- name: UpdateTransactionReturn :one
 UPDATE transactions
 SET returned_date = NOW(), fine_amount = $2, updated_at = NOW()
 WHERE id = $1
-RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at
+RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id
 `
 
 type UpdateTransactionReturnParams struct {
@@ -1293,6 +1592,7 @@ func (q *Queries) UpdateTransactionReturn(ctx context.Context, arg UpdateTransac
 		&i.FineWaivedBy,
 		&i.FineWaivedReason,
 		&i.FinePaidAt,
+		&i.CopyID,
 	)
 	return i, err
 }

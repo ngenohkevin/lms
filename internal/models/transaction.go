@@ -25,10 +25,27 @@ type Transaction struct {
 
 // BorrowBookRequest represents a request to borrow a book
 type BorrowBookRequest struct {
+	StudentID   int32   `json:"student_id" binding:"required,min=1"`
+	BookID      int32   `json:"book_id" binding:"required,min=1"`
+	LibrarianID int32   `json:"librarian_id" binding:"required,min=1"`
+	CopyID      *int32  `json:"copy_id" binding:"omitempty,min=1"`
+	Barcode     *string `json:"barcode" binding:"omitempty"`
+	Notes       string  `json:"notes"`
+}
+
+// BorrowByBarcodeRequest represents a quick checkout by barcode
+type BorrowByBarcodeRequest struct {
+	Barcode     string `json:"barcode" binding:"required"`
 	StudentID   int32  `json:"student_id" binding:"required,min=1"`
-	BookID      int32  `json:"book_id" binding:"required,min=1"`
 	LibrarianID int32  `json:"librarian_id" binding:"required,min=1"`
 	Notes       string `json:"notes"`
+}
+
+// ReturnByBarcodeRequest represents a quick return by barcode
+type ReturnByBarcodeRequest struct {
+	Barcode         string `json:"barcode" binding:"required"`
+	ReturnCondition string `json:"return_condition" binding:"omitempty,oneof=excellent good fair poor damaged"`
+	ConditionNotes  string `json:"condition_notes"`
 }
 
 // RenewBookRequest represents a request to renew a book
@@ -51,6 +68,11 @@ type TransactionResponse struct {
 	Notes           string          `json:"notes"`
 	CreatedAt       time.Time       `json:"created_at"`
 	UpdatedAt       time.Time       `json:"updated_at"`
+	// Copy-level tracking fields
+	CopyID        *int32  `json:"copy_id,omitempty"`
+	CopyNumber    *string `json:"copy_number,omitempty"`
+	CopyBarcode   *string `json:"copy_barcode,omitempty"`
+	CopyCondition *string `json:"copy_condition,omitempty"`
 }
 
 // OverdueTransactionResponse represents an overdue transaction with additional details

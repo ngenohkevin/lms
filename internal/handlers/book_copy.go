@@ -451,3 +451,75 @@ func (h *BookCopyHandler) ScanBarcode(c *gin.Context) {
 		Data:    copy,
 	})
 }
+
+// GetCopyHistory retrieves borrowing history for a specific copy
+// @Summary Get copy borrowing history
+// @Description Get the borrowing history for a specific book copy
+// @Tags book-copies
+// @Accept json
+// @Produce json
+// @Param id path int true "Book ID"
+// @Param copy_id path int true "Copy ID"
+// @Param limit query int false "Limit (default 20, max 100)"
+// @Param offset query int false "Offset (default 0)"
+// @Success 200 {object} SuccessResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/books/{id}/copies/{copy_id}/history [get]
+func (h *BookCopyHandler) GetCopyHistory(c *gin.Context) {
+	copyIDStr := c.Param("copy_id")
+	copyID, err := strconv.ParseInt(copyIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid copy ID",
+			},
+		})
+		return
+	}
+
+	// Parse pagination params
+	limit := int32(20)
+	offset := int32(0)
+
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if l, err := strconv.ParseInt(limitStr, 10, 32); err == nil && l > 0 {
+			limit = int32(l)
+		}
+	}
+	if offsetStr := c.Query("offset"); offsetStr != "" {
+		if o, err := strconv.ParseInt(offsetStr, 10, 32); err == nil && o >= 0 {
+			offset = int32(o)
+		}
+	}
+
+	history, err := h.bookCopyService.GetCopyBorrowingHistory(c.Request.Context(), int32(copyID), limit, offset)
+	if err != nil {
+		if isNotFoundError(err) {
+			c.JSON(http.StatusNotFound, ErrorResponse{
+				Success: false,
+				Error: ErrorDetail{
+					Code:    "NOT_FOUND",
+					Message: "Book copy not found",
+				},
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to get copy history",
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    history,
+	})
+}

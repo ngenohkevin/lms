@@ -367,6 +367,7 @@ func setupRoutes(
 				books.POST("/:id/copies", requirePerm("books.create"), bookCopyHandler.CreateBookCopy)
 				books.POST("/:id/copies/generate", requirePerm("books.create"), bookCopyHandler.GenerateCopies)
 				books.GET("/:id/copies/:copy_id", requirePerm("books.view"), bookCopyHandler.GetBookCopy)
+				books.GET("/:id/copies/:copy_id/history", requirePerm("books.view"), bookCopyHandler.GetCopyHistory)
 				books.PUT("/:id/copies/:copy_id", requirePerm("books.update"), bookCopyHandler.UpdateBookCopy)
 				books.DELETE("/:id/copies/:copy_id", requirePerm("books.delete"), bookCopyHandler.DeleteBookCopy)
 
@@ -463,10 +464,13 @@ func setupRoutes(
 				transactions.GET("/overdue", requirePerm("transactions.view"), transactionHandler.GetOverdueTransactions)
 				transactions.GET("/history/:studentId", requirePerm("transactions.view"), transactionHandler.GetTransactionHistory)
 				transactions.GET("/renewal-history", requirePerm("transactions.view"), transactionHandler.GetRenewalHistory)
+				transactions.GET("/scan", requirePerm("transactions.view"), transactionHandler.ScanBarcodeForTransaction)
 				transactions.GET("/:id/can-renew", requirePerm("transactions.view"), transactionHandler.CanBookBeRenewed)
 
 				// Borrow/Return operations
 				transactions.POST("/borrow", requirePerm("transactions.borrow"), transactionHandler.BorrowBook)
+				transactions.POST("/borrow-by-barcode", requirePerm("transactions.borrow"), transactionHandler.BorrowByBarcode)
+				transactions.POST("/return-by-barcode", requirePerm("transactions.return"), transactionHandler.ReturnByBarcode)
 				transactions.POST("/:id/return", requirePerm("transactions.return"), transactionHandler.ReturnBook)
 				transactions.POST("/:id/renew", requirePerm("transactions.view"), transactionHandler.RenewBook)
 				transactions.POST("/:id/pay-fine", requirePerm("fines.manage"), transactionHandler.PayFine)

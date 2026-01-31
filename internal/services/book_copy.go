@@ -21,9 +21,12 @@ type BookCopyQuerier interface {
 	UpdateBookCopy(ctx context.Context, arg queries.UpdateBookCopyParams) (queries.BookCopy, error)
 	UpdateBookCopyStatus(ctx context.Context, arg queries.UpdateBookCopyStatusParams) (queries.BookCopy, error)
 	UpdateBookCopyCondition(ctx context.Context, arg queries.UpdateBookCopyConditionParams) (queries.BookCopy, error)
+	UpdateBookCopyStatusAndCondition(ctx context.Context, arg queries.UpdateBookCopyStatusAndConditionParams) (queries.BookCopy, error)
 	DeleteBookCopy(ctx context.Context, id int32) error
 	ListBookCopiesByStatus(ctx context.Context, arg queries.ListBookCopiesByStatusParams) ([]queries.BookCopy, error)
 	SearchBookCopies(ctx context.Context, arg queries.SearchBookCopiesParams) ([]queries.BookCopy, error)
+	GetCopyBorrowingHistory(ctx context.Context, arg queries.GetCopyBorrowingHistoryParams) ([]queries.GetCopyBorrowingHistoryRow, error)
+	CountCopyBorrowings(ctx context.Context, copyID pgtype.Int4) (int64, error)
 }
 
 // BookCopyCountSyncer defines the interface for syncing book copy counts
@@ -44,6 +47,11 @@ type BookCopyServiceInterface interface {
 	UpdateBookCopyStatus(ctx context.Context, id int32, status string) (*models.BookCopyResponse, error)
 	DeleteBookCopy(ctx context.Context, id int32) error
 	GenerateCopies(ctx context.Context, bookID int32, count int32, bookCode string) ([]models.BookCopyResponse, error)
+	// Copy status management for transactions
+	MarkCopyBorrowed(ctx context.Context, copyID int32) (*models.BookCopyResponse, error)
+	MarkCopyReturned(ctx context.Context, copyID int32, condition string) (*models.BookCopyResponse, error)
+	// Copy history
+	GetCopyBorrowingHistory(ctx context.Context, copyID int32, limit, offset int32) ([]models.CopyBorrowingHistoryEntry, error)
 }
 
 // BookCopyService handles book copy-related business logic
@@ -323,6 +331,118 @@ func (s *BookCopyService) GenerateCopies(ctx context.Context, bookID int32, coun
 	}
 
 	return copies, nil
+}
+
+// MarkCopyBorrowed marks a copy as borrowed
+func (s *BookCopyService) MarkCopyBorrowed(ctx context.Context, copyID int32) (*models.BookCopyResponse, error) {
+	// Get existing copy to verify it exists and is available
+	existing, err := s.querier.GetBookCopyByID(ctx, copyID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get copy: %w", err)
+	}
+
+	if existing.Status.Valid && existing.Status.String != "available" {
+		return nil, fmt.Errorf("copy is not available for borrowing, current status: %s", existing.Status.String)
+	}
+
+	// Update status to borrowed
+	copy, err := s.querier.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
+		ID:     copyID,
+		Status: pgtype.Text{String: "borrowed", Valid: true},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to mark copy as borrowed: %w", err)
+	}
+
+	// Auto-sync book's available_copies
+	if s.copySyncer != nil {
+		_ = s.copySyncer.SyncBookCopyCounts(ctx, existing.BookID)
+	}
+
+	return bookCopyToResponse(&copy), nil
+}
+
+// MarkCopyReturned marks a copy as returned with optional condition update
+func (s *BookCopyService) MarkCopyReturned(ctx context.Context, copyID int32, condition string) (*models.BookCopyResponse, error) {
+	// Get existing copy to verify it exists
+	existing, err := s.querier.GetBookCopyByID(ctx, copyID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get copy: %w", err)
+	}
+
+	// Determine the new status based on condition
+	newStatus := "available"
+	newCondition := condition
+	if condition == "" {
+		// Keep existing condition
+		if existing.Condition.Valid {
+			newCondition = existing.Condition.String
+		} else {
+			newCondition = "good"
+		}
+	}
+
+	// If condition is damaged or lost, update status accordingly
+	if newCondition == "damaged" {
+		newStatus = "damaged"
+	}
+
+	// Update status and condition
+	copy, err := s.querier.UpdateBookCopyStatusAndCondition(ctx, queries.UpdateBookCopyStatusAndConditionParams{
+		ID:        copyID,
+		Status:    pgtype.Text{String: newStatus, Valid: true},
+		Condition: pgtype.Text{String: newCondition, Valid: true},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to mark copy as returned: %w", err)
+	}
+
+	// Auto-sync book's available_copies
+	if s.copySyncer != nil {
+		_ = s.copySyncer.SyncBookCopyCounts(ctx, existing.BookID)
+	}
+
+	return bookCopyToResponse(&copy), nil
+}
+
+// GetCopyBorrowingHistory returns the borrowing history for a copy
+func (s *BookCopyService) GetCopyBorrowingHistory(ctx context.Context, copyID int32, limit, offset int32) ([]models.CopyBorrowingHistoryEntry, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	rows, err := s.querier.GetCopyBorrowingHistory(ctx, queries.GetCopyBorrowingHistoryParams{
+		CopyID: pgtype.Int4{Int32: copyID, Valid: true},
+		Limit:  limit,
+		Offset: offset,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get copy borrowing history: %w", err)
+	}
+
+	history := make([]models.CopyBorrowingHistoryEntry, len(rows))
+	for i, row := range rows {
+		entry := models.CopyBorrowingHistoryEntry{
+			TransactionID: row.ID,
+			StudentName:   row.FirstName + " " + row.LastName,
+			StudentCode:   row.StudentCode,
+		}
+		if row.TransactionDate.Valid {
+			entry.BorrowedDate = row.TransactionDate.Time
+		}
+		if row.DueDate.Valid {
+			entry.DueDate = row.DueDate.Time
+		}
+		if row.ReturnedDate.Valid {
+			entry.ReturnedDate = &row.ReturnedDate.Time
+		}
+		history[i] = entry
+	}
+
+	return history, nil
 }
 
 // bookCopyToResponse converts queries.BookCopy to models.BookCopyResponse

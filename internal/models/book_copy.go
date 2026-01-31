@@ -122,3 +122,21 @@ func (r *UpdateBookCopyRequest) Validate() error {
 
 	return nil
 }
+
+// CopyBorrowingHistoryEntry represents a single borrowing record for a copy
+type CopyBorrowingHistoryEntry struct {
+	TransactionID int32      `json:"transaction_id"`
+	StudentName   string     `json:"student_name"`
+	StudentCode   string     `json:"student_code"`
+	BorrowedDate  time.Time  `json:"borrowed_date"`
+	DueDate       time.Time  `json:"due_date"`
+	ReturnedDate  *time.Time `json:"returned_date,omitempty"`
+}
+
+// CopyBorrowingHistoryResponse represents the response for copy borrowing history
+type CopyBorrowingHistoryResponse struct {
+	CopyID     int32                       `json:"copy_id"`
+	CopyNumber string                      `json:"copy_number"`
+	History    []CopyBorrowingHistoryEntry `json:"history"`
+	TotalCount int64                       `json:"total_count"`
+}

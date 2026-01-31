@@ -3,6 +3,11 @@ INSERT INTO transactions (student_id, book_id, transaction_type, due_date, libra
 VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
+-- name: CreateTransactionWithCopy :one
+INSERT INTO transactions (student_id, book_id, copy_id, transaction_type, due_date, librarian_id, notes)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING *;
+
 -- name: GetTransactionByID :one
 SELECT t.*, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
 FROM transactions t
@@ -176,3 +181,33 @@ WHERE student_id = $1;
 -- name: CountActiveTransactionsByBook :one
 SELECT COUNT(*) FROM transactions
 WHERE book_id = $1 AND returned_date IS NULL;
+
+-- Copy-level transaction tracking queries
+
+-- name: GetTransactionByIDWithCopy :one
+SELECT t.*,
+       s.first_name, s.last_name, s.student_id,
+       b.title, b.author, b.book_id,
+       bc.copy_number, bc.barcode as copy_barcode, bc.condition as copy_condition
+FROM transactions t
+JOIN students s ON t.student_id = s.id
+JOIN books b ON t.book_id = b.id
+LEFT JOIN book_copies bc ON t.copy_id = bc.id
+WHERE t.id = $1;
+
+-- name: GetActiveTransactionByCopy :one
+SELECT t.* FROM transactions t
+WHERE t.copy_id = $1 AND t.returned_date IS NULL
+LIMIT 1;
+
+-- name: ListTransactionsWithCopies :many
+SELECT t.*,
+       s.first_name, s.last_name, s.student_id,
+       b.title, b.author, b.book_id,
+       bc.copy_number, bc.barcode as copy_barcode, bc.condition as copy_condition
+FROM transactions t
+JOIN students s ON t.student_id = s.id
+JOIN books b ON t.book_id = b.id
+LEFT JOIN book_copies bc ON t.copy_id = bc.id
+ORDER BY t.transaction_date DESC
+LIMIT $1 OFFSET $2;

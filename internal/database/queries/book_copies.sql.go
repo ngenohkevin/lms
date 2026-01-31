@@ -35,6 +35,18 @@ func (q *Queries) CountBookCopies(ctx context.Context, bookID int32) (int64, err
 	return count, err
 }
 
+const countCopyBorrowings = `-- name: CountCopyBorrowings :one
+SELECT COUNT(*) FROM transactions
+WHERE copy_id = $1 AND transaction_type = 'borrow'
+`
+
+func (q *Queries) CountCopyBorrowings(ctx context.Context, copyID pgtype.Int4) (int64, error) {
+	row := q.db.QueryRow(ctx, countCopyBorrowings, copyID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createBookCopy = `-- name: CreateBookCopy :one
 INSERT INTO book_copies (book_id, copy_number, barcode, condition, acquisition_date, status, notes)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -85,6 +97,73 @@ WHERE id = $1
 func (q *Queries) DeleteBookCopy(ctx context.Context, id int32) error {
 	_, err := q.db.Exec(ctx, deleteBookCopy, id)
 	return err
+}
+
+const getActiveBorrowingByCopy = `-- name: GetActiveBorrowingByCopy :one
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, s.first_name, s.last_name, s.student_id as student_code
+FROM transactions t
+JOIN students s ON t.student_id = s.id
+WHERE t.copy_id = $1 AND t.returned_date IS NULL
+LIMIT 1
+`
+
+type GetActiveBorrowingByCopyRow struct {
+	ID               int32            `db:"id" json:"id"`
+	StudentID        int32            `db:"student_id" json:"student_id"`
+	BookID           int32            `db:"book_id" json:"book_id"`
+	TransactionType  string           `db:"transaction_type" json:"transaction_type"`
+	TransactionDate  pgtype.Timestamp `db:"transaction_date" json:"transaction_date"`
+	DueDate          pgtype.Timestamp `db:"due_date" json:"due_date"`
+	ReturnedDate     pgtype.Timestamp `db:"returned_date" json:"returned_date"`
+	LibrarianID      pgtype.Int4      `db:"librarian_id" json:"librarian_id"`
+	FineAmount       pgtype.Numeric   `db:"fine_amount" json:"fine_amount"`
+	FinePaid         pgtype.Bool      `db:"fine_paid" json:"fine_paid"`
+	Notes            pgtype.Text      `db:"notes" json:"notes"`
+	CreatedAt        pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt        pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	ReturnCondition  pgtype.Text      `db:"return_condition" json:"return_condition"`
+	ConditionNotes   pgtype.Text      `db:"condition_notes" json:"condition_notes"`
+	FineWaived       pgtype.Bool      `db:"fine_waived" json:"fine_waived"`
+	FineWaivedAt     pgtype.Timestamp `db:"fine_waived_at" json:"fine_waived_at"`
+	FineWaivedBy     pgtype.Int4      `db:"fine_waived_by" json:"fine_waived_by"`
+	FineWaivedReason pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
+	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
+	CopyID           pgtype.Int4      `db:"copy_id" json:"copy_id"`
+	FirstName        string           `db:"first_name" json:"first_name"`
+	LastName         string           `db:"last_name" json:"last_name"`
+	StudentCode      string           `db:"student_code" json:"student_code"`
+}
+
+func (q *Queries) GetActiveBorrowingByCopy(ctx context.Context, copyID pgtype.Int4) (GetActiveBorrowingByCopyRow, error) {
+	row := q.db.QueryRow(ctx, getActiveBorrowingByCopy, copyID)
+	var i GetActiveBorrowingByCopyRow
+	err := row.Scan(
+		&i.ID,
+		&i.StudentID,
+		&i.BookID,
+		&i.TransactionType,
+		&i.TransactionDate,
+		&i.DueDate,
+		&i.ReturnedDate,
+		&i.LibrarianID,
+		&i.FineAmount,
+		&i.FinePaid,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ReturnCondition,
+		&i.ConditionNotes,
+		&i.FineWaived,
+		&i.FineWaivedAt,
+		&i.FineWaivedBy,
+		&i.FineWaivedReason,
+		&i.FinePaidAt,
+		&i.CopyID,
+		&i.FirstName,
+		&i.LastName,
+		&i.StudentCode,
+	)
+	return i, err
 }
 
 const getBookCopyByBarcode = `-- name: GetBookCopyByBarcode :one
@@ -145,6 +224,166 @@ WHERE id = $1
 
 func (q *Queries) GetBookCopyByID(ctx context.Context, id int32) (BookCopy, error) {
 	row := q.db.QueryRow(ctx, getBookCopyByID, id)
+	var i BookCopy
+	err := row.Scan(
+		&i.ID,
+		&i.BookID,
+		&i.CopyNumber,
+		&i.Barcode,
+		&i.Condition,
+		&i.AcquisitionDate,
+		&i.Status,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getCopyBorrowingHistory = `-- name: GetCopyBorrowingHistory :many
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, s.first_name, s.last_name, s.student_id as student_code
+FROM transactions t
+JOIN students s ON t.student_id = s.id
+WHERE t.copy_id = $1
+ORDER BY t.transaction_date DESC
+LIMIT $2 OFFSET $3
+`
+
+type GetCopyBorrowingHistoryParams struct {
+	CopyID pgtype.Int4 `db:"copy_id" json:"copy_id"`
+	Limit  int32       `db:"limit" json:"limit"`
+	Offset int32       `db:"offset" json:"offset"`
+}
+
+type GetCopyBorrowingHistoryRow struct {
+	ID               int32            `db:"id" json:"id"`
+	StudentID        int32            `db:"student_id" json:"student_id"`
+	BookID           int32            `db:"book_id" json:"book_id"`
+	TransactionType  string           `db:"transaction_type" json:"transaction_type"`
+	TransactionDate  pgtype.Timestamp `db:"transaction_date" json:"transaction_date"`
+	DueDate          pgtype.Timestamp `db:"due_date" json:"due_date"`
+	ReturnedDate     pgtype.Timestamp `db:"returned_date" json:"returned_date"`
+	LibrarianID      pgtype.Int4      `db:"librarian_id" json:"librarian_id"`
+	FineAmount       pgtype.Numeric   `db:"fine_amount" json:"fine_amount"`
+	FinePaid         pgtype.Bool      `db:"fine_paid" json:"fine_paid"`
+	Notes            pgtype.Text      `db:"notes" json:"notes"`
+	CreatedAt        pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt        pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	ReturnCondition  pgtype.Text      `db:"return_condition" json:"return_condition"`
+	ConditionNotes   pgtype.Text      `db:"condition_notes" json:"condition_notes"`
+	FineWaived       pgtype.Bool      `db:"fine_waived" json:"fine_waived"`
+	FineWaivedAt     pgtype.Timestamp `db:"fine_waived_at" json:"fine_waived_at"`
+	FineWaivedBy     pgtype.Int4      `db:"fine_waived_by" json:"fine_waived_by"`
+	FineWaivedReason pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
+	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
+	CopyID           pgtype.Int4      `db:"copy_id" json:"copy_id"`
+	FirstName        string           `db:"first_name" json:"first_name"`
+	LastName         string           `db:"last_name" json:"last_name"`
+	StudentCode      string           `db:"student_code" json:"student_code"`
+}
+
+func (q *Queries) GetCopyBorrowingHistory(ctx context.Context, arg GetCopyBorrowingHistoryParams) ([]GetCopyBorrowingHistoryRow, error) {
+	rows, err := q.db.Query(ctx, getCopyBorrowingHistory, arg.CopyID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetCopyBorrowingHistoryRow{}
+	for rows.Next() {
+		var i GetCopyBorrowingHistoryRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.StudentID,
+			&i.BookID,
+			&i.TransactionType,
+			&i.TransactionDate,
+			&i.DueDate,
+			&i.ReturnedDate,
+			&i.LibrarianID,
+			&i.FineAmount,
+			&i.FinePaid,
+			&i.Notes,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ReturnCondition,
+			&i.ConditionNotes,
+			&i.FineWaived,
+			&i.FineWaivedAt,
+			&i.FineWaivedBy,
+			&i.FineWaivedReason,
+			&i.FinePaidAt,
+			&i.CopyID,
+			&i.FirstName,
+			&i.LastName,
+			&i.StudentCode,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getCopyByBarcodeWithBookInfo = `-- name: GetCopyByBarcodeWithBookInfo :one
+SELECT bc.id, bc.book_id, bc.copy_number, bc.barcode, bc.condition, bc.acquisition_date, bc.status, bc.notes, bc.created_at, bc.updated_at, b.id as book_db_id, b.title, b.author, b.book_id as book_code, b.isbn
+FROM book_copies bc
+JOIN books b ON bc.book_id = b.id
+WHERE bc.barcode = $1
+`
+
+type GetCopyByBarcodeWithBookInfoRow struct {
+	ID              int32            `db:"id" json:"id"`
+	BookID          int32            `db:"book_id" json:"book_id"`
+	CopyNumber      string           `db:"copy_number" json:"copy_number"`
+	Barcode         pgtype.Text      `db:"barcode" json:"barcode"`
+	Condition       pgtype.Text      `db:"condition" json:"condition"`
+	AcquisitionDate pgtype.Date      `db:"acquisition_date" json:"acquisition_date"`
+	Status          pgtype.Text      `db:"status" json:"status"`
+	Notes           pgtype.Text      `db:"notes" json:"notes"`
+	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	BookDbID        int32            `db:"book_db_id" json:"book_db_id"`
+	Title           string           `db:"title" json:"title"`
+	Author          string           `db:"author" json:"author"`
+	BookCode        string           `db:"book_code" json:"book_code"`
+	Isbn            pgtype.Text      `db:"isbn" json:"isbn"`
+}
+
+func (q *Queries) GetCopyByBarcodeWithBookInfo(ctx context.Context, barcode pgtype.Text) (GetCopyByBarcodeWithBookInfoRow, error) {
+	row := q.db.QueryRow(ctx, getCopyByBarcodeWithBookInfo, barcode)
+	var i GetCopyByBarcodeWithBookInfoRow
+	err := row.Scan(
+		&i.ID,
+		&i.BookID,
+		&i.CopyNumber,
+		&i.Barcode,
+		&i.Condition,
+		&i.AcquisitionDate,
+		&i.Status,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.BookDbID,
+		&i.Title,
+		&i.Author,
+		&i.BookCode,
+		&i.Isbn,
+	)
+	return i, err
+}
+
+const getFirstAvailableCopy = `-- name: GetFirstAvailableCopy :one
+SELECT id, book_id, copy_number, barcode, condition, acquisition_date, status, notes, created_at, updated_at FROM book_copies
+WHERE book_id = $1 AND status = 'available'
+ORDER BY copy_number
+LIMIT 1
+`
+
+func (q *Queries) GetFirstAvailableCopy(ctx context.Context, bookID int32) (BookCopy, error) {
+	row := q.db.QueryRow(ctx, getFirstAvailableCopy, bookID)
 	var i BookCopy
 	err := row.Scan(
 		&i.ID,
@@ -374,6 +613,37 @@ type UpdateBookCopyStatusParams struct {
 
 func (q *Queries) UpdateBookCopyStatus(ctx context.Context, arg UpdateBookCopyStatusParams) (BookCopy, error) {
 	row := q.db.QueryRow(ctx, updateBookCopyStatus, arg.ID, arg.Status)
+	var i BookCopy
+	err := row.Scan(
+		&i.ID,
+		&i.BookID,
+		&i.CopyNumber,
+		&i.Barcode,
+		&i.Condition,
+		&i.AcquisitionDate,
+		&i.Status,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateBookCopyStatusAndCondition = `-- name: UpdateBookCopyStatusAndCondition :one
+UPDATE book_copies
+SET status = $2, condition = $3, updated_at = NOW()
+WHERE id = $1
+RETURNING id, book_id, copy_number, barcode, condition, acquisition_date, status, notes, created_at, updated_at
+`
+
+type UpdateBookCopyStatusAndConditionParams struct {
+	ID        int32       `db:"id" json:"id"`
+	Status    pgtype.Text `db:"status" json:"status"`
+	Condition pgtype.Text `db:"condition" json:"condition"`
+}
+
+func (q *Queries) UpdateBookCopyStatusAndCondition(ctx context.Context, arg UpdateBookCopyStatusAndConditionParams) (BookCopy, error) {
+	row := q.db.QueryRow(ctx, updateBookCopyStatusAndCondition, arg.ID, arg.Status, arg.Condition)
 	var i BookCopy
 	err := row.Scan(
 		&i.ID,

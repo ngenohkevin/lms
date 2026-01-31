@@ -49,6 +49,7 @@ type Querier interface {
 	CountBooksByCategory(ctx context.Context, categoryID pgtype.Int4) (int64, error)
 	CountBooksByGenre(ctx context.Context, genre pgtype.Text) (int64, error)
 	CountCategories(ctx context.Context) (int64, error)
+	CountCopyBorrowings(ctx context.Context, copyID pgtype.Int4) (int64, error)
 	CountFines(ctx context.Context, arg CountFinesParams) (int64, error)
 	CountImportHistoryByFilters(ctx context.Context, arg CountImportHistoryByFiltersParams) (int64, error)
 	CountLanguages(ctx context.Context, dollar_1 bool) (int64, error)
@@ -97,6 +98,7 @@ type Querier interface {
 	CreateSeries(ctx context.Context, arg CreateSeriesParams) (BookSeries, error)
 	CreateStudent(ctx context.Context, arg CreateStudentParams) (Student, error)
 	CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error)
+	CreateTransactionWithCopy(ctx context.Context, arg CreateTransactionWithCopyParams) (Transaction, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserInvite(ctx context.Context, arg CreateUserInviteParams) (UserInvite, error)
 	CreateUserOverride(ctx context.Context, arg CreateUserOverrideParams) (UserPermissionOverride, error)
@@ -122,7 +124,9 @@ type Querier interface {
 	DeleteUserOverride(ctx context.Context, arg DeleteUserOverrideParams) error
 	DeleteUserOverrideByCode(ctx context.Context, arg DeleteUserOverrideByCodeParams) error
 	GetAcademicYearAnalytics(ctx context.Context, arg GetAcademicYearAnalyticsParams) (GetAcademicYearAnalyticsRow, error)
+	GetActiveBorrowingByCopy(ctx context.Context, copyID pgtype.Int4) (GetActiveBorrowingByCopyRow, error)
 	GetActiveExportFiles(ctx context.Context) ([]ExportFile, error)
+	GetActiveTransactionByCopy(ctx context.Context, copyID pgtype.Int4) (Transaction, error)
 	GetAuthorByID(ctx context.Context, id int32) (Author, error)
 	GetAuthorByName(ctx context.Context, name string) (Author, error)
 	GetBookByBookID(ctx context.Context, bookID string) (Book, error)
@@ -140,6 +144,8 @@ type Querier interface {
 	GetCapacityPlanningAnalysis(ctx context.Context) (GetCapacityPlanningAnalysisRow, error)
 	GetCategoryByID(ctx context.Context, id int32) (Category, error)
 	GetCategoryByName(ctx context.Context, name string) (Category, error)
+	GetCopyBorrowingHistory(ctx context.Context, arg GetCopyBorrowingHistoryParams) ([]GetCopyBorrowingHistoryRow, error)
+	GetCopyByBarcodeWithBookInfo(ctx context.Context, barcode pgtype.Text) (GetCopyByBarcodeWithBookInfoRow, error)
 	GetDashboardMetrics(ctx context.Context) (GetDashboardMetricsRow, error)
 	GetDistinctBookGenres(ctx context.Context) ([]pgtype.Text, error)
 	GetEmailDeliveriesByNotification(ctx context.Context, notificationID int32) ([]EmailDelivery, error)
@@ -153,6 +159,7 @@ type Querier interface {
 	GetFineByTransactionID(ctx context.Context, id int32) (GetFineByTransactionIDRow, error)
 	GetFineOverviewStats(ctx context.Context) (GetFineOverviewStatsRow, error)
 	GetFineStatistics(ctx context.Context, arg GetFineStatisticsParams) (GetFineStatisticsRow, error)
+	GetFirstAvailableCopy(ctx context.Context, bookID int32) (BookCopy, error)
 	GetGenrePopularity(ctx context.Context, arg GetGenrePopularityParams) ([]GetGenrePopularityRow, error)
 	GetImportErrorsByHistoryID(ctx context.Context, importHistoryID int32) ([]ImportError, error)
 	GetImportHistoryByFilters(ctx context.Context, arg GetImportHistoryByFiltersParams) ([]ImportHistory, error)
@@ -204,6 +211,8 @@ type Querier interface {
 	GetTopBorrowingStudents(ctx context.Context, arg GetTopBorrowingStudentsParams) ([]GetTopBorrowingStudentsRow, error)
 	GetTotalUnpaidFinesByStudent(ctx context.Context, studentID int32) (pgtype.Numeric, error)
 	GetTransactionByID(ctx context.Context, id int32) (GetTransactionByIDRow, error)
+	// Copy-level transaction tracking queries
+	GetTransactionByIDWithCopy(ctx context.Context, id int32) (GetTransactionByIDWithCopyRow, error)
 	GetUnpaidFinesByStudent(ctx context.Context, studentID int32) ([]GetUnpaidFinesByStudentRow, error)
 	// Phase 8.3 - Advanced Analytics Queries
 	GetUsagePatternAnalysis(ctx context.Context, arg GetUsagePatternAnalysisParams) ([]GetUsagePatternAnalysisRow, error)
@@ -284,6 +293,7 @@ type Querier interface {
 	// Notification-related queries for Phase 7.2
 	ListTransactionsDueSoon(ctx context.Context) ([]ListTransactionsDueSoonRow, error)
 	ListTransactionsOverdue(ctx context.Context) ([]ListTransactionsOverdueRow, error)
+	ListTransactionsWithCopies(ctx context.Context, arg ListTransactionsWithCopiesParams) ([]ListTransactionsWithCopiesRow, error)
 	ListTransactionsWithUnpaidFines(ctx context.Context) ([]ListTransactionsWithUnpaidFinesRow, error)
 	ListUnreadNotificationsByRecipient(ctx context.Context, arg ListUnreadNotificationsByRecipientParams) ([]Notification, error)
 	ListUnsentNotifications(ctx context.Context, limit int32) ([]Notification, error)
@@ -324,6 +334,7 @@ type Querier interface {
 	UpdateBookCopy(ctx context.Context, arg UpdateBookCopyParams) (BookCopy, error)
 	UpdateBookCopyCondition(ctx context.Context, arg UpdateBookCopyConditionParams) (BookCopy, error)
 	UpdateBookCopyStatus(ctx context.Context, arg UpdateBookCopyStatusParams) (BookCopy, error)
+	UpdateBookCopyStatusAndCondition(ctx context.Context, arg UpdateBookCopyStatusAndConditionParams) (BookCopy, error)
 	UpdateBookSeries(ctx context.Context, arg UpdateBookSeriesParams) error
 	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (Category, error)
 	UpdateEmailDeliveryError(ctx context.Context, arg UpdateEmailDeliveryErrorParams) (EmailDelivery, error)

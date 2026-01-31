@@ -64,3 +64,40 @@ ORDER BY copy_number;
 -- name: GetBookCopyByBookID :one
 SELECT * FROM book_copies
 WHERE book_id = $1 AND id = $2;
+
+-- name: GetFirstAvailableCopy :one
+SELECT * FROM book_copies
+WHERE book_id = $1 AND status = 'available'
+ORDER BY copy_number
+LIMIT 1;
+
+-- name: GetCopyByBarcodeWithBookInfo :one
+SELECT bc.*, b.id as book_db_id, b.title, b.author, b.book_id as book_code, b.isbn
+FROM book_copies bc
+JOIN books b ON bc.book_id = b.id
+WHERE bc.barcode = $1;
+
+-- name: GetActiveBorrowingByCopy :one
+SELECT t.*, s.first_name, s.last_name, s.student_id as student_code
+FROM transactions t
+JOIN students s ON t.student_id = s.id
+WHERE t.copy_id = $1 AND t.returned_date IS NULL
+LIMIT 1;
+
+-- name: GetCopyBorrowingHistory :many
+SELECT t.*, s.first_name, s.last_name, s.student_id as student_code
+FROM transactions t
+JOIN students s ON t.student_id = s.id
+WHERE t.copy_id = $1
+ORDER BY t.transaction_date DESC
+LIMIT $2 OFFSET $3;
+
+-- name: CountCopyBorrowings :one
+SELECT COUNT(*) FROM transactions
+WHERE copy_id = $1 AND transaction_type = 'borrow';
+
+-- name: UpdateBookCopyStatusAndCondition :one
+UPDATE book_copies
+SET status = $2, condition = $3, updated_at = NOW()
+WHERE id = $1
+RETURNING *;

@@ -78,6 +78,21 @@ func (m *MockBookCopyQuerier) SearchBookCopies(ctx context.Context, arg queries.
 	return args.Get(0).([]queries.BookCopy), args.Error(1)
 }
 
+func (m *MockBookCopyQuerier) UpdateBookCopyStatusAndCondition(ctx context.Context, arg queries.UpdateBookCopyStatusAndConditionParams) (queries.BookCopy, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(queries.BookCopy), args.Error(1)
+}
+
+func (m *MockBookCopyQuerier) GetCopyBorrowingHistory(ctx context.Context, arg queries.GetCopyBorrowingHistoryParams) ([]queries.GetCopyBorrowingHistoryRow, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).([]queries.GetCopyBorrowingHistoryRow), args.Error(1)
+}
+
+func (m *MockBookCopyQuerier) CountCopyBorrowings(ctx context.Context, copyID pgtype.Int4) (int64, error) {
+	args := m.Called(ctx, copyID)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 // Helper to create test book copy
 func createTestBookCopy(id, bookID int32, copyNumber, barcode string) queries.BookCopy {
 	return queries.BookCopy{
@@ -382,4 +397,258 @@ func TestBookCopyService_CreateBookCopy_InvalidAcquisitionDate(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, result)
 	assert.Contains(t, err.Error(), "invalid acquisition_date format")
+}
+
+// ==================== Copy-Level Transaction Tracking Tests ====================
+
+func TestBookCopyService_MarkCopyBorrowed_Success(t *testing.T) {
+	mockQuerier := new(MockBookCopyQuerier)
+	service := NewBookCopyService(mockQuerier, nil)
+	ctx := context.Background()
+
+	// Create an available copy
+	existingCopy := createTestBookCopy(1, 1, "COPY-001", "BC001")
+	existingCopy.Status = pgtype.Text{String: "available", Valid: true}
+
+	// Expected borrowed copy
+	borrowedCopy := createTestBookCopy(1, 1, "COPY-001", "BC001")
+	borrowedCopy.Status = pgtype.Text{String: "borrowed", Valid: true}
+
+	mockQuerier.On("GetBookCopyByID", ctx, int32(1)).Return(existingCopy, nil)
+	mockQuerier.On("UpdateBookCopyStatus", ctx, queries.UpdateBookCopyStatusParams{
+		ID:     1,
+		Status: pgtype.Text{String: "borrowed", Valid: true},
+	}).Return(borrowedCopy, nil)
+
+	result, err := service.MarkCopyBorrowed(ctx, 1)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, models.CopyStatus("borrowed"), result.Status)
+	mockQuerier.AssertExpectations(t)
+}
+
+func TestBookCopyService_MarkCopyBorrowed_NotAvailable(t *testing.T) {
+	mockQuerier := new(MockBookCopyQuerier)
+	service := NewBookCopyService(mockQuerier, nil)
+	ctx := context.Background()
+
+	// Create a borrowed copy (not available)
+	existingCopy := createTestBookCopy(1, 1, "COPY-001", "BC001")
+	existingCopy.Status = pgtype.Text{String: "borrowed", Valid: true}
+
+	mockQuerier.On("GetBookCopyByID", ctx, int32(1)).Return(existingCopy, nil)
+
+	result, err := service.MarkCopyBorrowed(ctx, 1)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "copy is not available for borrowing")
+	mockQuerier.AssertExpectations(t)
+}
+
+func TestBookCopyService_MarkCopyBorrowed_CopyNotFound(t *testing.T) {
+	mockQuerier := new(MockBookCopyQuerier)
+	service := NewBookCopyService(mockQuerier, nil)
+	ctx := context.Background()
+
+	mockQuerier.On("GetBookCopyByID", ctx, int32(999)).
+		Return(queries.BookCopy{}, errors.New("no rows"))
+
+	result, err := service.MarkCopyBorrowed(ctx, 999)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "failed to get copy")
+	mockQuerier.AssertExpectations(t)
+}
+
+func TestBookCopyService_MarkCopyReturned_Success(t *testing.T) {
+	mockQuerier := new(MockBookCopyQuerier)
+	service := NewBookCopyService(mockQuerier, nil)
+	ctx := context.Background()
+
+	// Create a borrowed copy
+	existingCopy := createTestBookCopy(1, 1, "COPY-001", "BC001")
+	existingCopy.Status = pgtype.Text{String: "borrowed", Valid: true}
+
+	// Expected returned copy
+	returnedCopy := createTestBookCopy(1, 1, "COPY-001", "BC001")
+	returnedCopy.Status = pgtype.Text{String: "available", Valid: true}
+	returnedCopy.Condition = pgtype.Text{String: "good", Valid: true}
+
+	mockQuerier.On("GetBookCopyByID", ctx, int32(1)).Return(existingCopy, nil)
+	mockQuerier.On("UpdateBookCopyStatusAndCondition", ctx, queries.UpdateBookCopyStatusAndConditionParams{
+		ID:        1,
+		Status:    pgtype.Text{String: "available", Valid: true},
+		Condition: pgtype.Text{String: "good", Valid: true},
+	}).Return(returnedCopy, nil)
+
+	result, err := service.MarkCopyReturned(ctx, 1, "good")
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, models.CopyStatus("available"), result.Status)
+	assert.Equal(t, models.CopyCondition("good"), result.Condition)
+	mockQuerier.AssertExpectations(t)
+}
+
+func TestBookCopyService_MarkCopyReturned_WithDamagedCondition(t *testing.T) {
+	mockQuerier := new(MockBookCopyQuerier)
+	service := NewBookCopyService(mockQuerier, nil)
+	ctx := context.Background()
+
+	// Create a borrowed copy
+	existingCopy := createTestBookCopy(1, 1, "COPY-001", "BC001")
+	existingCopy.Status = pgtype.Text{String: "borrowed", Valid: true}
+
+	// Expected returned copy with damaged status
+	returnedCopy := createTestBookCopy(1, 1, "COPY-001", "BC001")
+	returnedCopy.Status = pgtype.Text{String: "damaged", Valid: true}
+	returnedCopy.Condition = pgtype.Text{String: "damaged", Valid: true}
+
+	mockQuerier.On("GetBookCopyByID", ctx, int32(1)).Return(existingCopy, nil)
+	mockQuerier.On("UpdateBookCopyStatusAndCondition", ctx, queries.UpdateBookCopyStatusAndConditionParams{
+		ID:        1,
+		Status:    pgtype.Text{String: "damaged", Valid: true},
+		Condition: pgtype.Text{String: "damaged", Valid: true},
+	}).Return(returnedCopy, nil)
+
+	result, err := service.MarkCopyReturned(ctx, 1, "damaged")
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, models.CopyStatus("damaged"), result.Status)
+	assert.Equal(t, models.CopyCondition("damaged"), result.Condition)
+	mockQuerier.AssertExpectations(t)
+}
+
+func TestBookCopyService_MarkCopyReturned_KeepExistingCondition(t *testing.T) {
+	mockQuerier := new(MockBookCopyQuerier)
+	service := NewBookCopyService(mockQuerier, nil)
+	ctx := context.Background()
+
+	// Create a borrowed copy with fair condition
+	existingCopy := createTestBookCopy(1, 1, "COPY-001", "BC001")
+	existingCopy.Status = pgtype.Text{String: "borrowed", Valid: true}
+	existingCopy.Condition = pgtype.Text{String: "fair", Valid: true}
+
+	// Expected returned copy keeping existing condition
+	returnedCopy := createTestBookCopy(1, 1, "COPY-001", "BC001")
+	returnedCopy.Status = pgtype.Text{String: "available", Valid: true}
+	returnedCopy.Condition = pgtype.Text{String: "fair", Valid: true}
+
+	mockQuerier.On("GetBookCopyByID", ctx, int32(1)).Return(existingCopy, nil)
+	mockQuerier.On("UpdateBookCopyStatusAndCondition", ctx, queries.UpdateBookCopyStatusAndConditionParams{
+		ID:        1,
+		Status:    pgtype.Text{String: "available", Valid: true},
+		Condition: pgtype.Text{String: "fair", Valid: true},
+	}).Return(returnedCopy, nil)
+
+	// Pass empty string to keep existing condition
+	result, err := service.MarkCopyReturned(ctx, 1, "")
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, models.CopyCondition("fair"), result.Condition)
+	mockQuerier.AssertExpectations(t)
+}
+
+func TestBookCopyService_GetCopyBorrowingHistory_Success(t *testing.T) {
+	mockQuerier := new(MockBookCopyQuerier)
+	service := NewBookCopyService(mockQuerier, nil)
+	ctx := context.Background()
+
+	historyRows := []queries.GetCopyBorrowingHistoryRow{
+		{
+			ID:              1,
+			FirstName:       "John",
+			LastName:        "Doe",
+			StudentCode:     "STU001",
+			TransactionDate: pgtype.Timestamp{Time: time.Now().Add(-7 * 24 * time.Hour), Valid: true},
+			DueDate:         pgtype.Timestamp{Time: time.Now().Add(7 * 24 * time.Hour), Valid: true},
+			ReturnedDate:    pgtype.Timestamp{Valid: false},
+		},
+		{
+			ID:              2,
+			FirstName:       "Jane",
+			LastName:        "Smith",
+			StudentCode:     "STU002",
+			TransactionDate: pgtype.Timestamp{Time: time.Now().Add(-30 * 24 * time.Hour), Valid: true},
+			DueDate:         pgtype.Timestamp{Time: time.Now().Add(-16 * 24 * time.Hour), Valid: true},
+			ReturnedDate:    pgtype.Timestamp{Time: time.Now().Add(-20 * 24 * time.Hour), Valid: true},
+		},
+	}
+
+	mockQuerier.On("GetCopyBorrowingHistory", ctx, queries.GetCopyBorrowingHistoryParams{
+		CopyID: pgtype.Int4{Int32: 1, Valid: true},
+		Limit:  20,
+		Offset: 0,
+	}).Return(historyRows, nil)
+
+	result, err := service.GetCopyBorrowingHistory(ctx, 1, 20, 0)
+
+	assert.NoError(t, err)
+	assert.Len(t, result, 2)
+	assert.Equal(t, "John Doe", result[0].StudentName)
+	assert.Equal(t, "STU001", result[0].StudentCode)
+	assert.Nil(t, result[0].ReturnedDate) // Still borrowed
+	assert.NotNil(t, result[1].ReturnedDate)  // Returned
+	mockQuerier.AssertExpectations(t)
+}
+
+func TestBookCopyService_GetCopyBorrowingHistory_EmptyHistory(t *testing.T) {
+	mockQuerier := new(MockBookCopyQuerier)
+	service := NewBookCopyService(mockQuerier, nil)
+	ctx := context.Background()
+
+	mockQuerier.On("GetCopyBorrowingHistory", ctx, queries.GetCopyBorrowingHistoryParams{
+		CopyID: pgtype.Int4{Int32: 1, Valid: true},
+		Limit:  20,
+		Offset: 0,
+	}).Return([]queries.GetCopyBorrowingHistoryRow{}, nil)
+
+	result, err := service.GetCopyBorrowingHistory(ctx, 1, 20, 0)
+
+	assert.NoError(t, err)
+	assert.Len(t, result, 0)
+	mockQuerier.AssertExpectations(t)
+}
+
+func TestBookCopyService_GetCopyBorrowingHistory_LimitEnforcement(t *testing.T) {
+	mockQuerier := new(MockBookCopyQuerier)
+	service := NewBookCopyService(mockQuerier, nil)
+	ctx := context.Background()
+
+	// Request with limit > 100 should be capped to 100
+	mockQuerier.On("GetCopyBorrowingHistory", ctx, queries.GetCopyBorrowingHistoryParams{
+		CopyID: pgtype.Int4{Int32: 1, Valid: true},
+		Limit:  100, // Should be capped
+		Offset: 0,
+	}).Return([]queries.GetCopyBorrowingHistoryRow{}, nil)
+
+	result, err := service.GetCopyBorrowingHistory(ctx, 1, 200, 0)
+
+	assert.NoError(t, err)
+	assert.Len(t, result, 0)
+	mockQuerier.AssertExpectations(t)
+}
+
+func TestBookCopyService_GetCopyBorrowingHistory_DefaultLimit(t *testing.T) {
+	mockQuerier := new(MockBookCopyQuerier)
+	service := NewBookCopyService(mockQuerier, nil)
+	ctx := context.Background()
+
+	// Request with limit <= 0 should use default (20)
+	mockQuerier.On("GetCopyBorrowingHistory", ctx, queries.GetCopyBorrowingHistoryParams{
+		CopyID: pgtype.Int4{Int32: 1, Valid: true},
+		Limit:  20, // Default
+		Offset: 0,
+	}).Return([]queries.GetCopyBorrowingHistoryRow{}, nil)
+
+	result, err := service.GetCopyBorrowingHistory(ctx, 1, 0, 0)
+
+	assert.NoError(t, err)
+	assert.Len(t, result, 0)
+	mockQuerier.AssertExpectations(t)
 }

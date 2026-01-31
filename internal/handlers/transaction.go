@@ -17,7 +17,10 @@ import (
 // TransactionServiceInterface defines the interface for transaction service operations
 type TransactionServiceInterface interface {
 	BorrowBook(ctx context.Context, studentID, bookID, librarianID int32, notes string) (*services.TransactionResponse, error)
+	BorrowBookWithCopy(ctx context.Context, req services.BorrowBookWithCopyRequest) (*services.TransactionResponse, error)
+	BorrowByBarcode(ctx context.Context, req services.BorrowByBarcodeRequest) (*services.TransactionResponse, error)
 	ReturnBook(ctx context.Context, transactionID int32) (*services.TransactionResponse, error)
+	ReturnByBarcode(ctx context.Context, req services.ReturnByBarcodeRequest) (*services.TransactionResponse, error)
 	RenewBook(ctx context.Context, transactionID, librarianID int32) (*services.TransactionResponse, error)
 	GetOverdueTransactions(ctx context.Context) ([]queries.ListOverdueTransactionsRow, error)
 	PayFine(ctx context.Context, transactionID int32) error
@@ -29,6 +32,8 @@ type TransactionServiceInterface interface {
 	// List and stats methods
 	ListAllTransactions(ctx context.Context, page, limit int32) (*services.TransactionListResponse, error)
 	GetTransactionStats(ctx context.Context) (*services.TransactionStatsResponse, error)
+	// Copy-level tracking methods
+	ScanBarcode(ctx context.Context, barcode string) (*services.BarcodeScanResult, error)
 }
 
 // TransactionHandler handles transaction-related HTTP requests
@@ -70,12 +75,17 @@ func (h *TransactionHandler) BorrowBook(c *gin.Context) {
 		return
 	}
 
-	transaction, err := h.transactionService.BorrowBook(
+	// Use the copy-aware borrow method
+	transaction, err := h.transactionService.BorrowBookWithCopy(
 		c.Request.Context(),
-		req.StudentID,
-		req.BookID,
-		req.LibrarianID,
-		req.Notes,
+		services.BorrowBookWithCopyRequest{
+			StudentID:   req.StudentID,
+			BookID:      req.BookID,
+			LibrarianID: req.LibrarianID,
+			CopyID:      req.CopyID,
+			Barcode:     req.Barcode,
+			Notes:       req.Notes,
+		},
 	)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
@@ -88,7 +98,7 @@ func (h *TransactionHandler) BorrowBook(c *gin.Context) {
 		return
 	}
 
-	response := convertToTransactionResponse(transaction)
+	response := convertToTransactionResponseWithCopy(transaction)
 	c.JSON(http.StatusCreated, SuccessResponse{
 		Success: true,
 		Data:    response,
@@ -686,4 +696,189 @@ func (h *TransactionHandler) GetTransactionStats(c *gin.Context) {
 		Data:    stats,
 		Message: "Transaction statistics retrieved successfully",
 	})
+}
+
+// BorrowByBarcode handles quick checkout by barcode scanning
+// @Summary Borrow a book by barcode
+// @Description Quick checkout a book by scanning its barcode
+// @Tags transactions
+// @Accept json
+// @Produce json
+// @Param request body models.BorrowByBarcodeRequest true "Borrow by barcode request"
+// @Success 201 {object} SuccessResponse{data=models.TransactionResponse}
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/transactions/borrow-by-barcode [post]
+func (h *TransactionHandler) BorrowByBarcode(c *gin.Context) {
+	var req models.BorrowByBarcodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid request data",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	transaction, err := h.transactionService.BorrowByBarcode(
+		c.Request.Context(),
+		services.BorrowByBarcodeRequest{
+			Barcode:     req.Barcode,
+			StudentID:   req.StudentID,
+			LibrarianID: req.LibrarianID,
+			Notes:       req.Notes,
+		},
+	)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "BORROW_ERROR",
+				Message: err.Error(),
+			},
+		})
+		return
+	}
+
+	response := convertToTransactionResponseWithCopy(transaction)
+	c.JSON(http.StatusCreated, SuccessResponse{
+		Success: true,
+		Data:    response,
+		Message: "Book borrowed successfully",
+	})
+}
+
+// ReturnByBarcode handles quick return by barcode scanning
+// @Summary Return a book by barcode
+// @Description Quick return a book by scanning its barcode
+// @Tags transactions
+// @Accept json
+// @Produce json
+// @Param request body models.ReturnByBarcodeRequest true "Return by barcode request"
+// @Success 200 {object} SuccessResponse{data=models.TransactionResponse}
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/transactions/return-by-barcode [post]
+func (h *TransactionHandler) ReturnByBarcode(c *gin.Context) {
+	var req models.ReturnByBarcodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid request data",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	transaction, err := h.transactionService.ReturnByBarcode(
+		c.Request.Context(),
+		services.ReturnByBarcodeRequest{
+			Barcode:         req.Barcode,
+			ReturnCondition: req.ReturnCondition,
+			ConditionNotes:  req.ConditionNotes,
+		},
+	)
+	if err != nil {
+		statusCode := http.StatusBadRequest
+		if err.Error() == "no copy found with barcode: "+req.Barcode {
+			statusCode = http.StatusNotFound
+		}
+
+		c.JSON(statusCode, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "RETURN_ERROR",
+				Message: err.Error(),
+			},
+		})
+		return
+	}
+
+	response := convertToTransactionResponseWithCopy(transaction)
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    response,
+		Message: "Book returned successfully",
+	})
+}
+
+// ScanBarcodeForTransaction scans a barcode and returns copy/book info for transactions
+// @Summary Scan barcode for transaction
+// @Description Scan a barcode to get copy and book info, including current borrower if borrowed
+// @Tags transactions
+// @Produce json
+// @Param barcode query string true "Barcode to scan"
+// @Success 200 {object} SuccessResponse{data=services.BarcodeScanResult}
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/transactions/scan [get]
+func (h *TransactionHandler) ScanBarcodeForTransaction(c *gin.Context) {
+	barcode := c.Query("barcode")
+	if barcode == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Barcode is required",
+			},
+		})
+		return
+	}
+
+	result, err := h.transactionService.ScanBarcode(c.Request.Context(), barcode)
+	if err != nil {
+		statusCode := http.StatusInternalServerError
+		if err.Error() == "no copy found with barcode: "+barcode {
+			statusCode = http.StatusNotFound
+		}
+
+		c.JSON(statusCode, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "SCAN_ERROR",
+				Message: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    result,
+		Message: "Barcode scanned successfully",
+	})
+}
+
+// convertToTransactionResponseWithCopy converts service response to model response with copy info
+func convertToTransactionResponseWithCopy(tx *services.TransactionResponse) models.TransactionResponse {
+	resp := models.TransactionResponse{
+		ID:              tx.ID,
+		StudentID:       tx.StudentID,
+		BookID:          tx.BookID,
+		TransactionType: tx.TransactionType,
+		TransactionDate: tx.TransactionDate,
+		DueDate:         tx.DueDate,
+		ReturnedDate:    tx.ReturnedDate,
+		LibrarianID:     tx.LibrarianID,
+		FineAmount:      tx.FineAmount,
+		FinePaid:        tx.FinePaid,
+		Notes:           tx.Notes,
+		CreatedAt:       tx.CreatedAt,
+		UpdatedAt:       tx.UpdatedAt,
+		CopyID:          tx.CopyID,
+		CopyNumber:      tx.CopyNumber,
+		CopyBarcode:     tx.CopyBarcode,
+		CopyCondition:   tx.CopyCondition,
+	}
+	return resp
 }
