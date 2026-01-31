@@ -64,15 +64,15 @@ type GoogleBooksResponse struct {
 
 // OpenLibraryEditionResponse represents the Open Library /isbn endpoint response
 type OpenLibraryEditionResponse struct {
-	Title         string              `json:"title"`
-	Authors       []OpenLibraryAuthor `json:"authors"`
-	Publishers    []string            `json:"publishers"`
-	PublishDate   string              `json:"publish_date"`
-	Description   interface{}         `json:"description"`
+	Title         string               `json:"title"`
+	Authors       []OpenLibraryAuthor  `json:"authors"`
+	Publishers    []string             `json:"publishers"`
+	PublishDate   string               `json:"publish_date"`
+	Description   interface{}          `json:"description"`
 	Subjects      []OpenLibrarySubject `json:"subjects"`
-	Covers        []int               `json:"covers"`
-	NumberOfPages int                 `json:"number_of_pages"`
-	Pagination    string              `json:"pagination"`
+	Covers        []int                `json:"covers"`
+	NumberOfPages int                  `json:"number_of_pages"`
+	Pagination    string               `json:"pagination"`
 }
 
 type OpenLibraryAuthor struct {
@@ -86,8 +86,8 @@ type OpenLibrarySubject struct {
 
 // OpenLibraryBibkeysResponse represents the Open Library bibkeys API response
 type OpenLibraryBibkeysResponse map[string]struct {
-	Title      string `json:"title"`
-	Authors    []struct {
+	Title   string `json:"title"`
+	Authors []struct {
 		Name string `json:"name"`
 		URL  string `json:"url"`
 	} `json:"authors"`
