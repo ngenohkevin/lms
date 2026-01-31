@@ -280,12 +280,6 @@ func TestEffectivePermissionsWithGrantOverride(t *testing.T) {
 		effectivePermissions[perm] = true
 	}
 
-	// Convert to slice
-	result := []string{}
-	for perm := range effectivePermissions {
-		result = append(result, perm)
-	}
-
 	// Verify users.manage is now in effective permissions
 	assert.True(t, effectivePermissions["users.manage"])
 
