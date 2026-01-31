@@ -3,9 +3,11 @@ package services
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shopspring/decimal"
 
@@ -261,7 +263,8 @@ func (s *TransactionService) BorrowBookWithCopy(ctx context.Context, req BorrowB
 		// Auto-select first available copy
 		copy, err := s.queries.GetFirstAvailableCopy(ctx, bookID)
 		if err != nil {
-			if err == sql.ErrNoRows {
+			// Check for both pgx and sql ErrNoRows (pgx may wrap or return its own)
+			if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, sql.ErrNoRows) {
 				// No book copies exist - fall back to legacy mode
 				selectedCopy = nil
 			} else {
