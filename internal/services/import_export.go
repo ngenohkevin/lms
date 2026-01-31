@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -259,7 +260,7 @@ func (s *ImportExportService) processImport(ctx context.Context, importData []mo
 		_, err := s.queries.UpdateImportHistory(ctx, updateParams)
 		if err != nil {
 			// Log error but don't fail the import
-			fmt.Printf("Failed to update import history: %v\n", err)
+			slog.Warn("failed to update import history", "error", err)
 		}
 	}
 
@@ -378,7 +379,7 @@ func (s *ImportExportService) ExportBooksToCSV(ctx context.Context, req models.E
 		_, err = s.queries.UpdateImportHistory(ctx, updateParams)
 		if err != nil {
 			// Log error but don't fail the export
-			fmt.Printf("Failed to update export history: %v\n", err)
+			slog.Warn("failed to update export history", "error", err)
 		}
 	}
 
@@ -392,7 +393,7 @@ func (s *ImportExportService) ExportBooksToCSV(ctx context.Context, req models.E
 		})
 		if err != nil {
 			// Log error but don't fail the export
-			fmt.Printf("Failed to create export file record: %v\n", err)
+			slog.Warn("failed to create export file record", "error", err)
 		}
 	}
 
@@ -539,7 +540,7 @@ func (s *ImportExportService) ExportBooksToExcel(ctx context.Context, req models
 		_, err = s.queries.UpdateImportHistory(ctx, updateParams)
 		if err != nil {
 			// Log error but don't fail the export
-			fmt.Printf("Failed to update export history: %v\n", err)
+			slog.Warn("failed to update export history", "error", err)
 		}
 
 		// Create export file record
@@ -551,7 +552,7 @@ func (s *ImportExportService) ExportBooksToExcel(ctx context.Context, req models
 		})
 		if err != nil {
 			// Log error but don't fail the export
-			fmt.Printf("Failed to create export file record: %v\n", err)
+			slog.Warn("failed to create export file record", "error", err)
 		}
 	}
 
@@ -855,7 +856,7 @@ func (s *ImportExportService) ReadExcelFile(filePath string) ([]byte, error) {
 	// Clean up the temporary file after reading
 	if err := os.Remove(filePath); err != nil {
 		// Log the error but don't fail the operation
-		fmt.Printf("Warning: failed to clean up temporary file %s: %v\n", filePath, err)
+		slog.Warn("failed to clean up temporary file", "path", filePath, "error", err)
 	}
 
 	return data, nil

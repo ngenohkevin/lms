@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -1893,7 +1894,7 @@ func (s *StudentService) CleanupExpiredExports() error {
 			filePath := filepath.Join(exportDir, file.Name())
 			if err := os.Remove(filePath); err != nil {
 				// Log error but continue cleanup
-				fmt.Printf("Failed to remove expired export file %s: %v\n", filePath, err)
+				slog.Warn("failed to remove expired export file", "path", filePath, "error", err)
 			}
 		}
 	}
