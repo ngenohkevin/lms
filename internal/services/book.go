@@ -118,15 +118,23 @@ func (s *BookService) CreateBook(ctx context.Context, req models.CreateBookReque
 	if req.CoverImageURL != nil && *req.CoverImageURL != "" {
 		params.CoverImageUrl = pgtype.Text{String: *req.CoverImageURL, Valid: true}
 	}
+	// Determine total copies (default to 0 for copy-managed books)
+	totalCopies := int32(0)
 	if req.TotalCopies != nil {
-		params.TotalCopies = pgtype.Int4{Int32: *req.TotalCopies, Valid: true}
-	} else {
-		params.TotalCopies = pgtype.Int4{Int32: 1, Valid: true}
+		totalCopies = *req.TotalCopies
 	}
+	params.TotalCopies = pgtype.Int4{Int32: totalCopies, Valid: true}
+
+	// Available copies must not exceed total copies
 	if req.AvailableCopies != nil {
-		params.AvailableCopies = pgtype.Int4{Int32: *req.AvailableCopies, Valid: true}
+		availableCopies := *req.AvailableCopies
+		if availableCopies > totalCopies {
+			availableCopies = totalCopies
+		}
+		params.AvailableCopies = pgtype.Int4{Int32: availableCopies, Valid: true}
 	} else {
-		params.AvailableCopies = pgtype.Int4{Int32: 1, Valid: true}
+		// Default available copies to total copies
+		params.AvailableCopies = pgtype.Int4{Int32: totalCopies, Valid: true}
 	}
 	if req.ShelfLocation != nil && *req.ShelfLocation != "" {
 		params.ShelfLocation = pgtype.Text{String: *req.ShelfLocation, Valid: true}
