@@ -51,7 +51,7 @@ type BookCopyListResponse struct {
 
 // CreateBookCopyRequest represents the request to create a book copy
 type CreateBookCopyRequest struct {
-	BookID          int32   `json:"book_id" binding:"required"`
+	BookID          int32   `json:"book_id"` // Set from URL path parameter
 	CopyNumber      string  `json:"copy_number" binding:"required,max=50"`
 	Barcode         *string `json:"barcode" binding:"omitempty,max=100"`
 	Condition       *string `json:"condition" binding:"omitempty,oneof=excellent good fair poor damaged"`
