@@ -187,6 +187,21 @@ func (m *MockBookQuerier) CountActiveReservationsByBook(ctx context.Context, boo
 	return args.Get(0).(int64), args.Error(1)
 }
 
+func (m *MockBookQuerier) CountBooksByGenre(ctx context.Context, genre pgtype.Text) (int64, error) {
+	args := m.Called(ctx, genre)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockBookQuerier) CountSearchBooks(ctx context.Context, title string) (int64, error) {
+	args := m.Called(ctx, title)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockBookQuerier) CountBooksByCategory(ctx context.Context, categoryID pgtype.Int4) (int64, error) {
+	args := m.Called(ctx, categoryID)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 func TestBookService_CreateBook(t *testing.T) {
 	mockQuerier := new(MockBookQuerier)
 	mockCache := new(MockCacheService)
@@ -440,7 +455,7 @@ func TestBookService_SearchBooks(t *testing.T) {
 						UpdatedAt:       pgtype.Timestamp{Time: time.Now(), Valid: true},
 					},
 				}, nil)
-				mockQuerier.On("CountBooks", mock.Anything).Return(int64(1), nil)
+				mockQuerier.On("CountSearchBooks", mock.Anything, "%test%").Return(int64(1), nil)
 			},
 			wantErr: false,
 		},
@@ -468,7 +483,9 @@ func TestBookService_SearchBooks(t *testing.T) {
 						UpdatedAt:       pgtype.Timestamp{Time: time.Now(), Valid: true},
 					},
 				}, nil)
-				mockQuerier.On("CountBooks", mock.Anything).Return(int64(1), nil)
+				mockQuerier.On("CountBooksByGenre", mock.Anything, mock.MatchedBy(func(arg pgtype.Text) bool {
+					return arg.String == "Fiction" && arg.Valid
+				})).Return(int64(1), nil)
 			},
 			wantErr: false,
 		},

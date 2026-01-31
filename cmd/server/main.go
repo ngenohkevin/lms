@@ -120,6 +120,10 @@ func main() {
 	fineService := services.NewFineService(db.Queries, cfg.Borrowing.FinePerDay)
 	inviteService := services.NewInviteService(db.Pool, logger)
 	setupService := services.NewSetupService(db.Pool, logger)
+	bookCopyService := services.NewBookCopyService(db.Queries)
+	authorService := services.NewAuthorService(db.Queries)
+	seriesService := services.NewSeriesService(db.Queries)
+	qrCodeService := services.NewQRCodeService()
 
 	// Initialize Permission Cache and Service
 	permissionCache := services.NewPermissionCache(redisClient)
@@ -187,11 +191,15 @@ func main() {
 	inviteHandler := handlers.NewInviteHandler(inviteService, authService, cfg.Server.FrontendURL)
 	setupHandler := handlers.NewSetupHandler(setupService, authService)
 	permissionHandler := handlers.NewPermissionHandler(permissionService, userService)
+	bookCopyHandler := handlers.NewBookCopyHandler(bookCopyService)
+	authorHandler := handlers.NewAuthorHandler(authorService)
+	seriesHandler := handlers.NewSeriesHandler(seriesService)
+	qrCodeHandler := handlers.NewQRCodeHandler(qrCodeService, bookService, bookCopyService, cfg.Server.FrontendURL)
 
 	// Setup routes
 	setupRoutes(router, authHandler, healthHandler, bookHandler, studentHandler,
 		transactionHandler, reservationHandler, notificationHandler,
-		reportHandler, importExportHandler, uploadHandler, ratingHandler, categoryHandler, fineHandler, userHandler, inviteHandler, setupHandler, permissionHandler, authMiddleware, permissionMiddleware)
+		reportHandler, importExportHandler, uploadHandler, ratingHandler, categoryHandler, fineHandler, userHandler, inviteHandler, setupHandler, permissionHandler, bookCopyHandler, authorHandler, seriesHandler, qrCodeHandler, authMiddleware, permissionMiddleware)
 
 	// Start scheduler
 	if err := schedulerService.Start(); err != nil {
@@ -276,6 +284,10 @@ func setupRoutes(
 	inviteHandler *handlers.InviteHandler,
 	setupHandler *handlers.SetupHandler,
 	permissionHandler *handlers.PermissionHandler,
+	bookCopyHandler *handlers.BookCopyHandler,
+	authorHandler *handlers.AuthorHandler,
+	seriesHandler *handlers.SeriesHandler,
+	qrCodeHandler *handlers.QRCodeHandler,
 	authMiddleware *middleware.AuthMiddleware,
 	permissionMiddleware *middleware.PermissionMiddleware,
 ) {
@@ -346,6 +358,47 @@ func setupRoutes(
 				books.POST("/import", requirePerm("books.create"), importExportHandler.ImportBooks)
 				books.POST("/:id/cover", requirePerm("books.update"), uploadHandler.UploadBookCover)
 				books.DELETE("/:id/cover", requirePerm("books.update"), uploadHandler.DeleteBookCover)
+
+				// Book copies routes
+				books.GET("/:id/copies", requirePerm("books.view"), bookCopyHandler.ListBookCopies)
+				books.POST("/:id/copies", requirePerm("books.create"), bookCopyHandler.CreateBookCopy)
+				books.GET("/:id/copies/:copy_id", requirePerm("books.view"), bookCopyHandler.GetBookCopy)
+				books.PUT("/:id/copies/:copy_id", requirePerm("books.update"), bookCopyHandler.UpdateBookCopy)
+				books.DELETE("/:id/copies/:copy_id", requirePerm("books.delete"), bookCopyHandler.DeleteBookCopy)
+
+				// Book authors routes
+				books.GET("/:id/authors", requirePerm("books.view"), authorHandler.ListBookAuthors)
+				books.POST("/:id/authors", requirePerm("books.update"), authorHandler.AddBookAuthor)
+				books.DELETE("/:id/authors/:author_id", requirePerm("books.update"), authorHandler.RemoveBookAuthor)
+
+				// QR code routes
+				books.GET("/:id/qr", requirePerm("books.view"), qrCodeHandler.GetBookQR)
+			}
+
+			// Book copies scan route (separate group to avoid path conflicts)
+			protected.GET("/books/copies/scan", requirePerm("books.view"), bookCopyHandler.ScanBarcode)
+			protected.GET("/books/copies/:copy_id/qr", requirePerm("books.view"), qrCodeHandler.GetCopyQR)
+
+			// Author routes
+			authors := protected.Group("/authors")
+			{
+				authors.GET("", requirePerm("books.view"), authorHandler.ListAuthors)
+				authors.POST("", requirePerm("books.create"), authorHandler.CreateAuthor)
+				authors.GET("/:id", requirePerm("books.view"), authorHandler.GetAuthor)
+				authors.PUT("/:id", requirePerm("books.update"), authorHandler.UpdateAuthor)
+				authors.DELETE("/:id", requirePerm("books.delete"), authorHandler.DeleteAuthor)
+				authors.GET("/:id/books", requirePerm("books.view"), authorHandler.GetAuthorWithBooks)
+			}
+
+			// Series routes
+			series := protected.Group("/series")
+			{
+				series.GET("", requirePerm("books.view"), seriesHandler.ListSeries)
+				series.POST("", requirePerm("books.create"), seriesHandler.CreateSeries)
+				series.GET("/:id", requirePerm("books.view"), seriesHandler.GetSeries)
+				series.PUT("/:id", requirePerm("books.update"), seriesHandler.UpdateSeries)
+				series.DELETE("/:id", requirePerm("books.delete"), seriesHandler.DeleteSeries)
+				series.GET("/:id/books", requirePerm("books.view"), seriesHandler.GetSeriesWithBooks)
 			}
 
 			// Student routes

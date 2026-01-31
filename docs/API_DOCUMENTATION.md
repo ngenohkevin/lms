@@ -17,6 +17,10 @@ The Library Management System (LMS) Backend provides a comprehensive REST API fo
 - [Health Checks](#health-checks)
 - [Authentication Endpoints](#authentication-endpoints)
 - [Book Management](#book-management)
+- [Book Copies Management](#book-copies-management)
+- [Authors Management](#authors-management)
+- [Book Series Management](#book-series-management)
+- [QR Code Generation](#qr-code-generation)
 - [Student Management](#student-management)
 - [Transaction Management](#transaction-management)
 - [Reservation System](#reservation-system)
@@ -414,6 +418,371 @@ GET /api/v1/books/import-template
 ```http
 GET /api/v1/books/import-template/download
 ```
+
+## Enhanced Book Fields
+
+Books now support additional metadata fields:
+
+```json
+{
+  "book_id": "BK2024001",
+  "title": "Introduction to Computer Science",
+  "author": "John Doe",
+  "isbn": "978-0123456789",
+  "publisher": "Tech Publications",
+  "published_year": 2024,
+  "genre": "Computer Science",
+  "description": "A comprehensive introduction to computer science concepts",
+  "cover_image_url": "https://example.com/cover.jpg",
+  "total_copies": 5,
+  "available_copies": 3,
+  "shelf_location": "A1-CS-001",
+  "category_id": 1,
+  "series_id": 2,
+  "series_number": 1,
+  "language": "en",
+  "page_count": 450,
+  "edition": "2nd Edition",
+  "format": "physical"
+}
+```
+
+**New Fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `category_id` | int32 | Category ID reference |
+| `series_id` | int32 | Book series ID reference |
+| `series_number` | int32 | Position in the series |
+| `language` | string | ISO 639-1 language code (default: "en") |
+| `page_count` | int32 | Number of pages |
+| `edition` | string | Edition information |
+| `format` | string | Format type: `physical`, `ebook`, `audiobook` |
+
+---
+
+# Book Copies Management
+
+*Requires appropriate book permissions*
+
+## List Book Copies
+
+```http
+GET /api/v1/books/{id}/copies
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "book_id": 1,
+      "copy_number": "COPY-001",
+      "barcode": "BC0001234567",
+      "condition": "good",
+      "status": "available",
+      "acquisition_date": "2024-01-15",
+      "notes": "Purchased from vendor X",
+      "created_at": "2024-01-15T10:00:00Z"
+    }
+  ]
+}
+```
+
+## Create Book Copy
+
+```http
+POST /api/v1/books/{id}/copies
+```
+
+**Request Body:**
+```json
+{
+  "copy_number": "COPY-001",
+  "barcode": "BC0001234567",
+  "condition": "good",
+  "status": "available",
+  "acquisition_date": "2024-01-15",
+  "notes": "Purchased from vendor X"
+}
+```
+
+**Condition Values:** `excellent`, `good`, `fair`, `poor`, `damaged`
+**Status Values:** `available`, `borrowed`, `reserved`, `maintenance`, `lost`, `damaged`
+
+## Get Book Copy
+
+```http
+GET /api/v1/books/{id}/copies/{copy_id}
+```
+
+## Update Book Copy
+
+```http
+PUT /api/v1/books/{id}/copies/{copy_id}
+```
+
+**Request Body:**
+```json
+{
+  "condition": "fair",
+  "status": "maintenance",
+  "notes": "Sent for rebinding"
+}
+```
+
+## Delete Book Copy
+
+```http
+DELETE /api/v1/books/{id}/copies/{copy_id}
+```
+
+## Scan Barcode
+
+Look up a book copy by its barcode.
+
+```http
+GET /api/v1/books/copies/scan?barcode=BC0001234567
+```
+
+**Query Parameters:**
+- `barcode` - The barcode to scan
+
+---
+
+# Authors Management
+
+*Requires appropriate book permissions*
+
+## List Authors
+
+```http
+GET /api/v1/authors?page=1&limit=20
+```
+
+**Query Parameters:**
+- `page` - Page number (default: 1)
+- `limit` - Items per page (default: 20, max: 100)
+
+## Create Author
+
+```http
+POST /api/v1/authors
+```
+
+**Request Body:**
+```json
+{
+  "name": "J.K. Rowling",
+  "bio": "British author, best known for the Harry Potter series"
+}
+```
+
+## Get Author
+
+```http
+GET /api/v1/authors/{id}
+```
+
+## Update Author
+
+```http
+PUT /api/v1/authors/{id}
+```
+
+**Request Body:**
+```json
+{
+  "name": "J.K. Rowling",
+  "bio": "Updated biography..."
+}
+```
+
+## Delete Author
+
+```http
+DELETE /api/v1/authors/{id}
+```
+
+**Note:** Cannot delete authors that have associated books.
+
+## Get Author with Books
+
+```http
+GET /api/v1/authors/{id}/books
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "name": "J.K. Rowling",
+    "bio": "British author...",
+    "book_count": 7,
+    "books": [
+      {
+        "id": 1,
+        "title": "Harry Potter and the Philosopher's Stone",
+        "book_id": "HP001"
+      }
+    ]
+  }
+}
+```
+
+## Book Authors Association
+
+### List Book Authors
+
+```http
+GET /api/v1/books/{id}/authors
+```
+
+### Add Author to Book
+
+```http
+POST /api/v1/books/{id}/authors
+```
+
+**Request Body:**
+```json
+{
+  "author_id": 1,
+  "order": 1
+}
+```
+
+### Remove Author from Book
+
+```http
+DELETE /api/v1/books/{id}/authors/{author_id}
+```
+
+---
+
+# Book Series Management
+
+*Requires appropriate book permissions*
+
+## List Series
+
+```http
+GET /api/v1/series?page=1&limit=20
+```
+
+**Query Parameters:**
+- `page` - Page number (default: 1)
+- `limit` - Items per page (default: 20, max: 100)
+
+## Create Series
+
+```http
+POST /api/v1/series
+```
+
+**Request Body:**
+```json
+{
+  "name": "Harry Potter",
+  "description": "The Harry Potter fantasy series by J.K. Rowling"
+}
+```
+
+## Get Series
+
+```http
+GET /api/v1/series/{id}
+```
+
+## Update Series
+
+```http
+PUT /api/v1/series/{id}
+```
+
+**Request Body:**
+```json
+{
+  "name": "Harry Potter Series",
+  "description": "Updated description..."
+}
+```
+
+## Delete Series
+
+```http
+DELETE /api/v1/series/{id}
+```
+
+**Note:** Cannot delete series that have associated books.
+
+## Get Series with Books
+
+```http
+GET /api/v1/series/{id}/books
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "name": "Harry Potter",
+    "description": "The Harry Potter fantasy series...",
+    "book_count": 7,
+    "books": [
+      {
+        "id": 1,
+        "title": "Harry Potter and the Philosopher's Stone",
+        "series_number": 1
+      },
+      {
+        "id": 2,
+        "title": "Harry Potter and the Chamber of Secrets",
+        "series_number": 2
+      }
+    ]
+  }
+}
+```
+
+---
+
+# QR Code Generation
+
+*Requires books.view permission*
+
+## Generate Book QR Code
+
+Generate a QR code image for a book that links to its detail page.
+
+```http
+GET /api/v1/books/{id}/qr
+```
+
+**Response:**
+- Content-Type: `image/png`
+- Returns PNG image data
+
+The QR code contains a URL to the book detail page.
+
+## Generate Copy QR Code
+
+Generate a QR code image for a specific book copy.
+
+```http
+GET /api/v1/books/copies/{copy_id}/qr
+```
+
+**Response:**
+- Content-Type: `image/png`
+- Returns PNG image data
+
+The QR code contains the copy's barcode (if available) and a URL to the copy.
 
 ---
 
@@ -1346,6 +1715,19 @@ For API support and questions:
 
 ---
 
-**Last Updated**: 2024-01-01  
-**API Version**: v1.0.0  
-**Documentation Version**: 1.0.0
+**Last Updated**: 2026-01-31
+**API Version**: v1.1.0
+**Documentation Version**: 1.1.0
+
+## Changelog
+
+### v1.1.0 (2026-01-31)
+- Added Book Copies API for individual copy tracking
+- Added Authors API for multi-author support
+- Added Book Series API for series management
+- Added QR Code generation endpoints
+- Enhanced Book model with new metadata fields:
+  - `category_id`, `series_id`, `series_number`
+  - `language`, `page_count`, `edition`, `format`
+- Fixed pagination counts for filtered searches
+- Fixed ToResponse() to use actual database values

@@ -27,6 +27,9 @@ type BookQuerier interface {
 	SearchBooksByGenre(ctx context.Context, arg queries.SearchBooksByGenreParams) ([]queries.Book, error)
 	CountBooks(ctx context.Context) (int64, error)
 	CountAvailableBooks(ctx context.Context) (int64, error)
+	CountBooksByGenre(ctx context.Context, genre pgtype.Text) (int64, error)
+	CountSearchBooks(ctx context.Context, title string) (int64, error)
+	CountBooksByCategory(ctx context.Context, categoryID pgtype.Int4) (int64, error)
 	// Deletion validation queries
 	CountActiveTransactionsByBook(ctx context.Context, bookID int32) (int64, error)
 	CountActiveReservationsByBook(ctx context.Context, bookID int32) (int64, error)
@@ -129,6 +132,33 @@ func (s *BookService) CreateBook(ctx context.Context, req models.CreateBookReque
 		params.ShelfLocation = pgtype.Text{String: *req.ShelfLocation, Valid: true}
 	}
 
+	// Set new metadata fields
+	if req.CategoryID != nil {
+		params.CategoryID = pgtype.Int4{Int32: *req.CategoryID, Valid: true}
+	}
+	if req.SeriesID != nil {
+		params.SeriesID = pgtype.Int4{Int32: *req.SeriesID, Valid: true}
+	}
+	if req.SeriesNumber != nil {
+		params.SeriesNumber = pgtype.Int4{Int32: *req.SeriesNumber, Valid: true}
+	}
+	if req.Language != nil && *req.Language != "" {
+		params.Language = pgtype.Text{String: *req.Language, Valid: true}
+	} else {
+		params.Language = pgtype.Text{String: "en", Valid: true}
+	}
+	if req.PageCount != nil {
+		params.PageCount = pgtype.Int4{Int32: *req.PageCount, Valid: true}
+	}
+	if req.Edition != nil && *req.Edition != "" {
+		params.Edition = pgtype.Text{String: *req.Edition, Valid: true}
+	}
+	if req.Format != nil && *req.Format != "" {
+		params.Format = pgtype.Text{String: *req.Format, Valid: true}
+	} else {
+		params.Format = pgtype.Text{String: "physical", Valid: true}
+	}
+
 	// Create the book
 	book, err := s.querier.CreateBook(ctx, params)
 	if err != nil {
@@ -221,6 +251,13 @@ func (s *BookService) UpdateBook(ctx context.Context, id int32, req models.Updat
 		TotalCopies:     existingBook.TotalCopies,
 		AvailableCopies: existingBook.AvailableCopies,
 		ShelfLocation:   existingBook.ShelfLocation,
+		CategoryID:      existingBook.CategoryID,
+		SeriesID:        existingBook.SeriesID,
+		SeriesNumber:    existingBook.SeriesNumber,
+		Language:        existingBook.Language,
+		PageCount:       existingBook.PageCount,
+		Edition:         existingBook.Edition,
+		Format:          existingBook.Format,
 	}
 
 	// Update fields if provided
@@ -271,10 +308,8 @@ func (s *BookService) UpdateBook(ctx context.Context, id int32, req models.Updat
 	}
 	if req.CoverImageURL != nil {
 		if *req.CoverImageURL == "" {
-			fmt.Printf("[DEBUG] UpdateBook - Setting CoverImageUrl to NULL (Valid: false) for book ID: %d\n", id)
 			params.CoverImageUrl = pgtype.Text{Valid: false}
 		} else {
-			fmt.Printf("[DEBUG] UpdateBook - Setting CoverImageUrl to: %s for book ID: %d\n", *req.CoverImageURL, id)
 			params.CoverImageUrl = pgtype.Text{String: *req.CoverImageURL, Valid: true}
 		}
 	}
@@ -292,19 +327,45 @@ func (s *BookService) UpdateBook(ctx context.Context, id int32, req models.Updat
 		}
 	}
 
+	// Update new metadata fields
+	if req.CategoryID != nil {
+		params.CategoryID = pgtype.Int4{Int32: *req.CategoryID, Valid: true}
+	}
+	if req.SeriesID != nil {
+		params.SeriesID = pgtype.Int4{Int32: *req.SeriesID, Valid: true}
+	}
+	if req.SeriesNumber != nil {
+		params.SeriesNumber = pgtype.Int4{Int32: *req.SeriesNumber, Valid: true}
+	}
+	if req.Language != nil {
+		if *req.Language == "" {
+			params.Language = pgtype.Text{Valid: false}
+		} else {
+			params.Language = pgtype.Text{String: *req.Language, Valid: true}
+		}
+	}
+	if req.PageCount != nil {
+		params.PageCount = pgtype.Int4{Int32: *req.PageCount, Valid: true}
+	}
+	if req.Edition != nil {
+		if *req.Edition == "" {
+			params.Edition = pgtype.Text{Valid: false}
+		} else {
+			params.Edition = pgtype.Text{String: *req.Edition, Valid: true}
+		}
+	}
+	if req.Format != nil {
+		if *req.Format == "" {
+			params.Format = pgtype.Text{Valid: false}
+		} else {
+			params.Format = pgtype.Text{String: *req.Format, Valid: true}
+		}
+	}
+
 	// Update the book
 	book, err := s.querier.UpdateBook(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update book: %w", err)
-	}
-
-	// Debug log the result
-	if req.CoverImageURL != nil && *req.CoverImageURL == "" {
-		if book.CoverImageUrl.Valid {
-			fmt.Printf("[DEBUG] UpdateBook - WARNING: After update, CoverImageUrl.Valid is still true with value: %s\n", book.CoverImageUrl.String)
-		} else {
-			fmt.Printf("[DEBUG] UpdateBook - SUCCESS: CoverImageUrl.Valid is false (NULL in database)\n")
-		}
 	}
 
 	// Invalidate book-related caches after successful update
@@ -482,17 +543,19 @@ func (s *BookService) SearchBooks(ctx context.Context, req models.BookSearchRequ
 
 	case req.Genre != nil && *req.Genre != "":
 		// Search by genre
+		genre := pgtype.Text{String: *req.Genre, Valid: true}
 		books, err = s.querier.SearchBooksByGenre(ctx, queries.SearchBooksByGenreParams{
-			Genre:  pgtype.Text{String: *req.Genre, Valid: true},
+			Genre:  genre,
 			Limit:  int32(req.Limit),
 			Offset: int32(offset),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to search books by genre: %w", err)
 		}
-		total, err = s.querier.CountBooks(ctx)
+		// Use filtered count for accurate pagination
+		total, err = s.querier.CountBooksByGenre(ctx, genre)
 		if err != nil {
-			return nil, fmt.Errorf("failed to count books: %w", err)
+			return nil, fmt.Errorf("failed to count books by genre: %w", err)
 		}
 
 	case req.Query != "":
@@ -506,9 +569,10 @@ func (s *BookService) SearchBooks(ctx context.Context, req models.BookSearchRequ
 		if err != nil {
 			return nil, fmt.Errorf("failed to search books: %w", err)
 		}
-		total, err = s.querier.CountBooks(ctx)
+		// Use filtered count for accurate pagination
+		total, err = s.querier.CountSearchBooks(ctx, searchPattern)
 		if err != nil {
-			return nil, fmt.Errorf("failed to count books: %w", err)
+			return nil, fmt.Errorf("failed to count search results: %w", err)
 		}
 
 	default:

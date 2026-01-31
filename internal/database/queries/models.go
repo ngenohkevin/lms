@@ -24,6 +24,14 @@ type AuditLog struct {
 	CreatedAt pgtype.Timestamp `db:"created_at" json:"created_at"`
 }
 
+type Author struct {
+	ID        int32            `db:"id" json:"id"`
+	Name      string           `db:"name" json:"name"`
+	Bio       pgtype.Text      `db:"bio" json:"bio"`
+	CreatedAt pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+}
+
 type Book struct {
 	ID              int32            `db:"id" json:"id"`
 	BookID          string           `db:"book_id" json:"book_id"`
@@ -44,6 +52,39 @@ type Book struct {
 	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
 	Condition       pgtype.Text      `db:"condition" json:"condition"`
 	CategoryID      pgtype.Int4      `db:"category_id" json:"category_id"`
+	SeriesID        pgtype.Int4      `db:"series_id" json:"series_id"`
+	SeriesNumber    pgtype.Int4      `db:"series_number" json:"series_number"`
+	Language        pgtype.Text      `db:"language" json:"language"`
+	PageCount       pgtype.Int4      `db:"page_count" json:"page_count"`
+	Edition         pgtype.Text      `db:"edition" json:"edition"`
+	Format          pgtype.Text      `db:"format" json:"format"`
+}
+
+type BookAuthor struct {
+	BookID      int32       `db:"book_id" json:"book_id"`
+	AuthorID    int32       `db:"author_id" json:"author_id"`
+	AuthorOrder pgtype.Int4 `db:"author_order" json:"author_order"`
+}
+
+type BookCopy struct {
+	ID              int32            `db:"id" json:"id"`
+	BookID          int32            `db:"book_id" json:"book_id"`
+	CopyNumber      string           `db:"copy_number" json:"copy_number"`
+	Barcode         pgtype.Text      `db:"barcode" json:"barcode"`
+	Condition       pgtype.Text      `db:"condition" json:"condition"`
+	AcquisitionDate pgtype.Date      `db:"acquisition_date" json:"acquisition_date"`
+	Status          pgtype.Text      `db:"status" json:"status"`
+	Notes           pgtype.Text      `db:"notes" json:"notes"`
+	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+}
+
+type BookSeries struct {
+	ID          int32            `db:"id" json:"id"`
+	Name        string           `db:"name" json:"name"`
+	Description pgtype.Text      `db:"description" json:"description"`
+	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt   pgtype.Timestamp `db:"updated_at" json:"updated_at"`
 }
 
 type Category struct {

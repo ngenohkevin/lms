@@ -1,6 +1,6 @@
 -- name: CreateBook :one
-INSERT INTO books (book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+INSERT INTO books (book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, category_id, series_id, series_number, language, page_count, edition, format)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 RETURNING *;
 
 -- name: GetBookByID :one
@@ -17,7 +17,7 @@ WHERE isbn = $1 AND deleted_at IS NULL;
 
 -- name: UpdateBook :one
 UPDATE books
-SET book_id = $2, isbn = $3, title = $4, author = $5, publisher = $6, published_year = $7, genre = $8, description = $9, cover_image_url = $10, total_copies = $11, available_copies = $12, shelf_location = $13, updated_at = NOW()
+SET book_id = $2, isbn = $3, title = $4, author = $5, publisher = $6, published_year = $7, genre = $8, description = $9, cover_image_url = $10, total_copies = $11, available_copies = $12, shelf_location = $13, category_id = $14, series_id = $15, series_number = $16, language = $17, page_count = $18, edition = $19, format = $20, updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;
 
@@ -68,6 +68,33 @@ WHERE deleted_at IS NULL;
 -- name: CountAvailableBooks :one
 SELECT COUNT(*) FROM books
 WHERE available_copies > 0 AND deleted_at IS NULL;
+
+-- name: CountBooksByGenre :one
+SELECT COUNT(*) FROM books
+WHERE genre = $1 AND deleted_at IS NULL;
+
+-- name: CountSearchBooks :one
+SELECT COUNT(*) FROM books
+WHERE deleted_at IS NULL
+AND (title ILIKE $1 OR author ILIKE $1 OR book_id ILIKE $1 OR isbn ILIKE $1);
+
+-- name: CountBooksByCategory :one
+SELECT COUNT(*) FROM books
+WHERE category_id = $1 AND deleted_at IS NULL;
+
+-- name: GetBooksByCategory :many
+SELECT * FROM books
+WHERE category_id = $1 AND deleted_at IS NULL
+ORDER BY title
+LIMIT $2 OFFSET $3;
+
+-- name: UpdateBookCategory :exec
+UPDATE books SET category_id = $2, updated_at = NOW()
+WHERE id = $1 AND deleted_at IS NULL;
+
+-- name: UpdateBookSeries :exec
+UPDATE books SET series_id = $2, series_number = $3, updated_at = NOW()
+WHERE id = $1 AND deleted_at IS NULL;
 
 -- name: DecrementBookAvailability :one
 -- Atomically decrement available copies. Returns the new count, or no rows if book unavailable.

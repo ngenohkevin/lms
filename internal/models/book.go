@@ -41,6 +41,15 @@ const (
 	BookStatusDamaged     BookStatus = "damaged"
 )
 
+// BookFormat represents the format of a book
+type BookFormat string
+
+const (
+	BookFormatPhysical  BookFormat = "physical"
+	BookFormatEbook     BookFormat = "ebook"
+	BookFormatAudiobook BookFormat = "audiobook"
+)
+
 // CreateBookRequest represents the request to create a new book
 type CreateBookRequest struct {
 	BookID          string  `json:"book_id" binding:"required,min=1,max=50"`
@@ -55,6 +64,14 @@ type CreateBookRequest struct {
 	TotalCopies     *int32  `json:"total_copies" binding:"omitempty,min=0"`
 	AvailableCopies *int32  `json:"available_copies" binding:"omitempty,min=0"`
 	ShelfLocation   *string `json:"shelf_location" binding:"omitempty,max=50"`
+	// New metadata fields
+	CategoryID   *int32  `json:"category_id" binding:"omitempty"`
+	SeriesID     *int32  `json:"series_id" binding:"omitempty"`
+	SeriesNumber *int32  `json:"series_number" binding:"omitempty,min=1"`
+	Language     *string `json:"language" binding:"omitempty,max=10"`
+	PageCount    *int32  `json:"page_count" binding:"omitempty,min=1"`
+	Edition      *string `json:"edition" binding:"omitempty,max=50"`
+	Format       *string `json:"format" binding:"omitempty,oneof=physical ebook audiobook"`
 }
 
 // UpdateBookRequest represents the request to update a book
@@ -71,6 +88,14 @@ type UpdateBookRequest struct {
 	TotalCopies     *int32  `json:"total_copies" binding:"omitempty,min=0"`
 	AvailableCopies *int32  `json:"available_copies" binding:"omitempty,min=0"`
 	ShelfLocation   *string `json:"shelf_location" binding:"omitempty,max=50"`
+	// New metadata fields
+	CategoryID   *int32  `json:"category_id" binding:"omitempty"`
+	SeriesID     *int32  `json:"series_id" binding:"omitempty"`
+	SeriesNumber *int32  `json:"series_number" binding:"omitempty,min=1"`
+	Language     *string `json:"language" binding:"omitempty,max=10"`
+	PageCount    *int32  `json:"page_count" binding:"omitempty,min=1"`
+	Edition      *string `json:"edition" binding:"omitempty,max=50"`
+	Format       *string `json:"format" binding:"omitempty,oneof=physical ebook audiobook"`
 }
 
 // BookSearchRequest represents the request to search books
@@ -82,6 +107,11 @@ type BookSearchRequest struct {
 	AvailableOnly bool    `json:"available_only" form:"available_only"`
 	Page          int     `json:"page" form:"page,default=1" binding:"min=1"`
 	Limit         int     `json:"limit" form:"limit,default=20" binding:"min=1,max=100"`
+	// New filter fields
+	CategoryID *int32  `json:"category_id" form:"category_id"`
+	SeriesID   *int32  `json:"series_id" form:"series_id"`
+	Language   *string `json:"language" form:"language"`
+	Format     *string `json:"format" form:"format"`
 }
 
 // BookResponse represents the response for book operations
@@ -103,6 +133,14 @@ type BookResponse struct {
 	Status          BookStatus `json:"status"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
+	// New metadata fields
+	CategoryID   *int32  `json:"category_id"`
+	SeriesID     *int32  `json:"series_id"`
+	SeriesNumber *int32  `json:"series_number"`
+	Language     *string `json:"language"`
+	PageCount    *int32  `json:"page_count"`
+	Edition      *string `json:"edition"`
+	Format       *string `json:"format"`
 }
 
 // BookListResponse represents the response for book list operations
@@ -322,6 +360,9 @@ func (r *UpdateBookRequest) Validate() error {
 	}
 	if r.AvailableCopies != nil && *r.AvailableCopies < 0 {
 		return errors.New("available_copies cannot be negative")
+	}
+	if r.TotalCopies != nil && r.AvailableCopies != nil && *r.AvailableCopies > *r.TotalCopies {
+		return errors.New("available_copies cannot exceed total_copies")
 	}
 
 	return nil
