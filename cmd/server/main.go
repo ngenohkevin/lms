@@ -408,12 +408,12 @@ func setupRoutes(
 			// Series routes
 			series := protected.Group("/series")
 			{
-				series.GET("", requirePerm("books.view"), seriesHandler.ListSeries)
-				series.POST("", requirePerm("books.create"), seriesHandler.CreateSeries)
-				series.GET("/:id", requirePerm("books.view"), seriesHandler.GetSeries)
-				series.PUT("/:id", requirePerm("books.update"), seriesHandler.UpdateSeries)
-				series.DELETE("/:id", requirePerm("books.delete"), seriesHandler.DeleteSeries)
-				series.GET("/:id/books", requirePerm("books.view"), seriesHandler.GetSeriesWithBooks)
+				series.GET("", requirePerm("series.view"), seriesHandler.ListSeries)
+				series.POST("", requirePerm("series.create"), seriesHandler.CreateSeries)
+				series.GET("/:id", requirePerm("series.view"), seriesHandler.GetSeries)
+				series.PUT("/:id", requirePerm("series.update"), seriesHandler.UpdateSeries)
+				series.DELETE("/:id", requirePerm("series.delete"), seriesHandler.DeleteSeries)
+				series.GET("/:id/books", requirePerm("series.view"), seriesHandler.GetSeriesWithBooks)
 			}
 
 			// Student routes
