@@ -59,8 +59,8 @@ type CreateBookRequest struct {
 	Publisher       *string `json:"publisher" binding:"omitempty,max=255"`
 	PublishedYear   *int32  `json:"published_year" binding:"omitempty,min=1000"`
 	Genre           *string `json:"genre" binding:"omitempty,max=100"`
-	Description     *string `json:"description" binding:"omitempty,max=1000"`
-	CoverImageURL   *string `json:"cover_image_url" binding:"omitempty,max=500"`
+	Description     *string `json:"description" binding:"omitempty,max=5000"`
+	CoverImageURL   *string `json:"cover_image_url" binding:"omitempty,max=2000"`
 	TotalCopies     *int32  `json:"total_copies" binding:"omitempty,min=0"`
 	AvailableCopies *int32  `json:"available_copies" binding:"omitempty,min=0"`
 	ShelfLocation   *string `json:"shelf_location" binding:"omitempty,max=50"`
@@ -83,8 +83,8 @@ type UpdateBookRequest struct {
 	Publisher       *string `json:"publisher" binding:"omitempty,max=255"`
 	PublishedYear   *int32  `json:"published_year" binding:"omitempty,min=1000"`
 	Genre           *string `json:"genre" binding:"omitempty,max=100"`
-	Description     *string `json:"description" binding:"omitempty,max=1000"`
-	CoverImageURL   *string `json:"cover_image_url" binding:"omitempty,max=500"`
+	Description     *string `json:"description" binding:"omitempty,max=5000"`
+	CoverImageURL   *string `json:"cover_image_url" binding:"omitempty,max=2000"`
 	TotalCopies     *int32  `json:"total_copies" binding:"omitempty,min=0"`
 	AvailableCopies *int32  `json:"available_copies" binding:"omitempty,min=0"`
 	ShelfLocation   *string `json:"shelf_location" binding:"omitempty,max=50"`
