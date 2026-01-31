@@ -10,10 +10,68 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ngenohkevin/lms/internal/middleware"
+	"github.com/ngenohkevin/lms/internal/models"
 	"github.com/ngenohkevin/lms/internal/services"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
+
+// AllowAllPermissionService always returns true for HasPermission (for testing)
+type AllowAllPermissionService struct{}
+
+func (s *AllowAllPermissionService) ListPermissions(ctx context.Context) (*models.PermissionsListResponse, error) {
+	return nil, nil
+}
+func (s *AllowAllPermissionService) GetPermissionByCode(ctx context.Context, code string) (*models.Permission, error) {
+	return nil, nil
+}
+func (s *AllowAllPermissionService) GetPermissionMatrix(ctx context.Context) (*models.PermissionMatrixResponse, error) {
+	return nil, nil
+}
+func (s *AllowAllPermissionService) GetRolePermissions(ctx context.Context, role models.UserRole) (*models.RolePermissionsResponse, error) {
+	return nil, nil
+}
+func (s *AllowAllPermissionService) UpdateRolePermissions(ctx context.Context, role models.UserRole, permissionCodes []string, grantedByUserID int) error {
+	return nil
+}
+func (s *AllowAllPermissionService) GetRolePermissionCodes(ctx context.Context, role models.UserRole) ([]string, error) {
+	return nil, nil
+}
+func (s *AllowAllPermissionService) GetUserEffectivePermissions(ctx context.Context, userID int, username string, role models.UserRole) (*models.UserEffectivePermissionsResponse, error) {
+	return nil, nil
+}
+func (s *AllowAllPermissionService) GetMyPermissions(ctx context.Context, userID int, role models.UserRole) (*models.MyPermissionsResponse, error) {
+	return nil, nil
+}
+func (s *AllowAllPermissionService) HasPermission(ctx context.Context, userID int, permissionCode string) (bool, error) {
+	return true, nil // Always allow for tests
+}
+func (s *AllowAllPermissionService) HasAnyPermission(ctx context.Context, userID int, permissionCodes []string) (bool, error) {
+	return true, nil
+}
+func (s *AllowAllPermissionService) HasAllPermissions(ctx context.Context, userID int, permissionCodes []string) (bool, error) {
+	return true, nil
+}
+func (s *AllowAllPermissionService) ListUserOverrides(ctx context.Context, userID int, username string) (*models.UserOverridesResponse, error) {
+	return nil, nil
+}
+func (s *AllowAllPermissionService) CreateUserOverride(ctx context.Context, userID int, req *models.CreateUserOverrideRequest, grantedByUserID int) (*models.UserOverrideResponse, error) {
+	return nil, nil
+}
+func (s *AllowAllPermissionService) DeleteUserOverride(ctx context.Context, userID int, permissionCode string) error {
+	return nil
+}
+func (s *AllowAllPermissionService) InvalidateUserCache(ctx context.Context, userID int) error {
+	return nil
+}
+func (s *AllowAllPermissionService) InvalidateRoleCache(ctx context.Context, role models.UserRole) error {
+	return nil
+}
+
+func createTestPermissionMiddleware() *middleware.PermissionMiddleware {
+	return middleware.NewPermissionMiddleware(&AllowAllPermissionService{})
+}
 
 // MockFineService is a mock implementation of FineService
 type MockFineService struct {
@@ -91,11 +149,54 @@ func (m *MockFineService) GetFinePerDay() float64 {
 	return args.Get(0).(float64)
 }
 
+// DenyAllPermissionService denies all permissions (for testing forbidden scenarios)
+type DenyAllPermissionService struct {
+	AllowAllPermissionService
+}
+
+func (s *DenyAllPermissionService) HasPermission(ctx context.Context, userID int, permissionCode string) (bool, error) {
+	return false, nil // Always deny for tests
+}
+
+func createDenyPermissionMiddleware() *middleware.PermissionMiddleware {
+	return middleware.NewPermissionMiddleware(&DenyAllPermissionService{})
+}
+
 func setupFineTestRouter(handler *FineHandler) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
+	// Add middleware to set user ID (required for permission check)
+	router.Use(func(c *gin.Context) {
+		c.Set("user_id", 1)
+		c.Next()
+	})
 	api := router.Group("/api/v1")
-	handler.RegisterRoutes(api)
+	handler.RegisterRoutes(api, createTestPermissionMiddleware())
+	return router
+}
+
+// setupFineTestRouterNoAuth sets up a router WITHOUT auth context (for testing unauthorized)
+func setupFineTestRouterNoAuth(handler *FineHandler) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	// NO user_id set - simulating unauthenticated request
+	api := router.Group("/api/v1")
+	handler.RegisterRoutes(api, createTestPermissionMiddleware())
+	return router
+}
+
+// setupFineTestRouterDenyPerm sets up a router with permission denied (for testing forbidden)
+func setupFineTestRouterDenyPerm(handler *FineHandler, userID int32, role string) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	// Add middleware to set auth context
+	router.Use(func(c *gin.Context) {
+		c.Set("user_id", int(userID))
+		c.Set("user_role", role)
+		c.Next()
+	})
+	api := router.Group("/api/v1")
+	handler.RegisterRoutes(api, createDenyPermissionMiddleware()) // Use deny middleware
 	return router
 }
 
@@ -105,12 +206,12 @@ func setupFineTestRouterWithAuth(handler *FineHandler, userID int32, role string
 	router := gin.New()
 	// Add middleware to set auth context
 	router.Use(func(c *gin.Context) {
-		c.Set("user_id", userID)
+		c.Set("user_id", int(userID))
 		c.Set("user_role", role)
 		c.Next()
 	})
 	api := router.Group("/api/v1")
-	handler.RegisterRoutes(api)
+	handler.RegisterRoutes(api, createTestPermissionMiddleware())
 	return router
 }
 
@@ -327,7 +428,7 @@ func TestFineHandler_WaiveFine(t *testing.T) {
 
 	t.Run("returns unauthorized when user_id not in context", func(t *testing.T) {
 		// Use router without auth context
-		noAuthRouter := setupFineTestRouter(handler)
+		noAuthRouter := setupFineTestRouterNoAuth(handler)
 
 		body := WaiveFineRequest{Reason: "Test reason"}
 		jsonBody, _ := json.Marshal(body)
@@ -340,9 +441,9 @@ func TestFineHandler_WaiveFine(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 	})
 
-	t.Run("returns forbidden when user is not admin or librarian", func(t *testing.T) {
-		// Use router with student role
-		studentRouter := setupFineTestRouterWithAuth(handler, 1, "student")
+	t.Run("returns forbidden when user does not have permission", func(t *testing.T) {
+		// Use router with deny permission middleware (simulates denied permission override)
+		denyRouter := setupFineTestRouterDenyPerm(handler, 1, "student")
 
 		body := WaiveFineRequest{Reason: "Test reason"}
 		jsonBody, _ := json.Marshal(body)
@@ -350,7 +451,7 @@ func TestFineHandler_WaiveFine(t *testing.T) {
 		req, _ := http.NewRequest("POST", "/api/v1/fines/1/waive", bytes.NewBuffer(jsonBody))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
-		studentRouter.ServeHTTP(w, req)
+		denyRouter.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusForbidden, w.Code)
 	})

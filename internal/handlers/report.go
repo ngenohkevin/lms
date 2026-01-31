@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ngenohkevin/lms/internal/middleware"
 	"github.com/ngenohkevin/lms/internal/models"
 	"github.com/xuri/excelize/v2"
 )
@@ -57,44 +58,47 @@ func NewReportHandler(reportService ReportService) *ReportHandler {
 	}
 }
 
-// RegisterRoutes registers all report routes
-func (rh *ReportHandler) RegisterRoutes(router *gin.RouterGroup) {
+// RegisterRoutes registers all report routes with permission-based access control
+func (rh *ReportHandler) RegisterRoutes(router *gin.RouterGroup, permMiddleware *middleware.PermissionMiddleware) {
+	requirePerm := permMiddleware.RequirePermission
+
 	reports := router.Group("/reports")
 	{
+		// All report routes require reports.view permission
 		// Basic reports
-		reports.POST("/borrowing-statistics", rh.GetBorrowingStatistics)
-		reports.POST("/overdue-books", rh.GetOverdueBooks)
-		reports.POST("/popular-books", rh.GetPopularBooks)
-		reports.POST("/student-activity", rh.GetStudentActivity)
-		reports.GET("/inventory-status", rh.GetInventoryStatus)
-		reports.GET("/library-overview", rh.GetLibraryOverview)
+		reports.POST("/borrowing-statistics", requirePerm("reports.view"), rh.GetBorrowingStatistics)
+		reports.POST("/overdue-books", requirePerm("reports.view"), rh.GetOverdueBooks)
+		reports.POST("/popular-books", requirePerm("reports.view"), rh.GetPopularBooks)
+		reports.POST("/student-activity", requirePerm("reports.view"), rh.GetStudentActivity)
+		reports.GET("/inventory-status", requirePerm("reports.view"), rh.GetInventoryStatus)
+		reports.GET("/library-overview", requirePerm("reports.view"), rh.GetLibraryOverview)
 
 		// Advanced analytics
-		reports.POST("/borrowing-trends", rh.GetBorrowingTrends)
-		reports.POST("/yearly-comparison", rh.GetYearlyComparison)
+		reports.POST("/borrowing-trends", requirePerm("reports.view"), rh.GetBorrowingTrends)
+		reports.POST("/yearly-comparison", requirePerm("reports.view"), rh.GetYearlyComparison)
 
 		// Phase 8.2 - Year-based Reporting
-		reports.GET("/year-end-summary", rh.GetYearEndSummary)
-		reports.POST("/year-specific-borrowing", rh.GetYearSpecificBorrowingReport)
-		reports.POST("/year-over-year-comparison", rh.GetYearOverYearComparison)
-		reports.POST("/year-based-overdue-analysis", rh.GetYearBasedOverdueAnalysis)
-		reports.POST("/academic-year-analytics", rh.GetAcademicYearAnalytics)
+		reports.GET("/year-end-summary", requirePerm("reports.view"), rh.GetYearEndSummary)
+		reports.POST("/year-specific-borrowing", requirePerm("reports.view"), rh.GetYearSpecificBorrowingReport)
+		reports.POST("/year-over-year-comparison", requirePerm("reports.view"), rh.GetYearOverYearComparison)
+		reports.POST("/year-based-overdue-analysis", requirePerm("reports.view"), rh.GetYearBasedOverdueAnalysis)
+		reports.POST("/academic-year-analytics", requirePerm("reports.view"), rh.GetAcademicYearAnalytics)
 
 		// Phase 8.3 - Advanced Analytics
-		reports.POST("/usage-pattern-analysis", rh.GetUsagePatternAnalysis)
-		reports.POST("/seasonal-trends", rh.GetSeasonalTrends)
-		reports.POST("/book-demand-prediction", rh.GetBookDemandPrediction)
-		reports.POST("/student-behavior-analysis", rh.GetStudentBehaviorAnalysis)
-		reports.GET("/capacity-planning-analysis", rh.GetCapacityPlanningAnalysis)
-		reports.GET("/risk-analysis", rh.GetRiskAnalysis)
-		reports.POST("/data-visualization", rh.GetDataVisualization)
+		reports.POST("/usage-pattern-analysis", requirePerm("reports.view"), rh.GetUsagePatternAnalysis)
+		reports.POST("/seasonal-trends", requirePerm("reports.view"), rh.GetSeasonalTrends)
+		reports.POST("/book-demand-prediction", requirePerm("reports.view"), rh.GetBookDemandPrediction)
+		reports.POST("/student-behavior-analysis", requirePerm("reports.view"), rh.GetStudentBehaviorAnalysis)
+		reports.GET("/capacity-planning-analysis", requirePerm("reports.view"), rh.GetCapacityPlanningAnalysis)
+		reports.GET("/risk-analysis", requirePerm("reports.view"), rh.GetRiskAnalysis)
+		reports.POST("/data-visualization", requirePerm("reports.view"), rh.GetDataVisualization)
 
 		// Dashboard metrics
-		reports.GET("/dashboard-metrics", rh.GetDashboardMetrics)
+		reports.GET("/dashboard-metrics", requirePerm("reports.view"), rh.GetDashboardMetrics)
 
-		// Export functionality (placeholder for future implementation)
-		reports.POST("/export", rh.ExportReport)
-		reports.POST("/schedule", rh.ScheduleReport)
+		// Export functionality requires reports.export permission
+		reports.POST("/export", requirePerm("reports.export"), rh.ExportReport)
+		reports.POST("/schedule", requirePerm("reports.export"), rh.ScheduleReport)
 	}
 }
 

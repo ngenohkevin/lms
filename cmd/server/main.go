@@ -279,9 +279,9 @@ func setupRoutes(
 	authMiddleware *middleware.AuthMiddleware,
 	permissionMiddleware *middleware.PermissionMiddleware,
 ) {
-	// Note: permissionMiddleware is available for use with RequirePermission()
-	// Example: permissionMiddleware.RequirePermission("books.create")
-	_ = permissionMiddleware // Suppress unused warning until routes are added
+	// Helper function to require a specific permission
+	requirePerm := permissionMiddleware.RequirePermission
+
 	// Health check endpoints (no auth required)
 	router.GET("/health", healthHandler.Health)
 	router.GET("/ping", healthHandler.Ping)
@@ -318,123 +318,126 @@ func setupRoutes(
 		protected := v1.Group("")
 		protected.Use(authMiddleware.RequireAuth())
 		{
-			// Profile routes
+			// Profile routes (any authenticated user)
 			protected.GET("/profile", authHandler.GetProfile)
 			protected.POST("/change-password", authHandler.ChangePassword)
 
 			// Book routes
 			books := protected.Group("/books")
 			{
-				books.GET("", bookHandler.ListBooks)
-				books.GET("/search", bookHandler.SearchBooks)
-				books.GET("/stats", bookHandler.GetBookStats)
-				books.GET("/recommendations", bookHandler.GetRecommendations)
-				books.GET("/:id", bookHandler.GetBook)
-				books.GET("/:id/similar", bookHandler.GetSimilarBooks)
-				books.GET("/book/:book_id", bookHandler.GetBookByBookID)
+				// View routes - require books.view permission
+				books.GET("", requirePerm("books.view"), bookHandler.ListBooks)
+				books.GET("/search", requirePerm("books.view"), bookHandler.SearchBooks)
+				books.GET("/stats", requirePerm("books.view"), bookHandler.GetBookStats)
+				books.GET("/recommendations", requirePerm("books.view"), bookHandler.GetRecommendations)
+				books.GET("/:id", requirePerm("books.view"), bookHandler.GetBook)
+				books.GET("/:id/similar", requirePerm("books.view"), bookHandler.GetSimilarBooks)
+				books.GET("/book/:book_id", requirePerm("books.view"), bookHandler.GetBookByBookID)
 
-				// ISBN lookup
-				books.POST("/isbn/fetch", bookHandler.FetchBookByISBN)
-				books.POST("/barcode/scan", bookHandler.ProcessBarcode)
-				books.POST("/description/process", bookHandler.ProcessRichTextDescription)
+				// ISBN lookup - requires books.create (used when adding books)
+				books.POST("/isbn/fetch", requirePerm("books.create"), bookHandler.FetchBookByISBN)
+				books.POST("/barcode/scan", requirePerm("books.create"), bookHandler.ProcessBarcode)
+				books.POST("/description/process", requirePerm("books.create"), bookHandler.ProcessRichTextDescription)
 
-				// Librarian only routes
-				librarianBooks := books.Group("")
-				librarianBooks.Use(authMiddleware.RequireLibrarian())
-				{
-					librarianBooks.POST("", bookHandler.CreateBook)
-					librarianBooks.PUT("/:id", bookHandler.UpdateBook)
-					librarianBooks.DELETE("/:id", bookHandler.DeleteBook)
-					librarianBooks.POST("/import", importExportHandler.ImportBooks)
-					librarianBooks.POST("/:id/cover", uploadHandler.UploadBookCover)
-					librarianBooks.DELETE("/:id/cover", uploadHandler.DeleteBookCover)
-				}
+				// Create/Update/Delete routes
+				books.POST("", requirePerm("books.create"), bookHandler.CreateBook)
+				books.PUT("/:id", requirePerm("books.update"), bookHandler.UpdateBook)
+				books.DELETE("/:id", requirePerm("books.delete"), bookHandler.DeleteBook)
+				books.POST("/import", requirePerm("books.create"), importExportHandler.ImportBooks)
+				books.POST("/:id/cover", requirePerm("books.update"), uploadHandler.UploadBookCover)
+				books.DELETE("/:id/cover", requirePerm("books.update"), uploadHandler.DeleteBookCover)
 			}
 
 			// Student routes
 			students := protected.Group("/students")
 			{
-				students.GET("", authMiddleware.RequireLibrarian(), studentHandler.ListStudents)
-				students.GET("/search", authMiddleware.RequireLibrarian(), studentHandler.SearchStudents)
-				students.GET("/statistics", authMiddleware.RequireLibrarian(), studentHandler.GetStudentStatistics)
-				students.GET("/distribution/years", authMiddleware.RequireLibrarian(), studentHandler.GetYearDistribution)
-				students.GET("/compare/years", authMiddleware.RequireLibrarian(), studentHandler.GetYearComparison)
-				students.GET("/activity/ranking", authMiddleware.RequireLibrarian(), studentHandler.GetMostActiveStudents)
-				students.GET("/activity/year/:year", authMiddleware.RequireLibrarian(), studentHandler.GetStudentActivityByYear)
-				students.GET("/status/statistics", authMiddleware.RequireLibrarian(), studentHandler.GetStatusStatistics)
-				students.GET("/analytics/demographics", authMiddleware.RequireLibrarian(), studentHandler.GetStudentDemographics)
-				students.GET("/analytics/trends", authMiddleware.RequireLibrarian(), studentHandler.GetEnrollmentTrends)
+				// View routes - require students.view permission
+				students.GET("", requirePerm("students.view"), studentHandler.ListStudents)
+				students.GET("/search", requirePerm("students.view"), studentHandler.SearchStudents)
+				students.GET("/statistics", requirePerm("students.view"), studentHandler.GetStudentStatistics)
+				students.GET("/distribution/years", requirePerm("students.view"), studentHandler.GetYearDistribution)
+				students.GET("/compare/years", requirePerm("students.view"), studentHandler.GetYearComparison)
+				students.GET("/activity/ranking", requirePerm("students.view"), studentHandler.GetMostActiveStudents)
+				students.GET("/activity/year/:year", requirePerm("students.view"), studentHandler.GetStudentActivityByYear)
+				students.GET("/status/statistics", requirePerm("students.view"), studentHandler.GetStatusStatistics)
+				students.GET("/analytics/demographics", requirePerm("students.view"), studentHandler.GetStudentDemographics)
+				students.GET("/analytics/trends", requirePerm("students.view"), studentHandler.GetEnrollmentTrends)
 
-				// Self-service student routes
+				// Self-service student routes (any authenticated user can access their own profile)
 				students.GET("/profile", studentHandler.GetStudentProfile)
 				students.PUT("/profile", studentHandler.UpdateStudentProfile)
-				students.PUT("/password", studentHandler.ChangePassword) // Student self-service password change
+				students.PUT("/password", studentHandler.ChangePassword)
 
-				// Librarian routes
-				students.POST("", authMiddleware.RequireLibrarian(), studentHandler.CreateStudent)
+				// Create/Update/Delete routes
+				students.POST("", requirePerm("students.create"), studentHandler.CreateStudent)
 				students.GET("/:id", authMiddleware.RequireStudentOrLibrarian(), studentHandler.GetStudent)
-				students.PUT("/:id", authMiddleware.RequireLibrarian(), studentHandler.UpdateStudent)
-				students.DELETE("/:id", authMiddleware.RequireLibrarian(), studentHandler.DeleteStudent)
-				students.GET("/:id/activity", authMiddleware.RequireLibrarian(), studentHandler.GetStudentActivity)
-				students.PUT("/:id/status", authMiddleware.RequireLibrarian(), studentHandler.UpdateStudentStatus)
-				students.PUT("/:id/password", authMiddleware.RequireAdmin(), studentHandler.ChangeStudentPassword)
-				students.GET("/:id/renewal-statistics", transactionHandler.GetRenewalStatistics)
+				students.PUT("/:id", requirePerm("students.update"), studentHandler.UpdateStudent)
+				students.DELETE("/:id", requirePerm("students.delete"), studentHandler.DeleteStudent)
+				students.GET("/:id/activity", requirePerm("students.view"), studentHandler.GetStudentActivity)
+				students.PUT("/:id/status", requirePerm("students.update"), studentHandler.UpdateStudentStatus)
+				students.PUT("/:id/password", requirePerm("users.manage"), studentHandler.ChangeStudentPassword)
+				students.GET("/:id/renewal-statistics", requirePerm("transactions.view"), transactionHandler.GetRenewalStatistics)
 
 				// Bulk operations
-				students.POST("/bulk-import", authMiddleware.RequireLibrarian(), studentHandler.BulkImportStudents)
-				students.POST("/generate-id", authMiddleware.RequireLibrarian(), studentHandler.GenerateStudentID)
-				students.PUT("/status/bulk", authMiddleware.RequireLibrarian(), studentHandler.BulkUpdateStatus)
-				students.POST("/export", authMiddleware.RequireLibrarian(), studentHandler.ExportStudents)
+				students.POST("/bulk-import", requirePerm("students.create"), studentHandler.BulkImportStudents)
+				students.POST("/generate-id", requirePerm("students.create"), studentHandler.GenerateStudentID)
+				students.PUT("/status/bulk", requirePerm("students.update"), studentHandler.BulkUpdateStatus)
+				students.POST("/export", requirePerm("reports.export"), studentHandler.ExportStudents)
 			}
 
 			// Transaction routes
 			transactions := protected.Group("/transactions")
 			{
-				transactions.GET("", transactionHandler.ListTransactions)
-				transactions.GET("/stats", authMiddleware.RequireLibrarian(), transactionHandler.GetTransactionStats)
-				transactions.GET("/overdue", authMiddleware.RequireLibrarian(), transactionHandler.GetOverdueTransactions)
-				transactions.GET("/history/:studentId", transactionHandler.GetTransactionHistory)
-				transactions.GET("/renewal-history", transactionHandler.GetRenewalHistory)
-				transactions.GET("/:id/can-renew", transactionHandler.CanBookBeRenewed)
+				// View routes
+				transactions.GET("", requirePerm("transactions.view"), transactionHandler.ListTransactions)
+				transactions.GET("/stats", requirePerm("transactions.view"), transactionHandler.GetTransactionStats)
+				transactions.GET("/overdue", requirePerm("transactions.view"), transactionHandler.GetOverdueTransactions)
+				transactions.GET("/history/:studentId", requirePerm("transactions.view"), transactionHandler.GetTransactionHistory)
+				transactions.GET("/renewal-history", requirePerm("transactions.view"), transactionHandler.GetRenewalHistory)
+				transactions.GET("/:id/can-renew", requirePerm("transactions.view"), transactionHandler.CanBookBeRenewed)
 
-				transactions.POST("/borrow", authMiddleware.RequireLibrarian(), transactionHandler.BorrowBook)
-				transactions.POST("/:id/return", authMiddleware.RequireLibrarian(), transactionHandler.ReturnBook)
-				transactions.POST("/:id/renew", transactionHandler.RenewBook)
-				transactions.POST("/:id/pay-fine", authMiddleware.RequireLibrarian(), transactionHandler.PayFine)
+				// Borrow/Return operations
+				transactions.POST("/borrow", requirePerm("transactions.borrow"), transactionHandler.BorrowBook)
+				transactions.POST("/:id/return", requirePerm("transactions.return"), transactionHandler.ReturnBook)
+				transactions.POST("/:id/renew", requirePerm("transactions.view"), transactionHandler.RenewBook)
+				transactions.POST("/:id/pay-fine", requirePerm("fines.manage"), transactionHandler.PayFine)
 			}
 
 			// Reservation routes
 			reservations := protected.Group("/reservations")
 			{
-				reservations.GET("", authMiddleware.RequireLibrarian(), reservationHandler.GetAllReservations)
-				reservations.GET("/student/:studentId", reservationHandler.GetStudentReservations)
-				reservations.GET("/book/:bookId", reservationHandler.GetBookReservations)
-				reservations.GET("/book/:bookId/next", reservationHandler.GetNextReservation)
+				// View routes
+				reservations.GET("", requirePerm("reservations.view"), reservationHandler.GetAllReservations)
+				reservations.GET("/student/:studentId", requirePerm("reservations.view"), reservationHandler.GetStudentReservations)
+				reservations.GET("/book/:bookId", requirePerm("reservations.view"), reservationHandler.GetBookReservations)
+				reservations.GET("/book/:bookId/next", requirePerm("reservations.view"), reservationHandler.GetNextReservation)
 
-				reservations.POST("", reservationHandler.ReserveBook)
-				reservations.POST("/expire", authMiddleware.RequireLibrarian(), reservationHandler.ExpireReservations)
+				// Manage routes
+				reservations.POST("", requirePerm("reservations.manage"), reservationHandler.ReserveBook)
+				reservations.POST("/expire", requirePerm("reservations.manage"), reservationHandler.ExpireReservations)
 
 				// Routes with :id parameter placed last to avoid conflicts
-				reservations.GET("/:id", reservationHandler.GetReservation)
-				reservations.DELETE("/:id", reservationHandler.CancelReservation)
-				reservations.POST("/:id/fulfill", authMiddleware.RequireLibrarian(), reservationHandler.FulfillReservation)
+				reservations.GET("/:id", requirePerm("reservations.view"), reservationHandler.GetReservation)
+				reservations.DELETE("/:id", requirePerm("reservations.manage"), reservationHandler.CancelReservation)
+				reservations.POST("/:id/fulfill", requirePerm("reservations.manage"), reservationHandler.FulfillReservation)
 			}
 
 			// Notification routes
 			notifications := protected.Group("/notifications")
 			{
+				// Personal notifications (any authenticated user)
 				notifications.GET("", notificationHandler.ListNotifications)
 				notifications.GET("/stats", notificationHandler.GetNotificationStats)
 				notifications.GET("/:id", notificationHandler.GetNotification)
 				notifications.PUT("/:id/read", notificationHandler.MarkNotificationAsRead)
 				notifications.DELETE("/:id", notificationHandler.DeleteNotification)
 
-				// Librarian routes
-				notifications.POST("", authMiddleware.RequireLibrarian(), notificationHandler.CreateNotification)
-				notifications.POST("/batch", authMiddleware.RequireLibrarian(), notificationHandler.CreateBatchNotifications)
+				// Send notifications (requires permission)
+				notifications.POST("", requirePerm("notifications.send"), notificationHandler.CreateNotification)
+				notifications.POST("/batch", requirePerm("notifications.send"), notificationHandler.CreateBatchNotifications)
 			}
 
-			// Rating routes
+			// Rating routes (any authenticated user can rate)
 			ratings := protected.Group("/ratings")
 			{
 				ratings.GET("/book/:bookId", ratingHandler.GetBookRatings)
@@ -447,62 +450,56 @@ func setupRoutes(
 			// Category routes
 			categories := protected.Group("/categories")
 			{
+				// View routes (any authenticated user)
 				categories.GET("", categoryHandler.ListCategories)
 				categories.GET("/:id", categoryHandler.GetCategory)
 
-				// Librarian only routes
-				librarianCategories := categories.Group("")
-				librarianCategories.Use(authMiddleware.RequireLibrarian())
-				{
-					librarianCategories.POST("", categoryHandler.CreateCategory)
-					librarianCategories.PUT("/:id", categoryHandler.UpdateCategory)
-					librarianCategories.DELETE("/:id", categoryHandler.DeleteCategory)
-					librarianCategories.POST("/:id/deactivate", categoryHandler.DeactivateCategory)
-					librarianCategories.POST("/:id/activate", categoryHandler.ActivateCategory)
-				}
+				// Manage routes
+				categories.POST("", requirePerm("categories.manage"), categoryHandler.CreateCategory)
+				categories.PUT("/:id", requirePerm("categories.manage"), categoryHandler.UpdateCategory)
+				categories.DELETE("/:id", requirePerm("categories.manage"), categoryHandler.DeleteCategory)
+				categories.POST("/:id/deactivate", requirePerm("categories.manage"), categoryHandler.DeactivateCategory)
+				categories.POST("/:id/activate", requirePerm("categories.manage"), categoryHandler.ActivateCategory)
 			}
 
 			// Fine routes
-			fineHandler.RegisterRoutes(protected)
+			fineHandler.RegisterRoutes(protected, permissionMiddleware)
 
-			// Report routes (librarian only)
-			reportHandler.RegisterRoutes(protected)
+			// Report routes
+			reportHandler.RegisterRoutes(protected, permissionMiddleware)
 
 			// Import/Export routes
 			importExport := protected.Group("/import-export")
-			importExport.Use(authMiddleware.RequireLibrarian())
 			{
-				importExport.POST("/import/books", importExportHandler.ImportBooks)
-				importExport.POST("/import/students", studentHandler.BulkImportStudents)
-				importExport.GET("/export/books", importExportHandler.ExportBooks)
-				importExport.GET("/export/students", studentHandler.ExportStudents)
-				importExport.GET("/history", importExportHandler.GetImportHistory)
-				importExport.GET("/templates/:type", importExportHandler.GetImportTemplate)
+				importExport.POST("/import/books", requirePerm("books.create"), importExportHandler.ImportBooks)
+				importExport.POST("/import/students", requirePerm("students.create"), studentHandler.BulkImportStudents)
+				importExport.GET("/export/books", requirePerm("reports.export"), importExportHandler.ExportBooks)
+				importExport.GET("/export/students", requirePerm("reports.export"), studentHandler.ExportStudents)
+				importExport.GET("/history", requirePerm("reports.view"), importExportHandler.GetImportHistory)
+				importExport.GET("/templates/:type", requirePerm("books.create"), importExportHandler.GetImportTemplate)
 			}
 
-			// User management routes (admin only)
+			// User management routes
 			users := protected.Group("/users")
-			users.Use(authMiddleware.RequireAdmin())
 			{
-				users.GET("", userHandler.ListUsers)
-				users.GET("/roles", userHandler.GetRoles)
-				users.POST("", userHandler.CreateUser)
-				users.GET("/:id", userHandler.GetUser)
-				users.PUT("/:id", userHandler.UpdateUser)
-				users.DELETE("/:id", userHandler.DeleteUser)
-				users.PUT("/:id/status", userHandler.UpdateUserStatus)
-				users.PUT("/:id/password", userHandler.ResetUserPassword)
+				users.GET("", requirePerm("users.view"), userHandler.ListUsers)
+				users.GET("/roles", requirePerm("users.view"), userHandler.GetRoles)
+				users.POST("", requirePerm("users.manage"), userHandler.CreateUser)
+				users.GET("/:id", requirePerm("users.view"), userHandler.GetUser)
+				users.PUT("/:id", requirePerm("users.manage"), userHandler.UpdateUser)
+				users.DELETE("/:id", requirePerm("users.manage"), userHandler.DeleteUser)
+				users.PUT("/:id/status", requirePerm("users.manage"), userHandler.UpdateUserStatus)
+				users.PUT("/:id/password", requirePerm("users.manage"), userHandler.ResetUserPassword)
 			}
 
-			// Invite management routes (admin only)
+			// Invite management routes
 			invites := protected.Group("/invites")
-			invites.Use(authMiddleware.RequireAdmin())
 			{
-				invites.GET("", inviteHandler.ListInvites)
-				invites.POST("", inviteHandler.CreateInvite)
-				invites.GET("/:id", inviteHandler.GetInvite)
-				invites.DELETE("/:id", inviteHandler.DeleteInvite)
-				invites.POST("/:id/resend", inviteHandler.ResendInvite)
+				invites.GET("", requirePerm("invites.manage"), inviteHandler.ListInvites)
+				invites.POST("", requirePerm("invites.manage"), inviteHandler.CreateInvite)
+				invites.GET("/:id", requirePerm("invites.manage"), inviteHandler.GetInvite)
+				invites.DELETE("/:id", requirePerm("invites.manage"), inviteHandler.DeleteInvite)
+				invites.POST("/:id/resend", requirePerm("invites.manage"), inviteHandler.ResendInvite)
 			}
 
 			// Permission management routes
@@ -511,24 +508,17 @@ func setupRoutes(
 				// Current user's permissions (any authenticated user)
 				permissions.GET("/me", permissionHandler.GetMyPermissions)
 
-				// Admin only routes
-				adminPerms := permissions.Group("")
-				adminPerms.Use(authMiddleware.RequireAdmin())
-				{
-					// List all permissions
-					adminPerms.GET("", permissionHandler.ListPermissions)
-					adminPerms.GET("/matrix", permissionHandler.GetPermissionMatrix)
+				// View permissions (requires permissions.view)
+				permissions.GET("", requirePerm("permissions.view"), permissionHandler.ListPermissions)
+				permissions.GET("/matrix", requirePerm("permissions.view"), permissionHandler.GetPermissionMatrix)
+				permissions.GET("/roles/:role", requirePerm("permissions.view"), permissionHandler.GetRolePermissions)
+				permissions.GET("/users/:id", requirePerm("permissions.view"), permissionHandler.GetUserPermissions)
+				permissions.GET("/users/:id/overrides", requirePerm("permissions.view"), permissionHandler.ListUserOverrides)
 
-					// Role permissions
-					adminPerms.GET("/roles/:role", permissionHandler.GetRolePermissions)
-					adminPerms.PUT("/roles/:role", permissionHandler.UpdateRolePermissions)
-
-					// User permissions and overrides
-					adminPerms.GET("/users/:id", permissionHandler.GetUserPermissions)
-					adminPerms.GET("/users/:id/overrides", permissionHandler.ListUserOverrides)
-					adminPerms.POST("/users/:id/overrides", permissionHandler.CreateUserOverride)
-					adminPerms.DELETE("/users/:id/overrides/:code", permissionHandler.DeleteUserOverride)
-				}
+				// Manage permissions (requires permissions.manage)
+				permissions.PUT("/roles/:role", requirePerm("permissions.manage"), permissionHandler.UpdateRolePermissions)
+				permissions.POST("/users/:id/overrides", requirePerm("permissions.manage"), permissionHandler.CreateUserOverride)
+				permissions.DELETE("/users/:id/overrides/:code", requirePerm("permissions.manage"), permissionHandler.DeleteUserOverride)
 			}
 		}
 	}

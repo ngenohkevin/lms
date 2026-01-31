@@ -11,11 +11,17 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ngenohkevin/lms/internal/middleware"
 	"github.com/ngenohkevin/lms/internal/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
 )
+
+// createReportTestPermissionMiddleware creates a permission middleware that allows all for tests
+func createReportTestPermissionMiddleware() *middleware.PermissionMiddleware {
+	return middleware.NewPermissionMiddleware(&AllowAllPermissionService{})
+}
 
 // MockReportService for testing report handlers
 type MockReportService struct {
@@ -146,9 +152,15 @@ func (suite *ReportHandlerTestSuite) SetupTest() {
 	suite.handler = NewReportHandler(suite.mockService)
 	suite.router = gin.New()
 
-	// Register routes
+	// Add middleware to set user ID (required for permission check)
+	suite.router.Use(func(c *gin.Context) {
+		c.Set("user_id", 1)
+		c.Next()
+	})
+
+	// Register routes with permission middleware
 	api := suite.router.Group("/api/v1")
-	suite.handler.RegisterRoutes(api)
+	suite.handler.RegisterRoutes(api, createReportTestPermissionMiddleware())
 }
 
 func (suite *ReportHandlerTestSuite) TestNewReportHandler() {
@@ -709,8 +721,14 @@ func TestReportHandler_DateValidation(t *testing.T) {
 			handler := NewReportHandler(mockService)
 			router := gin.New()
 
+			// Add middleware to set user ID (required for permission check)
+			router.Use(func(c *gin.Context) {
+				c.Set("user_id", 1)
+				c.Next()
+			})
+
 			api := router.Group("/api/v1")
-			handler.RegisterRoutes(api)
+			handler.RegisterRoutes(api, createReportTestPermissionMiddleware())
 
 			// For valid dates, set up mock expectation
 			if !tt.wantErr {

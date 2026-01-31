@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ngenohkevin/lms/internal/middleware"
 	"github.com/ngenohkevin/lms/internal/services"
 )
 
@@ -35,18 +36,23 @@ func NewFineHandler(fineService FineService) *FineHandler {
 	}
 }
 
-// RegisterRoutes registers all fine routes
-func (h *FineHandler) RegisterRoutes(router *gin.RouterGroup) {
+// RegisterRoutes registers all fine routes with permission-based access control
+func (h *FineHandler) RegisterRoutes(router *gin.RouterGroup, permMiddleware *middleware.PermissionMiddleware) {
+	requirePerm := permMiddleware.RequirePermission
+
 	fines := router.Group("/fines")
 	{
-		fines.GET("", h.ListFines)
-		fines.GET("/statistics", h.GetFineStatistics)
-		fines.GET("/high-fines", h.GetStudentsWithHighFines)
-		fines.GET("/:id", h.GetFine)
-		fines.GET("/student/:studentId/unpaid", h.GetUnpaidFinesByStudent)
-		fines.POST("/:id/pay", h.PayFine)
-		fines.POST("/:id/waive", h.WaiveFine)
-		fines.POST("/calculate", h.CalculateFines) // Admin trigger for fine calculation
+		// View routes - require fines.view permission
+		fines.GET("", requirePerm("fines.view"), h.ListFines)
+		fines.GET("/statistics", requirePerm("fines.view"), h.GetFineStatistics)
+		fines.GET("/high-fines", requirePerm("fines.view"), h.GetStudentsWithHighFines)
+		fines.GET("/:id", requirePerm("fines.view"), h.GetFine)
+		fines.GET("/student/:studentId/unpaid", requirePerm("fines.view"), h.GetUnpaidFinesByStudent)
+
+		// Manage routes - require fines.manage permission
+		fines.POST("/:id/pay", requirePerm("fines.manage"), h.PayFine)
+		fines.POST("/:id/waive", requirePerm("fines.manage"), h.WaiveFine)
+		fines.POST("/calculate", requirePerm("fines.manage"), h.CalculateFines)
 	}
 }
 
@@ -292,9 +298,9 @@ func (h *FineHandler) WaiveFine(c *gin.Context) {
 	}
 
 	// Get the user ID from context (set by auth middleware)
-	// SECURITY: Never default to any user - require explicit authentication
-	userID, exists := c.Get("user_id")
-	if !exists {
+	// Permission check is handled by middleware (fines.manage permission required)
+	userID := middleware.GetUserID(c)
+	if userID == 0 {
 		c.JSON(http.StatusUnauthorized, ErrorResponse{
 			Success: false,
 			Error: ErrorDetail{
@@ -306,21 +312,7 @@ func (h *FineHandler) WaiveFine(c *gin.Context) {
 		return
 	}
 
-	// Verify the user has admin role (fine waiving is a privileged operation)
-	role, roleExists := c.Get("user_role")
-	if !roleExists || (role != "admin" && role != "librarian") {
-		c.JSON(http.StatusForbidden, ErrorResponse{
-			Success: false,
-			Error: ErrorDetail{
-				Code:    "FORBIDDEN",
-				Message: "Insufficient permissions to waive fines",
-				Details: "Admin or librarian role required",
-			},
-		})
-		return
-	}
-
-	fine, err := h.fineService.WaiveFine(c.Request.Context(), int32(id), userID.(int32), req.Reason)
+	fine, err := h.fineService.WaiveFine(c.Request.Context(), int32(id), int32(userID), req.Reason)
 	if err != nil {
 		c.JSON(http.StatusNotFound, ErrorResponse{
 			Success: false,

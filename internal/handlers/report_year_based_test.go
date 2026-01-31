@@ -9,11 +9,17 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ngenohkevin/lms/internal/middleware"
 	"github.com/ngenohkevin/lms/internal/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
 )
+
+// createYearBasedTestPermissionMiddleware creates a permission middleware that allows all for tests
+func createYearBasedTestPermissionMiddleware() *middleware.PermissionMiddleware {
+	return middleware.NewPermissionMiddleware(&AllowAllPermissionService{})
+}
 
 // YearBasedReportHandlerTestSuite contains all tests for year-based report handlers
 type YearBasedReportHandlerTestSuite struct {
@@ -29,9 +35,15 @@ func (suite *YearBasedReportHandlerTestSuite) SetupTest() {
 	suite.handler = NewReportHandler(suite.mockService)
 	suite.router = gin.New()
 
-	// Register routes
+	// Add middleware to set user ID (required for permission check)
+	suite.router.Use(func(c *gin.Context) {
+		c.Set("user_id", 1)
+		c.Next()
+	})
+
+	// Register routes with permission middleware
 	api := suite.router.Group("/api/v1")
-	suite.handler.RegisterRoutes(api)
+	suite.handler.RegisterRoutes(api, createYearBasedTestPermissionMiddleware())
 }
 
 func (suite *YearBasedReportHandlerTestSuite) TestGetYearEndSummary_Success() {
