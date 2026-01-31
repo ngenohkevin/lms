@@ -5,12 +5,14 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/pem"
 	"log"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -247,9 +249,28 @@ func main() {
 }
 
 // getOrGenerateRSAKey returns the provided key or generates a new one
+// Supports: raw PEM, escaped newlines (\n), or base64-encoded PEM
 func getOrGenerateRSAKey(keyPEM, keyType string) string {
 	if keyPEM != "" {
-		return keyPEM
+		// Handle escaped newlines (common in env vars)
+		if strings.Contains(keyPEM, "\\n") {
+			keyPEM = strings.ReplaceAll(keyPEM, "\\n", "\n")
+		}
+
+		// Check if it's already a valid PEM key
+		if strings.Contains(keyPEM, "-----BEGIN") && strings.Contains(keyPEM, "-----END") {
+			slog.Info("Using provided RSA key", "type", keyType)
+			return keyPEM
+		}
+
+		// Try base64 decoding
+		decoded, err := base64.StdEncoding.DecodeString(keyPEM)
+		if err == nil && strings.Contains(string(decoded), "-----BEGIN") {
+			slog.Info("Using base64-decoded RSA key", "type", keyType)
+			return string(decoded)
+		}
+
+		slog.Warn("Invalid RSA key format, generating new key", "type", keyType)
 	}
 
 	// Generate a new RSA key
