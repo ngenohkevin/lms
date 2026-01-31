@@ -23,7 +23,7 @@ type ISBNServiceInterface interface {
 
 // ISBNService handles ISBN-related operations
 type ISBNService struct {
-	httpClient       *http.Client
+	httpClient        *http.Client
 	googleBooksAPIKey string
 }
 
