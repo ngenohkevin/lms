@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -76,6 +77,7 @@ func (h *BookHandler) CreateBook(c *gin.Context) {
 			})
 			return
 		}
+		slog.Error("Failed to create book", "error", err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Success: false,
 			Error: ErrorDetail{
