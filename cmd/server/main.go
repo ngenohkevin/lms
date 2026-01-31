@@ -123,6 +123,7 @@ func main() {
 	bookCopyService := services.NewBookCopyService(db.Queries)
 	authorService := services.NewAuthorService(db.Queries)
 	seriesService := services.NewSeriesService(db.Queries)
+	languageService := services.NewLanguageService(db.Queries)
 	qrCodeService := services.NewQRCodeService()
 
 	// Initialize Permission Cache and Service
@@ -194,12 +195,13 @@ func main() {
 	bookCopyHandler := handlers.NewBookCopyHandler(bookCopyService)
 	authorHandler := handlers.NewAuthorHandler(authorService)
 	seriesHandler := handlers.NewSeriesHandler(seriesService)
+	languageHandler := handlers.NewLanguageHandler(languageService)
 	qrCodeHandler := handlers.NewQRCodeHandler(qrCodeService, bookService, bookCopyService, cfg.Server.FrontendURL)
 
 	// Setup routes
 	setupRoutes(router, authHandler, healthHandler, bookHandler, studentHandler,
 		transactionHandler, reservationHandler, notificationHandler,
-		reportHandler, importExportHandler, uploadHandler, ratingHandler, categoryHandler, fineHandler, userHandler, inviteHandler, setupHandler, permissionHandler, bookCopyHandler, authorHandler, seriesHandler, qrCodeHandler, authMiddleware, permissionMiddleware)
+		reportHandler, importExportHandler, uploadHandler, ratingHandler, categoryHandler, fineHandler, userHandler, inviteHandler, setupHandler, permissionHandler, bookCopyHandler, authorHandler, seriesHandler, languageHandler, qrCodeHandler, authMiddleware, permissionMiddleware)
 
 	// Start scheduler
 	if err := schedulerService.Start(); err != nil {
@@ -287,6 +289,7 @@ func setupRoutes(
 	bookCopyHandler *handlers.BookCopyHandler,
 	authorHandler *handlers.AuthorHandler,
 	seriesHandler *handlers.SeriesHandler,
+	languageHandler *handlers.LanguageHandler,
 	qrCodeHandler *handlers.QRCodeHandler,
 	authMiddleware *middleware.AuthMiddleware,
 	permissionMiddleware *middleware.PermissionMiddleware,
@@ -382,12 +385,24 @@ func setupRoutes(
 			// Author routes
 			authors := protected.Group("/authors")
 			{
-				authors.GET("", requirePerm("books.view"), authorHandler.ListAuthors)
-				authors.POST("", requirePerm("books.create"), authorHandler.CreateAuthor)
-				authors.GET("/:id", requirePerm("books.view"), authorHandler.GetAuthor)
-				authors.PUT("/:id", requirePerm("books.update"), authorHandler.UpdateAuthor)
-				authors.DELETE("/:id", requirePerm("books.delete"), authorHandler.DeleteAuthor)
-				authors.GET("/:id/books", requirePerm("books.view"), authorHandler.GetAuthorWithBooks)
+				authors.GET("", requirePerm("authors.view"), authorHandler.ListAuthors)
+				authors.POST("", requirePerm("authors.create"), authorHandler.CreateAuthor)
+				authors.GET("/:id", requirePerm("authors.view"), authorHandler.GetAuthor)
+				authors.PUT("/:id", requirePerm("authors.update"), authorHandler.UpdateAuthor)
+				authors.DELETE("/:id", requirePerm("authors.delete"), authorHandler.DeleteAuthor)
+				authors.GET("/:id/books", requirePerm("authors.view"), authorHandler.GetAuthorWithBooks)
+			}
+
+			// Language routes
+			languages := protected.Group("/languages")
+			{
+				languages.GET("", requirePerm("languages.view"), languageHandler.ListLanguages)
+				languages.POST("", requirePerm("languages.create"), languageHandler.CreateLanguage)
+				languages.GET("/:id", requirePerm("languages.view"), languageHandler.GetLanguage)
+				languages.PUT("/:id", requirePerm("languages.update"), languageHandler.UpdateLanguage)
+				languages.DELETE("/:id", requirePerm("languages.delete"), languageHandler.DeleteLanguage)
+				languages.POST("/:id/activate", requirePerm("languages.update"), languageHandler.ActivateLanguage)
+				languages.POST("/:id/deactivate", requirePerm("languages.update"), languageHandler.DeactivateLanguage)
 			}
 
 			// Series routes

@@ -12,6 +12,7 @@ import (
 
 type Querier interface {
 	ActivateCategory(ctx context.Context, id int32) error
+	ActivateLanguage(ctx context.Context, id int32) (Language, error)
 	AddBookAuthor(ctx context.Context, arg AddBookAuthorParams) error
 	AddRolePermission(ctx context.Context, arg AddRolePermissionParams) error
 	BulkUpdateStudentStatus(ctx context.Context, arg BulkUpdateStudentStatusParams) error
@@ -50,6 +51,7 @@ type Querier interface {
 	CountCategories(ctx context.Context) (int64, error)
 	CountFines(ctx context.Context, arg CountFinesParams) (int64, error)
 	CountImportHistoryByFilters(ctx context.Context, arg CountImportHistoryByFiltersParams) (int64, error)
+	CountLanguages(ctx context.Context, dollar_1 bool) (int64, error)
 	CountNotificationsByType(ctx context.Context, type_ string) (int64, error)
 	CountOverdueTransactions(ctx context.Context) (int64, error)
 	CountPendingInvites(ctx context.Context) (int64, error)
@@ -57,6 +59,7 @@ type Querier interface {
 	// Renewal-related queries for Phase 6.7
 	CountRenewalsByStudentAndBook(ctx context.Context, arg CountRenewalsByStudentAndBookParams) (int64, error)
 	CountSearchBooks(ctx context.Context, title string) (int64, error)
+	CountSearchLanguages(ctx context.Context, arg CountSearchLanguagesParams) (int64, error)
 	CountSearchUsers(ctx context.Context, arg CountSearchUsersParams) (int64, error)
 	CountSeries(ctx context.Context) (int64, error)
 	CountSeriesBooks(ctx context.Context, seriesID pgtype.Int4) (int64, error)
@@ -87,6 +90,7 @@ type Querier interface {
 	CreateFirstAdmin(ctx context.Context, arg CreateFirstAdminParams) (User, error)
 	CreateImportError(ctx context.Context, arg CreateImportErrorParams) (ImportError, error)
 	CreateImportHistory(ctx context.Context, arg CreateImportHistoryParams) (ImportHistory, error)
+	CreateLanguage(ctx context.Context, arg CreateLanguageParams) (Language, error)
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) (Notification, error)
 	CreatePermission(ctx context.Context, arg CreatePermissionParams) (Permission, error)
 	CreateReservation(ctx context.Context, arg CreateReservationParams) (Reservation, error)
@@ -98,12 +102,14 @@ type Querier interface {
 	CreateUserOverride(ctx context.Context, arg CreateUserOverrideParams) (UserPermissionOverride, error)
 	CreateUserWithoutPassword(ctx context.Context, arg CreateUserWithoutPasswordParams) (User, error)
 	DeactivateCategory(ctx context.Context, id int32) error
+	DeactivateLanguage(ctx context.Context, id int32) (Language, error)
 	// Atomically decrement available copies. Returns the new count, or no rows if book unavailable.
 	DecrementBookAvailability(ctx context.Context, id int32) (pgtype.Int4, error)
 	DeleteAuthor(ctx context.Context, id int32) error
 	DeleteBookCopy(ctx context.Context, id int32) error
 	DeleteCategory(ctx context.Context, id int32) error
 	DeleteInvite(ctx context.Context, id int32) error
+	DeleteLanguage(ctx context.Context, id int32) error
 	DeleteNotification(ctx context.Context, id int32) error
 	DeleteOldAuditLogs(ctx context.Context, createdAt pgtype.Timestamp) error
 	DeleteOldEmailDeliveries(ctx context.Context, createdAt pgtype.Timestamp) error
@@ -154,6 +160,8 @@ type Querier interface {
 	GetInviteByEmail(ctx context.Context, email string) (UserInvite, error)
 	GetInviteByID(ctx context.Context, id int32) (GetInviteByIDRow, error)
 	GetInviteByToken(ctx context.Context, inviteToken string) (UserInvite, error)
+	GetLanguageByCode(ctx context.Context, code string) (Language, error)
+	GetLanguageByID(ctx context.Context, id int32) (Language, error)
 	GetLibraryOverview(ctx context.Context) (GetLibraryOverviewRow, error)
 	GetMonthlyTrends(ctx context.Context, arg GetMonthlyTrendsParams) ([]GetMonthlyTrendsRow, error)
 	GetNextQueueItems(ctx context.Context, limit int32) ([]EmailQueue, error)
@@ -239,6 +247,7 @@ type Querier interface {
 	ListExpiredReservations(ctx context.Context) ([]ListExpiredReservationsRow, error)
 	// Fines Management Queries
 	ListFines(ctx context.Context, arg ListFinesParams) ([]ListFinesRow, error)
+	ListLanguages(ctx context.Context, arg ListLanguagesParams) ([]Language, error)
 	ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]Notification, error)
 	ListNotificationsByRecipient(ctx context.Context, arg ListNotificationsByRecipientParams) ([]Notification, error)
 	ListNotificationsByType(ctx context.Context, arg ListNotificationsByTypeParams) ([]Notification, error)
@@ -290,6 +299,7 @@ type Querier interface {
 	SearchAuthors(ctx context.Context, arg SearchAuthorsParams) ([]Author, error)
 	SearchBooks(ctx context.Context, arg SearchBooksParams) ([]Book, error)
 	SearchBooksByGenre(ctx context.Context, arg SearchBooksByGenreParams) ([]Book, error)
+	SearchLanguages(ctx context.Context, arg SearchLanguagesParams) ([]Language, error)
 	SearchSeries(ctx context.Context, arg SearchSeriesParams) ([]BookSeries, error)
 	SearchStudents(ctx context.Context, arg SearchStudentsParams) ([]Student, error)
 	SearchStudentsIncludingDeleted(ctx context.Context, arg SearchStudentsIncludingDeletedParams) ([]Student, error)
@@ -318,6 +328,7 @@ type Querier interface {
 	UpdateFineAmount(ctx context.Context, arg UpdateFineAmountParams) error
 	UpdateImportHistory(ctx context.Context, arg UpdateImportHistoryParams) (ImportHistory, error)
 	UpdateInviteToken(ctx context.Context, arg UpdateInviteTokenParams) (UserInvite, error)
+	UpdateLanguage(ctx context.Context, arg UpdateLanguageParams) (Language, error)
 	UpdatePermission(ctx context.Context, arg UpdatePermissionParams) (Permission, error)
 	UpdateQueueItemError(ctx context.Context, arg UpdateQueueItemErrorParams) (EmailQueue, error)
 	// Items processing longer than threshold

@@ -237,6 +237,18 @@ const (
 
 	// Categories
 	PermCategoriesManage = "categories.manage"
+
+	// Authors
+	PermAuthorsView   = "authors.view"
+	PermAuthorsCreate = "authors.create"
+	PermAuthorsUpdate = "authors.update"
+	PermAuthorsDelete = "authors.delete"
+
+	// Languages
+	PermLanguagesView   = "languages.view"
+	PermLanguagesCreate = "languages.create"
+	PermLanguagesUpdate = "languages.update"
+	PermLanguagesDelete = "languages.delete"
 )
 
 // AllPermissionCodes returns all standard permission codes
@@ -253,5 +265,7 @@ func AllPermissionCodes() []string {
 		PermFinesView, PermFinesManage,
 		PermNotificationsSend,
 		PermCategoriesManage,
+		PermAuthorsView, PermAuthorsCreate, PermAuthorsUpdate, PermAuthorsDelete,
+		PermLanguagesView, PermLanguagesCreate, PermLanguagesUpdate, PermLanguagesDelete,
 	}
 }

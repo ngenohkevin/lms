@@ -184,6 +184,16 @@ type ImportHistory struct {
 	UpdatedAt          pgtype.Timestamp `db:"updated_at" json:"updated_at"`
 }
 
+type Language struct {
+	ID         int32            `db:"id" json:"id"`
+	Code       string           `db:"code" json:"code"`
+	Name       string           `db:"name" json:"name"`
+	NativeName pgtype.Text      `db:"native_name" json:"native_name"`
+	IsActive   pgtype.Bool      `db:"is_active" json:"is_active"`
+	CreatedAt  pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt  pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+}
+
 type Notification struct {
 	ID            int32            `db:"id" json:"id"`
 	RecipientID   int32            `db:"recipient_id" json:"recipient_id"`
