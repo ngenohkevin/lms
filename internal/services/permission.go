@@ -259,9 +259,11 @@ func (s *PermissionService) UpdateRolePermissions(ctx context.Context, role mode
 		return err
 	}
 
-	// Invalidate role cache
+	// Invalidate role cache and all user permission caches
+	// (users with this role may now have different effective permissions)
 	if s.cache != nil {
 		_ = s.cache.InvalidateRolePermissions(ctx, role)
+		_ = s.cache.InvalidateAllUserPermissions(ctx)
 	}
 
 	s.logger.Info("Updated role permissions", "role", role, "permission_count", len(permissionCodes), "updated_by", grantedByUserID)
