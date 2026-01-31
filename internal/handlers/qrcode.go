@@ -10,10 +10,10 @@ import (
 
 // QRCodeHandler handles QR code generation endpoints
 type QRCodeHandler struct {
-	qrService      services.QRCodeServiceInterface
-	bookService    services.BookServiceInterface
-	copyService    services.BookCopyServiceInterface
-	baseURL        string
+	qrService   services.QRCodeServiceInterface
+	bookService services.BookServiceInterface
+	copyService services.BookCopyServiceInterface
+	baseURL     string
 }
 
 // NewQRCodeHandler creates a new QR code handler

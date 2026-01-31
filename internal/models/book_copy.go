@@ -31,16 +31,16 @@ const (
 
 // BookCopyResponse represents the response for book copy operations
 type BookCopyResponse struct {
-	ID              int32          `json:"id"`
-	BookID          int32          `json:"book_id"`
-	CopyNumber      string         `json:"copy_number"`
-	Barcode         *string        `json:"barcode"`
-	Condition       CopyCondition  `json:"condition"`
-	AcquisitionDate *time.Time     `json:"acquisition_date"`
-	Status          CopyStatus     `json:"status"`
-	Notes           *string        `json:"notes"`
-	CreatedAt       time.Time      `json:"created_at"`
-	UpdatedAt       time.Time      `json:"updated_at"`
+	ID              int32         `json:"id"`
+	BookID          int32         `json:"book_id"`
+	CopyNumber      string        `json:"copy_number"`
+	Barcode         *string       `json:"barcode"`
+	Condition       CopyCondition `json:"condition"`
+	AcquisitionDate *time.Time    `json:"acquisition_date"`
+	Status          CopyStatus    `json:"status"`
+	Notes           *string       `json:"notes"`
+	CreatedAt       time.Time     `json:"created_at"`
+	UpdatedAt       time.Time     `json:"updated_at"`
 }
 
 // BookCopyListResponse represents a paginated list of book copies
