@@ -176,8 +176,9 @@ func (s *BookService) CreateBook(ctx context.Context, req models.CreateBookReque
 	// Invalidate book-related caches after successful creation
 	if s.cacheService != nil {
 		// Invalidate book catalog and search results - errors are non-critical for cache invalidation
-		_ = s.cacheService.InvalidateByPattern(ctx, "books:list:*")
-		_ = s.cacheService.InvalidateByPattern(ctx, "search:*")
+		// Keys use cache:search: prefix from SetSearchResults
+		_ = s.cacheService.InvalidateByPattern(ctx, "cache:search:books:list:*")
+		_ = s.cacheService.InvalidateByPattern(ctx, "cache:search:*")
 		_ = s.cacheService.InvalidateBookCatalog(ctx)
 	}
 
@@ -379,8 +380,9 @@ func (s *BookService) UpdateBook(ctx context.Context, id int32, req models.Updat
 	// Invalidate book-related caches after successful update
 	if s.cacheService != nil {
 		// Invalidate book catalog and search results - errors are non-critical for cache invalidation
-		_ = s.cacheService.InvalidateByPattern(ctx, "books:list:*")
-		_ = s.cacheService.InvalidateByPattern(ctx, "search:*")
+		// Keys use cache:search: prefix from SetSearchResults
+		_ = s.cacheService.InvalidateByPattern(ctx, "cache:search:books:list:*")
+		_ = s.cacheService.InvalidateByPattern(ctx, "cache:search:*")
 		_ = s.cacheService.InvalidateBookCatalog(ctx)
 	}
 
@@ -423,8 +425,9 @@ func (s *BookService) DeleteBook(ctx context.Context, id int32) error {
 	// Invalidate book-related caches after successful deletion
 	if s.cacheService != nil {
 		// Invalidate book catalog and search results - errors are non-critical for cache invalidation
-		_ = s.cacheService.InvalidateByPattern(ctx, "books:list:*")
-		_ = s.cacheService.InvalidateByPattern(ctx, "search:*")
+		// Keys use cache:search: prefix from SetSearchResults
+		_ = s.cacheService.InvalidateByPattern(ctx, "cache:search:books:list:*")
+		_ = s.cacheService.InvalidateByPattern(ctx, "cache:search:*")
 		_ = s.cacheService.InvalidateBookCatalog(ctx)
 	}
 

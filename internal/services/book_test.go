@@ -257,8 +257,8 @@ func TestBookService_CreateBook(t *testing.T) {
 					UpdatedAt:       pgtype.Timestamp{Time: time.Now(), Valid: true},
 				}, nil)
 				// Mock cache invalidation calls
-				mockCache.On("InvalidateByPattern", mock.Anything, "books:list:*").Return(nil)
-				mockCache.On("InvalidateByPattern", mock.Anything, "search:*").Return(nil)
+				mockCache.On("InvalidateByPattern", mock.Anything, "cache:search:books:list:*").Return(nil)
+				mockCache.On("InvalidateByPattern", mock.Anything, "cache:search:*").Return(nil)
 				mockCache.On("InvalidateBookCatalog", mock.Anything).Return(nil)
 			},
 			wantErr: false,
