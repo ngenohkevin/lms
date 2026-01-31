@@ -592,8 +592,8 @@ func TestBookCopyService_GetCopyBorrowingHistory_Success(t *testing.T) {
 	assert.Len(t, result, 2)
 	assert.Equal(t, "John Doe", result[0].StudentName)
 	assert.Equal(t, "STU001", result[0].StudentCode)
-	assert.Nil(t, result[0].ReturnedDate) // Still borrowed
-	assert.NotNil(t, result[1].ReturnedDate)  // Returned
+	assert.Nil(t, result[0].ReturnedDate)    // Still borrowed
+	assert.NotNil(t, result[1].ReturnedDate) // Returned
 	mockQuerier.AssertExpectations(t)
 }
 

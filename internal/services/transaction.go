@@ -165,18 +165,18 @@ type ReturnByBarcodeRequest struct {
 
 // BarcodeScanResult represents the result of scanning a barcode
 type BarcodeScanResult struct {
-	CopyID          int32   `json:"copy_id"`
-	CopyNumber      string  `json:"copy_number"`
-	Barcode         string  `json:"barcode"`
-	Condition       string  `json:"condition"`
-	Status          string  `json:"status"`
-	BookID          int32   `json:"book_id"`
-	BookTitle       string  `json:"book_title"`
-	BookAuthor      string  `json:"book_author"`
-	BookCode        string  `json:"book_code"`
-	ISBN            *string `json:"isbn,omitempty"`
-	IsBorrowed      bool    `json:"is_borrowed"`
-	CanBorrow       bool    `json:"can_borrow"`
+	CopyID          int32                `json:"copy_id"`
+	CopyNumber      string               `json:"copy_number"`
+	Barcode         string               `json:"barcode"`
+	Condition       string               `json:"condition"`
+	Status          string               `json:"status"`
+	BookID          int32                `json:"book_id"`
+	BookTitle       string               `json:"book_title"`
+	BookAuthor      string               `json:"book_author"`
+	BookCode        string               `json:"book_code"`
+	ISBN            *string              `json:"isbn,omitempty"`
+	IsBorrowed      bool                 `json:"is_borrowed"`
+	CanBorrow       bool                 `json:"can_borrow"`
 	CurrentBorrower *CurrentBorrowerInfo `json:"current_borrower,omitempty"`
 }
 
