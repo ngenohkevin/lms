@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -323,6 +324,68 @@ func (h *BookCopyHandler) DeleteBookCopy(c *gin.Context) {
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Message: "Book copy deleted successfully",
+	})
+}
+
+// GenerateCopies generates multiple copies for a book
+// @Summary Generate copies for a book
+// @Description Auto-generate a specified number of copies for a book
+// @Tags book-copies
+// @Accept json
+// @Produce json
+// @Param id path int true "Book ID"
+// @Param request body GenerateCopiesRequest true "Generation parameters"
+// @Success 201 {object} SuccessResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/books/{id}/copies/generate [post]
+func (h *BookCopyHandler) GenerateCopies(c *gin.Context) {
+	idStr := c.Param("id")
+	bookID, err := strconv.ParseInt(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid book ID",
+			},
+		})
+		return
+	}
+
+	var req struct {
+		Count    int32  `json:"count" binding:"required,min=1,max=100"`
+		BookCode string `json:"book_code" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid request data",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	copies, err := h.bookCopyService.GenerateCopies(c.Request.Context(), int32(bookID), req.Count, req.BookCode)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to generate copies",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, SuccessResponse{
+		Success: true,
+		Data:    copies,
+		Message: fmt.Sprintf("Generated %d copies successfully", len(copies)),
 	})
 }
 

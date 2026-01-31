@@ -34,6 +34,7 @@ type BookCopyServiceInterface interface {
 	UpdateBookCopy(ctx context.Context, id int32, req models.UpdateBookCopyRequest) (*models.BookCopyResponse, error)
 	UpdateBookCopyStatus(ctx context.Context, id int32, status string) (*models.BookCopyResponse, error)
 	DeleteBookCopy(ctx context.Context, id int32) error
+	GenerateCopies(ctx context.Context, bookID int32, count int32, bookCode string) ([]models.BookCopyResponse, error)
 }
 
 // BookCopyService handles book copy-related business logic
@@ -210,6 +211,43 @@ func (s *BookCopyService) DeleteBookCopy(ctx context.Context, id int32) error {
 		return fmt.Errorf("failed to delete book copy: %w", err)
 	}
 	return nil
+}
+
+// GenerateCopies creates multiple copies for a book based on total_copies count
+// This is used when initially setting up copies for a book
+func (s *BookCopyService) GenerateCopies(ctx context.Context, bookID int32, count int32, bookCode string) ([]models.BookCopyResponse, error) {
+	if count <= 0 {
+		return nil, nil
+	}
+
+	// Get existing copies count to avoid duplicate copy numbers
+	existingCopies, err := s.querier.ListBookCopies(ctx, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check existing copies: %w", err)
+	}
+
+	startNum := len(existingCopies) + 1
+	copies := make([]models.BookCopyResponse, 0, count)
+
+	for i := int32(0); i < count; i++ {
+		copyNumber := fmt.Sprintf("%s-COPY-%03d", bookCode, startNum+int(i))
+
+		params := queries.CreateBookCopyParams{
+			BookID:     bookID,
+			CopyNumber: copyNumber,
+			Condition:  pgtype.Text{String: "good", Valid: true},
+			Status:     pgtype.Text{String: "available", Valid: true},
+		}
+
+		copy, err := s.querier.CreateBookCopy(ctx, params)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create copy %s: %w", copyNumber, err)
+		}
+
+		copies = append(copies, *bookCopyToResponse(&copy))
+	}
+
+	return copies, nil
 }
 
 // bookCopyToResponse converts queries.BookCopy to models.BookCopyResponse

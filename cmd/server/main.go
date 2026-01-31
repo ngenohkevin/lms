@@ -365,6 +365,7 @@ func setupRoutes(
 				// Book copies routes
 				books.GET("/:id/copies", requirePerm("books.view"), bookCopyHandler.ListBookCopies)
 				books.POST("/:id/copies", requirePerm("books.create"), bookCopyHandler.CreateBookCopy)
+				books.POST("/:id/copies/generate", requirePerm("books.create"), bookCopyHandler.GenerateCopies)
 				books.GET("/:id/copies/:copy_id", requirePerm("books.view"), bookCopyHandler.GetBookCopy)
 				books.PUT("/:id/copies/:copy_id", requirePerm("books.update"), bookCopyHandler.UpdateBookCopy)
 				books.DELETE("/:id/copies/:copy_id", requirePerm("books.delete"), bookCopyHandler.DeleteBookCopy)
