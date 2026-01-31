@@ -110,6 +110,34 @@ func (q *Queries) GetBookCopyByBarcode(ctx context.Context, barcode pgtype.Text)
 	return i, err
 }
 
+const getBookCopyByBookID = `-- name: GetBookCopyByBookID :one
+SELECT id, book_id, copy_number, barcode, condition, acquisition_date, status, notes, created_at, updated_at FROM book_copies
+WHERE book_id = $1 AND id = $2
+`
+
+type GetBookCopyByBookIDParams struct {
+	BookID int32 `db:"book_id" json:"book_id"`
+	ID     int32 `db:"id" json:"id"`
+}
+
+func (q *Queries) GetBookCopyByBookID(ctx context.Context, arg GetBookCopyByBookIDParams) (BookCopy, error) {
+	row := q.db.QueryRow(ctx, getBookCopyByBookID, arg.BookID, arg.ID)
+	var i BookCopy
+	err := row.Scan(
+		&i.ID,
+		&i.BookID,
+		&i.CopyNumber,
+		&i.Barcode,
+		&i.Condition,
+		&i.AcquisitionDate,
+		&i.Status,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getBookCopyByID = `-- name: GetBookCopyByID :one
 SELECT id, book_id, copy_number, barcode, condition, acquisition_date, status, notes, created_at, updated_at FROM book_copies
 WHERE id = $1
@@ -183,6 +211,53 @@ type ListBookCopiesByStatusParams struct {
 
 func (q *Queries) ListBookCopiesByStatus(ctx context.Context, arg ListBookCopiesByStatusParams) ([]BookCopy, error) {
 	rows, err := q.db.Query(ctx, listBookCopiesByStatus, arg.BookID, arg.Status)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BookCopy{}
+	for rows.Next() {
+		var i BookCopy
+		if err := rows.Scan(
+			&i.ID,
+			&i.BookID,
+			&i.CopyNumber,
+			&i.Barcode,
+			&i.Condition,
+			&i.AcquisitionDate,
+			&i.Status,
+			&i.Notes,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchBookCopies = `-- name: SearchBookCopies :many
+SELECT id, book_id, copy_number, barcode, condition, acquisition_date, status, notes, created_at, updated_at FROM book_copies
+WHERE book_id = $1
+AND (
+    copy_number ILIKE '%' || $2 || '%'
+    OR barcode ILIKE '%' || $2 || '%'
+    OR notes ILIKE '%' || $2 || '%'
+)
+ORDER BY copy_number
+`
+
+type SearchBookCopiesParams struct {
+	BookID  int32       `db:"book_id" json:"book_id"`
+	Column2 pgtype.Text `db:"column_2" json:"column_2"`
+}
+
+func (q *Queries) SearchBookCopies(ctx context.Context, arg SearchBookCopiesParams) ([]BookCopy, error) {
+	rows, err := q.db.Query(ctx, searchBookCopies, arg.BookID, arg.Column2)
 	if err != nil {
 		return nil, err
 	}

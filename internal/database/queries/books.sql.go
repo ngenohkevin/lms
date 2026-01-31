@@ -168,6 +168,18 @@ func (q *Queries) DecrementBookAvailability(ctx context.Context, id int32) (pgty
 	return available_copies, err
 }
 
+const decrementTotalCopies = `-- name: DecrementTotalCopies :exec
+UPDATE books
+SET total_copies = GREATEST(total_copies - 1, 0), updated_at = NOW()
+WHERE id = $1 AND deleted_at IS NULL
+`
+
+// Decrement total_copies by 1 (when a copy is deleted)
+func (q *Queries) DecrementTotalCopies(ctx context.Context, id int32) error {
+	_, err := q.db.Exec(ctx, decrementTotalCopies, id)
+	return err
+}
+
 const getBookByBookID = `-- name: GetBookByBookID :one
 SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition, category_id, series_id, series_number, language, page_count, edition, format FROM books
 WHERE book_id = $1 AND deleted_at IS NULL
@@ -354,6 +366,23 @@ func (q *Queries) IncrementBookAvailability(ctx context.Context, id int32) (pgty
 	var available_copies pgtype.Int4
 	err := row.Scan(&available_copies)
 	return available_copies, err
+}
+
+const incrementTotalCopies = `-- name: IncrementTotalCopies :exec
+UPDATE books
+SET total_copies = total_copies + $2, available_copies = available_copies + $2, updated_at = NOW()
+WHERE id = $1 AND deleted_at IS NULL
+`
+
+type IncrementTotalCopiesParams struct {
+	ID          int32       `db:"id" json:"id"`
+	TotalCopies pgtype.Int4 `db:"total_copies" json:"total_copies"`
+}
+
+// Increment total_copies by a given amount
+func (q *Queries) IncrementTotalCopies(ctx context.Context, arg IncrementTotalCopiesParams) error {
+	_, err := q.db.Exec(ctx, incrementTotalCopies, arg.ID, arg.TotalCopies)
+	return err
 }
 
 const listAvailableBooks = `-- name: ListAvailableBooks :many
@@ -599,6 +628,21 @@ WHERE id = $1
 
 func (q *Queries) SoftDeleteBook(ctx context.Context, id int32) error {
 	_, err := q.db.Exec(ctx, softDeleteBook, id)
+	return err
+}
+
+const syncBookCopyCounts = `-- name: SyncBookCopyCounts :exec
+UPDATE books b
+SET
+    total_copies = (SELECT COUNT(*) FROM book_copies WHERE book_id = b.id),
+    available_copies = (SELECT COUNT(*) FROM book_copies WHERE book_id = b.id AND status = 'available'),
+    updated_at = NOW()
+WHERE b.id = $1 AND b.deleted_at IS NULL
+`
+
+// Sync total_copies and available_copies from book_copies table
+func (q *Queries) SyncBookCopyCounts(ctx context.Context, id int32) error {
+	_, err := q.db.Exec(ctx, syncBookCopyCounts, id)
 	return err
 }
 

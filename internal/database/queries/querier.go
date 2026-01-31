@@ -105,6 +105,8 @@ type Querier interface {
 	DeactivateLanguage(ctx context.Context, id int32) (Language, error)
 	// Atomically decrement available copies. Returns the new count, or no rows if book unavailable.
 	DecrementBookAvailability(ctx context.Context, id int32) (pgtype.Int4, error)
+	// Decrement total_copies by 1 (when a copy is deleted)
+	DecrementTotalCopies(ctx context.Context, id int32) error
 	DeleteAuthor(ctx context.Context, id int32) error
 	DeleteBookCopy(ctx context.Context, id int32) error
 	DeleteCategory(ctx context.Context, id int32) error
@@ -127,6 +129,7 @@ type Querier interface {
 	GetBookByID(ctx context.Context, id int32) (Book, error)
 	GetBookByISBN(ctx context.Context, isbn pgtype.Text) (Book, error)
 	GetBookCopyByBarcode(ctx context.Context, barcode pgtype.Text) (BookCopy, error)
+	GetBookCopyByBookID(ctx context.Context, arg GetBookCopyByBookIDParams) (BookCopy, error)
 	GetBookCopyByID(ctx context.Context, id int32) (BookCopy, error)
 	GetBookDemandPrediction(ctx context.Context, arg GetBookDemandPredictionParams) ([]GetBookDemandPredictionRow, error)
 	GetBookUtilizationReport(ctx context.Context, arg GetBookUtilizationReportParams) ([]GetBookUtilizationReportRow, error)
@@ -223,6 +226,8 @@ type Querier interface {
 	HasActiveReservationsByOtherStudents(ctx context.Context, arg HasActiveReservationsByOtherStudentsParams) (bool, error)
 	// Atomically increment available copies.
 	IncrementBookAvailability(ctx context.Context, id int32) (pgtype.Int4, error)
+	// Increment total_copies by a given amount
+	IncrementTotalCopies(ctx context.Context, arg IncrementTotalCopiesParams) error
 	ListActiveBorrowings(ctx context.Context, arg ListActiveBorrowingsParams) ([]ListActiveBorrowingsRow, error)
 	ListActiveReservations(ctx context.Context) ([]ListActiveReservationsRow, error)
 	// Notification-related queries for Phase 7.2
@@ -297,6 +302,7 @@ type Querier interface {
 	ResetStuckQueueItems(ctx context.Context, processingStartedAt pgtype.Timestamp) error
 	ReturnBook(ctx context.Context, arg ReturnBookParams) (Transaction, error)
 	SearchAuthors(ctx context.Context, arg SearchAuthorsParams) ([]Author, error)
+	SearchBookCopies(ctx context.Context, arg SearchBookCopiesParams) ([]BookCopy, error)
 	SearchBooks(ctx context.Context, arg SearchBooksParams) ([]Book, error)
 	SearchBooksByGenre(ctx context.Context, arg SearchBooksByGenreParams) ([]Book, error)
 	SearchLanguages(ctx context.Context, arg SearchLanguagesParams) ([]Language, error)
@@ -308,6 +314,8 @@ type Querier interface {
 	SoftDeleteBook(ctx context.Context, id int32) error
 	SoftDeleteStudent(ctx context.Context, id int32) error
 	SoftDeleteUser(ctx context.Context, id int32) error
+	// Sync total_copies and available_copies from book_copies table
+	SyncBookCopyCounts(ctx context.Context, id int32) error
 	UpdateAuthor(ctx context.Context, arg UpdateAuthorParams) (Author, error)
 	UpdateBook(ctx context.Context, arg UpdateBookParams) (Book, error)
 	UpdateBookAvailability(ctx context.Context, arg UpdateBookAvailabilityParams) error

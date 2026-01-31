@@ -109,3 +109,24 @@ UPDATE books
 SET available_copies = available_copies + 1, updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING available_copies;
+
+-- name: SyncBookCopyCounts :exec
+-- Sync total_copies and available_copies from book_copies table
+UPDATE books b
+SET
+    total_copies = (SELECT COUNT(*) FROM book_copies WHERE book_id = b.id),
+    available_copies = (SELECT COUNT(*) FROM book_copies WHERE book_id = b.id AND status = 'available'),
+    updated_at = NOW()
+WHERE b.id = $1 AND b.deleted_at IS NULL;
+
+-- name: IncrementTotalCopies :exec
+-- Increment total_copies by a given amount
+UPDATE books
+SET total_copies = total_copies + $2, available_copies = available_copies + $2, updated_at = NOW()
+WHERE id = $1 AND deleted_at IS NULL;
+
+-- name: DecrementTotalCopies :exec
+-- Decrement total_copies by 1 (when a copy is deleted)
+UPDATE books
+SET total_copies = GREATEST(total_copies - 1, 0), updated_at = NOW()
+WHERE id = $1 AND deleted_at IS NULL;

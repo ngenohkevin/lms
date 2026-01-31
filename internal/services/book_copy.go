@@ -23,6 +23,14 @@ type BookCopyQuerier interface {
 	UpdateBookCopyCondition(ctx context.Context, arg queries.UpdateBookCopyConditionParams) (queries.BookCopy, error)
 	DeleteBookCopy(ctx context.Context, id int32) error
 	ListBookCopiesByStatus(ctx context.Context, arg queries.ListBookCopiesByStatusParams) ([]queries.BookCopy, error)
+	SearchBookCopies(ctx context.Context, arg queries.SearchBookCopiesParams) ([]queries.BookCopy, error)
+}
+
+// BookCopyCountSyncer defines the interface for syncing book copy counts
+type BookCopyCountSyncer interface {
+	SyncBookCopyCounts(ctx context.Context, id int32) error
+	IncrementTotalCopies(ctx context.Context, arg queries.IncrementTotalCopiesParams) error
+	DecrementTotalCopies(ctx context.Context, id int32) error
 }
 
 // BookCopyServiceInterface defines the interface for book copy service operations
@@ -31,6 +39,7 @@ type BookCopyServiceInterface interface {
 	GetBookCopyByID(ctx context.Context, id int32) (*models.BookCopyResponse, error)
 	GetBookCopyByBarcode(ctx context.Context, barcode string) (*models.BookCopyResponse, error)
 	ListBookCopies(ctx context.Context, bookID int32) ([]models.BookCopyResponse, error)
+	SearchBookCopies(ctx context.Context, bookID int32, query string) ([]models.BookCopyResponse, error)
 	UpdateBookCopy(ctx context.Context, id int32, req models.UpdateBookCopyRequest) (*models.BookCopyResponse, error)
 	UpdateBookCopyStatus(ctx context.Context, id int32, status string) (*models.BookCopyResponse, error)
 	DeleteBookCopy(ctx context.Context, id int32) error
@@ -39,13 +48,15 @@ type BookCopyServiceInterface interface {
 
 // BookCopyService handles book copy-related business logic
 type BookCopyService struct {
-	querier BookCopyQuerier
+	querier    BookCopyQuerier
+	copySyncer BookCopyCountSyncer
 }
 
 // NewBookCopyService creates a new book copy service
-func NewBookCopyService(querier BookCopyQuerier) *BookCopyService {
+func NewBookCopyService(querier BookCopyQuerier, copySyncer BookCopyCountSyncer) *BookCopyService {
 	return &BookCopyService{
-		querier: querier,
+		querier:    querier,
+		copySyncer: copySyncer,
 	}
 }
 
@@ -75,6 +86,10 @@ func (s *BookCopyService) CreateBookCopy(ctx context.Context, req models.CreateB
 		if err != nil {
 			return nil, fmt.Errorf("invalid acquisition_date format: %w", err)
 		}
+		// Validate acquisition date is not in the future
+		if t.After(time.Now()) {
+			return nil, fmt.Errorf("validation error: acquisition_date cannot be in the future")
+		}
 		params.AcquisitionDate = pgtype.Date{Time: t, Valid: true}
 	}
 
@@ -91,6 +106,11 @@ func (s *BookCopyService) CreateBookCopy(ctx context.Context, req models.CreateB
 	copy, err := s.querier.CreateBookCopy(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create book copy: %w", err)
+	}
+
+	// Auto-sync book's total_copies and available_copies
+	if s.copySyncer != nil {
+		_ = s.copySyncer.SyncBookCopyCounts(ctx, req.BookID)
 	}
 
 	return bookCopyToResponse(&copy), nil
@@ -170,6 +190,10 @@ func (s *BookCopyService) UpdateBookCopy(ctx context.Context, id int32, req mode
 			if err != nil {
 				return nil, fmt.Errorf("invalid acquisition_date format: %w", err)
 			}
+			// Validate acquisition date is not in the future
+			if t.After(time.Now()) {
+				return nil, fmt.Errorf("validation error: acquisition_date cannot be in the future")
+			}
 			params.AcquisitionDate = pgtype.Date{Time: t, Valid: true}
 		}
 	}
@@ -189,11 +213,22 @@ func (s *BookCopyService) UpdateBookCopy(ctx context.Context, id int32, req mode
 		return nil, fmt.Errorf("failed to update book copy: %w", err)
 	}
 
+	// Auto-sync book's available_copies if status changed
+	if req.Status != nil && s.copySyncer != nil {
+		_ = s.copySyncer.SyncBookCopyCounts(ctx, existing.BookID)
+	}
+
 	return bookCopyToResponse(&copy), nil
 }
 
 // UpdateBookCopyStatus updates only the status of a book copy
 func (s *BookCopyService) UpdateBookCopyStatus(ctx context.Context, id int32, status string) (*models.BookCopyResponse, error) {
+	// Get existing copy to know the book ID for syncing
+	existing, err := s.querier.GetBookCopyByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get existing copy: %w", err)
+	}
+
 	copy, err := s.querier.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
 		ID:     id,
 		Status: pgtype.Text{String: status, Valid: true},
@@ -201,16 +236,51 @@ func (s *BookCopyService) UpdateBookCopyStatus(ctx context.Context, id int32, st
 	if err != nil {
 		return nil, fmt.Errorf("failed to update book copy status: %w", err)
 	}
+
+	// Auto-sync book's available_copies
+	if s.copySyncer != nil {
+		_ = s.copySyncer.SyncBookCopyCounts(ctx, existing.BookID)
+	}
+
 	return bookCopyToResponse(&copy), nil
 }
 
 // DeleteBookCopy deletes a book copy
 func (s *BookCopyService) DeleteBookCopy(ctx context.Context, id int32) error {
-	err := s.querier.DeleteBookCopy(ctx, id)
+	// Get the copy first to know which book to sync
+	existing, err := s.querier.GetBookCopyByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get book copy: %w", err)
+	}
+
+	err = s.querier.DeleteBookCopy(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete book copy: %w", err)
 	}
+
+	// Auto-sync book's total_copies and available_copies
+	if s.copySyncer != nil {
+		_ = s.copySyncer.SyncBookCopyCounts(ctx, existing.BookID)
+	}
+
 	return nil
+}
+
+// SearchBookCopies searches for copies of a book by copy number, barcode, or notes
+func (s *BookCopyService) SearchBookCopies(ctx context.Context, bookID int32, query string) ([]models.BookCopyResponse, error) {
+	copies, err := s.querier.SearchBookCopies(ctx, queries.SearchBookCopiesParams{
+		BookID:  bookID,
+		Column2: pgtype.Text{String: query, Valid: true},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to search book copies: %w", err)
+	}
+
+	responses := make([]models.BookCopyResponse, len(copies))
+	for i, copy := range copies {
+		responses[i] = *bookCopyToResponse(&copy)
+	}
+	return responses, nil
 }
 
 // GenerateCopies creates multiple copies for a book based on total_copies count
@@ -245,6 +315,11 @@ func (s *BookCopyService) GenerateCopies(ctx context.Context, bookID int32, coun
 		}
 
 		copies = append(copies, *bookCopyToResponse(&copy))
+	}
+
+	// Auto-sync book's total_copies and available_copies
+	if s.copySyncer != nil {
+		_ = s.copySyncer.SyncBookCopyCounts(ctx, bookID)
 	}
 
 	return copies, nil

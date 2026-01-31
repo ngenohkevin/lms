@@ -151,11 +151,12 @@ func (h *BookCopyHandler) GetBookCopy(c *gin.Context) {
 
 // ListBookCopies lists all copies of a book
 // @Summary List all copies of a book
-// @Description Get all copies of a specific book
+// @Description Get all copies of a specific book. Supports search via query parameter.
 // @Tags book-copies
 // @Accept json
 // @Produce json
 // @Param id path int true "Book ID"
+// @Param q query string false "Search query (searches copy number, barcode, notes)"
 // @Success 200 {object} SuccessResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
@@ -174,7 +175,16 @@ func (h *BookCopyHandler) ListBookCopies(c *gin.Context) {
 		return
 	}
 
-	copies, err := h.bookCopyService.ListBookCopies(c.Request.Context(), int32(bookID))
+	// Check for search query
+	searchQuery := c.Query("q")
+	var copies []models.BookCopyResponse
+
+	if searchQuery != "" {
+		copies, err = h.bookCopyService.SearchBookCopies(c.Request.Context(), int32(bookID), searchQuery)
+	} else {
+		copies, err = h.bookCopyService.ListBookCopies(c.Request.Context(), int32(bookID))
+	}
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Success: false,

@@ -50,3 +50,17 @@ WHERE id = $1;
 SELECT * FROM book_copies
 WHERE book_id = $1 AND status = $2
 ORDER BY copy_number;
+
+-- name: SearchBookCopies :many
+SELECT * FROM book_copies
+WHERE book_id = $1
+AND (
+    copy_number ILIKE '%' || $2 || '%'
+    OR barcode ILIKE '%' || $2 || '%'
+    OR notes ILIKE '%' || $2 || '%'
+)
+ORDER BY copy_number;
+
+-- name: GetBookCopyByBookID :one
+SELECT * FROM book_copies
+WHERE book_id = $1 AND id = $2;
