@@ -262,57 +262,90 @@ func (s *TransactionService) BorrowBookWithCopy(ctx context.Context, req BorrowB
 		copy, err := s.queries.GetFirstAvailableCopy(ctx, bookID)
 		if err != nil {
 			if err == sql.ErrNoRows {
-				return nil, fmt.Errorf("no available copies")
+				// No book copies exist - fall back to legacy mode
+				selectedCopy = nil
+			} else {
+				return nil, fmt.Errorf("failed to get available copy: %w", err)
 			}
-			return nil, fmt.Errorf("failed to get available copy: %w", err)
+		} else {
+			selectedCopy = &copy
 		}
-		selectedCopy = &copy
 	}
 
 	// Calculate due date based on student year and borrowing rules
 	dueDate := s.calculateDueDate(student)
 
-	// Update copy status to "borrowed"
-	_, err = s.queries.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
-		ID:     selectedCopy.ID,
-		Status: pgtype.Text{String: "borrowed", Valid: true},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to update copy status: %w", err)
-	}
+	var transaction queries.Transaction
 
-	// Create transaction with copy_id
-	transaction, err := s.queries.CreateTransactionWithCopy(ctx, queries.CreateTransactionWithCopyParams{
-		StudentID:       req.StudentID,
-		BookID:          bookID,
-		CopyID:          pgtype.Int4{Int32: selectedCopy.ID, Valid: true},
-		TransactionType: "borrow",
-		DueDate:         pgtype.Timestamp{Time: dueDate, Valid: true},
-		LibrarianID:     pgtype.Int4{Int32: req.LibrarianID, Valid: true},
-		Notes:           pgtype.Text{String: req.Notes, Valid: req.Notes != ""},
-	})
-	if err != nil {
-		// Rollback: revert copy status
-		_, _ = s.queries.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
+	if selectedCopy != nil {
+		// Copy-level tracking mode
+		// Update copy status to "borrowed"
+		_, err = s.queries.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
 			ID:     selectedCopy.ID,
-			Status: pgtype.Text{String: "available", Valid: true},
+			Status: pgtype.Text{String: "borrowed", Valid: true},
 		})
-		return nil, fmt.Errorf("failed to create transaction: %w", err)
+		if err != nil {
+			return nil, fmt.Errorf("failed to update copy status: %w", err)
+		}
+
+		// Create transaction with copy_id
+		transaction, err = s.queries.CreateTransactionWithCopy(ctx, queries.CreateTransactionWithCopyParams{
+			StudentID:       req.StudentID,
+			BookID:          bookID,
+			CopyID:          pgtype.Int4{Int32: selectedCopy.ID, Valid: true},
+			TransactionType: "borrow",
+			DueDate:         pgtype.Timestamp{Time: dueDate, Valid: true},
+			LibrarianID:     pgtype.Int4{Int32: req.LibrarianID, Valid: true},
+			Notes:           pgtype.Text{String: req.Notes, Valid: req.Notes != ""},
+		})
+		if err != nil {
+			// Rollback: revert copy status
+			_, _ = s.queries.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
+				ID:     selectedCopy.ID,
+				Status: pgtype.Text{String: "available", Valid: true},
+			})
+			return nil, fmt.Errorf("failed to create transaction: %w", err)
+		}
+
+		// Sync book's available_copies count
+		_ = s.queries.SyncBookCopyCounts(ctx, bookID)
+	} else {
+		// Legacy mode - no book copies exist, use old availability tracking
+		_, err = s.queries.DecrementBookAvailability(ctx, bookID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to update book availability: %w", err)
+		}
+
+		// Create transaction without copy_id
+		transaction, err = s.queries.CreateTransaction(ctx, queries.CreateTransactionParams{
+			StudentID:       req.StudentID,
+			BookID:          bookID,
+			TransactionType: "borrow",
+			DueDate:         pgtype.Timestamp{Time: dueDate, Valid: true},
+			LibrarianID:     pgtype.Int4{Int32: req.LibrarianID, Valid: true},
+			Notes:           pgtype.Text{String: req.Notes, Valid: req.Notes != ""},
+		})
+		if err != nil {
+			// Rollback: increment availability back
+			_, _ = s.queries.IncrementBookAvailability(ctx, bookID)
+			return nil, fmt.Errorf("failed to create transaction: %w", err)
+		}
 	}
 
-	// Sync book's available_copies count
-	_ = s.queries.SyncBookCopyCounts(ctx, bookID)
-
-	// Build response with copy info
+	// Build response
 	response := s.convertToTransactionResponse(transaction)
-	response.CopyID = &selectedCopy.ID
-	copyNumber := selectedCopy.CopyNumber
-	response.CopyNumber = &copyNumber
-	if selectedCopy.Barcode.Valid {
-		response.CopyBarcode = &selectedCopy.Barcode.String
-	}
-	if selectedCopy.Condition.Valid {
-		response.CopyCondition = &selectedCopy.Condition.String
+
+	// Add copy info if using copy-level tracking
+	if selectedCopy != nil {
+		response.CopyID = &selectedCopy.ID
+		copyNumber := selectedCopy.CopyNumber
+		response.CopyNumber = &copyNumber
+		if selectedCopy.Barcode.Valid {
+			response.CopyBarcode = &selectedCopy.Barcode.String
+		}
+		if selectedCopy.Condition.Valid {
+			response.CopyCondition = &selectedCopy.Condition.String
+		}
 	}
 
 	return response, nil
