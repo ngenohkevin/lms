@@ -140,7 +140,7 @@ func TestSuspendStudent_StoresReason(t *testing.T) {
 	router := gin.New()
 	router.POST("/students/:id/suspend", func(c *gin.Context) {
 		var req models.SuspendStudentRequest
-		c.ShouldBindJSON(&req)
+		_ = c.ShouldBindJSON(&req)
 
 		student := createMockStudentResponse(1, "suspended")
 		student.SuspensionReason = req.Reason
@@ -162,7 +162,7 @@ func TestSuspendStudent_StoresReason(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var result map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &result)
+	_ = json.Unmarshal(w.Body.Bytes(), &result)
 
 	data := result["data"].(map[string]interface{})
 	assert.Equal(t, "suspended", data["status"])
@@ -217,7 +217,7 @@ func TestReactivateStudent_ClearsReason(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var result map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &result)
+	_ = json.Unmarshal(w.Body.Bytes(), &result)
 
 	data := result["data"].(map[string]interface{})
 	assert.Equal(t, "active", data["status"])
@@ -232,7 +232,7 @@ func TestGraduateStudent_Success(t *testing.T) {
 	router := gin.New()
 	router.POST("/students/:id/graduate", func(c *gin.Context) {
 		var req models.GraduateStudentRequest
-		c.ShouldBindJSON(&req)
+		_ = c.ShouldBindJSON(&req)
 
 		student := createMockStudentResponse(1, "graduated")
 		if req.GraduatedAt != "" {
@@ -270,7 +270,7 @@ func TestGraduateStudent_DefaultsToNow(t *testing.T) {
 	router := gin.New()
 	router.POST("/students/:id/graduate", func(c *gin.Context) {
 		var req models.GraduateStudentRequest
-		c.ShouldBindJSON(&req)
+		_ = c.ShouldBindJSON(&req)
 
 		student := createMockStudentResponse(1, "graduated")
 		// When no date provided, use current timestamp
@@ -291,7 +291,7 @@ func TestGraduateStudent_DefaultsToNow(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var result map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &result)
+	_ = json.Unmarshal(w.Body.Bytes(), &result)
 
 	data := result["data"].(map[string]interface{})
 	assert.Equal(t, "graduated", data["status"])
@@ -347,7 +347,7 @@ func TestUpdateAdminNotes_ClearNotes(t *testing.T) {
 	router := gin.New()
 	router.PUT("/students/:id/admin-notes", func(c *gin.Context) {
 		var req models.UpdateAdminNotesRequest
-		c.ShouldBindJSON(&req)
+		_ = c.ShouldBindJSON(&req)
 
 		student := createMockStudentResponse(1, "active")
 		student.AdminNotes = req.AdminNotes // Will be empty
@@ -478,7 +478,7 @@ func TestStatusWorkflow_ActiveToSuspended(t *testing.T) {
 	router := gin.New()
 	router.POST("/students/:id/suspend", func(c *gin.Context) {
 		var req models.SuspendStudentRequest
-		c.ShouldBindJSON(&req)
+		_ = c.ShouldBindJSON(&req)
 
 		student := createMockStudentResponse(1, "suspended")
 		student.SuspensionReason = req.Reason
@@ -496,7 +496,7 @@ func TestStatusWorkflow_ActiveToSuspended(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	var result map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &result)
+	_ = json.Unmarshal(w.Body.Bytes(), &result)
 
 	data := result["data"].(map[string]interface{})
 	assert.Equal(t, "suspended", data["status"])
@@ -519,7 +519,7 @@ func TestStatusWorkflow_SuspendedToActive(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	var result map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &result)
+	_ = json.Unmarshal(w.Body.Bytes(), &result)
 
 	data := result["data"].(map[string]interface{})
 	assert.Equal(t, "active", data["status"])
@@ -543,7 +543,7 @@ func TestStatusWorkflow_ActiveToGraduated(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	var result map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &result)
+	_ = json.Unmarshal(w.Body.Bytes(), &result)
 
 	data := result["data"].(map[string]interface{})
 	assert.Equal(t, "graduated", data["status"])
