@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -547,12 +546,12 @@ func TestSearchTransactions_OverdueCalculation(t *testing.T) {
 	book := createTestBook(t, querier, "Overdue Test Book", "Author", "BK_OC_"+suffix, 1)
 
 	// Create a transaction
-	tx, err := transactionService.BorrowBook(ctx, student.ID, book.ID, librarian.ID, "Overdue test")
+	createdTx, err := transactionService.BorrowBook(ctx, student.ID, book.ID, librarian.ID, "Overdue test")
 	require.NoError(t, err)
 
 	// Manually update the due date to be in the past
 	pastDueDate := time.Now().Add(-5 * 24 * time.Hour) // 5 days ago
-	_, err = db.Exec(ctx, "UPDATE transactions SET due_date = $1 WHERE id = $2", pastDueDate, tx.ID)
+	_, err = db.Exec(ctx, "UPDATE transactions SET due_date = $1 WHERE id = $2", pastDueDate, createdTx.ID)
 	require.NoError(t, err)
 
 	// Search and check overdue calculation
@@ -567,7 +566,7 @@ func TestSearchTransactions_OverdueCalculation(t *testing.T) {
 
 		found := false
 		for _, tx := range result.Transactions {
-			if tx.ID == tx.ID && tx.StudentID == student.ID {
+			if tx.ID == createdTx.ID && tx.StudentID == student.ID {
 				found = true
 				assert.Equal(t, "overdue", tx.Status)
 				assert.GreaterOrEqual(t, tx.DaysOverdue, 4) // At least 4-5 days overdue
@@ -576,16 +575,4 @@ func TestSearchTransactions_OverdueCalculation(t *testing.T) {
 		}
 		assert.True(t, found, "Expected to find the overdue transaction")
 	})
-}
-
-// Helper to create test user specifically for these tests
-func createTestLibrarianUnique(t *testing.T, querier *queries.Queries, suffix string) queries.User {
-	user, err := querier.CreateUser(context.Background(), queries.CreateUserParams{
-		Username:     "lib_" + suffix,
-		Email:        "lib." + suffix + "@example.com",
-		PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
-		Role:         pgtype.Text{String: "librarian", Valid: true},
-	})
-	require.NoError(t, err)
-	return user
 }
