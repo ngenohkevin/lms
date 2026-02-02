@@ -1,7 +1,7 @@
 -- Migration: Add permissions for departments, academic years, and student status management
 
 -- Insert new permissions
-INSERT INTO permissions (code, name, module) VALUES
+INSERT INTO permissions (code, name, category) VALUES
     ('departments.view', 'View Departments', 'departments'),
     ('departments.manage', 'Manage Departments', 'departments'),
     ('academic_years.view', 'View Academic Years', 'academic_years'),
