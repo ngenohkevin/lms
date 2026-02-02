@@ -1156,30 +1156,30 @@ type TransactionSearchParams struct {
 
 // TransactionSearchResult represents a transaction search result with enriched data
 type TransactionSearchResult struct {
-	ID               int32            `json:"id"`
-	StudentID        int32            `json:"student_id"`
-	BookID           int32            `json:"book_id"`
-	TransactionType  string           `json:"transaction_type"`
-	TransactionDate  time.Time        `json:"transaction_date"`
-	DueDate          time.Time        `json:"due_date"`
-	ReturnedDate     *time.Time       `json:"returned_date,omitempty"`
-	LibrarianID      *int32           `json:"librarian_id,omitempty"`
-	FineAmount       decimal.Decimal  `json:"fine_amount"`
-	FinePaid         bool             `json:"fine_paid"`
-	Notes            string           `json:"notes,omitempty"`
-	ReturnCondition  string           `json:"return_condition,omitempty"`
-	ConditionNotes   string           `json:"condition_notes,omitempty"`
-	Status           string           `json:"status"` // Computed: active, returned, overdue
-	DaysOverdue      int              `json:"days_overdue,omitempty"`
-	StudentName      string           `json:"student_name"`
-	StudentCode      string           `json:"student_code"`
-	BookTitle        string           `json:"book_title"`
-	BookAuthor       string           `json:"book_author"`
-	BookCode         string           `json:"book_code"`
-	CopyID           *int32           `json:"copy_id,omitempty"`
-	CopyNumber       *string          `json:"copy_number,omitempty"`
-	CopyBarcode      *string          `json:"copy_barcode,omitempty"`
-	CopyCondition    *string          `json:"copy_condition,omitempty"`
+	ID              int32           `json:"id"`
+	StudentID       int32           `json:"student_id"`
+	BookID          int32           `json:"book_id"`
+	TransactionType string          `json:"transaction_type"`
+	TransactionDate time.Time       `json:"transaction_date"`
+	DueDate         time.Time       `json:"due_date"`
+	ReturnedDate    *time.Time      `json:"returned_date,omitempty"`
+	LibrarianID     *int32          `json:"librarian_id,omitempty"`
+	FineAmount      decimal.Decimal `json:"fine_amount"`
+	FinePaid        bool            `json:"fine_paid"`
+	Notes           string          `json:"notes,omitempty"`
+	ReturnCondition string          `json:"return_condition,omitempty"`
+	ConditionNotes  string          `json:"condition_notes,omitempty"`
+	Status          string          `json:"status"` // Computed: active, returned, overdue
+	DaysOverdue     int             `json:"days_overdue,omitempty"`
+	StudentName     string          `json:"student_name"`
+	StudentCode     string          `json:"student_code"`
+	BookTitle       string          `json:"book_title"`
+	BookAuthor      string          `json:"book_author"`
+	BookCode        string          `json:"book_code"`
+	CopyID          *int32          `json:"copy_id,omitempty"`
+	CopyNumber      *string         `json:"copy_number,omitempty"`
+	CopyBarcode     *string         `json:"copy_barcode,omitempty"`
+	CopyCondition   *string         `json:"copy_condition,omitempty"`
 }
 
 // TransactionSearchResponse represents the search response

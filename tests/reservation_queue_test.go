@@ -87,8 +87,8 @@ func TestGetQueuePosition_NotInQueue(t *testing.T) {
 	// Student 2 has NOT reserved the book
 	pos, err := reservationService.GetQueuePosition(ctx, student2.ID, book.ID)
 	require.NoError(t, err)
-	assert.Equal(t, 0, pos.Position)        // Not in queue
-	assert.Equal(t, 1, pos.TotalInQueue)    // But queue has 1 person
+	assert.Equal(t, 0, pos.Position)     // Not in queue
+	assert.Equal(t, 1, pos.TotalInQueue) // But queue has 1 person
 	assert.False(t, pos.HasReserved)
 }
 
