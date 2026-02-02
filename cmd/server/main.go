@@ -502,6 +502,7 @@ func setupRoutes(
 			{
 				// View routes
 				reservations.GET("", requirePerm("reservations.view"), reservationHandler.GetAllReservations)
+				reservations.GET("/queue-position", requirePerm("reservations.view"), reservationHandler.GetQueuePosition)
 				reservations.GET("/student/:studentId", requirePerm("reservations.view"), reservationHandler.GetStudentReservations)
 				reservations.GET("/book/:bookId", requirePerm("reservations.view"), reservationHandler.GetBookReservations)
 				reservations.GET("/book/:bookId/next", requirePerm("reservations.view"), reservationHandler.GetNextReservation)
@@ -514,6 +515,7 @@ func setupRoutes(
 				reservations.GET("/:id", requirePerm("reservations.view"), reservationHandler.GetReservation)
 				reservations.DELETE("/:id", requirePerm("reservations.manage"), reservationHandler.CancelReservation)
 				reservations.POST("/:id/fulfill", requirePerm("reservations.manage"), reservationHandler.FulfillReservation)
+				reservations.POST("/:id/ready", requirePerm("reservations.manage"), reservationHandler.MarkReservationReady)
 			}
 
 			// Notification routes

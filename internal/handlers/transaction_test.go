@@ -131,6 +131,14 @@ func (m *MockTransactionService) GetTransactionStats(ctx context.Context) (*serv
 	return args.Get(0).(*services.TransactionStatsResponse), args.Error(1)
 }
 
+func (m *MockTransactionService) SearchTransactions(ctx context.Context, params services.TransactionSearchParams) (*services.TransactionSearchResponse, error) {
+	args := m.Called(ctx, params)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*services.TransactionSearchResponse), args.Error(1)
+}
+
 // Test helper functions
 func setupTransactionRouter() (*gin.Engine, *MockTransactionService) {
 	gin.SetMode(gin.TestMode)

@@ -34,6 +34,8 @@ type TransactionServiceInterface interface {
 	GetTransactionStats(ctx context.Context) (*services.TransactionStatsResponse, error)
 	// Copy-level tracking methods
 	ScanBarcode(ctx context.Context, barcode string) (*services.BarcodeScanResult, error)
+	// Search methods
+	SearchTransactions(ctx context.Context, params services.TransactionSearchParams) (*services.TransactionSearchResponse, error)
 }
 
 // TransactionHandler handles transaction-related HTTP requests
@@ -623,39 +625,81 @@ func (h *TransactionHandler) GetRenewalStatistics(c *gin.Context) {
 	})
 }
 
-// ListTransactions lists all transactions with pagination
+// ListTransactions lists all transactions with pagination and search
 // @Summary List all transactions
-// @Description Get a paginated list of all transactions
+// @Description Get a paginated list of all transactions with optional search and filters
 // @Tags transactions
 // @Produce json
 // @Param page query int false "Page number" default(1)
 // @Param limit query int false "Items per page" default(20)
-// @Success 200 {object} SuccessResponse{data=services.TransactionListResponse}
+// @Param query query string false "Search query (book title, author, student name, barcode)"
+// @Param student_id query int false "Filter by student ID"
+// @Param book_id query int false "Filter by book ID"
+// @Param type query string false "Filter by type (borrow, return, renew)"
+// @Param status query string false "Filter by status (active, returned, overdue)"
+// @Param from_date query string false "Filter by date range start (RFC3339)"
+// @Param to_date query string false "Filter by date range end (RFC3339)"
+// @Param sort_by query string false "Sort by (transaction_date, due_date)"
+// @Param sort_order query string false "Sort order (asc, desc)"
+// @Success 200 {object} SuccessResponse{data=services.TransactionSearchResponse}
 // @Failure 500 {object} ErrorResponse
 // @Router /api/v1/transactions [get]
 func (h *TransactionHandler) ListTransactions(c *gin.Context) {
-	page := 1
-	limit := 20
+	params := services.TransactionSearchParams{
+		Page:      1,
+		Limit:     20,
+		Query:     c.Query("query"),
+		Type:      c.Query("type"),
+		Status:    c.Query("status"),
+		SortBy:    c.Query("sort_by"),
+		SortOrder: c.Query("sort_order"),
+	}
 
 	if pageStr := c.Query("page"); pageStr != "" {
 		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
+			params.Page = int32(p)
 		}
 	}
 
 	if limitStr := c.Query("limit"); limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
-			limit = l
+			params.Limit = int32(l)
 		}
 	}
 
-	result, err := h.transactionService.ListAllTransactions(c.Request.Context(), int32(page), int32(limit))
+	if studentIDStr := c.Query("student_id"); studentIDStr != "" {
+		if id, err := strconv.Atoi(studentIDStr); err == nil {
+			studentID := int32(id)
+			params.StudentID = &studentID
+		}
+	}
+
+	if bookIDStr := c.Query("book_id"); bookIDStr != "" {
+		if id, err := strconv.Atoi(bookIDStr); err == nil {
+			bookID := int32(id)
+			params.BookID = &bookID
+		}
+	}
+
+	if fromDateStr := c.Query("from_date"); fromDateStr != "" {
+		if t, err := time.Parse(time.RFC3339, fromDateStr); err == nil {
+			params.FromDate = &t
+		}
+	}
+
+	if toDateStr := c.Query("to_date"); toDateStr != "" {
+		if t, err := time.Parse(time.RFC3339, toDateStr); err == nil {
+			params.ToDate = &t
+		}
+	}
+
+	result, err := h.transactionService.SearchTransactions(c.Request.Context(), params)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Success: false,
 			Error: ErrorDetail{
 				Code:    "INTERNAL_ERROR",
-				Message: "Failed to list transactions",
+				Message: "Failed to search transactions",
 				Details: err.Error(),
 			},
 		})

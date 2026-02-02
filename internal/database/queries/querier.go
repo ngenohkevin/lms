@@ -61,6 +61,7 @@ type Querier interface {
 	CountRenewalsByStudentAndBook(ctx context.Context, arg CountRenewalsByStudentAndBookParams) (int64, error)
 	CountSearchBooks(ctx context.Context, title string) (int64, error)
 	CountSearchLanguages(ctx context.Context, arg CountSearchLanguagesParams) (int64, error)
+	CountSearchTransactions(ctx context.Context, arg CountSearchTransactionsParams) (int64, error)
 	CountSearchUsers(ctx context.Context, arg CountSearchUsersParams) (int64, error)
 	CountSeries(ctx context.Context) (int64, error)
 	CountSeriesBooks(ctx context.Context, seriesID pgtype.Int4) (int64, error)
@@ -319,6 +320,7 @@ type Querier interface {
 	SearchSeries(ctx context.Context, arg SearchSeriesParams) ([]BookSeries, error)
 	SearchStudents(ctx context.Context, arg SearchStudentsParams) ([]Student, error)
 	SearchStudentsIncludingDeleted(ctx context.Context, arg SearchStudentsIncludingDeletedParams) ([]Student, error)
+	SearchTransactions(ctx context.Context, arg SearchTransactionsParams) ([]SearchTransactionsRow, error)
 	SearchUsers(ctx context.Context, arg SearchUsersParams) ([]User, error)
 	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) error
 	SoftDeleteBook(ctx context.Context, id int32) error

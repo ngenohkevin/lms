@@ -11,6 +11,8 @@ type ReservationServiceInterface interface {
 	GetNextReservationForBook(ctx context.Context, bookID int32) (*ReservationResponse, error)
 	FulfillReservation(ctx context.Context, reservationID int32) (*ReservationResponse, error)
 	HasStudentFulfilledReservation(ctx context.Context, studentID, bookID int32) (*ReservationResponse, error)
+	MarkReservationReady(ctx context.Context, reservationID int32) (*ReservationResponse, error)
+	HasStudentReadyReservation(ctx context.Context, studentID, bookID int32) (*ReservationResponse, error)
 }
 
 // NotificationSenderInterface defines the interface for sending book availability notifications
@@ -57,7 +59,9 @@ func (s *EnhancedTransactionService) ReturnBookWithReservationHandling(ctx conte
 	return transaction, nil
 }
 
-// handleReservationFulfillment checks for and fulfills the next reservation for a book
+// handleReservationFulfillment checks for and marks the next reservation as ready for a book
+// Note: We mark as "ready" instead of "fulfilled" - the student must come to the library
+// and the librarian will fulfill when they borrow the book
 func (s *EnhancedTransactionService) handleReservationFulfillment(ctx context.Context, bookID int32) {
 	// Get the next reservation for this book
 	nextReservation, err := s.reservationService.GetNextReservationForBook(ctx, bookID)
@@ -71,21 +75,21 @@ func (s *EnhancedTransactionService) handleReservationFulfillment(ctx context.Co
 		return
 	}
 
-	// Fulfill the reservation
-	_, err = s.reservationService.FulfillReservation(ctx, nextReservation.ID)
+	// Mark the reservation as "ready" (not fulfilled yet - that happens when they borrow)
+	_, err = s.reservationService.MarkReservationReady(ctx, nextReservation.ID)
 	if err != nil {
-		log.Printf("Error fulfilling reservation %d for book %d: %v", nextReservation.ID, bookID, err)
+		log.Printf("Error marking reservation %d as ready for book %d: %v", nextReservation.ID, bookID, err)
 		return
 	}
 
-	log.Printf("Successfully fulfilled reservation %d for book %d (student: %s)",
+	log.Printf("Successfully marked reservation %d as ready for book %d (student: %s)",
 		nextReservation.ID, bookID, nextReservation.StudentName)
 
-	// Send book available notifications to students with active reservations
+	// Send book available notifications to the student with the ready reservation
 	if s.notificationService != nil {
 		if err := s.notificationService.SendBookAvailableNotifications(ctx, bookID); err != nil {
 			log.Printf("Error sending book available notifications for book %d: %v", bookID, err)
-			// Don't fail the reservation fulfillment if notification fails
+			// Don't fail the reservation marking if notification fails
 		} else {
 			log.Printf("Successfully sent book available notifications for book %d", bookID)
 		}
@@ -94,7 +98,22 @@ func (s *EnhancedTransactionService) handleReservationFulfillment(ctx context.Co
 
 // BorrowBookWithReservationCheck processes a book borrowing request with reservation priority check
 func (s *EnhancedTransactionService) BorrowBookWithReservationCheck(ctx context.Context, studentID, bookID, librarianID int32, notes string) (*TransactionResponse, error) {
-	// First check if the student has a fulfilled reservation for this book
+	// First check if the student has a "ready" reservation for this book
+	readyReservation, err := s.reservationService.HasStudentReadyReservation(ctx, studentID, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check ready reservation: %w", err)
+	}
+
+	// If student has a ready reservation, fulfill it and allow borrowing
+	if readyReservation != nil {
+		_, err = s.reservationService.FulfillReservation(ctx, readyReservation.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fulfill reservation: %w", err)
+		}
+		return s.TransactionService.BorrowBook(ctx, studentID, bookID, librarianID, notes)
+	}
+
+	// Check if the student has a fulfilled reservation for this book (legacy support)
 	fulfilledReservation, err := s.reservationService.HasStudentFulfilledReservation(ctx, studentID, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check fulfilled reservation: %w", err)
@@ -116,7 +135,7 @@ func (s *EnhancedTransactionService) BorrowBookWithReservationCheck(ctx context.
 		return nil, fmt.Errorf("book is reserved for another student (reservation #%d). Student should reserve the book instead", nextReservation.ID)
 	}
 
-	// If there's a reservation for this student, fulfill it automatically
+	// If there's an active reservation for this student, fulfill it automatically
 	if nextReservation != nil && nextReservation.StudentID == studentID {
 		_, err = s.reservationService.FulfillReservation(ctx, nextReservation.ID)
 		if err != nil {
@@ -209,7 +228,21 @@ func (s *EnhancedTransactionService) CanStudentBorrowBook(ctx context.Context, s
 		return eligibility, nil
 	}
 
-	// First check if the student has a fulfilled reservation for this book
+	// First check if the student has a "ready" reservation for this book
+	readyReservation, err := s.reservationService.HasStudentReadyReservation(ctx, studentID, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check ready reservation: %w", err)
+	}
+
+	// If student has a ready reservation, they can borrow directly
+	if readyReservation != nil {
+		eligibility.HasReservationForStudent = true
+		eligibility.ReservationID = &readyReservation.ID
+		eligibility.CanBorrow = true
+		return eligibility, nil
+	}
+
+	// Check if the student has a fulfilled reservation for this book (legacy support)
 	fulfilledReservation, err := s.reservationService.HasStudentFulfilledReservation(ctx, studentID, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check fulfilled reservation: %w", err)
@@ -239,7 +272,7 @@ func (s *EnhancedTransactionService) CanStudentBorrowBook(ctx context.Context, s
 		return eligibility, nil
 	}
 
-	// If there's a reservation for this student
+	// If there's an active reservation for this student
 	if nextReservation != nil && nextReservation.StudentID == studentID {
 		eligibility.HasReservationForStudent = true
 		eligibility.ReservationID = &nextReservation.ID

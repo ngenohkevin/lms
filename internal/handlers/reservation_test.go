@@ -84,6 +84,30 @@ func (m *MockReservationService) GetAllReservations(ctx context.Context, limit, 
 	return args.Get(0).([]services.ReservationResponse), args.Error(1)
 }
 
+func (m *MockReservationService) GetQueuePosition(ctx context.Context, studentID, bookID int32) (*services.QueuePositionResponse, error) {
+	args := m.Called(ctx, studentID, bookID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*services.QueuePositionResponse), args.Error(1)
+}
+
+func (m *MockReservationService) MarkReservationReady(ctx context.Context, reservationID int32) (*services.ReservationResponse, error) {
+	args := m.Called(ctx, reservationID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*services.ReservationResponse), args.Error(1)
+}
+
+func (m *MockReservationService) HasStudentReadyReservation(ctx context.Context, studentID, bookID int32) (*services.ReservationResponse, error) {
+	args := m.Called(ctx, studentID, bookID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*services.ReservationResponse), args.Error(1)
+}
+
 func TestNewReservationHandler(t *testing.T) {
 	mockService := &MockReservationService{}
 	handler := NewReservationHandler(mockService)

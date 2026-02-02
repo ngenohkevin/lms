@@ -22,6 +22,8 @@ type ReservationServiceInterface interface {
 	GetNextReservationForBook(ctx context.Context, bookID int32) (*services.ReservationResponse, error)
 	ExpireReservations(ctx context.Context) (int, error)
 	GetAllReservations(ctx context.Context, limit, offset int32) ([]services.ReservationResponse, error)
+	GetQueuePosition(ctx context.Context, studentID, bookID int32) (*services.QueuePositionResponse, error)
+	MarkReservationReady(ctx context.Context, reservationID int32) (*services.ReservationResponse, error)
 }
 
 // ReservationHandler handles reservation-related HTTP requests
@@ -432,6 +434,126 @@ func (h *ReservationHandler) GetAllReservations(c *gin.Context) {
 		Success: true,
 		Data:    response,
 		Message: "Reservations retrieved successfully",
+	})
+}
+
+// GetQueuePosition handles getting a student's queue position for a book reservation
+// @Summary Get queue position
+// @Description Get a student's position in the reservation queue for a specific book
+// @Tags reservations
+// @Produce json
+// @Param book_id query int true "Book ID"
+// @Param student_id query int true "Student ID"
+// @Success 200 {object} SuccessResponse{data=models.QueuePositionResponse}
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/reservations/queue-position [get]
+func (h *ReservationHandler) GetQueuePosition(c *gin.Context) {
+	bookIDStr := c.Query("book_id")
+	studentIDStr := c.Query("student_id")
+
+	if bookIDStr == "" || studentIDStr == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    models.ReservationErrorCodeValidationError,
+				Message: "Both book_id and student_id are required",
+			},
+		})
+		return
+	}
+
+	bookID, err := strconv.ParseInt(bookIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    models.ReservationErrorCodeValidationError,
+				Message: "Invalid book ID",
+				Details: "Book ID must be a valid integer",
+			},
+		})
+		return
+	}
+
+	studentID, err := strconv.ParseInt(studentIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    models.ReservationErrorCodeValidationError,
+				Message: "Invalid student ID",
+				Details: "Student ID must be a valid integer",
+			},
+		})
+		return
+	}
+
+	queuePosition, err := h.reservationService.GetQueuePosition(c.Request.Context(), int32(studentID), int32(bookID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    models.ReservationErrorCodeInternalError,
+				Message: "Failed to get queue position",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    queuePosition,
+		Message: "Queue position retrieved successfully",
+	})
+}
+
+// MarkReservationReady handles marking a reservation as ready for pickup
+// @Summary Mark reservation as ready
+// @Description Mark a reservation as ready when the book becomes available (librarian only)
+// @Tags reservations
+// @Produce json
+// @Param id path int true "Reservation ID"
+// @Success 200 {object} SuccessResponse{data=models.ReservationResponse}
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/reservations/{id}/ready [post]
+func (h *ReservationHandler) MarkReservationReady(c *gin.Context) {
+	idStr := c.Param("id")
+	reservationID, err := strconv.ParseInt(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    models.ReservationErrorCodeValidationError,
+				Message: "Invalid reservation ID",
+				Details: "Reservation ID must be a valid integer",
+			},
+		})
+		return
+	}
+
+	reservation, err := h.reservationService.MarkReservationReady(c.Request.Context(), int32(reservationID))
+	if err != nil {
+		statusCode, errorCode := h.getErrorCodeAndStatus(err)
+		c.JSON(statusCode, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    errorCode,
+				Message: err.Error(),
+			},
+		})
+		return
+	}
+
+	response := convertToReservationResponse(reservation)
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    response,
+		Message: "Reservation marked as ready for pickup",
 	})
 }
 

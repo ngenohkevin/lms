@@ -314,6 +314,41 @@ func (s *ReservationService) HasStudentFulfilledReservation(ctx context.Context,
 	return &response, nil
 }
 
+// HasStudentReadyReservation checks if a student has a "ready" reservation for a book
+func (s *ReservationService) HasStudentReadyReservation(ctx context.Context, studentID, bookID int32) (*ReservationResponse, error) {
+	reservationRow, err := s.queries.GetStudentReservationForBook(ctx, queries.GetStudentReservationForBookParams{
+		StudentID: studentID,
+		BookID:    bookID,
+		Status:    pgtype.Text{String: "ready", Valid: true},
+	})
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // No ready reservation found
+		}
+		return nil, fmt.Errorf("failed to get student reservation: %w", err)
+	}
+
+	// Convert to response
+	response := ReservationResponse{
+		ID:            reservationRow.ID,
+		StudentID:     reservationRow.StudentID,
+		BookID:        reservationRow.BookID,
+		ReservedAt:    reservationRow.ReservedAt.Time,
+		ExpiresAt:     reservationRow.ExpiresAt.Time,
+		Status:        mapStatusToAPI(reservationRow.Status.String),
+		CreatedAt:     reservationRow.CreatedAt.Time,
+		UpdatedAt:     reservationRow.UpdatedAt.Time,
+		StudentName:   reservationRow.FirstName + " " + reservationRow.LastName,
+		StudentIDCode: reservationRow.StudentCode,
+	}
+
+	if reservationRow.FulfilledAt.Valid {
+		response.FulfilledAt = &reservationRow.FulfilledAt.Time
+	}
+
+	return &response, nil
+}
+
 // validateReservationEligibility performs comprehensive validation for reservation eligibility
 func (s *ReservationService) validateReservationEligibility(ctx context.Context, student queries.Student, book queries.Book, studentID, bookID int32) error {
 	// Check if student is active
@@ -377,18 +412,17 @@ func (s *ReservationService) getQueuePosition(ctx context.Context, bookID, reser
 }
 
 // mapStatusToAPI maps internal database status to API-friendly status
-// Database uses: "active", "fulfilled", "cancelled", "expired"
+// Database uses: "active", "ready", "fulfilled", "cancelled", "expired"
 // API returns: "pending", "ready", "fulfilled", "cancelled", "expired"
-// - "active" -> "pending" (waiting in queue)
-// - Note: "ready" status is set when student is notified book is available
+// Status flow: active (pending/waiting) → ready (book available, notified) → fulfilled (borrowed)
 func mapStatusToAPI(dbStatus string) string {
 	switch dbStatus {
 	case "active":
 		return "pending" // "active" in DB means "pending" (waiting in queue)
 	case "ready":
-		return "ready" // Book available, student notified
+		return "ready" // Book available, student notified, ready for pickup
 	case "fulfilled":
-		return "fulfilled"
+		return "fulfilled" // Book has been borrowed
 	case "cancelled":
 		return "cancelled"
 	case "expired":
@@ -535,4 +569,67 @@ func (s *ReservationService) convertToListReservationResponse(reservation querie
 	}
 
 	return response
+}
+
+// QueuePositionResponse represents a student's queue position for a book
+type QueuePositionResponse struct {
+	Position     int  `json:"position"`
+	TotalInQueue int  `json:"total_in_queue"`
+	HasReserved  bool `json:"has_reserved"`
+}
+
+// GetQueuePosition returns a student's position in the reservation queue for a book
+func (s *ReservationService) GetQueuePosition(ctx context.Context, studentID, bookID int32) (*QueuePositionResponse, error) {
+	// Get all active/ready reservations for this book
+	bookReservations, err := s.queries.ListReservationsByBook(ctx, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get book reservations: %w", err)
+	}
+
+	response := &QueuePositionResponse{
+		Position:     0,
+		TotalInQueue: len(bookReservations),
+		HasReserved:  false,
+	}
+
+	// Find the student's position in the queue
+	for i, reservation := range bookReservations {
+		if reservation.StudentID == studentID {
+			response.Position = i + 1 // 1-based position
+			response.HasReserved = true
+			break
+		}
+	}
+
+	return response, nil
+}
+
+// MarkReservationReady marks a reservation as ready for pickup (book is available)
+func (s *ReservationService) MarkReservationReady(ctx context.Context, reservationID int32) (*ReservationResponse, error) {
+	// Get the reservation to verify it exists and is in the correct state
+	reservationRow, err := s.queries.GetReservationByID(ctx, reservationID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("reservation not found")
+		}
+		return nil, fmt.Errorf("failed to get reservation: %w", err)
+	}
+
+	// Verify the reservation is in "active" status
+	if reservationRow.Status.String != "active" {
+		return nil, fmt.Errorf("reservation is not in active status (current: %s)", reservationRow.Status.String)
+	}
+
+	// Update reservation status to "ready"
+	now := time.Now().UTC()
+	reservation, err := s.queries.UpdateReservationStatus(ctx, queries.UpdateReservationStatusParams{
+		ID:          reservationID,
+		Status:      pgtype.Text{String: "ready", Valid: true},
+		FulfilledAt: pgtype.Timestamp{Time: now, Valid: true}, // Use fulfilled_at as notified_at for "ready" status
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to mark reservation as ready: %w", err)
+	}
+
+	return s.convertToReservationResponse(reservation, 1), nil
 }

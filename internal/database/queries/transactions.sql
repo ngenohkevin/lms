@@ -211,3 +211,53 @@ JOIN books b ON t.book_id = b.id
 LEFT JOIN book_copies bc ON t.copy_id = bc.id
 ORDER BY t.transaction_date DESC
 LIMIT $1 OFFSET $2;
+
+-- name: SearchTransactions :many
+SELECT t.*,
+       s.first_name, s.last_name, s.student_id as student_code,
+       b.title, b.author, b.book_id as book_code,
+       bc.copy_number, bc.barcode as copy_barcode, bc.condition as copy_condition
+FROM transactions t
+JOIN students s ON t.student_id = s.id
+JOIN books b ON t.book_id = b.id
+LEFT JOIN book_copies bc ON t.copy_id = bc.id
+WHERE
+    (sqlc.narg('query')::text IS NULL OR sqlc.narg('query') = '' OR
+     b.title ILIKE '%' || sqlc.narg('query') || '%' OR
+     b.author ILIKE '%' || sqlc.narg('query') || '%' OR
+     s.first_name ILIKE '%' || sqlc.narg('query') || '%' OR
+     s.last_name ILIKE '%' || sqlc.narg('query') || '%' OR
+     s.student_id ILIKE '%' || sqlc.narg('query') || '%' OR
+     bc.barcode ILIKE '%' || sqlc.narg('query') || '%')
+    AND (sqlc.narg('filter_student_id')::int IS NULL OR t.student_id = sqlc.narg('filter_student_id'))
+    AND (sqlc.narg('filter_book_id')::int IS NULL OR t.book_id = sqlc.narg('filter_book_id'))
+    AND (sqlc.narg('filter_type')::text IS NULL OR sqlc.narg('filter_type') = '' OR t.transaction_type = sqlc.narg('filter_type'))
+    AND (sqlc.narg('from_date')::timestamp IS NULL OR t.transaction_date >= sqlc.narg('from_date'))
+    AND (sqlc.narg('to_date')::timestamp IS NULL OR t.transaction_date <= sqlc.narg('to_date'))
+ORDER BY
+    CASE WHEN sqlc.narg('sort_by')::text = 'transaction_date' AND sqlc.narg('sort_order')::text = 'asc' THEN t.transaction_date END ASC,
+    CASE WHEN sqlc.narg('sort_by')::text = 'transaction_date' AND sqlc.narg('sort_order')::text = 'desc' THEN t.transaction_date END DESC,
+    CASE WHEN sqlc.narg('sort_by')::text = 'due_date' AND sqlc.narg('sort_order')::text = 'asc' THEN t.due_date END ASC,
+    CASE WHEN sqlc.narg('sort_by')::text = 'due_date' AND sqlc.narg('sort_order')::text = 'desc' THEN t.due_date END DESC,
+    CASE WHEN sqlc.narg('sort_by')::text IS NULL OR sqlc.narg('sort_by') = '' THEN t.transaction_date END DESC
+LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
+
+-- name: CountSearchTransactions :one
+SELECT COUNT(*)
+FROM transactions t
+JOIN students s ON t.student_id = s.id
+JOIN books b ON t.book_id = b.id
+LEFT JOIN book_copies bc ON t.copy_id = bc.id
+WHERE
+    (sqlc.narg('query')::text IS NULL OR sqlc.narg('query') = '' OR
+     b.title ILIKE '%' || sqlc.narg('query') || '%' OR
+     b.author ILIKE '%' || sqlc.narg('query') || '%' OR
+     s.first_name ILIKE '%' || sqlc.narg('query') || '%' OR
+     s.last_name ILIKE '%' || sqlc.narg('query') || '%' OR
+     s.student_id ILIKE '%' || sqlc.narg('query') || '%' OR
+     bc.barcode ILIKE '%' || sqlc.narg('query') || '%')
+    AND (sqlc.narg('filter_student_id')::int IS NULL OR t.student_id = sqlc.narg('filter_student_id'))
+    AND (sqlc.narg('filter_book_id')::int IS NULL OR t.book_id = sqlc.narg('filter_book_id'))
+    AND (sqlc.narg('filter_type')::text IS NULL OR sqlc.narg('filter_type') = '' OR t.transaction_type = sqlc.narg('filter_type'))
+    AND (sqlc.narg('from_date')::timestamp IS NULL OR t.transaction_date >= sqlc.narg('from_date'))
+    AND (sqlc.narg('to_date')::timestamp IS NULL OR t.transaction_date <= sqlc.narg('to_date'));

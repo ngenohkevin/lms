@@ -112,13 +112,13 @@ func TestReservationIntegration_CompleteWorkflow(t *testing.T) {
 	// Give some time for the background goroutine to process
 	time.Sleep(100 * time.Millisecond)
 
-	// Check that Student 2's reservation is fulfilled
+	// Check that Student 2's reservation is marked as "ready" (book available for pickup)
 	updatedReservation, err := reservationService.GetReservationByID(ctx, student2ReservationID)
 	require.NoError(t, err)
-	assert.Equal(t, "fulfilled", updatedReservation.Status)
-	assert.NotNil(t, updatedReservation.FulfilledAt)
+	assert.Equal(t, "ready", updatedReservation.Status) // "ready" means book available for pickup
+	assert.NotNil(t, updatedReservation.FulfilledAt)    // FulfilledAt is used as notified_at for ready status
 
-	// Test 8: Student 2 can now borrow the book (their reservation is fulfilled)
+	// Test 8: Student 2 can now borrow the book (their reservation is ready for pickup)
 	// Check eligibility first
 	eligibility, err := enhancedTransactionService.CanStudentBorrowBook(ctx, student2.ID, book.ID)
 	require.NoError(t, err)

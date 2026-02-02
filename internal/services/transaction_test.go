@@ -197,6 +197,16 @@ func (m *MockTransactionQueries) SyncBookCopyCounts(ctx context.Context, id int3
 	return args.Error(0)
 }
 
+func (m *MockTransactionQueries) SearchTransactions(ctx context.Context, arg queries.SearchTransactionsParams) ([]queries.SearchTransactionsRow, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).([]queries.SearchTransactionsRow), args.Error(1)
+}
+
+func (m *MockTransactionQueries) CountSearchTransactions(ctx context.Context, arg queries.CountSearchTransactionsParams) (int64, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 // Test helper functions
 func createTestTransaction() queries.Transaction {
 	now := time.Now()

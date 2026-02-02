@@ -66,6 +66,50 @@ func (q *Queries) CountRenewalsByStudentAndBook(ctx context.Context, arg CountRe
 	return count, err
 }
 
+const countSearchTransactions = `-- name: CountSearchTransactions :one
+SELECT COUNT(*)
+FROM transactions t
+JOIN students s ON t.student_id = s.id
+JOIN books b ON t.book_id = b.id
+LEFT JOIN book_copies bc ON t.copy_id = bc.id
+WHERE
+    ($1::text IS NULL OR $1 = '' OR
+     b.title ILIKE '%' || $1 || '%' OR
+     b.author ILIKE '%' || $1 || '%' OR
+     s.first_name ILIKE '%' || $1 || '%' OR
+     s.last_name ILIKE '%' || $1 || '%' OR
+     s.student_id ILIKE '%' || $1 || '%' OR
+     bc.barcode ILIKE '%' || $1 || '%')
+    AND ($2::int IS NULL OR t.student_id = $2)
+    AND ($3::int IS NULL OR t.book_id = $3)
+    AND ($4::text IS NULL OR $4 = '' OR t.transaction_type = $4)
+    AND ($5::timestamp IS NULL OR t.transaction_date >= $5)
+    AND ($6::timestamp IS NULL OR t.transaction_date <= $6)
+`
+
+type CountSearchTransactionsParams struct {
+	Query           pgtype.Text      `db:"query" json:"query"`
+	FilterStudentID pgtype.Int4      `db:"filter_student_id" json:"filter_student_id"`
+	FilterBookID    pgtype.Int4      `db:"filter_book_id" json:"filter_book_id"`
+	FilterType      pgtype.Text      `db:"filter_type" json:"filter_type"`
+	FromDate        pgtype.Timestamp `db:"from_date" json:"from_date"`
+	ToDate          pgtype.Timestamp `db:"to_date" json:"to_date"`
+}
+
+func (q *Queries) CountSearchTransactions(ctx context.Context, arg CountSearchTransactionsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchTransactions,
+		arg.Query,
+		arg.FilterStudentID,
+		arg.FilterBookID,
+		arg.FilterType,
+		arg.FromDate,
+		arg.ToDate,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countTodayBorrowings = `-- name: CountTodayBorrowings :one
 SELECT COUNT(*) FROM transactions
 WHERE transaction_type = 'borrow' AND DATE(transaction_date) = CURRENT_DATE
@@ -1538,6 +1582,145 @@ func (q *Queries) ReturnBook(ctx context.Context, arg ReturnBookParams) (Transac
 		&i.CopyID,
 	)
 	return i, err
+}
+
+const searchTransactions = `-- name: SearchTransactions :many
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id,
+       s.first_name, s.last_name, s.student_id as student_code,
+       b.title, b.author, b.book_id as book_code,
+       bc.copy_number, bc.barcode as copy_barcode, bc.condition as copy_condition
+FROM transactions t
+JOIN students s ON t.student_id = s.id
+JOIN books b ON t.book_id = b.id
+LEFT JOIN book_copies bc ON t.copy_id = bc.id
+WHERE
+    ($1::text IS NULL OR $1 = '' OR
+     b.title ILIKE '%' || $1 || '%' OR
+     b.author ILIKE '%' || $1 || '%' OR
+     s.first_name ILIKE '%' || $1 || '%' OR
+     s.last_name ILIKE '%' || $1 || '%' OR
+     s.student_id ILIKE '%' || $1 || '%' OR
+     bc.barcode ILIKE '%' || $1 || '%')
+    AND ($2::int IS NULL OR t.student_id = $2)
+    AND ($3::int IS NULL OR t.book_id = $3)
+    AND ($4::text IS NULL OR $4 = '' OR t.transaction_type = $4)
+    AND ($5::timestamp IS NULL OR t.transaction_date >= $5)
+    AND ($6::timestamp IS NULL OR t.transaction_date <= $6)
+ORDER BY
+    CASE WHEN $7::text = 'transaction_date' AND $8::text = 'asc' THEN t.transaction_date END ASC,
+    CASE WHEN $7::text = 'transaction_date' AND $8::text = 'desc' THEN t.transaction_date END DESC,
+    CASE WHEN $7::text = 'due_date' AND $8::text = 'asc' THEN t.due_date END ASC,
+    CASE WHEN $7::text = 'due_date' AND $8::text = 'desc' THEN t.due_date END DESC,
+    CASE WHEN $7::text IS NULL OR $7 = '' THEN t.transaction_date END DESC
+LIMIT $10 OFFSET $9
+`
+
+type SearchTransactionsParams struct {
+	Query           pgtype.Text      `db:"query" json:"query"`
+	FilterStudentID pgtype.Int4      `db:"filter_student_id" json:"filter_student_id"`
+	FilterBookID    pgtype.Int4      `db:"filter_book_id" json:"filter_book_id"`
+	FilterType      pgtype.Text      `db:"filter_type" json:"filter_type"`
+	FromDate        pgtype.Timestamp `db:"from_date" json:"from_date"`
+	ToDate          pgtype.Timestamp `db:"to_date" json:"to_date"`
+	SortBy          pgtype.Text      `db:"sort_by" json:"sort_by"`
+	SortOrder       pgtype.Text      `db:"sort_order" json:"sort_order"`
+	Offset          int32            `db:"offset" json:"offset"`
+	Limit           int32            `db:"limit" json:"limit"`
+}
+
+type SearchTransactionsRow struct {
+	ID               int32            `db:"id" json:"id"`
+	StudentID        int32            `db:"student_id" json:"student_id"`
+	BookID           int32            `db:"book_id" json:"book_id"`
+	TransactionType  string           `db:"transaction_type" json:"transaction_type"`
+	TransactionDate  pgtype.Timestamp `db:"transaction_date" json:"transaction_date"`
+	DueDate          pgtype.Timestamp `db:"due_date" json:"due_date"`
+	ReturnedDate     pgtype.Timestamp `db:"returned_date" json:"returned_date"`
+	LibrarianID      pgtype.Int4      `db:"librarian_id" json:"librarian_id"`
+	FineAmount       pgtype.Numeric   `db:"fine_amount" json:"fine_amount"`
+	FinePaid         pgtype.Bool      `db:"fine_paid" json:"fine_paid"`
+	Notes            pgtype.Text      `db:"notes" json:"notes"`
+	CreatedAt        pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt        pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	ReturnCondition  pgtype.Text      `db:"return_condition" json:"return_condition"`
+	ConditionNotes   pgtype.Text      `db:"condition_notes" json:"condition_notes"`
+	FineWaived       pgtype.Bool      `db:"fine_waived" json:"fine_waived"`
+	FineWaivedAt     pgtype.Timestamp `db:"fine_waived_at" json:"fine_waived_at"`
+	FineWaivedBy     pgtype.Int4      `db:"fine_waived_by" json:"fine_waived_by"`
+	FineWaivedReason pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
+	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
+	CopyID           pgtype.Int4      `db:"copy_id" json:"copy_id"`
+	FirstName        string           `db:"first_name" json:"first_name"`
+	LastName         string           `db:"last_name" json:"last_name"`
+	StudentCode      string           `db:"student_code" json:"student_code"`
+	Title            string           `db:"title" json:"title"`
+	Author           string           `db:"author" json:"author"`
+	BookCode         string           `db:"book_code" json:"book_code"`
+	CopyNumber       pgtype.Text      `db:"copy_number" json:"copy_number"`
+	CopyBarcode      pgtype.Text      `db:"copy_barcode" json:"copy_barcode"`
+	CopyCondition    pgtype.Text      `db:"copy_condition" json:"copy_condition"`
+}
+
+func (q *Queries) SearchTransactions(ctx context.Context, arg SearchTransactionsParams) ([]SearchTransactionsRow, error) {
+	rows, err := q.db.Query(ctx, searchTransactions,
+		arg.Query,
+		arg.FilterStudentID,
+		arg.FilterBookID,
+		arg.FilterType,
+		arg.FromDate,
+		arg.ToDate,
+		arg.SortBy,
+		arg.SortOrder,
+		arg.Offset,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchTransactionsRow{}
+	for rows.Next() {
+		var i SearchTransactionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.StudentID,
+			&i.BookID,
+			&i.TransactionType,
+			&i.TransactionDate,
+			&i.DueDate,
+			&i.ReturnedDate,
+			&i.LibrarianID,
+			&i.FineAmount,
+			&i.FinePaid,
+			&i.Notes,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ReturnCondition,
+			&i.ConditionNotes,
+			&i.FineWaived,
+			&i.FineWaivedAt,
+			&i.FineWaivedBy,
+			&i.FineWaivedReason,
+			&i.FinePaidAt,
+			&i.CopyID,
+			&i.FirstName,
+			&i.LastName,
+			&i.StudentCode,
+			&i.Title,
+			&i.Author,
+			&i.BookCode,
+			&i.CopyNumber,
+			&i.CopyBarcode,
+			&i.CopyCondition,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateTransactionFine = `-- name: UpdateTransactionFine :exec

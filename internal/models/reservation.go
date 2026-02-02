@@ -145,10 +145,18 @@ type ReservationSuccessResponse struct {
 // ReservationStatus constants for reservation statuses
 const (
 	ReservationStatusActive    = "active"
+	ReservationStatusReady     = "ready"
 	ReservationStatusFulfilled = "fulfilled"
 	ReservationStatusCancelled = "cancelled"
 	ReservationStatusExpired   = "expired"
 )
+
+// QueuePositionResponse represents a student's position in a reservation queue
+type QueuePositionResponse struct {
+	Position     int  `json:"position"`
+	TotalInQueue int  `json:"total_in_queue"`
+	HasReserved  bool `json:"has_reserved"`
+}
 
 // ReservationErrorCodes constants for reservation error codes
 const (
@@ -168,7 +176,7 @@ const (
 // ValidateReservationStatus validates if a reservation status is valid
 func ValidateReservationStatus(status string) bool {
 	switch status {
-	case ReservationStatusActive, ReservationStatusFulfilled, ReservationStatusCancelled, ReservationStatusExpired:
+	case ReservationStatusActive, ReservationStatusReady, ReservationStatusFulfilled, ReservationStatusCancelled, ReservationStatusExpired:
 		return true
 	default:
 		return false
@@ -178,8 +186,10 @@ func ValidateReservationStatus(status string) bool {
 // IsValidReservationTransition checks if a status transition is valid
 func IsValidReservationTransition(from, to string) bool {
 	// Define valid transitions
+	// active (waiting) → ready (book available, notified) → fulfilled (borrowed)
 	validTransitions := map[string][]string{
-		ReservationStatusActive:    {ReservationStatusFulfilled, ReservationStatusCancelled, ReservationStatusExpired},
+		ReservationStatusActive:    {ReservationStatusReady, ReservationStatusFulfilled, ReservationStatusCancelled, ReservationStatusExpired},
+		ReservationStatusReady:     {ReservationStatusFulfilled, ReservationStatusCancelled, ReservationStatusExpired},
 		ReservationStatusFulfilled: {}, // No transitions allowed from fulfilled
 		ReservationStatusCancelled: {}, // No transitions allowed from cancelled
 		ReservationStatusExpired:   {}, // No transitions allowed from expired
@@ -204,8 +214,10 @@ func GetReservationStatusDescription(status string) string {
 	switch status {
 	case ReservationStatusActive:
 		return "Active reservation waiting for book availability"
+	case ReservationStatusReady:
+		return "Book is available - ready for pickup at the library"
 	case ReservationStatusFulfilled:
-		return "Reservation fulfilled - book is available for borrowing"
+		return "Reservation fulfilled - book has been borrowed"
 	case ReservationStatusCancelled:
 		return "Reservation cancelled by student or librarian"
 	case ReservationStatusExpired:

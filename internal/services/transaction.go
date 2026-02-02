@@ -55,6 +55,9 @@ type TransactionQuerier interface {
 	GetActiveTransactionByCopy(ctx context.Context, copyID pgtype.Int4) (queries.Transaction, error)
 	GetActiveBorrowingByCopy(ctx context.Context, copyID pgtype.Int4) (queries.GetActiveBorrowingByCopyRow, error)
 	SyncBookCopyCounts(ctx context.Context, id int32) error
+	// Search queries
+	SearchTransactions(ctx context.Context, arg queries.SearchTransactionsParams) ([]queries.SearchTransactionsRow, error)
+	CountSearchTransactions(ctx context.Context, arg queries.CountSearchTransactionsParams) (int64, error)
 }
 
 // TransactionService handles all business logic related to book transactions
@@ -1133,5 +1136,219 @@ func (s *TransactionService) GetTransactionStats(ctx context.Context) (*Transact
 		TotalBorrowedToday: todayCount,
 		TotalUnpaidFines:   totalUnpaidFines,
 		TotalTransactions:  totalCount,
+	}, nil
+}
+
+// TransactionSearchParams represents search parameters for transactions
+type TransactionSearchParams struct {
+	Query     string     `json:"query"`      // Search in book title, author, student name, barcode
+	StudentID *int32     `json:"student_id"` // Filter by student
+	BookID    *int32     `json:"book_id"`    // Filter by book
+	Type      string     `json:"type"`       // Filter by transaction type (borrow, return, renew)
+	Status    string     `json:"status"`     // Filter by status (active, returned, overdue)
+	FromDate  *time.Time `json:"from_date"`  // Filter by date range start
+	ToDate    *time.Time `json:"to_date"`    // Filter by date range end
+	SortBy    string     `json:"sort_by"`    // Sort by (transaction_date, due_date)
+	SortOrder string     `json:"sort_order"` // Sort order (asc, desc)
+	Page      int32      `json:"page"`
+	Limit     int32      `json:"limit"`
+}
+
+// TransactionSearchResult represents a transaction search result with enriched data
+type TransactionSearchResult struct {
+	ID               int32            `json:"id"`
+	StudentID        int32            `json:"student_id"`
+	BookID           int32            `json:"book_id"`
+	TransactionType  string           `json:"transaction_type"`
+	TransactionDate  time.Time        `json:"transaction_date"`
+	DueDate          time.Time        `json:"due_date"`
+	ReturnedDate     *time.Time       `json:"returned_date,omitempty"`
+	LibrarianID      *int32           `json:"librarian_id,omitempty"`
+	FineAmount       decimal.Decimal  `json:"fine_amount"`
+	FinePaid         bool             `json:"fine_paid"`
+	Notes            string           `json:"notes,omitempty"`
+	ReturnCondition  string           `json:"return_condition,omitempty"`
+	ConditionNotes   string           `json:"condition_notes,omitempty"`
+	Status           string           `json:"status"` // Computed: active, returned, overdue
+	DaysOverdue      int              `json:"days_overdue,omitempty"`
+	StudentName      string           `json:"student_name"`
+	StudentCode      string           `json:"student_code"`
+	BookTitle        string           `json:"book_title"`
+	BookAuthor       string           `json:"book_author"`
+	BookCode         string           `json:"book_code"`
+	CopyID           *int32           `json:"copy_id,omitempty"`
+	CopyNumber       *string          `json:"copy_number,omitempty"`
+	CopyBarcode      *string          `json:"copy_barcode,omitempty"`
+	CopyCondition    *string          `json:"copy_condition,omitempty"`
+}
+
+// TransactionSearchResponse represents the search response
+type TransactionSearchResponse struct {
+	Transactions []TransactionSearchResult `json:"transactions"`
+	Pagination   PaginationInfo            `json:"pagination"`
+}
+
+// SearchTransactions searches transactions with filters
+func (s *TransactionService) SearchTransactions(ctx context.Context, params TransactionSearchParams) (*TransactionSearchResponse, error) {
+	if params.Page < 1 {
+		params.Page = 1
+	}
+	if params.Limit < 1 || params.Limit > 100 {
+		params.Limit = 20
+	}
+
+	offset := (params.Page - 1) * params.Limit
+
+	// Build query parameters
+	searchParams := queries.SearchTransactionsParams{
+		Limit:  params.Limit,
+		Offset: offset,
+	}
+
+	// Set optional parameters
+	if params.Query != "" {
+		searchParams.Query = pgtype.Text{String: params.Query, Valid: true}
+	}
+	if params.StudentID != nil {
+		searchParams.FilterStudentID = pgtype.Int4{Int32: *params.StudentID, Valid: true}
+	}
+	if params.BookID != nil {
+		searchParams.FilterBookID = pgtype.Int4{Int32: *params.BookID, Valid: true}
+	}
+	if params.Type != "" {
+		searchParams.FilterType = pgtype.Text{String: params.Type, Valid: true}
+	}
+	if params.FromDate != nil {
+		searchParams.FromDate = pgtype.Timestamp{Time: *params.FromDate, Valid: true}
+	}
+	if params.ToDate != nil {
+		searchParams.ToDate = pgtype.Timestamp{Time: *params.ToDate, Valid: true}
+	}
+	if params.SortBy != "" {
+		searchParams.SortBy = pgtype.Text{String: params.SortBy, Valid: true}
+	}
+	if params.SortOrder != "" {
+		searchParams.SortOrder = pgtype.Text{String: params.SortOrder, Valid: true}
+	}
+
+	// Execute search
+	rows, err := s.queries.SearchTransactions(ctx, searchParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search transactions: %w", err)
+	}
+
+	// Count total matching
+	countParams := queries.CountSearchTransactionsParams{
+		Query:           searchParams.Query,
+		FilterStudentID: searchParams.FilterStudentID,
+		FilterBookID:    searchParams.FilterBookID,
+		FilterType:      searchParams.FilterType,
+		FromDate:        searchParams.FromDate,
+		ToDate:          searchParams.ToDate,
+	}
+	total, err := s.queries.CountSearchTransactions(ctx, countParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count search results: %w", err)
+	}
+
+	// Convert to results
+	results := make([]TransactionSearchResult, 0, len(rows))
+	now := time.Now()
+
+	for _, row := range rows {
+		result := TransactionSearchResult{
+			ID:              row.ID,
+			StudentID:       row.StudentID,
+			BookID:          row.BookID,
+			TransactionType: row.TransactionType,
+			TransactionDate: row.TransactionDate.Time,
+			DueDate:         row.DueDate.Time,
+			FineAmount:      decimal.Zero,
+			FinePaid:        row.FinePaid.Bool,
+			StudentName:     row.FirstName + " " + row.LastName,
+			StudentCode:     row.StudentCode,
+			BookTitle:       row.Title,
+			BookAuthor:      row.Author,
+			BookCode:        row.BookCode,
+		}
+
+		// Handle optional fields
+		if row.ReturnedDate.Valid {
+			result.ReturnedDate = &row.ReturnedDate.Time
+		}
+		if row.LibrarianID.Valid {
+			result.LibrarianID = &row.LibrarianID.Int32
+		}
+		if row.Notes.Valid {
+			result.Notes = row.Notes.String
+		}
+		if row.ReturnCondition.Valid {
+			result.ReturnCondition = row.ReturnCondition.String
+		}
+		if row.ConditionNotes.Valid {
+			result.ConditionNotes = row.ConditionNotes.String
+		}
+		if row.FineAmount.Valid && row.FineAmount.Int != nil {
+			if row.FineAmount.Exp == 0 {
+				result.FineAmount = decimal.NewFromBigInt(row.FineAmount.Int, 0)
+			} else {
+				result.FineAmount = decimal.NewFromBigInt(row.FineAmount.Int, row.FineAmount.Exp)
+			}
+		}
+
+		// Copy info
+		if row.CopyID.Valid {
+			result.CopyID = &row.CopyID.Int32
+		}
+		if row.CopyNumber.Valid {
+			result.CopyNumber = &row.CopyNumber.String
+		}
+		if row.CopyBarcode.Valid {
+			result.CopyBarcode = &row.CopyBarcode.String
+		}
+		if row.CopyCondition.Valid {
+			result.CopyCondition = &row.CopyCondition.String
+		}
+
+		// Compute status
+		if row.ReturnedDate.Valid {
+			result.Status = "returned"
+		} else if row.DueDate.Valid && now.After(row.DueDate.Time) {
+			result.Status = "overdue"
+			result.DaysOverdue = int(now.Sub(row.DueDate.Time).Hours() / 24)
+		} else {
+			result.Status = "active"
+		}
+
+		// Apply status filter if specified (handled in Go since SQL can't easily compute status)
+		if params.Status != "" {
+			if params.Status != result.Status {
+				continue
+			}
+		}
+
+		results = append(results, result)
+	}
+
+	// Recalculate total if status filter was applied
+	actualTotal := total
+	if params.Status != "" {
+		// When filtering by status, the count may differ since status is computed
+		actualTotal = int64(len(results))
+	}
+
+	totalPages := int(actualTotal) / int(params.Limit)
+	if int(actualTotal)%int(params.Limit) > 0 {
+		totalPages++
+	}
+
+	return &TransactionSearchResponse{
+		Transactions: results,
+		Pagination: PaginationInfo{
+			Page:       int(params.Page),
+			Limit:      int(params.Limit),
+			Total:      actualTotal,
+			TotalPages: totalPages,
+		},
 	}, nil
 }
