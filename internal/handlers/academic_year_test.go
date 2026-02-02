@@ -637,10 +637,10 @@ func TestAcademicYearHandler_LevelValidation(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
-		name          string
-		level         int32
-		expectError   bool
-		expectedCode  int
+		name         string
+		level        int32
+		expectError  bool
+		expectedCode int
 	}{
 		{"Valid level 1", 1, false, http.StatusCreated},
 		{"Valid level 5", 5, false, http.StatusCreated},

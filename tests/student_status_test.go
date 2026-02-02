@@ -16,16 +16,16 @@ import (
 
 // StudentStatusResponse represents the student response for status tests
 type StudentStatusResponse struct {
-	ID               int32   `json:"id"`
-	StudentID        string  `json:"student_id"`
-	FirstName        string  `json:"first_name"`
-	LastName         string  `json:"last_name"`
-	Email            string  `json:"email,omitempty"`
-	Status           string  `json:"status"`
-	IsActive         bool    `json:"is_active"`
-	SuspensionReason string  `json:"suspension_reason,omitempty"`
-	GraduatedAt      string  `json:"graduated_at,omitempty"`
-	AdminNotes       string  `json:"admin_notes,omitempty"`
+	ID               int32  `json:"id"`
+	StudentID        string `json:"student_id"`
+	FirstName        string `json:"first_name"`
+	LastName         string `json:"last_name"`
+	Email            string `json:"email,omitempty"`
+	Status           string `json:"status"`
+	IsActive         bool   `json:"is_active"`
+	SuspensionReason string `json:"suspension_reason,omitempty"`
+	GraduatedAt      string `json:"graduated_at,omitempty"`
+	AdminNotes       string `json:"admin_notes,omitempty"`
 }
 
 // Helper to create a test student response
