@@ -140,3 +140,59 @@ WHERE s.deleted_at IS NULL
   AND ((t.fine_amount > 0 AND t.fine_paid = false) OR (t.due_date < NOW() AND t.returned_date IS NULL))
 ORDER BY s.created_at DESC
 LIMIT $1 OFFSET $2;
+
+-- Student Status Management Queries
+
+-- name: SuspendStudent :one
+UPDATE students
+SET status = 'suspended', suspension_reason = $2, is_active = false, updated_at = NOW()
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING *;
+
+-- name: ActivateStudent :one
+UPDATE students
+SET status = 'active', suspension_reason = NULL, is_active = true, updated_at = NOW()
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING *;
+
+-- name: GraduateStudent :one
+UPDATE students
+SET status = 'graduated', graduated_at = COALESCE($2, NOW()), is_active = false, updated_at = NOW()
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING *;
+
+-- name: UpdateStudentAdminNotes :one
+UPDATE students
+SET admin_notes = $2, updated_at = NOW()
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING *;
+
+-- name: GetStudentWithDepartment :one
+SELECT s.*, d.name as department_name
+FROM students s
+LEFT JOIN departments d ON s.department_id = d.id
+WHERE s.id = $1 AND s.deleted_at IS NULL;
+
+-- name: ListStudentsWithDepartment :many
+SELECT s.*, d.name as department_name
+FROM students s
+LEFT JOIN departments d ON s.department_id = d.id
+WHERE s.deleted_at IS NULL
+ORDER BY s.created_at DESC
+LIMIT $1 OFFSET $2;
+
+-- name: GetStudentsByStatusType :many
+SELECT * FROM students
+WHERE status = $1 AND deleted_at IS NULL
+ORDER BY last_name, first_name
+LIMIT $2 OFFSET $3;
+
+-- name: CountStudentsByStatusType :one
+SELECT COUNT(*) FROM students
+WHERE status = $1 AND deleted_at IS NULL;
+
+-- name: UpdateStudentDepartmentID :one
+UPDATE students
+SET department_id = $2, updated_at = NOW()
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING *;

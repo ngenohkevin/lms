@@ -11,8 +11,11 @@ import (
 )
 
 type Querier interface {
+	ActivateAcademicYear(ctx context.Context, id int32) error
 	ActivateCategory(ctx context.Context, id int32) error
+	ActivateDepartment(ctx context.Context, id int32) error
 	ActivateLanguage(ctx context.Context, id int32) (Language, error)
+	ActivateStudent(ctx context.Context, id int32) (Student, error)
 	AddBookAuthor(ctx context.Context, arg AddBookAuthorParams) error
 	AddRolePermission(ctx context.Context, arg AddRolePermissionParams) error
 	BulkUpdateStudentStatus(ctx context.Context, arg BulkUpdateStudentStatusParams) error
@@ -28,6 +31,7 @@ type Querier interface {
 	ClearRolePermissions(ctx context.Context, role string) error
 	ClearUserOverrides(ctx context.Context, userID int32) error
 	CompleteQueueItem(ctx context.Context, id int32) (EmailQueue, error)
+	CountAcademicYears(ctx context.Context) (int64, error)
 	CountActiveBorrowingsByStudent(ctx context.Context, studentID int32) (int64, error)
 	CountActiveReservationsByBook(ctx context.Context, bookID int32) (int64, error)
 	CountActiveReservationsByStudent(ctx context.Context, studentID int32) (int64, error)
@@ -50,6 +54,7 @@ type Querier interface {
 	CountBooksByGenre(ctx context.Context, genre pgtype.Text) (int64, error)
 	CountCategories(ctx context.Context) (int64, error)
 	CountCopyBorrowings(ctx context.Context, copyID pgtype.Int4) (int64, error)
+	CountDepartments(ctx context.Context) (int64, error)
 	CountFines(ctx context.Context, arg CountFinesParams) (int64, error)
 	CountImportHistoryByFilters(ctx context.Context, arg CountImportHistoryByFiltersParams) (int64, error)
 	CountLanguages(ctx context.Context, dollar_1 bool) (int64, error)
@@ -66,7 +71,10 @@ type Querier interface {
 	CountSeries(ctx context.Context) (int64, error)
 	CountSeriesBooks(ctx context.Context, seriesID pgtype.Int4) (int64, error)
 	CountStudents(ctx context.Context) (int64, error)
+	CountStudentsByAcademicYear(ctx context.Context, yearOfStudy int32) (int64, error)
+	CountStudentsByDepartment(ctx context.Context, departmentID pgtype.Int4) (int64, error)
 	CountStudentsByStatus(ctx context.Context, isActive pgtype.Bool) (int64, error)
+	CountStudentsByStatusType(ctx context.Context, status pgtype.Text) (int64, error)
 	CountStudentsByYear(ctx context.Context, yearOfStudy int32) (int64, error)
 	CountStudentsWithFines(ctx context.Context) (int64, error)
 	CountStudentsWithOverdue(ctx context.Context) (int32, error)
@@ -76,11 +84,13 @@ type Querier interface {
 	CountTransactions(ctx context.Context) (int64, error)
 	CountUnreadNotificationsByRecipient(ctx context.Context, arg CountUnreadNotificationsByRecipientParams) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
+	CreateAcademicYear(ctx context.Context, arg CreateAcademicYearParams) (AcademicYear, error)
 	CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) error
 	CreateAuthor(ctx context.Context, arg CreateAuthorParams) (Author, error)
 	CreateBook(ctx context.Context, arg CreateBookParams) (Book, error)
 	CreateBookCopy(ctx context.Context, arg CreateBookCopyParams) (BookCopy, error)
 	CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error)
+	CreateDepartment(ctx context.Context, arg CreateDepartmentParams) (Department, error)
 	// Email Deliveries Queries
 	// Phase 7.4: Email Integration - Delivery Tracking
 	CreateEmailDelivery(ctx context.Context, arg CreateEmailDeliveryParams) (EmailDelivery, error)
@@ -104,15 +114,19 @@ type Querier interface {
 	CreateUserInvite(ctx context.Context, arg CreateUserInviteParams) (UserInvite, error)
 	CreateUserOverride(ctx context.Context, arg CreateUserOverrideParams) (UserPermissionOverride, error)
 	CreateUserWithoutPassword(ctx context.Context, arg CreateUserWithoutPasswordParams) (User, error)
+	DeactivateAcademicYear(ctx context.Context, id int32) error
 	DeactivateCategory(ctx context.Context, id int32) error
+	DeactivateDepartment(ctx context.Context, id int32) error
 	DeactivateLanguage(ctx context.Context, id int32) (Language, error)
 	// Atomically decrement available copies. Returns the new count, or no rows if book unavailable.
 	DecrementBookAvailability(ctx context.Context, id int32) (pgtype.Int4, error)
 	// Decrement total_copies by 1 (when a copy is deleted)
 	DecrementTotalCopies(ctx context.Context, id int32) error
+	DeleteAcademicYear(ctx context.Context, id int32) error
 	DeleteAuthor(ctx context.Context, id int32) error
 	DeleteBookCopy(ctx context.Context, id int32) error
 	DeleteCategory(ctx context.Context, id int32) error
+	DeleteDepartment(ctx context.Context, id int32) error
 	DeleteInvite(ctx context.Context, id int32) error
 	DeleteLanguage(ctx context.Context, id int32) error
 	DeleteNotification(ctx context.Context, id int32) error
@@ -125,6 +139,8 @@ type Querier interface {
 	DeleteUserOverride(ctx context.Context, arg DeleteUserOverrideParams) error
 	DeleteUserOverrideByCode(ctx context.Context, arg DeleteUserOverrideByCodeParams) error
 	GetAcademicYearAnalytics(ctx context.Context, arg GetAcademicYearAnalyticsParams) (GetAcademicYearAnalyticsRow, error)
+	GetAcademicYearByID(ctx context.Context, id int32) (AcademicYear, error)
+	GetAcademicYearByLevel(ctx context.Context, level int32) (AcademicYear, error)
 	GetActiveBorrowingByCopy(ctx context.Context, copyID pgtype.Int4) (GetActiveBorrowingByCopyRow, error)
 	GetActiveExportFiles(ctx context.Context) ([]ExportFile, error)
 	GetActiveTransactionByCopy(ctx context.Context, copyID pgtype.Int4) (Transaction, error)
@@ -148,6 +164,9 @@ type Querier interface {
 	GetCopyBorrowingHistory(ctx context.Context, arg GetCopyBorrowingHistoryParams) ([]GetCopyBorrowingHistoryRow, error)
 	GetCopyByBarcodeWithBookInfo(ctx context.Context, barcode pgtype.Text) (GetCopyByBarcodeWithBookInfoRow, error)
 	GetDashboardMetrics(ctx context.Context) (GetDashboardMetricsRow, error)
+	GetDepartmentByCode(ctx context.Context, code pgtype.Text) (Department, error)
+	GetDepartmentByID(ctx context.Context, id int32) (Department, error)
+	GetDepartmentByName(ctx context.Context, name string) (Department, error)
 	GetDistinctBookGenres(ctx context.Context) ([]pgtype.Text, error)
 	GetEmailDeliveriesByNotification(ctx context.Context, notificationID int32) ([]EmailDelivery, error)
 	GetEmailDeliveriesByStatus(ctx context.Context, arg GetEmailDeliveriesByStatusParams) ([]EmailDelivery, error)
@@ -207,7 +226,9 @@ type Querier interface {
 	GetStudentFineStats(ctx context.Context, studentID int32) (GetStudentFineStatsRow, error)
 	GetStudentReservationForBook(ctx context.Context, arg GetStudentReservationForBookParams) (GetStudentReservationForBookRow, error)
 	GetStudentTotalBorrowed(ctx context.Context, studentID int32) (int64, error)
+	GetStudentWithDepartment(ctx context.Context, id int32) (GetStudentWithDepartmentRow, error)
 	GetStudentsByStatus(ctx context.Context, arg GetStudentsByStatusParams) ([]Student, error)
+	GetStudentsByStatusType(ctx context.Context, arg GetStudentsByStatusTypeParams) ([]Student, error)
 	GetStudentsWithHighFines(ctx context.Context, fineAmount pgtype.Numeric) ([]GetStudentsWithHighFinesRow, error)
 	GetTopBorrowingStudents(ctx context.Context, arg GetTopBorrowingStudentsParams) ([]GetTopBorrowingStudentsRow, error)
 	GetTotalUnpaidFinesByStudent(ctx context.Context, studentID int32) (pgtype.Numeric, error)
@@ -233,17 +254,21 @@ type Querier interface {
 	GetYearOverYearComparison(ctx context.Context, dollar_1 []int32) ([]GetYearOverYearComparisonRow, error)
 	GetYearSpecificBorrowingReport(ctx context.Context, dollar_1 int32) ([]GetYearSpecificBorrowingReportRow, error)
 	GetYearlyStatistics(ctx context.Context, dollar_1 []int32) ([]GetYearlyStatisticsRow, error)
+	GraduateStudent(ctx context.Context, arg GraduateStudentParams) (Student, error)
 	HasActiveReservationsByOtherStudents(ctx context.Context, arg HasActiveReservationsByOtherStudentsParams) (bool, error)
 	// Atomically increment available copies.
 	IncrementBookAvailability(ctx context.Context, id int32) (pgtype.Int4, error)
 	// Increment total_copies by a given amount
 	IncrementTotalCopies(ctx context.Context, arg IncrementTotalCopiesParams) error
+	ListAcademicYears(ctx context.Context) ([]AcademicYear, error)
 	ListActiveBorrowings(ctx context.Context, arg ListActiveBorrowingsParams) ([]ListActiveBorrowingsRow, error)
 	ListActiveReservations(ctx context.Context) ([]ListActiveReservationsRow, error)
 	// Notification-related queries for Phase 7.2
 	ListActiveReservationsForAvailableBook(ctx context.Context, bookID int32) ([]ListActiveReservationsForAvailableBookRow, error)
 	ListActiveTransactionsByStudent(ctx context.Context, studentID int32) ([]ListActiveTransactionsByStudentRow, error)
+	ListAllAcademicYears(ctx context.Context) ([]AcademicYear, error)
 	ListAllCategories(ctx context.Context) ([]Category, error)
+	ListAllDepartments(ctx context.Context) ([]Department, error)
 	ListAllRolePermissions(ctx context.Context) ([]ListAllRolePermissionsRow, error)
 	ListAuditLogs(ctx context.Context, arg ListAuditLogsParams) ([]AuditLog, error)
 	ListAuditLogsByAction(ctx context.Context, arg ListAuditLogsByActionParams) ([]AuditLog, error)
@@ -259,6 +284,7 @@ type Querier interface {
 	ListBookCopiesByStatus(ctx context.Context, arg ListBookCopiesByStatusParams) ([]BookCopy, error)
 	ListBooks(ctx context.Context, arg ListBooksParams) ([]Book, error)
 	ListCategories(ctx context.Context) ([]Category, error)
+	ListDepartments(ctx context.Context) ([]Department, error)
 	ListExpiredReservations(ctx context.Context) ([]ListExpiredReservationsRow, error)
 	// Fines Management Queries
 	ListFines(ctx context.Context, arg ListFinesParams) ([]ListFinesRow, error)
@@ -284,6 +310,7 @@ type Querier interface {
 	ListSeriesBooks(ctx context.Context, seriesID pgtype.Int4) ([]Book, error)
 	ListStudents(ctx context.Context, arg ListStudentsParams) ([]Student, error)
 	ListStudentsByYear(ctx context.Context, arg ListStudentsByYearParams) ([]Student, error)
+	ListStudentsWithDepartment(ctx context.Context, arg ListStudentsWithDepartmentParams) ([]ListStudentsWithDepartmentRow, error)
 	// Fine and Overdue Filtering Queries
 	ListStudentsWithFines(ctx context.Context, arg ListStudentsWithFinesParams) ([]Student, error)
 	ListStudentsWithFinesAndOverdue(ctx context.Context, arg ListStudentsWithFinesAndOverdueParams) ([]Student, error)
@@ -326,8 +353,11 @@ type Querier interface {
 	SoftDeleteBook(ctx context.Context, id int32) error
 	SoftDeleteStudent(ctx context.Context, id int32) error
 	SoftDeleteUser(ctx context.Context, id int32) error
+	// Student Status Management Queries
+	SuspendStudent(ctx context.Context, arg SuspendStudentParams) (Student, error)
 	// Sync total_copies and available_copies from book_copies table
 	SyncBookCopyCounts(ctx context.Context, id int32) error
+	UpdateAcademicYear(ctx context.Context, arg UpdateAcademicYearParams) (AcademicYear, error)
 	UpdateAuthor(ctx context.Context, arg UpdateAuthorParams) (Author, error)
 	UpdateBook(ctx context.Context, arg UpdateBookParams) (Book, error)
 	UpdateBookAvailability(ctx context.Context, arg UpdateBookAvailabilityParams) error
@@ -339,6 +369,7 @@ type Querier interface {
 	UpdateBookCopyStatusAndCondition(ctx context.Context, arg UpdateBookCopyStatusAndConditionParams) (BookCopy, error)
 	UpdateBookSeries(ctx context.Context, arg UpdateBookSeriesParams) error
 	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (Category, error)
+	UpdateDepartment(ctx context.Context, arg UpdateDepartmentParams) (Department, error)
 	UpdateEmailDeliveryError(ctx context.Context, arg UpdateEmailDeliveryErrorParams) (EmailDelivery, error)
 	UpdateEmailDeliveryProviderInfo(ctx context.Context, arg UpdateEmailDeliveryProviderInfoParams) (EmailDelivery, error)
 	UpdateEmailDeliveryStatus(ctx context.Context, arg UpdateEmailDeliveryStatusParams) (EmailDelivery, error)
@@ -360,6 +391,8 @@ type Querier interface {
 	UpdateReservationStatus(ctx context.Context, arg UpdateReservationStatusParams) (Reservation, error)
 	UpdateSeries(ctx context.Context, arg UpdateSeriesParams) (BookSeries, error)
 	UpdateStudent(ctx context.Context, arg UpdateStudentParams) (Student, error)
+	UpdateStudentAdminNotes(ctx context.Context, arg UpdateStudentAdminNotesParams) (Student, error)
+	UpdateStudentDepartmentID(ctx context.Context, arg UpdateStudentDepartmentIDParams) (Student, error)
 	UpdateStudentPassword(ctx context.Context, arg UpdateStudentPasswordParams) error
 	// Status Management Queries
 	UpdateStudentStatus(ctx context.Context, arg UpdateStudentStatusParams) (Student, error)

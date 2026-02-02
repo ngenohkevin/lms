@@ -10,6 +10,16 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AcademicYear struct {
+	ID          int32            `db:"id" json:"id"`
+	Name        string           `db:"name" json:"name"`
+	Level       int32            `db:"level" json:"level"`
+	Description pgtype.Text      `db:"description" json:"description"`
+	IsActive    pgtype.Bool      `db:"is_active" json:"is_active"`
+	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt   pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+}
+
 type AuditLog struct {
 	ID        int32            `db:"id" json:"id"`
 	TableName string           `db:"table_name" json:"table_name"`
@@ -90,6 +100,16 @@ type BookSeries struct {
 type Category struct {
 	ID          int32            `db:"id" json:"id"`
 	Name        string           `db:"name" json:"name"`
+	Description pgtype.Text      `db:"description" json:"description"`
+	IsActive    pgtype.Bool      `db:"is_active" json:"is_active"`
+	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt   pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+}
+
+type Department struct {
+	ID          int32            `db:"id" json:"id"`
+	Name        string           `db:"name" json:"name"`
+	Code        pgtype.Text      `db:"code" json:"code"`
 	Description pgtype.Text      `db:"description" json:"description"`
 	IsActive    pgtype.Bool      `db:"is_active" json:"is_active"`
 	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
@@ -258,6 +278,7 @@ type Student struct {
 	SuspensionReason pgtype.Text      `db:"suspension_reason" json:"suspension_reason"`
 	GraduatedAt      pgtype.Timestamp `db:"graduated_at" json:"graduated_at"`
 	AdminNotes       pgtype.Text      `db:"admin_notes" json:"admin_notes"`
+	DepartmentID     pgtype.Int4      `db:"department_id" json:"department_id"`
 }
 
 type Transaction struct {

@@ -12,25 +12,31 @@ import (
 
 // StudentDB represents a student from the database with pgtype fields
 type StudentDB struct {
-	ID             int32            `json:"id"`
-	StudentID      string           `json:"student_id"`
-	FirstName      string           `json:"first_name"`
-	LastName       string           `json:"last_name"`
-	Email          pgtype.Text      `json:"email"`
-	Phone          pgtype.Text      `json:"phone"`
-	YearOfStudy    int32            `json:"year_of_study"`
-	Department     pgtype.Text      `json:"department"`
-	EnrollmentDate pgtype.Date      `json:"enrollment_date"`
-	PasswordHash   pgtype.Text      `json:"password_hash,omitempty"`
-	IsActive       pgtype.Bool      `json:"is_active"`
-	MaxBooks       int32            `json:"max_books"`
-	CurrentBooks   int32            `json:"current_books"`  // Populated from transactions
-	TotalBorrowed  int32            `json:"total_borrowed"` // Populated from transactions
-	TotalFines     float64          `json:"total_fines"`    // Populated from transactions
-	UnpaidFines    float64          `json:"unpaid_fines"`   // Populated from transactions
-	DeletedAt      pgtype.Timestamp `json:"deleted_at,omitempty"`
-	CreatedAt      pgtype.Timestamp `json:"created_at"`
-	UpdatedAt      pgtype.Timestamp `json:"updated_at"`
+	ID               int32            `json:"id"`
+	StudentID        string           `json:"student_id"`
+	FirstName        string           `json:"first_name"`
+	LastName         string           `json:"last_name"`
+	Email            pgtype.Text      `json:"email"`
+	Phone            pgtype.Text      `json:"phone"`
+	YearOfStudy      int32            `json:"year_of_study"`
+	Department       pgtype.Text      `json:"department"`
+	DepartmentID     pgtype.Int4      `json:"department_id"`
+	DepartmentName   pgtype.Text      `json:"department_name"` // From join with departments table
+	EnrollmentDate   pgtype.Date      `json:"enrollment_date"`
+	PasswordHash     pgtype.Text      `json:"password_hash,omitempty"`
+	IsActive         pgtype.Bool      `json:"is_active"`
+	Status           pgtype.Text      `json:"status"`
+	SuspensionReason pgtype.Text      `json:"suspension_reason"`
+	GraduatedAt      pgtype.Timestamp `json:"graduated_at"`
+	AdminNotes       pgtype.Text      `json:"admin_notes"`
+	MaxBooks         int32            `json:"max_books"`
+	CurrentBooks     int32            `json:"current_books"`  // Populated from transactions
+	TotalBorrowed    int32            `json:"total_borrowed"` // Populated from transactions
+	TotalFines       float64          `json:"total_fines"`    // Populated from transactions
+	UnpaidFines      float64          `json:"unpaid_fines"`   // Populated from transactions
+	DeletedAt        pgtype.Timestamp `json:"deleted_at,omitempty"`
+	CreatedAt        pgtype.Timestamp `json:"created_at"`
+	UpdatedAt        pgtype.Timestamp `json:"updated_at"`
 }
 
 // CreateStudentRequest represents the request payload for creating a student
@@ -66,23 +72,29 @@ type UpdateStudentProfileRequest struct {
 
 // StudentResponse represents the response payload for student operations
 type StudentResponse struct {
-	ID             int32   `json:"id"`
-	StudentID      string  `json:"student_id"`
-	FirstName      string  `json:"first_name"`
-	LastName       string  `json:"last_name"`
-	Email          string  `json:"email,omitempty"`
-	Phone          string  `json:"phone,omitempty"`
-	YearOfStudy    int32   `json:"year_of_study"`
-	Department     string  `json:"department,omitempty"`
-	EnrollmentDate string  `json:"enrollment_date"`
-	IsActive       bool    `json:"is_active"`
-	MaxBooks       int32   `json:"max_books"`
-	CurrentBooks   int32   `json:"current_books"`
-	TotalBorrowed  int32   `json:"total_borrowed"`
-	TotalFines     float64 `json:"total_fines"`
-	UnpaidFines    float64 `json:"unpaid_fines"`
-	CreatedAt      string  `json:"created_at"`
-	UpdatedAt      string  `json:"updated_at"`
+	ID               int32   `json:"id"`
+	StudentID        string  `json:"student_id"`
+	FirstName        string  `json:"first_name"`
+	LastName         string  `json:"last_name"`
+	Email            string  `json:"email,omitempty"`
+	Phone            string  `json:"phone,omitempty"`
+	YearOfStudy      int32   `json:"year_of_study"`
+	Department       string  `json:"department,omitempty"`
+	DepartmentID     *int32  `json:"department_id,omitempty"`
+	DepartmentName   string  `json:"department_name,omitempty"`
+	EnrollmentDate   string  `json:"enrollment_date"`
+	IsActive         bool    `json:"is_active"`
+	Status           string  `json:"status"`
+	SuspensionReason string  `json:"suspension_reason,omitempty"`
+	GraduatedAt      string  `json:"graduated_at,omitempty"`
+	AdminNotes       string  `json:"admin_notes,omitempty"`
+	MaxBooks         int32   `json:"max_books"`
+	CurrentBooks     int32   `json:"current_books"`
+	TotalBorrowed    int32   `json:"total_borrowed"`
+	TotalFines       float64 `json:"total_fines"`
+	UnpaidFines      float64 `json:"unpaid_fines"`
+	CreatedAt        string  `json:"created_at"`
+	UpdatedAt        string  `json:"updated_at"`
 }
 
 // StudentListResponse represents the response payload for listing students
@@ -293,6 +305,7 @@ func (s *StudentDB) ToResponse() StudentResponse {
 		TotalBorrowed: s.TotalBorrowed,
 		TotalFines:    s.TotalFines,
 		UnpaidFines:   s.UnpaidFines,
+		Status:        "active", // Default status
 	}
 
 	// Handle optional fields
@@ -305,6 +318,22 @@ func (s *StudentDB) ToResponse() StudentResponse {
 	if s.Department.Valid {
 		response.Department = s.Department.String
 	}
+	if s.DepartmentID.Valid {
+		deptID := s.DepartmentID.Int32
+		response.DepartmentID = &deptID
+	}
+	if s.DepartmentName.Valid {
+		response.DepartmentName = s.DepartmentName.String
+	}
+	if s.Status.Valid {
+		response.Status = s.Status.String
+	}
+	if s.SuspensionReason.Valid {
+		response.SuspensionReason = s.SuspensionReason.String
+	}
+	if s.AdminNotes.Valid {
+		response.AdminNotes = s.AdminNotes.String
+	}
 
 	// Format dates
 	if s.EnrollmentDate.Valid {
@@ -315,6 +344,9 @@ func (s *StudentDB) ToResponse() StudentResponse {
 	}
 	if s.UpdatedAt.Valid {
 		response.UpdatedAt = s.UpdatedAt.Time.Format(time.RFC3339)
+	}
+	if s.GraduatedAt.Valid {
+		response.GraduatedAt = s.GraduatedAt.Time.Format(time.RFC3339)
 	}
 
 	return response
@@ -491,3 +523,37 @@ type EnrollmentTrendsResponse struct {
 	EndDate      time.Time         `json:"end_date"`
 	GeneratedAt  time.Time         `json:"generated_at"`
 }
+
+// SuspendStudentRequest represents a request to suspend a student
+type SuspendStudentRequest struct {
+	Reason string `json:"reason" binding:"required,min=1"`
+}
+
+// GraduateStudentRequest represents a request to graduate a student
+type GraduateStudentRequest struct {
+	GraduatedAt string `json:"graduated_at,omitempty"` // Optional, defaults to current time
+}
+
+// UpdateAdminNotesRequest represents a request to update admin notes
+type UpdateAdminNotesRequest struct {
+	AdminNotes string `json:"admin_notes"`
+}
+
+// Student status constants
+const (
+	StudentStatusActive    = "active"
+	StudentStatusSuspended = "suspended"
+	StudentStatusGraduated = "graduated"
+	StudentStatusInactive  = "inactive"
+)
+
+// Student status error messages
+var (
+	ErrStudentSuspended = errors.New("student is suspended")
+	ErrStudentGraduated = errors.New("student has graduated")
+	ErrReasonRequired   = errors.New("suspension reason is required")
+	ErrInvalidStatus    = errors.New("invalid student status")
+	ErrCannotSuspend    = errors.New("cannot suspend student in current status")
+	ErrCannotGraduate   = errors.New("cannot graduate student in current status")
+	ErrCannotReactivate = errors.New("cannot reactivate graduated student")
+)

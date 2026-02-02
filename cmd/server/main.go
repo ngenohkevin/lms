@@ -189,6 +189,8 @@ func main() {
 	uploadHandler := handlers.NewUploadHandler(bookService)
 	ratingHandler := handlers.NewRatingHandler(ratingService)
 	categoryHandler := handlers.NewCategoryHandler(db.Queries)
+	departmentHandler := handlers.NewDepartmentHandler(db.Queries)
+	academicYearHandler := handlers.NewAcademicYearHandler(db.Queries)
 	fineHandler := handlers.NewFineHandler(fineService)
 	userHandler := handlers.NewUserHandler(userService, authService)
 	inviteHandler := handlers.NewInviteHandler(inviteService, authService, cfg.Server.FrontendURL)
@@ -203,7 +205,7 @@ func main() {
 	// Setup routes
 	setupRoutes(router, authHandler, healthHandler, bookHandler, studentHandler,
 		transactionHandler, reservationHandler, notificationHandler,
-		reportHandler, importExportHandler, uploadHandler, ratingHandler, categoryHandler, fineHandler, userHandler, inviteHandler, setupHandler, permissionHandler, bookCopyHandler, authorHandler, seriesHandler, languageHandler, qrCodeHandler, authMiddleware, permissionMiddleware)
+		reportHandler, importExportHandler, uploadHandler, ratingHandler, categoryHandler, departmentHandler, academicYearHandler, fineHandler, userHandler, inviteHandler, setupHandler, permissionHandler, bookCopyHandler, authorHandler, seriesHandler, languageHandler, qrCodeHandler, authMiddleware, permissionMiddleware)
 
 	// Start scheduler
 	if err := schedulerService.Start(); err != nil {
@@ -302,6 +304,8 @@ func setupRoutes(
 	uploadHandler *handlers.UploadHandler,
 	ratingHandler *handlers.RatingHandler,
 	categoryHandler *handlers.CategoryHandler,
+	departmentHandler *handlers.DepartmentHandler,
+	academicYearHandler *handlers.AcademicYearHandler,
 	fineHandler *handlers.FineHandler,
 	userHandler *handlers.UserHandler,
 	inviteHandler *handlers.InviteHandler,
@@ -469,6 +473,12 @@ func setupRoutes(
 				students.PUT("/:id/password", requirePerm("users.manage"), studentHandler.ChangeStudentPassword)
 				students.GET("/:id/renewal-statistics", requirePerm("transactions.view"), transactionHandler.GetRenewalStatistics)
 
+				// Student status management routes
+				students.POST("/:id/suspend", requirePerm("students.suspend"), studentHandler.SuspendStudent)
+				students.POST("/:id/reactivate", requirePerm("students.suspend"), studentHandler.ReactivateStudent)
+				students.POST("/:id/graduate", requirePerm("students.graduate"), studentHandler.GraduateStudent)
+				students.PUT("/:id/admin-notes", requirePerm("students.admin_notes"), studentHandler.UpdateAdminNotes)
+
 				// Bulk operations
 				students.POST("/bulk-import", requirePerm("students.create"), studentHandler.BulkImportStudents)
 				students.POST("/generate-id", requirePerm("students.create"), studentHandler.GenerateStudentID)
@@ -556,6 +566,36 @@ func setupRoutes(
 				categories.DELETE("/:id", requirePerm("categories.manage"), categoryHandler.DeleteCategory)
 				categories.POST("/:id/deactivate", requirePerm("categories.manage"), categoryHandler.DeactivateCategory)
 				categories.POST("/:id/activate", requirePerm("categories.manage"), categoryHandler.ActivateCategory)
+			}
+
+			// Department routes
+			departments := protected.Group("/departments")
+			{
+				// View routes
+				departments.GET("", requirePerm("departments.view"), departmentHandler.ListDepartments)
+				departments.GET("/:id", requirePerm("departments.view"), departmentHandler.GetDepartment)
+
+				// Manage routes
+				departments.POST("", requirePerm("departments.manage"), departmentHandler.CreateDepartment)
+				departments.PUT("/:id", requirePerm("departments.manage"), departmentHandler.UpdateDepartment)
+				departments.DELETE("/:id", requirePerm("departments.manage"), departmentHandler.DeleteDepartment)
+				departments.POST("/:id/deactivate", requirePerm("departments.manage"), departmentHandler.DeactivateDepartment)
+				departments.POST("/:id/activate", requirePerm("departments.manage"), departmentHandler.ActivateDepartment)
+			}
+
+			// Academic Year routes
+			academicYears := protected.Group("/academic-years")
+			{
+				// View routes
+				academicYears.GET("", requirePerm("academic_years.view"), academicYearHandler.ListAcademicYears)
+				academicYears.GET("/:id", requirePerm("academic_years.view"), academicYearHandler.GetAcademicYear)
+
+				// Manage routes
+				academicYears.POST("", requirePerm("academic_years.manage"), academicYearHandler.CreateAcademicYear)
+				academicYears.PUT("/:id", requirePerm("academic_years.manage"), academicYearHandler.UpdateAcademicYear)
+				academicYears.DELETE("/:id", requirePerm("academic_years.manage"), academicYearHandler.DeleteAcademicYear)
+				academicYears.POST("/:id/deactivate", requirePerm("academic_years.manage"), academicYearHandler.DeactivateAcademicYear)
+				academicYears.POST("/:id/activate", requirePerm("academic_years.manage"), academicYearHandler.ActivateAcademicYear)
 			}
 
 			// Fine routes

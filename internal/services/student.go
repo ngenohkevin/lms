@@ -58,6 +58,12 @@ type StudentQuerier interface {
 	ListStudentsWithOverdue(ctx context.Context, params queries.ListStudentsWithOverdueParams) ([]queries.Student, error)
 	CountStudentsWithFines(ctx context.Context) (int64, error)
 	CountStudentsWithOverdueBooks(ctx context.Context) (int64, error)
+
+	// Student Status Management
+	SuspendStudent(ctx context.Context, params queries.SuspendStudentParams) (queries.Student, error)
+	ActivateStudent(ctx context.Context, id int32) (queries.Student, error)
+	GraduateStudent(ctx context.Context, params queries.GraduateStudentParams) (queries.Student, error)
+	UpdateStudentAdminNotes(ctx context.Context, params queries.UpdateStudentAdminNotesParams) (queries.Student, error)
 }
 
 // AuthServiceInterface defines the interface for auth-related operations
@@ -1900,4 +1906,241 @@ func (s *StudentService) CleanupExpiredExports() error {
 	}
 
 	return nil
+}
+
+// SuspendStudent suspends a student with a required reason
+func (s *StudentService) SuspendStudent(ctx context.Context, id int32, reason string) (*models.StudentDB, error) {
+	// Get the student first to check current status
+	student, err := s.GetStudentByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if student can be suspended
+	currentStatus := models.StudentStatusActive
+	if student.Status.Valid {
+		currentStatus = student.Status.String
+	}
+
+	if currentStatus == models.StudentStatusGraduated {
+		return nil, models.ErrCannotSuspend
+	}
+
+	if currentStatus == models.StudentStatusSuspended {
+		return nil, fmt.Errorf("student is already suspended")
+	}
+
+	// Suspend the student
+	suspendedStudent, err := s.queries.SuspendStudent(ctx, queries.SuspendStudentParams{
+		ID:               id,
+		SuspensionReason: pgtype.Text{String: reason, Valid: true},
+	})
+	if err != nil {
+		if strings.Contains(err.Error(), "no rows") {
+			return nil, models.ErrStudentNotFound
+		}
+		return nil, fmt.Errorf("failed to suspend student: %w", err)
+	}
+
+	// Invalidate cache
+	if s.cacheService != nil {
+		_ = s.cacheService.InvalidateByPattern(ctx, "students:*")
+		_ = s.cacheService.InvalidateStudentProfile(ctx, int(id))
+	}
+
+	return &models.StudentDB{
+		ID:               suspendedStudent.ID,
+		StudentID:        suspendedStudent.StudentID,
+		FirstName:        suspendedStudent.FirstName,
+		LastName:         suspendedStudent.LastName,
+		Email:            suspendedStudent.Email,
+		Phone:            suspendedStudent.Phone,
+		YearOfStudy:      suspendedStudent.YearOfStudy,
+		Department:       suspendedStudent.Department,
+		EnrollmentDate:   suspendedStudent.EnrollmentDate,
+		PasswordHash:     suspendedStudent.PasswordHash,
+		IsActive:         suspendedStudent.IsActive,
+		Status:           suspendedStudent.Status,
+		SuspensionReason: suspendedStudent.SuspensionReason,
+		GraduatedAt:      suspendedStudent.GraduatedAt,
+		AdminNotes:       suspendedStudent.AdminNotes,
+		MaxBooks:         suspendedStudent.MaxBooks,
+		DeletedAt:        suspendedStudent.DeletedAt,
+		CreatedAt:        suspendedStudent.CreatedAt,
+		UpdatedAt:        suspendedStudent.UpdatedAt,
+	}, nil
+}
+
+// ReactivateStudent reactivates a suspended or inactive student
+func (s *StudentService) ReactivateStudent(ctx context.Context, id int32) (*models.StudentDB, error) {
+	// Get the student first to check current status
+	student, err := s.GetStudentByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if student can be reactivated
+	currentStatus := models.StudentStatusActive
+	if student.Status.Valid {
+		currentStatus = student.Status.String
+	}
+
+	if currentStatus == models.StudentStatusGraduated {
+		return nil, models.ErrCannotReactivate
+	}
+
+	if currentStatus == models.StudentStatusActive && student.IsActive.Bool {
+		return nil, fmt.Errorf("student is already active")
+	}
+
+	// Reactivate the student
+	activatedStudent, err := s.queries.ActivateStudent(ctx, id)
+	if err != nil {
+		if strings.Contains(err.Error(), "no rows") {
+			return nil, models.ErrStudentNotFound
+		}
+		return nil, fmt.Errorf("failed to reactivate student: %w", err)
+	}
+
+	// Invalidate cache
+	if s.cacheService != nil {
+		_ = s.cacheService.InvalidateByPattern(ctx, "students:*")
+		_ = s.cacheService.InvalidateStudentProfile(ctx, int(id))
+	}
+
+	return &models.StudentDB{
+		ID:               activatedStudent.ID,
+		StudentID:        activatedStudent.StudentID,
+		FirstName:        activatedStudent.FirstName,
+		LastName:         activatedStudent.LastName,
+		Email:            activatedStudent.Email,
+		Phone:            activatedStudent.Phone,
+		YearOfStudy:      activatedStudent.YearOfStudy,
+		Department:       activatedStudent.Department,
+		EnrollmentDate:   activatedStudent.EnrollmentDate,
+		PasswordHash:     activatedStudent.PasswordHash,
+		IsActive:         activatedStudent.IsActive,
+		Status:           activatedStudent.Status,
+		SuspensionReason: activatedStudent.SuspensionReason,
+		GraduatedAt:      activatedStudent.GraduatedAt,
+		AdminNotes:       activatedStudent.AdminNotes,
+		MaxBooks:         activatedStudent.MaxBooks,
+		DeletedAt:        activatedStudent.DeletedAt,
+		CreatedAt:        activatedStudent.CreatedAt,
+		UpdatedAt:        activatedStudent.UpdatedAt,
+	}, nil
+}
+
+// GraduateStudent marks a student as graduated
+func (s *StudentService) GraduateStudent(ctx context.Context, id int32, graduatedAt *time.Time) (*models.StudentDB, error) {
+	// Get the student first to check current status
+	student, err := s.GetStudentByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if student can be graduated
+	currentStatus := models.StudentStatusActive
+	if student.Status.Valid {
+		currentStatus = student.Status.String
+	}
+
+	if currentStatus == models.StudentStatusGraduated {
+		return nil, fmt.Errorf("student is already graduated")
+	}
+
+	// Prepare graduation timestamp
+	var graduatedAtParam pgtype.Timestamp
+	if graduatedAt != nil {
+		graduatedAtParam = pgtype.Timestamp{Time: *graduatedAt, Valid: true}
+	}
+
+	// Graduate the student
+	graduatedStudent, err := s.queries.GraduateStudent(ctx, queries.GraduateStudentParams{
+		ID:          id,
+		GraduatedAt: graduatedAtParam,
+	})
+	if err != nil {
+		if strings.Contains(err.Error(), "no rows") {
+			return nil, models.ErrStudentNotFound
+		}
+		return nil, fmt.Errorf("failed to graduate student: %w", err)
+	}
+
+	// Invalidate cache
+	if s.cacheService != nil {
+		_ = s.cacheService.InvalidateByPattern(ctx, "students:*")
+		_ = s.cacheService.InvalidateStudentProfile(ctx, int(id))
+	}
+
+	return &models.StudentDB{
+		ID:               graduatedStudent.ID,
+		StudentID:        graduatedStudent.StudentID,
+		FirstName:        graduatedStudent.FirstName,
+		LastName:         graduatedStudent.LastName,
+		Email:            graduatedStudent.Email,
+		Phone:            graduatedStudent.Phone,
+		YearOfStudy:      graduatedStudent.YearOfStudy,
+		Department:       graduatedStudent.Department,
+		EnrollmentDate:   graduatedStudent.EnrollmentDate,
+		PasswordHash:     graduatedStudent.PasswordHash,
+		IsActive:         graduatedStudent.IsActive,
+		Status:           graduatedStudent.Status,
+		SuspensionReason: graduatedStudent.SuspensionReason,
+		GraduatedAt:      graduatedStudent.GraduatedAt,
+		AdminNotes:       graduatedStudent.AdminNotes,
+		MaxBooks:         graduatedStudent.MaxBooks,
+		DeletedAt:        graduatedStudent.DeletedAt,
+		CreatedAt:        graduatedStudent.CreatedAt,
+		UpdatedAt:        graduatedStudent.UpdatedAt,
+	}, nil
+}
+
+// UpdateAdminNotes updates the admin notes for a student
+func (s *StudentService) UpdateAdminNotes(ctx context.Context, id int32, notes string) (*models.StudentDB, error) {
+	// Check if student exists
+	_, err := s.GetStudentByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update admin notes
+	updatedStudent, err := s.queries.UpdateStudentAdminNotes(ctx, queries.UpdateStudentAdminNotesParams{
+		ID:         id,
+		AdminNotes: pgtype.Text{String: notes, Valid: notes != ""},
+	})
+	if err != nil {
+		if strings.Contains(err.Error(), "no rows") {
+			return nil, models.ErrStudentNotFound
+		}
+		return nil, fmt.Errorf("failed to update admin notes: %w", err)
+	}
+
+	// Invalidate cache
+	if s.cacheService != nil {
+		_ = s.cacheService.InvalidateByPattern(ctx, "students:*")
+		_ = s.cacheService.InvalidateStudentProfile(ctx, int(id))
+	}
+
+	return &models.StudentDB{
+		ID:               updatedStudent.ID,
+		StudentID:        updatedStudent.StudentID,
+		FirstName:        updatedStudent.FirstName,
+		LastName:         updatedStudent.LastName,
+		Email:            updatedStudent.Email,
+		Phone:            updatedStudent.Phone,
+		YearOfStudy:      updatedStudent.YearOfStudy,
+		Department:       updatedStudent.Department,
+		EnrollmentDate:   updatedStudent.EnrollmentDate,
+		PasswordHash:     updatedStudent.PasswordHash,
+		IsActive:         updatedStudent.IsActive,
+		Status:           updatedStudent.Status,
+		SuspensionReason: updatedStudent.SuspensionReason,
+		GraduatedAt:      updatedStudent.GraduatedAt,
+		AdminNotes:       updatedStudent.AdminNotes,
+		MaxBooks:         updatedStudent.MaxBooks,
+		DeletedAt:        updatedStudent.DeletedAt,
+		CreatedAt:        updatedStudent.CreatedAt,
+		UpdatedAt:        updatedStudent.UpdatedAt,
+	}, nil
 }

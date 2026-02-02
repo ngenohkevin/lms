@@ -1354,3 +1354,339 @@ func (h *StudentHandler) ChangePassword(c *gin.Context) {
 		Message: "Password changed successfully",
 	})
 }
+
+// SuspendStudent handles POST /api/v1/students/:id/suspend
+// @Summary Suspend a student
+// @Description Suspend a student account with a required reason
+// @Tags students
+// @Accept json
+// @Produce json
+// @Param id path int true "Student ID"
+// @Param request body models.SuspendStudentRequest true "Suspension request"
+// @Success 200 {object} SuccessResponse "Student suspended successfully"
+// @Failure 400 {object} ErrorResponse "Validation error"
+// @Failure 404 {object} ErrorResponse "Student not found"
+// @Failure 500 {object} ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Router /students/{id}/suspend [post]
+func (h *StudentHandler) SuspendStudent(c *gin.Context) {
+	idParam := c.Param("id")
+	id, err := strconv.ParseInt(idParam, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INVALID_ID",
+				Message: "Invalid student ID format",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	var req models.SuspendStudentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid request data",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	// Validate reason is provided
+	if strings.TrimSpace(req.Reason) == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Suspension reason is required",
+				Details: "Please provide a reason for the suspension",
+			},
+		})
+		return
+	}
+
+	student, err := h.studentService.SuspendStudent(c.Request.Context(), int32(id), req.Reason)
+	if err != nil {
+		if err == models.ErrStudentNotFound {
+			c.JSON(http.StatusNotFound, ErrorResponse{
+				Success: false,
+				Error: ErrorDetail{
+					Code:    "STUDENT_NOT_FOUND",
+					Message: "Student not found",
+					Details: err.Error(),
+				},
+			})
+			return
+		}
+		if err == models.ErrCannotSuspend {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Success: false,
+				Error: ErrorDetail{
+					Code:    "CANNOT_SUSPEND",
+					Message: "Cannot suspend student",
+					Details: err.Error(),
+				},
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to suspend student",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    student.ToResponse(),
+		Message: "Student suspended successfully",
+	})
+}
+
+// ReactivateStudent handles POST /api/v1/students/:id/reactivate
+// @Summary Reactivate a suspended student
+// @Description Reactivate a suspended student account
+// @Tags students
+// @Produce json
+// @Param id path int true "Student ID"
+// @Success 200 {object} SuccessResponse "Student reactivated successfully"
+// @Failure 400 {object} ErrorResponse "Validation error"
+// @Failure 404 {object} ErrorResponse "Student not found"
+// @Failure 500 {object} ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Router /students/{id}/reactivate [post]
+func (h *StudentHandler) ReactivateStudent(c *gin.Context) {
+	idParam := c.Param("id")
+	id, err := strconv.ParseInt(idParam, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INVALID_ID",
+				Message: "Invalid student ID format",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	student, err := h.studentService.ReactivateStudent(c.Request.Context(), int32(id))
+	if err != nil {
+		if err == models.ErrStudentNotFound {
+			c.JSON(http.StatusNotFound, ErrorResponse{
+				Success: false,
+				Error: ErrorDetail{
+					Code:    "STUDENT_NOT_FOUND",
+					Message: "Student not found",
+					Details: err.Error(),
+				},
+			})
+			return
+		}
+		if err == models.ErrCannotReactivate {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Success: false,
+				Error: ErrorDetail{
+					Code:    "CANNOT_REACTIVATE",
+					Message: "Cannot reactivate graduated student",
+					Details: err.Error(),
+				},
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to reactivate student",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    student.ToResponse(),
+		Message: "Student reactivated successfully",
+	})
+}
+
+// GraduateStudent handles POST /api/v1/students/:id/graduate
+// @Summary Graduate a student
+// @Description Mark a student as graduated
+// @Tags students
+// @Accept json
+// @Produce json
+// @Param id path int true "Student ID"
+// @Param request body models.GraduateStudentRequest false "Graduation request"
+// @Success 200 {object} SuccessResponse "Student graduated successfully"
+// @Failure 400 {object} ErrorResponse "Validation error"
+// @Failure 404 {object} ErrorResponse "Student not found"
+// @Failure 500 {object} ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Router /students/{id}/graduate [post]
+func (h *StudentHandler) GraduateStudent(c *gin.Context) {
+	idParam := c.Param("id")
+	id, err := strconv.ParseInt(idParam, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INVALID_ID",
+				Message: "Invalid student ID format",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	var req models.GraduateStudentRequest
+	// Bind JSON if present, but it's optional
+	_ = c.ShouldBindJSON(&req)
+
+	// Parse graduation date if provided
+	var graduatedAt *time.Time
+	if req.GraduatedAt != "" {
+		parsed, err := time.Parse(time.RFC3339, req.GraduatedAt)
+		if err != nil {
+			// Try date-only format
+			parsed, err = time.Parse("2006-01-02", req.GraduatedAt)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, ErrorResponse{
+					Success: false,
+					Error: ErrorDetail{
+						Code:    "VALIDATION_ERROR",
+						Message: "Invalid graduation date format",
+						Details: "Use RFC3339 format (e.g., 2024-01-15T00:00:00Z) or YYYY-MM-DD",
+					},
+				})
+				return
+			}
+		}
+		graduatedAt = &parsed
+	}
+
+	student, err := h.studentService.GraduateStudent(c.Request.Context(), int32(id), graduatedAt)
+	if err != nil {
+		if err == models.ErrStudentNotFound {
+			c.JSON(http.StatusNotFound, ErrorResponse{
+				Success: false,
+				Error: ErrorDetail{
+					Code:    "STUDENT_NOT_FOUND",
+					Message: "Student not found",
+					Details: err.Error(),
+				},
+			})
+			return
+		}
+		if err == models.ErrCannotGraduate {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Success: false,
+				Error: ErrorDetail{
+					Code:    "CANNOT_GRADUATE",
+					Message: "Cannot graduate student",
+					Details: err.Error(),
+				},
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to graduate student",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    student.ToResponse(),
+		Message: "Student graduated successfully",
+	})
+}
+
+// UpdateAdminNotes handles PUT /api/v1/students/:id/admin-notes
+// @Summary Update admin notes for a student
+// @Description Update the administrative notes for a student (visible to librarians only)
+// @Tags students
+// @Accept json
+// @Produce json
+// @Param id path int true "Student ID"
+// @Param request body models.UpdateAdminNotesRequest true "Admin notes request"
+// @Success 200 {object} SuccessResponse "Admin notes updated successfully"
+// @Failure 400 {object} ErrorResponse "Validation error"
+// @Failure 404 {object} ErrorResponse "Student not found"
+// @Failure 500 {object} ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Router /students/{id}/admin-notes [put]
+func (h *StudentHandler) UpdateAdminNotes(c *gin.Context) {
+	idParam := c.Param("id")
+	id, err := strconv.ParseInt(idParam, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INVALID_ID",
+				Message: "Invalid student ID format",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	var req models.UpdateAdminNotesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid request data",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	student, err := h.studentService.UpdateAdminNotes(c.Request.Context(), int32(id), req.AdminNotes)
+	if err != nil {
+		if err == models.ErrStudentNotFound {
+			c.JSON(http.StatusNotFound, ErrorResponse{
+				Success: false,
+				Error: ErrorDetail{
+					Code:    "STUDENT_NOT_FOUND",
+					Message: "Student not found",
+					Details: err.Error(),
+				},
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to update admin notes",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    student.ToResponse(),
+		Message: "Admin notes updated successfully",
+	})
+}

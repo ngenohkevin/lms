@@ -173,6 +173,27 @@ func (m *MockQueries) CountStudentsWithOverdueBooks(ctx context.Context) (int64,
 	return args.Get(0).(int64), args.Error(1)
 }
 
+// Student Status Management Mock Methods
+func (m *MockQueries) SuspendStudent(ctx context.Context, params queries.SuspendStudentParams) (queries.Student, error) {
+	args := m.Called(ctx, params)
+	return args.Get(0).(queries.Student), args.Error(1)
+}
+
+func (m *MockQueries) ActivateStudent(ctx context.Context, id int32) (queries.Student, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(queries.Student), args.Error(1)
+}
+
+func (m *MockQueries) GraduateStudent(ctx context.Context, params queries.GraduateStudentParams) (queries.Student, error) {
+	args := m.Called(ctx, params)
+	return args.Get(0).(queries.Student), args.Error(1)
+}
+
+func (m *MockQueries) UpdateStudentAdminNotes(ctx context.Context, params queries.UpdateStudentAdminNotesParams) (queries.Student, error) {
+	args := m.Called(ctx, params)
+	return args.Get(0).(queries.Student), args.Error(1)
+}
+
 // Helper function to create a mock student
 func createMockStudent() queries.Student {
 	now := time.Now()
