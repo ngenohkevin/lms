@@ -94,6 +94,11 @@ func (m *MockReservationQuerier) CancelReservation(ctx context.Context, id int32
 	return args.Get(0).(queries.Reservation), args.Error(1)
 }
 
+func (m *MockReservationQuerier) DeleteReservation(ctx context.Context, id int32) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
 func (m *MockReservationQuerier) GetBookByID(ctx context.Context, id int32) (queries.Book, error) {
 	args := m.Called(ctx, id)
 	return args.Get(0).(queries.Book), args.Error(1)
