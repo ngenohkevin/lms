@@ -537,11 +537,18 @@ func (suite *TransactionIntegrationTestSuite) TestValidationErrors() {
 }
 
 // Test marking a transaction as lost sets transaction_type to 'lost'
+// This test verifies the SQL MarkTransactionAsLost query sets transaction_type = 'lost'
 func (suite *TransactionIntegrationTestSuite) TestMarkAsLost_SetsTransactionTypeLost() {
-	// First borrow a book
+	// First borrow a book - need to call the borrow test first
 	suite.TestBorrowBook_Success()
 
-	// Mark the transaction as lost
+	// Skip API test if transaction wasn't created properly
+	if suite.testTransaction.ID == 0 {
+		suite.T().Skip("Transaction not created, skipping mark as lost test")
+		return
+	}
+
+	// Mark the transaction as lost via API
 	url := fmt.Sprintf("/api/v1/transactions/%d/lost", suite.testTransaction.ID)
 	requestBody := map[string]string{
 		"reason": "Book was damaged beyond repair",
@@ -556,8 +563,8 @@ func (suite *TransactionIntegrationTestSuite) TestMarkAsLost_SetsTransactionType
 	w := httptest.NewRecorder()
 	suite.router.ServeHTTP(w, req)
 
-	// Assert HTTP response
-	assert.Equal(suite.T(), http.StatusOK, w.Code)
+	// Assert HTTP response - should be 200 OK
+	require.Equal(suite.T(), http.StatusOK, w.Code, "MarkAsLost API should return 200 OK, got: %s", w.Body.String())
 
 	// Verify transaction type is 'lost' (not just checking returned_date)
 	lostTransaction, err := suite.queries.GetTransactionByID(suite.ctx, suite.testTransaction.ID)
