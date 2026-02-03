@@ -22,7 +22,7 @@ type TransactionServiceInterface interface {
 	BorrowByBarcode(ctx context.Context, req services.BorrowByBarcodeRequest) (*services.TransactionResponse, error)
 	ReturnBook(ctx context.Context, transactionID int32) (*services.TransactionResponse, error)
 	ReturnByBarcode(ctx context.Context, req services.ReturnByBarcodeRequest) (*services.TransactionResponse, error)
-	RenewBook(ctx context.Context, transactionID, librarianID int32) (*services.TransactionResponse, error)
+	RenewBook(ctx context.Context, transactionID, librarianID int32, extensionDays *int32) (*services.TransactionResponse, error)
 	GetOverdueTransactions(ctx context.Context) ([]queries.ListOverdueTransactionsRow, error)
 	PayFine(ctx context.Context, transactionID int32) error
 	CancelTransaction(ctx context.Context, transactionID int32, reason string) (*services.TransactionResponse, error)
@@ -208,6 +208,7 @@ func (h *TransactionHandler) RenewBook(c *gin.Context) {
 		c.Request.Context(),
 		int32(transactionID),
 		req.LibrarianID,
+		req.ExtensionDays,
 	)
 	if err != nil {
 		statusCode := http.StatusBadRequest
@@ -555,6 +556,9 @@ func convertToTransactionResponse(tx *services.TransactionResponse) models.Trans
 		Notes:           tx.Notes,
 		CreatedAt:       tx.CreatedAt,
 		UpdatedAt:       tx.UpdatedAt,
+		RenewalCount:    tx.RenewalCount,
+		LastRenewedAt:   tx.LastRenewedAt,
+		LastRenewedBy:   tx.LastRenewedBy,
 	}
 
 	// Map return condition fields if present
@@ -1092,6 +1096,9 @@ func convertToTransactionResponseWithCopy(tx *services.TransactionResponse) mode
 		CopyNumber:      tx.CopyNumber,
 		CopyBarcode:     tx.CopyBarcode,
 		CopyCondition:   tx.CopyCondition,
+		RenewalCount:    tx.RenewalCount,
+		LastRenewedAt:   tx.LastRenewedAt,
+		LastRenewedBy:   tx.LastRenewedBy,
 	}
 
 	// Map return condition fields if present

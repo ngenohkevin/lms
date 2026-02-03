@@ -144,6 +144,7 @@ type Querier interface {
 	DeleteOldQueueItems(ctx context.Context, createdAt pgtype.Timestamp) error
 	DeletePermission(ctx context.Context, id int32) error
 	DeleteSeries(ctx context.Context, id int32) error
+	DeleteSetting(ctx context.Context, key string) error
 	DeleteUserOverride(ctx context.Context, arg DeleteUserOverrideParams) error
 	DeleteUserOverrideByCode(ctx context.Context, arg DeleteUserOverrideByCodeParams) error
 	GetAcademicYearAnalytics(ctx context.Context, arg GetAcademicYearAnalyticsParams) (GetAcademicYearAnalyticsRow, error)
@@ -186,6 +187,7 @@ type Querier interface {
 	GetFailedEmailDeliveries(ctx context.Context, limit int32) ([]EmailDelivery, error)
 	GetFineByTransactionID(ctx context.Context, id int32) (GetFineByTransactionIDRow, error)
 	GetFineOverviewStats(ctx context.Context) (GetFineOverviewStatsRow, error)
+	GetFineSettings(ctx context.Context) ([]Setting, error)
 	GetFineStatistics(ctx context.Context, arg GetFineStatisticsParams) (GetFineStatisticsRow, error)
 	GetFirstAvailableCopy(ctx context.Context, bookID int32) (BookCopy, error)
 	GetGenrePopularity(ctx context.Context, arg GetGenrePopularityParams) ([]GetGenrePopularityRow, error)
@@ -223,6 +225,8 @@ type Querier interface {
 	GetSeasonalTrends(ctx context.Context, arg GetSeasonalTrendsParams) ([]GetSeasonalTrendsRow, error)
 	GetSeriesByID(ctx context.Context, id int32) (BookSeries, error)
 	GetSeriesByName(ctx context.Context, name string) (BookSeries, error)
+	GetSetting(ctx context.Context, key string) (Setting, error)
+	GetSettingsByCategory(ctx context.Context, category string) ([]Setting, error)
 	GetStudentActivity(ctx context.Context, arg GetStudentActivityParams) ([]GetStudentActivityRow, error)
 	GetStudentBehaviorAnalysis(ctx context.Context, arg GetStudentBehaviorAnalysisParams) ([]GetStudentBehaviorAnalysisRow, error)
 	GetStudentBorrowingStats(ctx context.Context) ([]GetStudentBorrowingStatsRow, error)
@@ -245,6 +249,8 @@ type Querier interface {
 	GetTransactionByID(ctx context.Context, id int32) (GetTransactionByIDRow, error)
 	// Copy-level transaction tracking queries
 	GetTransactionByIDWithCopy(ctx context.Context, id int32) (GetTransactionByIDWithCopyRow, error)
+	// Get the renewal count for a specific transaction
+	GetTransactionRenewalCount(ctx context.Context, id int32) (int32, error)
 	GetUnpaidFinesByStudent(ctx context.Context, studentID int32) ([]GetUnpaidFinesByStudentRow, error)
 	// Phase 8.3 - Advanced Analytics Queries
 	GetUsagePatternAnalysis(ctx context.Context, arg GetUsagePatternAnalysisParams) ([]GetUsagePatternAnalysisRow, error)
@@ -318,6 +324,7 @@ type Querier interface {
 	ListRolePermissions(ctx context.Context, role string) ([]Permission, error)
 	ListSeries(ctx context.Context, arg ListSeriesParams) ([]BookSeries, error)
 	ListSeriesBooks(ctx context.Context, seriesID pgtype.Int4) ([]Book, error)
+	ListSettings(ctx context.Context) ([]Setting, error)
 	ListStudents(ctx context.Context, arg ListStudentsParams) ([]Student, error)
 	ListStudentsByYear(ctx context.Context, arg ListStudentsByYearParams) ([]Student, error)
 	ListStudentsWithDepartment(ctx context.Context, arg ListStudentsWithDepartmentParams) ([]ListStudentsWithDepartmentRow, error)
@@ -350,6 +357,9 @@ type Querier interface {
 	PayTransactionFine(ctx context.Context, id int32) error
 	RemoveBookAuthor(ctx context.Context, arg RemoveBookAuthorParams) error
 	RemoveRolePermission(ctx context.Context, arg RemoveRolePermissionParams) error
+	// Renew a transaction by updating its due date and incrementing renewal count
+	// This replaces the old approach of creating a new "renew" type transaction
+	RenewTransaction(ctx context.Context, arg RenewTransactionParams) (Transaction, error)
 	ResetStuckQueueItems(ctx context.Context, processingStartedAt pgtype.Timestamp) error
 	ReturnBook(ctx context.Context, arg ReturnBookParams) (Transaction, error)
 	SearchAuthors(ctx context.Context, arg SearchAuthorsParams) ([]Author, error)
@@ -391,6 +401,7 @@ type Querier interface {
 	UpdateEmailDeliveryToSent(ctx context.Context, id int32) (EmailDelivery, error)
 	UpdateExportFileDownload(ctx context.Context, id int32) (ExportFile, error)
 	UpdateFineAmount(ctx context.Context, arg UpdateFineAmountParams) error
+	UpdateFineSettings(ctx context.Context, arg UpdateFineSettingsParams) error
 	UpdateImportHistory(ctx context.Context, arg UpdateImportHistoryParams) (ImportHistory, error)
 	UpdateInviteToken(ctx context.Context, arg UpdateInviteTokenParams) (UserInvite, error)
 	UpdateLanguage(ctx context.Context, arg UpdateLanguageParams) (Language, error)
@@ -403,6 +414,7 @@ type Querier interface {
 	UpdateQueueItemToProcessing(ctx context.Context, arg UpdateQueueItemToProcessingParams) (EmailQueue, error)
 	UpdateReservationStatus(ctx context.Context, arg UpdateReservationStatusParams) (Reservation, error)
 	UpdateSeries(ctx context.Context, arg UpdateSeriesParams) (BookSeries, error)
+	UpdateSetting(ctx context.Context, arg UpdateSettingParams) (Setting, error)
 	UpdateStudent(ctx context.Context, arg UpdateStudentParams) (Student, error)
 	UpdateStudentAdminNotes(ctx context.Context, arg UpdateStudentAdminNotesParams) (Student, error)
 	UpdateStudentDepartmentID(ctx context.Context, arg UpdateStudentDepartmentIDParams) (Student, error)
@@ -416,6 +428,7 @@ type Querier interface {
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error)
 	UpdateUserStatus(ctx context.Context, arg UpdateUserStatusParams) (User, error)
+	UpsertSetting(ctx context.Context, arg UpsertSettingParams) (Setting, error)
 	UpsertUser(ctx context.Context, arg UpsertUserParams) (User, error)
 	WaiveFineByTransactionID(ctx context.Context, arg WaiveFineByTransactionIDParams) (Transaction, error)
 }

@@ -41,6 +41,8 @@ type TransactionQuerier interface {
 	HasActiveReservationsByOtherStudents(ctx context.Context, arg queries.HasActiveReservationsByOtherStudentsParams) (bool, error)
 	ListRenewalsByStudentAndBook(ctx context.Context, arg queries.ListRenewalsByStudentAndBookParams) ([]queries.ListRenewalsByStudentAndBookRow, error)
 	GetRenewalStatisticsByStudent(ctx context.Context, studentID int32) (queries.GetRenewalStatisticsByStudentRow, error)
+	GetTransactionRenewalCount(ctx context.Context, id int32) (int32, error)
+	RenewTransaction(ctx context.Context, arg queries.RenewTransactionParams) (queries.Transaction, error)
 	// Stats queries
 	CountTransactions(ctx context.Context) (int64, error)
 	ListActiveBorrowings(ctx context.Context, arg queries.ListActiveBorrowingsParams) ([]queries.ListActiveBorrowingsRow, error)
@@ -156,6 +158,10 @@ type TransactionResponse struct {
 	CopyNumber    *string `json:"copy_number,omitempty"`
 	CopyBarcode   *string `json:"copy_barcode,omitempty"`
 	CopyCondition *string `json:"copy_condition,omitempty"`
+	// Renewal tracking fields
+	RenewalCount   int32      `json:"renewal_count"`
+	LastRenewedAt  *time.Time `json:"last_renewed_at,omitempty"`
+	LastRenewedBy  *int32     `json:"last_renewed_by,omitempty"`
 }
 
 // BorrowBookWithCopyRequest represents a book borrowing request with optional copy specification
@@ -621,7 +627,9 @@ func (s *TransactionService) GetActiveBorrowingByCopy(ctx context.Context, copyI
 }
 
 // RenewBook renews a borrowed book with comprehensive validation
-func (s *TransactionService) RenewBook(ctx context.Context, transactionID, librarianID int32) (*TransactionResponse, error) {
+// It updates the existing transaction's due date instead of creating a new transaction,
+// preventing orphan transaction issues. Optionally accepts custom extension days.
+func (s *TransactionService) RenewBook(ctx context.Context, transactionID, librarianID int32, extensionDays *int32) (*TransactionResponse, error) {
 	// Get original transaction
 	transactionRow, err := s.queries.GetTransactionByID(ctx, transactionID)
 	if err != nil {
@@ -631,30 +639,27 @@ func (s *TransactionService) RenewBook(ctx context.Context, transactionID, libra
 		return nil, fmt.Errorf("failed to get transaction: %w", err)
 	}
 
-	// Comprehensive renewal validation
-	if err := s.validateRenewalEligibility(ctx, transactionRow); err != nil {
+	// Comprehensive renewal validation (checks renewal count from transaction, not separate records)
+	if err := s.validateRenewalEligibilityV2(ctx, transactionRow); err != nil {
 		return nil, err
 	}
 
-	// Calculate new due date based on student year
+	// Calculate new due date based on student year (or custom extension days)
 	student, err := s.queries.GetStudentByID(ctx, transactionRow.StudentID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get student: %w", err)
 	}
 
-	newDueDate := s.calculateDueDate(student, nil) // Renewals always use year-based default
+	newDueDate := s.calculateDueDate(student, extensionDays)
 
-	// Create renewal transaction
-	transaction, err := s.queries.CreateTransaction(ctx, queries.CreateTransactionParams{
-		StudentID:       transactionRow.StudentID,
-		BookID:          transactionRow.BookID,
-		TransactionType: "renew",
-		DueDate:         pgtype.Timestamp{Time: newDueDate, Valid: true},
-		LibrarianID:     pgtype.Int4{Int32: librarianID, Valid: true},
-		Notes:           pgtype.Text{String: fmt.Sprintf("Renewal of transaction #%d", transactionID), Valid: true},
+	// Update the existing transaction with new due date and increment renewal count
+	transaction, err := s.queries.RenewTransaction(ctx, queries.RenewTransactionParams{
+		ID:         transactionID,
+		NewDueDate: pgtype.Timestamp{Time: newDueDate, Valid: true},
+		RenewedBy:  librarianID,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create renewal transaction: %w", err)
+		return nil, fmt.Errorf("failed to renew transaction: %w", err)
 	}
 
 	return s.convertToTransactionResponse(transaction), nil
@@ -1048,6 +1053,7 @@ func (s *TransactionService) convertToTransactionResponse(tx queries.Transaction
 		Notes:           tx.Notes.String,
 		CreatedAt:       tx.CreatedAt.Time,
 		UpdatedAt:       tx.UpdatedAt.Time,
+		RenewalCount:    0,
 	}
 
 	if tx.ReturnedDate.Valid {
@@ -1077,13 +1083,27 @@ func (s *TransactionService) convertToTransactionResponse(tx queries.Transaction
 		response.ConditionNotes = tx.ConditionNotes.String
 	}
 
+	// Renewal tracking fields
+	if tx.RenewalCount.Valid {
+		response.RenewalCount = tx.RenewalCount.Int32
+	}
+
+	if tx.LastRenewedAt.Valid {
+		response.LastRenewedAt = &tx.LastRenewedAt.Time
+	}
+
+	if tx.LastRenewedBy.Valid {
+		response.LastRenewedBy = &tx.LastRenewedBy.Int32
+	}
+
 	return response
 }
 
 // Phase 6.7: Enhanced Renewal System Functions
 
-// validateRenewalEligibility performs comprehensive validation for renewal eligibility
-func (s *TransactionService) validateRenewalEligibility(ctx context.Context, tx queries.GetTransactionByIDRow) error {
+// validateRenewalEligibilityV2 uses the renewal_count field from the transaction itself
+// This is the preferred method as it doesn't rely on counting separate renewal transactions
+func (s *TransactionService) validateRenewalEligibilityV2(ctx context.Context, tx queries.GetTransactionByIDRow) error {
 	// Check if already returned
 	if tx.ReturnedDate.Valid {
 		return fmt.Errorf("cannot renew returned book")
@@ -1094,16 +1114,13 @@ func (s *TransactionService) validateRenewalEligibility(ctx context.Context, tx 
 		return fmt.Errorf("cannot renew overdue book")
 	}
 
-	// Check maximum renewals limit
-	renewalCount, err := s.queries.CountRenewalsByStudentAndBook(ctx, queries.CountRenewalsByStudentAndBookParams{
-		StudentID: tx.StudentID,
-		BookID:    tx.BookID,
-	})
+	// Check maximum renewals limit using the transaction's renewal_count field
+	renewalCount, err := s.queries.GetTransactionRenewalCount(ctx, tx.ID)
 	if err != nil {
 		return fmt.Errorf("failed to check renewal count: %w", err)
 	}
 
-	if renewalCount >= int64(s.maxRenewals) {
+	if int(renewalCount) >= s.maxRenewals {
 		return fmt.Errorf("maximum number of renewals (%d) reached for this book", s.maxRenewals)
 	}
 

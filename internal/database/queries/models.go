@@ -259,6 +259,16 @@ type RolePermission struct {
 	CreatedAt    pgtype.Timestamp `db:"created_at" json:"created_at"`
 }
 
+type Setting struct {
+	Key         string           `db:"key" json:"key"`
+	Value       []byte           `db:"value" json:"value"`
+	Description pgtype.Text      `db:"description" json:"description"`
+	Category    string           `db:"category" json:"category"`
+	UpdatedBy   pgtype.Int4      `db:"updated_by" json:"updated_by"`
+	UpdatedAt   pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
+}
+
 type Student struct {
 	ID             int32            `db:"id" json:"id"`
 	StudentID      string           `db:"student_id" json:"student_id"`
@@ -306,6 +316,12 @@ type Transaction struct {
 	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
 	CopyID           pgtype.Int4      `db:"copy_id" json:"copy_id"`
 	Status           pgtype.Text      `db:"status" json:"status"`
+	// Number of times this transaction has been renewed
+	RenewalCount pgtype.Int4 `db:"renewal_count" json:"renewal_count"`
+	// Timestamp of the last renewal
+	LastRenewedAt pgtype.Timestamp `db:"last_renewed_at" json:"last_renewed_at"`
+	// ID of the user (librarian) who performed the last renewal
+	LastRenewedBy pgtype.Int4 `db:"last_renewed_by" json:"last_renewed_by"`
 }
 
 type User struct {

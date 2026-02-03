@@ -527,7 +527,7 @@ SET fine_paid = true,
 WHERE id = $1
     AND fine_amount > 0
     AND fine_paid = false
-RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status
+RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by
 `
 
 func (q *Queries) PayFineByTransactionID(ctx context.Context, id int32) (Transaction, error) {
@@ -556,6 +556,9 @@ func (q *Queries) PayFineByTransactionID(ctx context.Context, id int32) (Transac
 		&i.FinePaidAt,
 		&i.CopyID,
 		&i.Status,
+		&i.RenewalCount,
+		&i.LastRenewedAt,
+		&i.LastRenewedBy,
 	)
 	return i, err
 }
@@ -589,7 +592,7 @@ SET fine_waived = true,
 WHERE id = $1
     AND fine_amount > 0
     AND fine_paid = false
-RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status
+RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by
 `
 
 type WaiveFineByTransactionIDParams struct {
@@ -624,6 +627,9 @@ func (q *Queries) WaiveFineByTransactionID(ctx context.Context, arg WaiveFineByT
 		&i.FinePaidAt,
 		&i.CopyID,
 		&i.Status,
+		&i.RenewalCount,
+		&i.LastRenewedAt,
+		&i.LastRenewedBy,
 	)
 	return i, err
 }

@@ -51,7 +51,8 @@ type ReturnByBarcodeRequest struct {
 
 // RenewBookRequest represents a request to renew a book
 type RenewBookRequest struct {
-	LibrarianID int32 `json:"librarian_id" binding:"required,min=1"`
+	LibrarianID   int32  `json:"librarian_id" binding:"required,min=1"`
+	ExtensionDays *int32 `json:"extension_days,omitempty" binding:"omitempty,min=1,max=90"`
 }
 
 // TransactionResponse represents a transaction response
@@ -77,6 +78,10 @@ type TransactionResponse struct {
 	// Return condition fields
 	ReturnCondition *string `json:"return_condition,omitempty"`
 	ConditionNotes  *string `json:"condition_notes,omitempty"`
+	// Renewal tracking fields
+	RenewalCount  int32      `json:"renewal_count"`
+	LastRenewedAt *time.Time `json:"last_renewed_at,omitempty"`
+	LastRenewedBy *int32     `json:"last_renewed_by,omitempty"`
 }
 
 // OverdueTransactionResponse represents an overdue transaction with additional details

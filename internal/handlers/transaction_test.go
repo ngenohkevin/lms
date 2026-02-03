@@ -73,8 +73,8 @@ func (m *MockTransactionService) ReturnBook(ctx context.Context, transactionID i
 	return args.Get(0).(*services.TransactionResponse), args.Error(1)
 }
 
-func (m *MockTransactionService) RenewBook(ctx context.Context, transactionID, librarianID int32) (*services.TransactionResponse, error) {
-	args := m.Called(ctx, transactionID, librarianID)
+func (m *MockTransactionService) RenewBook(ctx context.Context, transactionID, librarianID int32, extensionDays *int32) (*services.TransactionResponse, error) {
+	args := m.Called(ctx, transactionID, librarianID, extensionDays)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -365,8 +365,8 @@ func TestTransactionHandler_RenewBook_Success(t *testing.T) {
 	expectedResponse.TransactionType = "renew"
 	expectedResponse.DueDate = time.Now().AddDate(0, 0, 28)
 
-	// Setup mock
-	mockService.On("RenewBook", mock.Anything, int32(1), int32(1)).Return(expectedResponse, nil)
+	// Setup mock (extensionDays is nil when not provided in request)
+	mockService.On("RenewBook", mock.Anything, int32(1), int32(1), (*int32)(nil)).Return(expectedResponse, nil)
 
 	// Create request
 	jsonBody, _ := json.Marshal(requestBody)

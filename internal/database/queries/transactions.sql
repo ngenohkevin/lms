@@ -303,3 +303,28 @@ WHERE id = sqlc.arg(id)
   AND returned_date IS NULL
   AND transaction_type = 'borrow'
 RETURNING *;
+
+-- name: RenewTransaction :one
+-- Renew a transaction by updating its due date and incrementing renewal count
+-- This replaces the old approach of creating a new "renew" type transaction
+UPDATE transactions
+SET
+    due_date = sqlc.arg(new_due_date)::timestamp,
+    renewal_count = COALESCE(renewal_count, 0) + 1,
+    last_renewed_at = NOW(),
+    last_renewed_by = sqlc.arg(renewed_by)::int,
+    notes = CASE
+        WHEN notes IS NULL OR notes = '' THEN '[RENEWED] Extended due date'
+        ELSE notes || E'\n\n[RENEWED] Extended due date at ' || NOW()::text
+    END,
+    updated_at = NOW()
+WHERE id = sqlc.arg(id)
+  AND returned_date IS NULL
+  AND transaction_type IN ('borrow', 'renew')
+RETURNING *;
+
+-- name: GetTransactionRenewalCount :one
+-- Get the renewal count for a specific transaction
+SELECT COALESCE(renewal_count, 0) as renewal_count
+FROM transactions
+WHERE id = $1;

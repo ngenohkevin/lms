@@ -120,6 +120,7 @@ func main() {
 	ratingService := services.NewRatingService(cacheService, bookService, studentService)
 	importExportService := services.NewImportExportService(bookService, db.Queries, "./uploads")
 	fineService := services.NewFineService(db.Queries, cfg.Borrowing.FinePerDay)
+	settingsService := services.NewSettingsService(db.Queries)
 	inviteService := services.NewInviteService(db.Pool, logger)
 	setupService := services.NewSetupService(db.Pool, logger)
 	bookCopyService := services.NewBookCopyService(db.Queries, db.Queries)
@@ -201,11 +202,12 @@ func main() {
 	seriesHandler := handlers.NewSeriesHandler(seriesService)
 	languageHandler := handlers.NewLanguageHandler(languageService)
 	qrCodeHandler := handlers.NewQRCodeHandler(qrCodeService, bookService, bookCopyService, cfg.Server.FrontendURL)
+	settingsHandler := handlers.NewSettingsHandler(settingsService)
 
 	// Setup routes
 	setupRoutes(router, authHandler, healthHandler, bookHandler, studentHandler,
 		transactionHandler, reservationHandler, notificationHandler,
-		reportHandler, importExportHandler, uploadHandler, ratingHandler, categoryHandler, departmentHandler, academicYearHandler, fineHandler, userHandler, inviteHandler, setupHandler, permissionHandler, bookCopyHandler, authorHandler, seriesHandler, languageHandler, qrCodeHandler, authMiddleware, permissionMiddleware)
+		reportHandler, importExportHandler, uploadHandler, ratingHandler, categoryHandler, departmentHandler, academicYearHandler, fineHandler, userHandler, inviteHandler, setupHandler, permissionHandler, bookCopyHandler, authorHandler, seriesHandler, languageHandler, qrCodeHandler, settingsHandler, authMiddleware, permissionMiddleware)
 
 	// Start scheduler
 	if err := schedulerService.Start(); err != nil {
@@ -316,6 +318,7 @@ func setupRoutes(
 	seriesHandler *handlers.SeriesHandler,
 	languageHandler *handlers.LanguageHandler,
 	qrCodeHandler *handlers.QRCodeHandler,
+	settingsHandler *handlers.SettingsHandler,
 	authMiddleware *middleware.AuthMiddleware,
 	permissionMiddleware *middleware.PermissionMiddleware,
 ) {
@@ -659,6 +662,18 @@ func setupRoutes(
 				permissions.PUT("/roles/:role", requirePerm("permissions.manage"), permissionHandler.UpdateRolePermissions)
 				permissions.POST("/users/:id/overrides", requirePerm("permissions.manage"), permissionHandler.CreateUserOverride)
 				permissions.DELETE("/users/:id/overrides/:code", requirePerm("permissions.manage"), permissionHandler.DeleteUserOverride)
+			}
+
+			// Settings routes
+			settings := protected.Group("/settings")
+			{
+				// Fine settings - view requires fines.view, update requires settings.fines (admin only)
+				settings.GET("/fines", requirePerm("fines.view"), settingsHandler.GetFineSettings)
+				settings.PUT("/fines", requirePerm("settings.fines"), settingsHandler.UpdateFineSettings)
+
+				// General settings routes
+				settings.GET("", requirePerm("settings.view"), settingsHandler.ListAllSettings)
+				settings.GET("/category/:category", requirePerm("settings.view"), settingsHandler.GetSettingsByCategory)
 			}
 		}
 	}

@@ -222,6 +222,17 @@ func (m *MockTransactionQueries) MarkTransactionAsLost(ctx context.Context, arg 
 	return args.Get(0).(queries.Transaction), args.Error(1)
 }
 
+// Renewal tracking methods
+func (m *MockTransactionQueries) GetTransactionRenewalCount(ctx context.Context, id int32) (int32, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(int32), args.Error(1)
+}
+
+func (m *MockTransactionQueries) RenewTransaction(ctx context.Context, arg queries.RenewTransactionParams) (queries.Transaction, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(queries.Transaction), args.Error(1)
+}
+
 // Test helper functions
 func createTestTransaction() queries.Transaction {
 	now := time.Now()
@@ -601,31 +612,30 @@ func TestTransactionService_RenewBook_Success(t *testing.T) {
 		ReturnedDate:    pgtype.Timestamp{Valid: false},
 	}
 
+	// Renewed transaction - same type (borrow) since we update in place now
 	renewedTransaction := createTestTransaction()
 	renewedTransaction.DueDate = pgtype.Timestamp{Time: now.AddDate(0, 0, 28), Valid: true}
-	renewedTransaction.TransactionType = "renew"
+	renewedTransaction.TransactionType = "borrow" // Stays as borrow, not renew
+	renewedTransaction.RenewalCount = pgtype.Int4{Int32: 1, Valid: true}
 
 	student := createTestStudent()
 
 	// Setup mocks for comprehensive renewal validation
 	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
-	mockQueries.On("CountRenewalsByStudentAndBook", ctx, queries.CountRenewalsByStudentAndBookParams{
-		StudentID: studentID,
-		BookID:    bookID,
-	}).Return(int64(0), nil)
+	mockQueries.On("GetTransactionRenewalCount", ctx, transactionID).Return(int32(0), nil)
 	mockQueries.On("HasActiveReservationsByOtherStudents", ctx, queries.HasActiveReservationsByOtherStudentsParams{
 		BookID:    bookID,
 		StudentID: studentID,
 	}).Return(false, nil)
 	mockQueries.On("GetStudentByID", ctx, studentID).Return(student, nil)
-	mockQueries.On("CreateTransaction", ctx, mock.AnythingOfType("queries.CreateTransactionParams")).Return(renewedTransaction, nil)
+	mockQueries.On("RenewTransaction", ctx, mock.AnythingOfType("queries.RenewTransactionParams")).Return(renewedTransaction, nil)
 
 	// Execute
-	result, err := service.RenewBook(ctx, transactionID, int32(1))
+	result, err := service.RenewBook(ctx, transactionID, int32(1), nil)
 
 	// Assert
 	require.NoError(t, err)
-	assert.Equal(t, "renew", result.TransactionType)
+	assert.Equal(t, "borrow", result.TransactionType) // Stays as borrow since we update in place
 	mockQueries.AssertExpectations(t)
 }
 
@@ -1555,7 +1565,7 @@ func TestTransactionService_RenewBook_TransactionNotFound(t *testing.T) {
 	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(queries.GetTransactionByIDRow{}, sql.ErrNoRows)
 
 	// Execute
-	_, err := service.RenewBook(ctx, transactionID, int32(1))
+	_, err := service.RenewBook(ctx, transactionID, int32(1), nil)
 
 	// Assert
 	require.Error(t, err)
@@ -1585,7 +1595,7 @@ func TestTransactionService_RenewBook_AlreadyReturned(t *testing.T) {
 	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
 
 	// Execute
-	_, err := service.RenewBook(ctx, transactionID, int32(1))
+	_, err := service.RenewBook(ctx, transactionID, int32(1), nil)
 
 	// Assert
 	require.Error(t, err)
@@ -1615,7 +1625,7 @@ func TestTransactionService_RenewBook_OverdueBook(t *testing.T) {
 	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
 
 	// Execute
-	_, err := service.RenewBook(ctx, transactionID, int32(1))
+	_, err := service.RenewBook(ctx, transactionID, int32(1), nil)
 
 	// Assert
 	require.Error(t, err)
@@ -1645,13 +1655,10 @@ func TestTransactionService_RenewBook_MaxRenewalsReached(t *testing.T) {
 
 	// Setup mocks
 	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
-	mockQueries.On("CountRenewalsByStudentAndBook", ctx, queries.CountRenewalsByStudentAndBookParams{
-		StudentID: studentID,
-		BookID:    bookID,
-	}).Return(int64(2), nil)
+	mockQueries.On("GetTransactionRenewalCount", ctx, transactionID).Return(int32(2), nil) // Max renewals is 2
 
 	// Execute
-	_, err := service.RenewBook(ctx, transactionID, int32(1))
+	_, err := service.RenewBook(ctx, transactionID, int32(1), nil)
 
 	// Assert
 	require.Error(t, err)
@@ -1681,14 +1688,14 @@ func TestTransactionService_RenewBook_BookReservedByOther(t *testing.T) {
 
 	// Setup mocks
 	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
-	mockQueries.On("CountRenewalsByStudentAndBook", ctx, mock.AnythingOfType("queries.CountRenewalsByStudentAndBookParams")).Return(int64(0), nil)
+	mockQueries.On("GetTransactionRenewalCount", ctx, transactionID).Return(int32(0), nil)
 	mockQueries.On("HasActiveReservationsByOtherStudents", ctx, queries.HasActiveReservationsByOtherStudentsParams{
 		BookID:    bookID,
 		StudentID: studentID,
 	}).Return(true, nil)
 
 	// Execute
-	_, err := service.RenewBook(ctx, transactionID, int32(1))
+	_, err := service.RenewBook(ctx, transactionID, int32(1), nil)
 
 	// Assert
 	require.Error(t, err)
@@ -1718,17 +1725,17 @@ func TestTransactionService_RenewBook_CreateTransactionFailure(t *testing.T) {
 
 	// Setup mocks
 	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
-	mockQueries.On("CountRenewalsByStudentAndBook", ctx, mock.AnythingOfType("queries.CountRenewalsByStudentAndBookParams")).Return(int64(0), nil)
+	mockQueries.On("GetTransactionRenewalCount", ctx, transactionID).Return(int32(0), nil)
 	mockQueries.On("HasActiveReservationsByOtherStudents", ctx, mock.AnythingOfType("queries.HasActiveReservationsByOtherStudentsParams")).Return(false, nil)
 	mockQueries.On("GetStudentByID", ctx, studentID).Return(createTestStudent(), nil)
-	mockQueries.On("CreateTransaction", ctx, mock.AnythingOfType("queries.CreateTransactionParams")).Return(queries.Transaction{}, assert.AnError)
+	mockQueries.On("RenewTransaction", ctx, mock.AnythingOfType("queries.RenewTransactionParams")).Return(queries.Transaction{}, assert.AnError)
 
 	// Execute
-	_, err := service.RenewBook(ctx, transactionID, int32(1))
+	_, err := service.RenewBook(ctx, transactionID, int32(1), nil)
 
 	// Assert
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to create renewal transaction")
+	assert.Contains(t, err.Error(), "failed to renew transaction")
 	mockQueries.AssertExpectations(t)
 }
 

@@ -495,8 +495,8 @@ func TestSearchTransactions_TypeFilter(t *testing.T) {
 	tx, err := transactionService.BorrowBook(ctx, student.ID, book.ID, librarian.ID, "Type test")
 	require.NoError(t, err)
 
-	// Renew the book (creates a "renew" transaction)
-	_, err = transactionService.RenewBook(ctx, tx.ID, librarian.ID)
+	// Renew the book (updates the existing transaction in place now)
+	_, err = transactionService.RenewBook(ctx, tx.ID, librarian.ID, nil)
 	require.NoError(t, err)
 
 	// Test: Filter by borrow type
