@@ -155,6 +155,11 @@ func (m *MockTransactionService) MarkAsLost(ctx context.Context, transactionID i
 	return args.Get(0).(*services.TransactionResponse), args.Error(1)
 }
 
+func (m *MockTransactionService) DeleteTransaction(ctx context.Context, transactionID int32) error {
+	args := m.Called(ctx, transactionID)
+	return args.Error(0)
+}
+
 // Test helper functions
 func setupTransactionRouter() (*gin.Engine, *MockTransactionService) {
 	gin.SetMode(gin.TestMode)

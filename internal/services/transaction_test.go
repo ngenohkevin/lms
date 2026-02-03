@@ -222,6 +222,11 @@ func (m *MockTransactionQueries) MarkTransactionAsLost(ctx context.Context, arg 
 	return args.Get(0).(queries.Transaction), args.Error(1)
 }
 
+func (m *MockTransactionQueries) DeleteTransaction(ctx context.Context, id int32) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
 // Renewal tracking methods
 func (m *MockTransactionQueries) GetTransactionRenewalCount(ctx context.Context, id int32) (int32, error) {
 	args := m.Called(ctx, id)
