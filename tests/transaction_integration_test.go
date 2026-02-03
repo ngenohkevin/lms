@@ -587,11 +587,12 @@ func (suite *TransactionIntegrationTestSuite) TestDeleteTransaction_RestoresCopy
 	require.NoError(suite.T(), err)
 
 	// Borrow the book with a specific copy
+	copyID := copy.ID
 	requestBody := models.BorrowBookRequest{
 		StudentID:   suite.testStudent.ID,
 		BookID:      suite.testBook.ID,
 		LibrarianID: suite.testUser.ID,
-		CopyID:      copy.ID,
+		CopyID:      &copyID,
 		Notes:       "Borrow for delete test",
 	}
 
