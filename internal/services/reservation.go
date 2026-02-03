@@ -668,7 +668,7 @@ func (s *ReservationService) MarkReservationReady(ctx context.Context, reservati
 	}
 
 	// Update reservation status to "ready" (don't set fulfilled_at - that's for when book is borrowed)
-	reservation, err := s.queries.UpdateReservationStatus(ctx, queries.UpdateReservationStatusParams{
+	_, err = s.queries.UpdateReservationStatus(ctx, queries.UpdateReservationStatusParams{
 		ID:          reservationID,
 		Status:      pgtype.Text{String: "ready", Valid: true},
 		FulfilledAt: pgtype.Timestamp{Valid: false}, // Not fulfilled yet - just ready for pickup
@@ -678,7 +678,7 @@ func (s *ReservationService) MarkReservationReady(ctx context.Context, reservati
 	}
 
 	// Set notified_at timestamp to track when student was notified
-	reservation, err = s.queries.MarkReservationNotified(ctx, reservationID)
+	reservation, err := s.queries.MarkReservationNotified(ctx, reservationID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to set notification timestamp: %w", err)
 	}

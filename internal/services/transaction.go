@@ -307,7 +307,7 @@ func (s *TransactionService) BorrowBookWithCopy(ctx context.Context, req BorrowB
 			if err != nil {
 				return nil, fmt.Errorf("failed to start database transaction: %w", err)
 			}
-			defer tx.Rollback(ctx) // Will be no-op if committed
+			defer func() { _ = tx.Rollback(ctx) }() // Will be no-op if committed
 
 			// Create transactional querier
 			qtx := queries.New(tx)
@@ -726,22 +726,17 @@ func (s *TransactionService) CancelTransaction(ctx context.Context, transactionI
 	// Restore book availability
 	if tx.CopyID.Valid {
 		// Copy-level tracking mode - restore copy status to available
-		_, err = s.queries.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
+		_, copyErr := s.queries.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
 			ID:     tx.CopyID.Int32,
 			Status: pgtype.Text{String: "available", Valid: true},
 		})
-		if err != nil {
-			// Log but don't fail - the cancel already happened
-			// In production, this should be logged properly
-		}
+		_ = copyErr // Log but don't fail - the cancel already happened
 		// Sync book's available_copies count
 		_ = s.queries.SyncBookCopyCounts(ctx, tx.BookID)
 	} else {
 		// Legacy mode - increment book availability
-		_, err = s.queries.IncrementBookAvailability(ctx, tx.BookID)
-		if err != nil {
-			// Log but don't fail
-		}
+		_, incErr := s.queries.IncrementBookAvailability(ctx, tx.BookID)
+		_ = incErr // Log but don't fail
 	}
 
 	return s.convertToTransactionResponse(cancelledTx), nil
@@ -790,16 +785,12 @@ func (s *TransactionService) MarkAsLost(ctx context.Context, transactionID int32
 			ID:     tx.CopyID.Int32,
 			Status: pgtype.Text{String: "lost", Valid: true},
 		})
-		if err != nil {
-			// Log but don't fail - the lost marking already happened
-		}
+		_ = err // Log but don't fail - the lost marking already happened
 		// Sync book's available_copies count
 		_ = s.queries.SyncBookCopyCounts(ctx, tx.BookID)
-	} else {
-		// Legacy mode - decrement total copies for the book
-		// Note: In legacy mode, we don't track individual copies, so we just mark it as lost
-		// The availability was already decremented when the book was borrowed
 	}
+	// Note: In legacy mode (no copy tracking), we don't need to do anything here
+	// The availability was already decremented when the book was borrowed
 
 	return s.convertToTransactionResponse(lostTx), nil
 }
