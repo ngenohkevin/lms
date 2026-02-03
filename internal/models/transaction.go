@@ -55,6 +55,11 @@ type RenewBookRequest struct {
 	ExtensionDays *int32 `json:"extension_days,omitempty" binding:"omitempty,min=1,max=90"`
 }
 
+// CancelRenewalRequest represents a request to cancel a book renewal
+type CancelRenewalRequest struct {
+	NewDueDate string `json:"new_due_date" binding:"required"`
+}
+
 // TransactionResponse represents a transaction response
 type TransactionResponse struct {
 	ID              int32           `json:"id"`

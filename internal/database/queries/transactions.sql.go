@@ -11,6 +11,61 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const cancelRenewal = `-- name: CancelRenewal :one
+UPDATE transactions
+SET
+    due_date = $1::timestamp,
+    renewal_count = GREATEST(COALESCE(renewal_count, 0) - 1, 0),
+    notes = CASE
+        WHEN notes IS NULL OR notes = '' THEN '[RENEWAL CANCELLED] Due date adjusted'
+        ELSE notes || E'\n\n[RENEWAL CANCELLED] Due date adjusted at ' || NOW()::text
+    END,
+    updated_at = NOW()
+WHERE id = $2
+  AND returned_date IS NULL
+  AND COALESCE(renewal_count, 0) > 0
+RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by
+`
+
+type CancelRenewalParams struct {
+	NewDueDate pgtype.Timestamp `db:"new_due_date" json:"new_due_date"`
+	ID         int32            `db:"id" json:"id"`
+}
+
+// Cancel the last renewal by decrementing the renewal count and setting a new due date
+func (q *Queries) CancelRenewal(ctx context.Context, arg CancelRenewalParams) (Transaction, error) {
+	row := q.db.QueryRow(ctx, cancelRenewal, arg.NewDueDate, arg.ID)
+	var i Transaction
+	err := row.Scan(
+		&i.ID,
+		&i.StudentID,
+		&i.BookID,
+		&i.TransactionType,
+		&i.TransactionDate,
+		&i.DueDate,
+		&i.ReturnedDate,
+		&i.LibrarianID,
+		&i.FineAmount,
+		&i.FinePaid,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ReturnCondition,
+		&i.ConditionNotes,
+		&i.FineWaived,
+		&i.FineWaivedAt,
+		&i.FineWaivedBy,
+		&i.FineWaivedReason,
+		&i.FinePaidAt,
+		&i.CopyID,
+		&i.Status,
+		&i.RenewalCount,
+		&i.LastRenewedAt,
+		&i.LastRenewedBy,
+	)
+	return i, err
+}
+
 const cancelTransaction = `-- name: CancelTransaction :one
 UPDATE transactions
 SET

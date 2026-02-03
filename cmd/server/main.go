@@ -508,6 +508,7 @@ func setupRoutes(
 				transactions.POST("/return-by-barcode", requirePerm("transactions.return"), transactionHandler.ReturnByBarcode)
 				transactions.POST("/:id/return", requirePerm("transactions.return"), transactionHandler.ReturnBook)
 				transactions.POST("/:id/renew", requirePerm("transactions.view"), transactionHandler.RenewBook)
+				transactions.POST("/:id/cancel-renewal", requirePerm("transactions.view"), transactionHandler.CancelRenewal)
 				transactions.POST("/:id/pay-fine", requirePerm("fines.manage"), transactionHandler.PayFine)
 				transactions.POST("/:id/cancel", requirePerm("transactions.borrow"), transactionHandler.CancelTransaction)
 				transactions.POST("/:id/lost", requirePerm("transactions.return"), transactionHandler.MarkAsLost)

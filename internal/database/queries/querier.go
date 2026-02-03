@@ -23,6 +23,8 @@ type Querier interface {
 	BulkUpdateStudentStatus(ctx context.Context, arg BulkUpdateStudentStatusParams) error
 	BulkWaiveFines(ctx context.Context, arg BulkWaiveFinesParams) (int64, error)
 	CancelQueueItem(ctx context.Context, id int32) (EmailQueue, error)
+	// Cancel the last renewal by decrementing the renewal count and setting a new due date
+	CancelRenewal(ctx context.Context, arg CancelRenewalParams) (Transaction, error)
 	CancelReservation(ctx context.Context, id int32) (Reservation, error)
 	// Cancel a transaction by marking it as returned with zero fine
 	// This effectively cancels the transaction without needing a separate status column

@@ -44,6 +44,7 @@ type TransactionQuerier interface {
 	GetRenewalStatisticsByStudent(ctx context.Context, studentID int32) (queries.GetRenewalStatisticsByStudentRow, error)
 	GetTransactionRenewalCount(ctx context.Context, id int32) (int32, error)
 	RenewTransaction(ctx context.Context, arg queries.RenewTransactionParams) (queries.Transaction, error)
+	CancelRenewal(ctx context.Context, arg queries.CancelRenewalParams) (queries.Transaction, error)
 	// Stats queries
 	CountTransactions(ctx context.Context) (int64, error)
 	ListActiveBorrowings(ctx context.Context, arg queries.ListActiveBorrowingsParams) ([]queries.ListActiveBorrowingsRow, error)
@@ -647,13 +648,25 @@ func (s *TransactionService) RenewBook(ctx context.Context, transactionID, libra
 		return nil, err
 	}
 
-	// Calculate new due date based on student year (or custom extension days)
-	student, err := s.queries.GetStudentByID(ctx, transactionRow.StudentID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get student: %w", err)
+	// Calculate new due date: extend from current due date (or today if past due)
+	var extensionPeriod int
+	if extensionDays != nil && *extensionDays > 0 {
+		extensionPeriod = int(*extensionDays)
+	} else {
+		// Default extension period based on student year
+		student, err := s.queries.GetStudentByID(ctx, transactionRow.StudentID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get student: %w", err)
+		}
+		extensionPeriod = s.validateBorrowingPeriod(student)
 	}
 
-	newDueDate := s.calculateDueDate(student, extensionDays)
+	// Start from current due date or today, whichever is later
+	baseDate := time.Now()
+	if transactionRow.DueDate.Valid && transactionRow.DueDate.Time.After(baseDate) {
+		baseDate = transactionRow.DueDate.Time
+	}
+	newDueDate := baseDate.AddDate(0, 0, extensionPeriod)
 
 	// Update the existing transaction with new due date and increment renewal count
 	transaction, err := s.queries.RenewTransaction(ctx, queries.RenewTransactionParams{
@@ -663,6 +676,43 @@ func (s *TransactionService) RenewBook(ctx context.Context, transactionID, libra
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to renew transaction: %w", err)
+	}
+
+	return s.convertToTransactionResponse(transaction), nil
+}
+
+// CancelRenewal cancels the last renewal by decrementing the renewal count and setting a new due date
+func (s *TransactionService) CancelRenewal(ctx context.Context, transactionID int32, newDueDate time.Time) (*TransactionResponse, error) {
+	// Get original transaction to verify it exists and has renewals
+	transactionRow, err := s.queries.GetTransactionByID(ctx, transactionID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("transaction not found")
+		}
+		return nil, fmt.Errorf("failed to get transaction: %w", err)
+	}
+
+	// Verify the transaction has been renewed at least once
+	renewalCount, err := s.queries.GetTransactionRenewalCount(ctx, transactionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check renewal count: %w", err)
+	}
+	if renewalCount <= 0 {
+		return nil, fmt.Errorf("transaction has not been renewed")
+	}
+
+	// Verify the transaction is still active (not returned)
+	if transactionRow.ReturnedDate.Valid {
+		return nil, fmt.Errorf("cannot cancel renewal for returned book")
+	}
+
+	// Cancel the renewal
+	transaction, err := s.queries.CancelRenewal(ctx, queries.CancelRenewalParams{
+		ID:         transactionID,
+		NewDueDate: pgtype.Timestamp{Time: newDueDate, Valid: true},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to cancel renewal: %w", err)
 	}
 
 	return s.convertToTransactionResponse(transaction), nil

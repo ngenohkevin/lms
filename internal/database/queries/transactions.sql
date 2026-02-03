@@ -324,6 +324,22 @@ WHERE id = sqlc.arg(id)
   AND transaction_type IN ('borrow', 'renew')
 RETURNING *;
 
+-- name: CancelRenewal :one
+-- Cancel the last renewal by decrementing the renewal count and setting a new due date
+UPDATE transactions
+SET
+    due_date = sqlc.arg(new_due_date)::timestamp,
+    renewal_count = GREATEST(COALESCE(renewal_count, 0) - 1, 0),
+    notes = CASE
+        WHEN notes IS NULL OR notes = '' THEN '[RENEWAL CANCELLED] Due date adjusted'
+        ELSE notes || E'\n\n[RENEWAL CANCELLED] Due date adjusted at ' || NOW()::text
+    END,
+    updated_at = NOW()
+WHERE id = sqlc.arg(id)
+  AND returned_date IS NULL
+  AND COALESCE(renewal_count, 0) > 0
+RETURNING *;
+
 -- name: GetTransactionRenewalCount :one
 -- Get the renewal count for a specific transaction
 SELECT COALESCE(renewal_count, 0) as renewal_count

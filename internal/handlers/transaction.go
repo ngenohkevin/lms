@@ -23,6 +23,7 @@ type TransactionServiceInterface interface {
 	ReturnBook(ctx context.Context, transactionID int32) (*services.TransactionResponse, error)
 	ReturnByBarcode(ctx context.Context, req services.ReturnByBarcodeRequest) (*services.TransactionResponse, error)
 	RenewBook(ctx context.Context, transactionID, librarianID int32, extensionDays *int32) (*services.TransactionResponse, error)
+	CancelRenewal(ctx context.Context, transactionID int32, newDueDate time.Time) (*services.TransactionResponse, error)
 	GetOverdueTransactions(ctx context.Context) ([]queries.ListOverdueTransactionsRow, error)
 	PayFine(ctx context.Context, transactionID int32) error
 	CancelTransaction(ctx context.Context, transactionID int32, reason string) (*services.TransactionResponse, error)
@@ -232,6 +233,94 @@ func (h *TransactionHandler) RenewBook(c *gin.Context) {
 		Success: true,
 		Data:    response,
 		Message: "Book renewed successfully",
+	})
+}
+
+// CancelRenewal cancels the last renewal and sets a new due date
+// @Summary Cancel a renewal
+// @Description Cancel the last renewal of a book and set a new due date
+// @Tags transactions
+// @Accept json
+// @Produce json
+// @Param id path int true "Transaction ID"
+// @Param request body models.CancelRenewalRequest true "Cancel renewal request"
+// @Success 200 {object} SuccessResponse{data=models.TransactionResponse}
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/transactions/{id}/cancel-renewal [post]
+func (h *TransactionHandler) CancelRenewal(c *gin.Context) {
+	idStr := c.Param("id")
+	transactionID, err := strconv.ParseInt(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid transaction ID",
+				Details: "Transaction ID must be a valid integer",
+			},
+		})
+		return
+	}
+
+	var req models.CancelRenewalRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid request data",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	// Parse the new due date
+	newDueDate, err := time.Parse(time.RFC3339, req.NewDueDate)
+	if err != nil {
+		// Try parsing as date only
+		newDueDate, err = time.Parse("2006-01-02", req.NewDueDate)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Success: false,
+				Error: ErrorDetail{
+					Code:    "VALIDATION_ERROR",
+					Message: "Invalid due date format",
+					Details: "Use ISO 8601 format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ)",
+				},
+			})
+			return
+		}
+	}
+
+	transaction, err := h.transactionService.CancelRenewal(
+		c.Request.Context(),
+		int32(transactionID),
+		newDueDate,
+	)
+	if err != nil {
+		statusCode := http.StatusBadRequest
+		if err.Error() == "transaction not found" {
+			statusCode = http.StatusNotFound
+		}
+
+		c.JSON(statusCode, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "CANCEL_RENEWAL_ERROR",
+				Message: err.Error(),
+			},
+		})
+		return
+	}
+
+	response := convertToTransactionResponse(transaction)
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    response,
+		Message: "Renewal cancelled successfully",
 	})
 }
 
