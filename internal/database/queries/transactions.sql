@@ -328,3 +328,6 @@ RETURNING *;
 SELECT COALESCE(renewal_count, 0) as renewal_count
 FROM transactions
 WHERE id = $1;
+-- name: DeleteTransaction :exec
+-- Delete a transaction by ID (admin only)
+DELETE FROM transactions WHERE id = $1;

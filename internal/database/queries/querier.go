@@ -145,6 +145,8 @@ type Querier interface {
 	DeletePermission(ctx context.Context, id int32) error
 	DeleteSeries(ctx context.Context, id int32) error
 	DeleteSetting(ctx context.Context, key string) error
+	// Delete a transaction by ID (admin only)
+	DeleteTransaction(ctx context.Context, id int32) error
 	DeleteUserOverride(ctx context.Context, arg DeleteUserOverrideParams) error
 	DeleteUserOverrideByCode(ctx context.Context, arg DeleteUserOverrideByCodeParams) error
 	GetAcademicYearAnalytics(ctx context.Context, arg GetAcademicYearAnalyticsParams) (GetAcademicYearAnalyticsRow, error)

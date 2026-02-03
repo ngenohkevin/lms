@@ -66,6 +66,8 @@ type TransactionQuerier interface {
 	CancelTransaction(ctx context.Context, arg queries.CancelTransactionParams) (queries.Transaction, error)
 	// Mark as lost query
 	MarkTransactionAsLost(ctx context.Context, arg queries.MarkTransactionAsLostParams) (queries.Transaction, error)
+	// Delete transaction query
+	DeleteTransaction(ctx context.Context, id int32) error
 }
 
 // TransactionService handles all business logic related to book transactions
@@ -798,6 +800,23 @@ func (s *TransactionService) MarkAsLost(ctx context.Context, transactionID int32
 	// The availability was already decremented when the book was borrowed
 
 	return s.convertToTransactionResponse(lostTx), nil
+}
+
+// DeleteTransaction deletes a transaction by ID
+func (s *TransactionService) DeleteTransaction(ctx context.Context, transactionID int32) error {
+	// First check if the transaction exists
+	_, err := s.queries.GetTransactionByID(ctx, transactionID)
+	if err != nil {
+		return fmt.Errorf("transaction not found")
+	}
+
+	// Delete the transaction
+	err = s.queries.DeleteTransaction(ctx, transactionID)
+	if err != nil {
+		return fmt.Errorf("failed to delete transaction: %w", err)
+	}
+
+	return nil
 }
 
 // GetTransactionHistory returns transaction history for a student

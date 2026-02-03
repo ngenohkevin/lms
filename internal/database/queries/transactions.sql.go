@@ -303,6 +303,16 @@ func (q *Queries) CreateTransactionWithCopy(ctx context.Context, arg CreateTrans
 	return i, err
 }
 
+const deleteTransaction = `-- name: DeleteTransaction :exec
+DELETE FROM transactions WHERE id = $1
+`
+
+// Delete a transaction by ID (admin only)
+func (q *Queries) DeleteTransaction(ctx context.Context, id int32) error {
+	_, err := q.db.Exec(ctx, deleteTransaction, id)
+	return err
+}
+
 const getActiveTransactionByCopy = `-- name: GetActiveTransactionByCopy :one
 SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by FROM transactions t
 WHERE t.copy_id = $1 AND t.returned_date IS NULL

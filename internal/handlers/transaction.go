@@ -27,6 +27,7 @@ type TransactionServiceInterface interface {
 	PayFine(ctx context.Context, transactionID int32) error
 	CancelTransaction(ctx context.Context, transactionID int32, reason string) (*services.TransactionResponse, error)
 	MarkAsLost(ctx context.Context, transactionID int32, reason string) (*services.TransactionResponse, error)
+	DeleteTransaction(ctx context.Context, transactionID int32) error
 	GetTransactionHistory(ctx context.Context, studentID int32, limit, offset int32) ([]queries.ListTransactionsByStudentRow, error)
 	// Phase 6.7: Enhanced Renewal System methods
 	CanBookBeRenewed(ctx context.Context, transactionID int32) (bool, string, error)
@@ -420,6 +421,55 @@ func (h *TransactionHandler) MarkAsLost(c *gin.Context) {
 		Success: true,
 		Data:    response,
 		Message: "Transaction marked as lost successfully",
+	})
+}
+
+// DeleteTransaction handles transaction deletion requests
+// @Summary Delete a transaction
+// @Description Delete a transaction by ID (admin only)
+// @Tags transactions
+// @Produce json
+// @Param id path int true "Transaction ID"
+// @Success 200 {object} SuccessResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/transactions/{id} [delete]
+func (h *TransactionHandler) DeleteTransaction(c *gin.Context) {
+	idStr := c.Param("id")
+	transactionID, err := strconv.ParseInt(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid transaction ID",
+				Details: "Transaction ID must be a valid integer",
+			},
+		})
+		return
+	}
+
+	err = h.transactionService.DeleteTransaction(c.Request.Context(), int32(transactionID))
+	if err != nil {
+		statusCode := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "not found") {
+			statusCode = http.StatusNotFound
+		}
+		c.JSON(statusCode, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "DELETE_ERROR",
+				Message: "Failed to delete transaction",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Message: "Transaction deleted successfully",
 	})
 }
 

@@ -511,6 +511,7 @@ func setupRoutes(
 				transactions.POST("/:id/pay-fine", requirePerm("fines.manage"), transactionHandler.PayFine)
 				transactions.POST("/:id/cancel", requirePerm("transactions.borrow"), transactionHandler.CancelTransaction)
 				transactions.POST("/:id/lost", requirePerm("transactions.return"), transactionHandler.MarkAsLost)
+				transactions.DELETE("/:id", requirePerm("transactions.delete"), transactionHandler.DeleteTransaction)
 			}
 
 			// Reservation routes
