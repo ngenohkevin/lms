@@ -359,28 +359,22 @@ func (suite *TransactionIntegrationTestSuite) TestRenewBook_Success() {
 	assert.True(suite.T(), response.Success)
 	assert.Equal(suite.T(), "Book renewed successfully", response.Message)
 
-	// Verify renewal transaction was created
-	transactions, err := suite.queries.ListTransactionsByStudent(suite.ctx, queries.ListTransactionsByStudentParams{
-		StudentID: suite.testStudent.ID,
-		Limit:     10,
-		Offset:    0,
-	})
+	// Verify the transaction was updated in place (not a new transaction created)
+	// The renewal system now updates the existing transaction's due_date and renewal_count
+	updatedTransaction, err := suite.queries.GetTransactionByID(suite.ctx, suite.testTransaction.ID)
 	require.NoError(suite.T(), err)
 
-	// Should have both borrow and renew transactions
-	assert.GreaterOrEqual(suite.T(), len(transactions), 2)
+	// Transaction type should still be "borrow" (we update in place)
+	assert.Equal(suite.T(), "borrow", updatedTransaction.TransactionType)
+	assert.Equal(suite.T(), suite.testStudent.ID, updatedTransaction.StudentID)
+	assert.Equal(suite.T(), suite.testBook.ID, updatedTransaction.BookID)
 
-	// Find the renewal transaction
-	var renewalTransaction *queries.ListTransactionsByStudentRow
-	for _, tx := range transactions {
-		if tx.TransactionType == "renew" {
-			renewalTransaction = &tx
-			break
-		}
-	}
-	require.NotNil(suite.T(), renewalTransaction)
-	assert.Equal(suite.T(), suite.testStudent.ID, renewalTransaction.StudentID)
-	assert.Equal(suite.T(), suite.testBook.ID, renewalTransaction.BookID)
+	// Renewal count should be incremented
+	assert.Equal(suite.T(), int32(1), updatedTransaction.RenewalCount)
+
+	// Due date should be extended (verify it's in the future)
+	assert.True(suite.T(), updatedTransaction.DueDate.Valid)
+	assert.True(suite.T(), updatedTransaction.DueDate.Time.After(time.Now()))
 }
 
 // Test getting overdue transactions
