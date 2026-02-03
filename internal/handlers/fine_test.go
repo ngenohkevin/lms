@@ -149,6 +149,16 @@ func (m *MockFineService) GetFinePerDay() float64 {
 	return args.Get(0).(float64)
 }
 
+func (m *MockFineService) BulkPayFines(ctx context.Context, transactionIDs []int32) (int64, error) {
+	args := m.Called(ctx, transactionIDs)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockFineService) BulkWaiveFines(ctx context.Context, transactionIDs []int32, waivedBy int32, reason string) (int64, error) {
+	args := m.Called(ctx, transactionIDs, waivedBy, reason)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 // DenyAllPermissionService denies all permissions (for testing forbidden scenarios)
 type DenyAllPermissionService struct {
 	AllowAllPermissionService

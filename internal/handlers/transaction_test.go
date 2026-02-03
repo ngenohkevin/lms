@@ -139,6 +139,22 @@ func (m *MockTransactionService) SearchTransactions(ctx context.Context, params 
 	return args.Get(0).(*services.TransactionSearchResponse), args.Error(1)
 }
 
+func (m *MockTransactionService) CancelTransaction(ctx context.Context, transactionID int32, reason string) (*services.TransactionResponse, error) {
+	args := m.Called(ctx, transactionID, reason)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*services.TransactionResponse), args.Error(1)
+}
+
+func (m *MockTransactionService) MarkAsLost(ctx context.Context, transactionID int32, reason string) (*services.TransactionResponse, error) {
+	args := m.Called(ctx, transactionID, reason)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*services.TransactionResponse), args.Error(1)
+}
+
 // Test helper functions
 func setupTransactionRouter() (*gin.Engine, *MockTransactionService) {
 	gin.SetMode(gin.TestMode)

@@ -196,3 +196,8 @@ UPDATE students
 SET department_id = $2, updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;
+
+-- name: BulkUpdateStudentDepartment :execrows
+UPDATE students
+SET department_id = $2, updated_at = NOW()
+WHERE id = ANY($1::int[]) AND deleted_at IS NULL;

@@ -247,6 +247,8 @@ type Reservation struct {
 	FulfilledAt pgtype.Timestamp `db:"fulfilled_at" json:"fulfilled_at"`
 	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt   pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	// Timestamp when student was notified about book availability
+	NotifiedAt pgtype.Timestamp `db:"notified_at" json:"notified_at"`
 }
 
 type RolePermission struct {
@@ -303,6 +305,7 @@ type Transaction struct {
 	FineWaivedReason pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
 	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
 	CopyID           pgtype.Int4      `db:"copy_id" json:"copy_id"`
+	Status           pgtype.Text      `db:"status" json:"status"`
 }
 
 type User struct {

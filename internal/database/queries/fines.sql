@@ -186,3 +186,25 @@ WHERE t.fine_amount > 0
 GROUP BY s.id, s.student_id, s.first_name, s.last_name, s.email
 HAVING COALESCE(SUM(t.fine_amount), 0) >= $1
 ORDER BY total_fines DESC;
+
+-- name: BulkPayFines :execrows
+UPDATE transactions
+SET fine_paid = true,
+    fine_paid_at = NOW(),
+    updated_at = NOW()
+WHERE id = ANY($1::int[])
+    AND fine_amount > 0
+    AND fine_paid = false;
+
+-- name: BulkWaiveFines :execrows
+UPDATE transactions
+SET fine_waived = true,
+    fine_waived_at = NOW(),
+    fine_waived_by = $2,
+    fine_waived_reason = $3,
+    fine_paid = true,
+    fine_paid_at = NOW(),
+    updated_at = NOW()
+WHERE id = ANY($1::int[])
+    AND fine_amount > 0
+    AND fine_paid = false;

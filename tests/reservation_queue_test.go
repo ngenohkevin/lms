@@ -135,7 +135,7 @@ func TestMarkReservationReady_Success(t *testing.T) {
 	readyReservation, err := reservationService.MarkReservationReady(ctx, reservation.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "ready", readyReservation.Status)
-	assert.NotNil(t, readyReservation.FulfilledAt) // FulfilledAt is used as notified_at for ready status
+	assert.NotNil(t, readyReservation.NotifiedAt) // NotifiedAt is set when reservation is marked ready
 }
 
 func TestMarkReservationReady_NotActive(t *testing.T) {

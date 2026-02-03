@@ -22,6 +22,8 @@ type FineService interface {
 	CalculateFinesForOverdueBooks(ctx context.Context) (int, error)
 	GetStudentsWithHighFines(ctx context.Context, threshold float64) ([]services.StudentWithHighFines, error)
 	GetFinePerDay() float64
+	BulkPayFines(ctx context.Context, transactionIDs []int32) (int64, error)
+	BulkWaiveFines(ctx context.Context, transactionIDs []int32, waivedBy int32, reason string) (int64, error)
 }
 
 // FineHandler handles fine-related HTTP requests
@@ -53,6 +55,10 @@ func (h *FineHandler) RegisterRoutes(router *gin.RouterGroup, permMiddleware *mi
 		fines.POST("/:id/pay", requirePerm("fines.manage"), h.PayFine)
 		fines.POST("/:id/waive", requirePerm("fines.manage"), h.WaiveFine)
 		fines.POST("/calculate", requirePerm("fines.manage"), h.CalculateFines)
+
+		// Bulk operations - require fines.manage permission
+		fines.POST("/bulk-pay", requirePerm("fines.manage"), h.BulkPayFines)
+		fines.POST("/bulk-waive", requirePerm("fines.manage"), h.BulkWaiveFines)
 	}
 }
 
@@ -433,6 +439,130 @@ func (h *FineHandler) GetStudentsWithHighFines(c *gin.Context) {
 			"students":  students,
 			"count":     len(students),
 			"threshold": threshold,
+		},
+	})
+}
+
+// BulkPayFinesRequest represents the request body for bulk paying fines
+type BulkPayFinesRequest struct {
+	TransactionIDs []int32 `json:"transaction_ids" binding:"required,min=1"`
+}
+
+// BulkPayFines godoc
+// @Summary Bulk pay multiple fines
+// @Description Mark multiple fines as paid in a single operation
+// @Tags fines
+// @Accept json
+// @Produce json
+// @Param body body BulkPayFinesRequest true "Transaction IDs to pay"
+// @Success 200 {object} SuccessResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/fines/bulk-pay [post]
+func (h *FineHandler) BulkPayFines(c *gin.Context) {
+	var req BulkPayFinesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INVALID_REQUEST",
+				Message: "Invalid request body",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	count, err := h.fineService.BulkPayFines(c.Request.Context(), req.TransactionIDs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "BULK_PAY_ERROR",
+				Message: "Failed to bulk pay fines",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Message: "Fines paid successfully",
+		Data: gin.H{
+			"paid_count":   count,
+			"requested":    len(req.TransactionIDs),
+			"already_paid": int64(len(req.TransactionIDs)) - count,
+		},
+	})
+}
+
+// BulkWaiveFinesRequest represents the request body for bulk waiving fines
+type BulkWaiveFinesRequest struct {
+	TransactionIDs []int32 `json:"transaction_ids" binding:"required,min=1"`
+	Reason         string  `json:"reason" binding:"required"`
+}
+
+// BulkWaiveFines godoc
+// @Summary Bulk waive multiple fines
+// @Description Waive multiple fines with a single reason
+// @Tags fines
+// @Accept json
+// @Produce json
+// @Param body body BulkWaiveFinesRequest true "Transaction IDs to waive and reason"
+// @Success 200 {object} SuccessResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/fines/bulk-waive [post]
+func (h *FineHandler) BulkWaiveFines(c *gin.Context) {
+	var req BulkWaiveFinesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INVALID_REQUEST",
+				Message: "Invalid request body",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	// Get the user ID from context (set by auth middleware)
+	userID := middleware.GetUserID(c)
+	if userID == 0 {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "UNAUTHORIZED",
+				Message: "Authentication required to waive fines",
+				Details: "User ID not found in request context",
+			},
+		})
+		return
+	}
+
+	count, err := h.fineService.BulkWaiveFines(c.Request.Context(), req.TransactionIDs, int32(userID), req.Reason)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "BULK_WAIVE_ERROR",
+				Message: "Failed to bulk waive fines",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Message: "Fines waived successfully",
+		Data: gin.H{
+			"waived_count":   count,
+			"requested":      len(req.TransactionIDs),
+			"already_waived": int64(len(req.TransactionIDs)) - count,
+			"reason":         req.Reason,
 		},
 	})
 }

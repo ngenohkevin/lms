@@ -22,6 +22,8 @@ type FineQuerier interface {
 	GetOverdueTransactionsForFineCalculation(ctx context.Context) ([]queries.GetOverdueTransactionsForFineCalculationRow, error)
 	UpdateFineAmount(ctx context.Context, arg queries.UpdateFineAmountParams) error
 	GetStudentsWithHighFines(ctx context.Context, fineAmount pgtype.Numeric) ([]queries.GetStudentsWithHighFinesRow, error)
+	BulkPayFines(ctx context.Context, ids []int32) (int64, error)
+	BulkWaiveFines(ctx context.Context, arg queries.BulkWaiveFinesParams) (int64, error)
 }
 
 // Fine represents a fine record
@@ -340,6 +342,43 @@ func (s *FineService) GetStudentsWithHighFines(ctx context.Context, threshold fl
 // GetFinePerDay returns the current fine rate per day
 func (s *FineService) GetFinePerDay() float64 {
 	return s.finePerDay
+}
+
+// BulkPayFines marks multiple fines as paid
+func (s *FineService) BulkPayFines(ctx context.Context, transactionIDs []int32) (int64, error) {
+	if len(transactionIDs) == 0 {
+		return 0, fmt.Errorf("no transaction IDs provided")
+	}
+
+	count, err := s.queries.BulkPayFines(ctx, transactionIDs)
+	if err != nil {
+		return 0, fmt.Errorf("failed to bulk pay fines: %w", err)
+	}
+
+	return count, nil
+}
+
+// BulkWaiveFines waives multiple fines with a single reason
+func (s *FineService) BulkWaiveFines(ctx context.Context, transactionIDs []int32, waivedBy int32, reason string) (int64, error) {
+	if len(transactionIDs) == 0 {
+		return 0, fmt.Errorf("no transaction IDs provided")
+	}
+	if reason == "" {
+		return 0, fmt.Errorf("waive reason is required")
+	}
+
+	params := queries.BulkWaiveFinesParams{
+		Column1:          transactionIDs,
+		FineWaivedBy:     pgtype.Int4{Int32: waivedBy, Valid: true},
+		FineWaivedReason: pgtype.Text{String: reason, Valid: true},
+	}
+
+	count, err := s.queries.BulkWaiveFines(ctx, params)
+	if err != nil {
+		return 0, fmt.Errorf("failed to bulk waive fines: %w", err)
+	}
+
+	return count, nil
 }
 
 // Helper functions

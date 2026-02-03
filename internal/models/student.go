@@ -293,6 +293,14 @@ func (r *BulkImportStudentRequest) Validate() error {
 
 // ToResponse converts a database StudentDB to StudentResponse
 func (s *StudentDB) ToResponse() StudentResponse {
+	// Determine status: use database value if valid, otherwise derive from IsActive
+	status := StudentStatusActive // Default to active
+	if s.Status.Valid && s.Status.String != "" {
+		status = s.Status.String
+	} else if !s.IsActive.Valid || !s.IsActive.Bool {
+		status = StudentStatusInactive
+	}
+
 	response := StudentResponse{
 		ID:            s.ID,
 		StudentID:     s.StudentID,
@@ -305,7 +313,7 @@ func (s *StudentDB) ToResponse() StudentResponse {
 		TotalBorrowed: s.TotalBorrowed,
 		TotalFines:    s.TotalFines,
 		UnpaidFines:   s.UnpaidFines,
-		Status:        "active", // Default status
+		Status:        status,
 	}
 
 	// Handle optional fields
@@ -324,9 +332,6 @@ func (s *StudentDB) ToResponse() StudentResponse {
 	}
 	if s.DepartmentName.Valid {
 		response.DepartmentName = s.DepartmentName.String
-	}
-	if s.Status.Valid {
-		response.Status = s.Status.String
 	}
 	if s.SuspensionReason.Valid {
 		response.SuspensionReason = s.SuspensionReason.String

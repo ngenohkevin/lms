@@ -16,6 +16,7 @@ type ReservationQuerier interface {
 	CreateReservation(ctx context.Context, arg queries.CreateReservationParams) (queries.Reservation, error)
 	GetReservationByID(ctx context.Context, id int32) (queries.GetReservationByIDRow, error)
 	UpdateReservationStatus(ctx context.Context, arg queries.UpdateReservationStatusParams) (queries.Reservation, error)
+	MarkReservationNotified(ctx context.Context, id int32) (queries.Reservation, error)
 	ListReservations(ctx context.Context, arg queries.ListReservationsParams) ([]queries.ListReservationsRow, error)
 	ListReservationsByStudent(ctx context.Context, arg queries.ListReservationsByStudentParams) ([]queries.ListReservationsByStudentRow, error)
 	ListReservationsByBook(ctx context.Context, bookID int32) ([]queries.ListReservationsByBookRow, error)
@@ -23,6 +24,7 @@ type ReservationQuerier interface {
 	ListExpiredReservations(ctx context.Context) ([]queries.ListExpiredReservationsRow, error)
 	CountActiveReservationsByStudent(ctx context.Context, studentID int32) (int64, error)
 	CountActiveReservationsByBook(ctx context.Context, bookID int32) (int64, error)
+	CountAllReservations(ctx context.Context) (int64, error)
 	GetNextReservationForBook(ctx context.Context, bookID int32) (queries.GetNextReservationForBookRow, error)
 	CancelReservation(ctx context.Context, id int32) (queries.Reservation, error)
 	GetStudentReservationForBook(ctx context.Context, arg queries.GetStudentReservationForBookParams) (queries.GetStudentReservationForBookRow, error)
@@ -72,6 +74,7 @@ type ReservationResponse struct {
 	ReservedAt  time.Time  `json:"reserved_at"`
 	ExpiresAt   time.Time  `json:"expires_at"`
 	Status      string     `json:"status"`
+	NotifiedAt  *time.Time `json:"notified_at,omitempty"`
 	FulfilledAt *time.Time `json:"fulfilled_at,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
@@ -82,6 +85,12 @@ type ReservationResponse struct {
 	BookAuthor    string `json:"book_author,omitempty"`
 	BookIDCode    string `json:"book_id_code,omitempty"`
 	QueuePosition int    `json:"queue_position,omitempty"`
+}
+
+// ReservationListResponse represents a paginated list of reservations
+type ReservationListResponse struct {
+	Reservations []ReservationResponse `json:"reservations"`
+	Pagination   PaginationInfo        `json:"pagination"`
 }
 
 // ReserveBook creates a new book reservation
@@ -261,7 +270,7 @@ func (s *ReservationService) ExpireReservations(ctx context.Context) (int, error
 }
 
 // GetAllReservations retrieves all reservations with pagination
-func (s *ReservationService) GetAllReservations(ctx context.Context, limit, offset int32) ([]ReservationResponse, error) {
+func (s *ReservationService) GetAllReservations(ctx context.Context, limit, offset int32) (*ReservationListResponse, error) {
 	reservations, err := s.queries.ListReservations(ctx, queries.ListReservationsParams{
 		Limit:  limit,
 		Offset: offset,
@@ -270,13 +279,39 @@ func (s *ReservationService) GetAllReservations(ctx context.Context, limit, offs
 		return nil, fmt.Errorf("failed to get reservations: %w", err)
 	}
 
+	// Get total count for pagination
+	totalCount, err := s.queries.CountAllReservations(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count reservations: %w", err)
+	}
+
 	responses := make([]ReservationResponse, 0, len(reservations))
 	for _, reservation := range reservations {
 		response := s.convertToListReservationResponse(reservation)
 		responses = append(responses, response)
 	}
 
-	return responses, nil
+	// Calculate page from offset
+	page := 1
+	if limit > 0 {
+		page = int(offset/limit) + 1
+	}
+
+	// Calculate total pages
+	totalPages := 1
+	if limit > 0 && totalCount > 0 {
+		totalPages = int((totalCount + int64(limit) - 1) / int64(limit))
+	}
+
+	return &ReservationListResponse{
+		Reservations: responses,
+		Pagination: PaginationInfo{
+			Page:       page,
+			Limit:      int(limit),
+			Total:      totalCount,
+			TotalPages: totalPages,
+		},
+	}, nil
 }
 
 // HasStudentFulfilledReservation checks if a student has a fulfilled reservation for a book
@@ -446,6 +481,9 @@ func (s *ReservationService) convertToReservationResponse(reservation queries.Re
 		QueuePosition: queuePosition,
 	}
 
+	if reservation.NotifiedAt.Valid {
+		response.NotifiedAt = &reservation.NotifiedAt.Time
+	}
 	if reservation.FulfilledAt.Valid {
 		response.FulfilledAt = &reservation.FulfilledAt.Time
 	}
@@ -472,6 +510,9 @@ func (s *ReservationService) convertToExtendedReservationResponse(reservation qu
 		QueuePosition: queuePosition,
 	}
 
+	if reservation.NotifiedAt.Valid {
+		response.NotifiedAt = &reservation.NotifiedAt.Time
+	}
 	if reservation.FulfilledAt.Valid {
 		response.FulfilledAt = &reservation.FulfilledAt.Time
 	}
@@ -495,6 +536,9 @@ func (s *ReservationService) convertToStudentReservationResponse(reservation que
 		BookIDCode: reservation.BookCode,
 	}
 
+	if reservation.NotifiedAt.Valid {
+		response.NotifiedAt = &reservation.NotifiedAt.Time
+	}
 	if reservation.FulfilledAt.Valid {
 		response.FulfilledAt = &reservation.FulfilledAt.Time
 	}
@@ -517,6 +561,9 @@ func (s *ReservationService) convertToBookReservationResponse(reservation querie
 		StudentIDCode: reservation.StudentCode,
 	}
 
+	if reservation.NotifiedAt.Valid {
+		response.NotifiedAt = &reservation.NotifiedAt.Time
+	}
 	if reservation.FulfilledAt.Valid {
 		response.FulfilledAt = &reservation.FulfilledAt.Time
 	}
@@ -620,15 +667,20 @@ func (s *ReservationService) MarkReservationReady(ctx context.Context, reservati
 		return nil, fmt.Errorf("reservation is not in active status (current: %s)", reservationRow.Status.String)
 	}
 
-	// Update reservation status to "ready"
-	now := time.Now().UTC()
+	// Update reservation status to "ready" (don't set fulfilled_at - that's for when book is borrowed)
 	reservation, err := s.queries.UpdateReservationStatus(ctx, queries.UpdateReservationStatusParams{
 		ID:          reservationID,
 		Status:      pgtype.Text{String: "ready", Valid: true},
-		FulfilledAt: pgtype.Timestamp{Time: now, Valid: true}, // Use fulfilled_at as notified_at for "ready" status
+		FulfilledAt: pgtype.Timestamp{Valid: false}, // Not fulfilled yet - just ready for pickup
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to mark reservation as ready: %w", err)
+	}
+
+	// Set notified_at timestamp to track when student was notified
+	reservation, err = s.queries.MarkReservationNotified(ctx, reservationID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set notification timestamp: %w", err)
 	}
 
 	return s.convertToReservationResponse(reservation, 1), nil

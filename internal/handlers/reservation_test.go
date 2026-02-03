@@ -79,9 +79,12 @@ func (m *MockReservationService) ExpireReservations(ctx context.Context) (int, e
 	return args.Get(0).(int), args.Error(1)
 }
 
-func (m *MockReservationService) GetAllReservations(ctx context.Context, limit, offset int32) ([]services.ReservationResponse, error) {
+func (m *MockReservationService) GetAllReservations(ctx context.Context, limit, offset int32) (*services.ReservationListResponse, error) {
 	args := m.Called(ctx, limit, offset)
-	return args.Get(0).([]services.ReservationResponse), args.Error(1)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*services.ReservationListResponse), args.Error(1)
 }
 
 func (m *MockReservationService) GetQueuePosition(ctx context.Context, studentID, bookID int32) (*services.QueuePositionResponse, error) {
@@ -578,26 +581,34 @@ func TestReservationHandler_GetAllReservations_Success(t *testing.T) {
 	router := gin.New()
 	router.GET("/reservations", handler.GetAllReservations)
 
-	expectedReservations := []services.ReservationResponse{
-		{
-			ID:            1,
-			StudentID:     1,
-			BookID:        2,
-			ReservedAt:    time.Now(),
-			ExpiresAt:     time.Now().AddDate(0, 0, 7),
-			Status:        "active",
-			CreatedAt:     time.Now(),
-			UpdatedAt:     time.Now(),
-			QueuePosition: 1,
-			StudentName:   "John Doe",
-			StudentIDCode: "STU001",
-			BookTitle:     "Test Book",
-			BookAuthor:    "Test Author",
-			BookIDCode:    "BK001",
+	expectedResponse := &services.ReservationListResponse{
+		Reservations: []services.ReservationResponse{
+			{
+				ID:            1,
+				StudentID:     1,
+				BookID:        2,
+				ReservedAt:    time.Now(),
+				ExpiresAt:     time.Now().AddDate(0, 0, 7),
+				Status:        "active",
+				CreatedAt:     time.Now(),
+				UpdatedAt:     time.Now(),
+				QueuePosition: 1,
+				StudentName:   "John Doe",
+				StudentIDCode: "STU001",
+				BookTitle:     "Test Book",
+				BookAuthor:    "Test Author",
+				BookIDCode:    "BK001",
+			},
+		},
+		Pagination: services.PaginationInfo{
+			Page:       1,
+			Limit:      20,
+			Total:      1,
+			TotalPages: 1,
 		},
 	}
 
-	mockService.On("GetAllReservations", mock.Anything, int32(20), int32(0)).Return(expectedReservations, nil)
+	mockService.On("GetAllReservations", mock.Anything, int32(20), int32(0)).Return(expectedResponse, nil)
 
 	req, _ := http.NewRequest(http.MethodGet, "/reservations", nil)
 	w := httptest.NewRecorder()

@@ -31,6 +31,7 @@ type BorrowBookRequest struct {
 	CopyID      *int32  `json:"copy_id" binding:"omitempty,min=1"`
 	Barcode     *string `json:"barcode" binding:"omitempty"`
 	Notes       string  `json:"notes"`
+	DueDays     *int32  `json:"due_days" binding:"omitempty,min=1,max=90"` // Custom due period in days (overrides year-based default)
 }
 
 // BorrowByBarcodeRequest represents a quick checkout by barcode
@@ -73,6 +74,9 @@ type TransactionResponse struct {
 	CopyNumber    *string `json:"copy_number,omitempty"`
 	CopyBarcode   *string `json:"copy_barcode,omitempty"`
 	CopyCondition *string `json:"copy_condition,omitempty"`
+	// Return condition fields
+	ReturnCondition *string `json:"return_condition,omitempty"`
+	ConditionNotes  *string `json:"condition_notes,omitempty"`
 }
 
 // OverdueTransactionResponse represents an overdue transaction with additional details

@@ -182,6 +182,31 @@ WHERE student_id = $1;
 SELECT COUNT(*) FROM transactions
 WHERE book_id = $1 AND returned_date IS NULL;
 
+-- name: CancelTransaction :one
+-- Cancel a transaction by marking it as returned with zero fine
+-- This effectively cancels the transaction without needing a separate status column
+-- The notes field documents the cancellation reason
+UPDATE transactions
+SET
+    returned_date = NOW(),
+    fine_amount = 0,
+    fine_paid = true,
+    notes = CASE
+        WHEN notes IS NULL OR notes = '' THEN '[CANCELLED] ' || sqlc.arg(cancel_reason)::text
+        ELSE notes || E'\n\n[CANCELLED] ' || sqlc.arg(cancel_reason)::text
+    END,
+    updated_at = NOW()
+WHERE id = sqlc.arg(id)
+  AND returned_date IS NULL
+  AND transaction_type = 'borrow'
+RETURNING *;
+
+-- name: GetTransactionAge :one
+-- Get transaction age in minutes (for cancel time window validation)
+SELECT EXTRACT(EPOCH FROM (NOW() - transaction_date)) / 60 as age_minutes
+FROM transactions
+WHERE id = sqlc.arg(id);
+
 -- Copy-level transaction tracking queries
 
 -- name: GetTransactionByIDWithCopy :one
@@ -261,3 +286,20 @@ WHERE
     AND (sqlc.narg('filter_type')::text IS NULL OR sqlc.narg('filter_type') = '' OR t.transaction_type = sqlc.narg('filter_type'))
     AND (sqlc.narg('from_date')::timestamp IS NULL OR t.transaction_date >= sqlc.narg('from_date'))
     AND (sqlc.narg('to_date')::timestamp IS NULL OR t.transaction_date <= sqlc.narg('to_date'));
+
+-- name: MarkTransactionAsLost :one
+-- Mark a transaction as lost: sets returned_date, applies replacement fine, and adds lost note
+UPDATE transactions
+SET
+    returned_date = NOW(),
+    fine_amount = sqlc.arg(replacement_fine)::numeric,
+    fine_paid = false,
+    notes = CASE
+        WHEN notes IS NULL OR notes = '' THEN '[LOST] ' || sqlc.arg(lost_reason)::text || ' | Replacement fine: $' || sqlc.arg(replacement_fine)::text
+        ELSE notes || E'\n\n[LOST] ' || sqlc.arg(lost_reason)::text || ' | Replacement fine: $' || sqlc.arg(replacement_fine)::text
+    END,
+    updated_at = NOW()
+WHERE id = sqlc.arg(id)
+  AND returned_date IS NULL
+  AND transaction_type = 'borrow'
+RETURNING *;

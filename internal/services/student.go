@@ -64,6 +64,7 @@ type StudentQuerier interface {
 	ActivateStudent(ctx context.Context, id int32) (queries.Student, error)
 	GraduateStudent(ctx context.Context, params queries.GraduateStudentParams) (queries.Student, error)
 	UpdateStudentAdminNotes(ctx context.Context, params queries.UpdateStudentAdminNotesParams) (queries.Student, error)
+	BulkUpdateStudentDepartment(ctx context.Context, arg queries.BulkUpdateStudentDepartmentParams) (int64, error)
 }
 
 // AuthServiceInterface defines the interface for auth-related operations
@@ -2143,4 +2144,38 @@ func (s *StudentService) UpdateAdminNotes(ctx context.Context, id int32, notes s
 		CreatedAt:        updatedStudent.CreatedAt,
 		UpdatedAt:        updatedStudent.UpdatedAt,
 	}, nil
+}
+
+// BulkUpdateDepartment updates the department for multiple students
+func (s *StudentService) BulkUpdateDepartment(ctx context.Context, studentIDs []int32, departmentID int32) (int64, error) {
+	if len(studentIDs) == 0 {
+		return 0, fmt.Errorf("no student IDs provided")
+	}
+
+	// Verify all students exist before updating
+	for _, studentID := range studentIDs {
+		_, err := s.queries.GetStudentByID(ctx, studentID)
+		if err != nil {
+			return 0, fmt.Errorf("student with ID %d not found", studentID)
+		}
+	}
+
+	// Perform bulk update
+	count, err := s.queries.BulkUpdateStudentDepartment(ctx, queries.BulkUpdateStudentDepartmentParams{
+		Column1:      studentIDs,
+		DepartmentID: pgtype.Int4{Int32: departmentID, Valid: true},
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to bulk update student departments: %w", err)
+	}
+
+	// Invalidate caches for all updated students
+	if s.cacheService != nil {
+		_ = s.cacheService.InvalidateByPattern(ctx, "students:*")
+		for _, id := range studentIDs {
+			_ = s.cacheService.InvalidateStudentProfile(ctx, int(id))
+		}
+	}
+
+	return count, nil
 }

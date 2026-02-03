@@ -18,9 +18,16 @@ type Querier interface {
 	ActivateStudent(ctx context.Context, id int32) (Student, error)
 	AddBookAuthor(ctx context.Context, arg AddBookAuthorParams) error
 	AddRolePermission(ctx context.Context, arg AddRolePermissionParams) error
+	BulkPayFines(ctx context.Context, dollar_1 []int32) (int64, error)
+	BulkUpdateStudentDepartment(ctx context.Context, arg BulkUpdateStudentDepartmentParams) (int64, error)
 	BulkUpdateStudentStatus(ctx context.Context, arg BulkUpdateStudentStatusParams) error
+	BulkWaiveFines(ctx context.Context, arg BulkWaiveFinesParams) (int64, error)
 	CancelQueueItem(ctx context.Context, id int32) (EmailQueue, error)
 	CancelReservation(ctx context.Context, id int32) (Reservation, error)
+	// Cancel a transaction by marking it as returned with zero fine
+	// This effectively cancels the transaction without needing a separate status column
+	// The notes field documents the cancellation reason
+	CancelTransaction(ctx context.Context, arg CancelTransactionParams) (Transaction, error)
 	CheckEmailExists(ctx context.Context, arg CheckEmailExistsParams) (bool, error)
 	CheckRoleHasPermission(ctx context.Context, arg CheckRoleHasPermissionParams) (bool, error)
 	// Check if a user has a specific permission (considering role + overrides)
@@ -37,6 +44,7 @@ type Querier interface {
 	CountActiveReservationsByStudent(ctx context.Context, studentID int32) (int64, error)
 	CountActiveTransactionsByBook(ctx context.Context, bookID int32) (int64, error)
 	CountAdminUsers(ctx context.Context) (int64, error)
+	CountAllReservations(ctx context.Context) (int64, error)
 	// =====================================================
 	// User Invites Queries
 	// =====================================================
@@ -232,6 +240,8 @@ type Querier interface {
 	GetStudentsWithHighFines(ctx context.Context, fineAmount pgtype.Numeric) ([]GetStudentsWithHighFinesRow, error)
 	GetTopBorrowingStudents(ctx context.Context, arg GetTopBorrowingStudentsParams) ([]GetTopBorrowingStudentsRow, error)
 	GetTotalUnpaidFinesByStudent(ctx context.Context, studentID int32) (pgtype.Numeric, error)
+	// Get transaction age in minutes (for cancel time window validation)
+	GetTransactionAge(ctx context.Context, id int32) (int32, error)
 	GetTransactionByID(ctx context.Context, id int32) (GetTransactionByIDRow, error)
 	// Copy-level transaction tracking queries
 	GetTransactionByIDWithCopy(ctx context.Context, id int32) (GetTransactionByIDWithCopyRow, error)
@@ -333,6 +343,9 @@ type Querier interface {
 	MarkInviteAccepted(ctx context.Context, arg MarkInviteAcceptedParams) (UserInvite, error)
 	MarkNotificationAsRead(ctx context.Context, id int32) error
 	MarkNotificationAsSent(ctx context.Context, id int32) error
+	MarkReservationNotified(ctx context.Context, id int32) (Reservation, error)
+	// Mark a transaction as lost: sets returned_date, applies replacement fine, and adds lost note
+	MarkTransactionAsLost(ctx context.Context, arg MarkTransactionAsLostParams) (Transaction, error)
 	PayFineByTransactionID(ctx context.Context, id int32) (Transaction, error)
 	PayTransactionFine(ctx context.Context, id int32) error
 	RemoveBookAuthor(ctx context.Context, arg RemoveBookAuthorParams) error

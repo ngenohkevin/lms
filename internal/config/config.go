@@ -86,6 +86,7 @@ type BorrowingConfig struct {
 	BorrowingPeriodDays   int     `mapstructure:"borrowing_period_days"`
 	MaxBooksPerStudent    int     `mapstructure:"max_books_per_student"`
 	FinePerDay            float64 `mapstructure:"fine_per_day"`
+	LostBookFine          float64 `mapstructure:"lost_book_fine"`
 	MaxRenewals           int     `mapstructure:"max_renewals"`
 	ReservationExpiryDays int     `mapstructure:"reservation_expiry_days"`
 }
@@ -148,6 +149,7 @@ func Load() (*Config, error) {
 	viper.SetDefault("borrowing.borrowing_period_days", 14)
 	viper.SetDefault("borrowing.max_books_per_student", 5)
 	viper.SetDefault("borrowing.fine_per_day", 0.50)
+	viper.SetDefault("borrowing.lost_book_fine", 50.00) // Default replacement cost for lost books
 	viper.SetDefault("borrowing.max_renewals", 2)
 	viper.SetDefault("borrowing.reservation_expiry_days", 3)
 

@@ -207,6 +207,21 @@ func (m *MockTransactionQueries) CountSearchTransactions(ctx context.Context, ar
 	return args.Get(0).(int64), args.Error(1)
 }
 
+func (m *MockTransactionQueries) GetTransactionAge(ctx context.Context, id int32) (int32, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(int32), args.Error(1)
+}
+
+func (m *MockTransactionQueries) CancelTransaction(ctx context.Context, arg queries.CancelTransactionParams) (queries.Transaction, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(queries.Transaction), args.Error(1)
+}
+
+func (m *MockTransactionQueries) MarkTransactionAsLost(ctx context.Context, arg queries.MarkTransactionAsLostParams) (queries.Transaction, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(queries.Transaction), args.Error(1)
+}
+
 // Test helper functions
 func createTestTransaction() queries.Transaction {
 	now := time.Now()
@@ -814,7 +829,7 @@ func TestTransactionService_CalculateDueDate_DifferentYears(t *testing.T) {
 		student := createTestStudent()
 		student.YearOfStudy = tc.year
 
-		dueDate := service.calculateDueDate(student)
+		dueDate := service.calculateDueDate(student, nil) // nil for default year-based calculation
 		expectedDate := time.Now().AddDate(0, 0, tc.expected)
 
 		// Allow for slight time differences during test execution

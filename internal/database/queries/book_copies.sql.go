@@ -100,7 +100,7 @@ func (q *Queries) DeleteBookCopy(ctx context.Context, id int32) error {
 }
 
 const getActiveBorrowingByCopy = `-- name: GetActiveBorrowingByCopy :one
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, s.first_name, s.last_name, s.student_id as student_code
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, s.first_name, s.last_name, s.student_id as student_code
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 WHERE t.copy_id = $1 AND t.returned_date IS NULL
@@ -129,6 +129,7 @@ type GetActiveBorrowingByCopyRow struct {
 	FineWaivedReason pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
 	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
 	CopyID           pgtype.Int4      `db:"copy_id" json:"copy_id"`
+	Status           pgtype.Text      `db:"status" json:"status"`
 	FirstName        string           `db:"first_name" json:"first_name"`
 	LastName         string           `db:"last_name" json:"last_name"`
 	StudentCode      string           `db:"student_code" json:"student_code"`
@@ -159,6 +160,7 @@ func (q *Queries) GetActiveBorrowingByCopy(ctx context.Context, copyID pgtype.In
 		&i.FineWaivedReason,
 		&i.FinePaidAt,
 		&i.CopyID,
+		&i.Status,
 		&i.FirstName,
 		&i.LastName,
 		&i.StudentCode,
@@ -241,7 +243,7 @@ func (q *Queries) GetBookCopyByID(ctx context.Context, id int32) (BookCopy, erro
 }
 
 const getCopyBorrowingHistory = `-- name: GetCopyBorrowingHistory :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, s.first_name, s.last_name, s.student_id as student_code
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, s.first_name, s.last_name, s.student_id as student_code
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 WHERE t.copy_id = $1
@@ -277,6 +279,7 @@ type GetCopyBorrowingHistoryRow struct {
 	FineWaivedReason pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
 	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
 	CopyID           pgtype.Int4      `db:"copy_id" json:"copy_id"`
+	Status           pgtype.Text      `db:"status" json:"status"`
 	FirstName        string           `db:"first_name" json:"first_name"`
 	LastName         string           `db:"last_name" json:"last_name"`
 	StudentCode      string           `db:"student_code" json:"student_code"`
@@ -313,6 +316,7 @@ func (q *Queries) GetCopyBorrowingHistory(ctx context.Context, arg GetCopyBorrow
 			&i.FineWaivedReason,
 			&i.FinePaidAt,
 			&i.CopyID,
+			&i.Status,
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentCode,

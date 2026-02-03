@@ -194,6 +194,11 @@ func (m *MockQueries) UpdateStudentAdminNotes(ctx context.Context, params querie
 	return args.Get(0).(queries.Student), args.Error(1)
 }
 
+func (m *MockQueries) BulkUpdateStudentDepartment(ctx context.Context, params queries.BulkUpdateStudentDepartmentParams) (int64, error) {
+	args := m.Called(ctx, params)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 // Helper function to create a mock student
 func createMockStudent() queries.Student {
 	now := time.Now()

@@ -15,7 +15,7 @@ const cancelReservation = `-- name: CancelReservation :one
 UPDATE reservations
 SET status = 'cancelled', updated_at = NOW()
 WHERE id = $1 AND status IN ('active', 'fulfilled')
-RETURNING id, student_id, book_id, reserved_at, expires_at, status, fulfilled_at, created_at, updated_at
+RETURNING id, student_id, book_id, reserved_at, expires_at, status, fulfilled_at, created_at, updated_at, notified_at
 `
 
 func (q *Queries) CancelReservation(ctx context.Context, id int32) (Reservation, error) {
@@ -31,6 +31,7 @@ func (q *Queries) CancelReservation(ctx context.Context, id int32) (Reservation,
 		&i.FulfilledAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.NotifiedAt,
 	)
 	return i, err
 }
@@ -59,10 +60,21 @@ func (q *Queries) CountActiveReservationsByStudent(ctx context.Context, studentI
 	return count, err
 }
 
+const countAllReservations = `-- name: CountAllReservations :one
+SELECT COUNT(*) FROM reservations
+`
+
+func (q *Queries) CountAllReservations(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countAllReservations)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createReservation = `-- name: CreateReservation :one
 INSERT INTO reservations (student_id, book_id, expires_at)
 VALUES ($1, $2, $3)
-RETURNING id, student_id, book_id, reserved_at, expires_at, status, fulfilled_at, created_at, updated_at
+RETURNING id, student_id, book_id, reserved_at, expires_at, status, fulfilled_at, created_at, updated_at, notified_at
 `
 
 type CreateReservationParams struct {
@@ -84,12 +96,13 @@ func (q *Queries) CreateReservation(ctx context.Context, arg CreateReservationPa
 		&i.FulfilledAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.NotifiedAt,
 	)
 	return i, err
 }
 
 const getNextReservationForBook = `-- name: GetNextReservationForBook :one
-SELECT r.id, r.student_id, r.book_id, r.reserved_at, r.expires_at, r.status, r.fulfilled_at, r.created_at, r.updated_at, s.first_name, s.last_name, s.student_id as student_code
+SELECT r.id, r.student_id, r.book_id, r.reserved_at, r.expires_at, r.status, r.fulfilled_at, r.created_at, r.updated_at, r.notified_at, s.first_name, s.last_name, s.student_id as student_code
 FROM reservations r
 JOIN students s ON r.student_id = s.id
 WHERE r.book_id = $1 AND r.status = 'active'
@@ -107,6 +120,7 @@ type GetNextReservationForBookRow struct {
 	FulfilledAt pgtype.Timestamp `db:"fulfilled_at" json:"fulfilled_at"`
 	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt   pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	NotifiedAt  pgtype.Timestamp `db:"notified_at" json:"notified_at"`
 	FirstName   string           `db:"first_name" json:"first_name"`
 	LastName    string           `db:"last_name" json:"last_name"`
 	StudentCode string           `db:"student_code" json:"student_code"`
@@ -125,6 +139,7 @@ func (q *Queries) GetNextReservationForBook(ctx context.Context, bookID int32) (
 		&i.FulfilledAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.NotifiedAt,
 		&i.FirstName,
 		&i.LastName,
 		&i.StudentCode,
@@ -133,7 +148,7 @@ func (q *Queries) GetNextReservationForBook(ctx context.Context, bookID int32) (
 }
 
 const getReservationByID = `-- name: GetReservationByID :one
-SELECT r.id, r.student_id, r.book_id, r.reserved_at, r.expires_at, r.status, r.fulfilled_at, r.created_at, r.updated_at, s.first_name, s.last_name, s.student_id as student_code, b.title, b.author, b.book_id as book_code
+SELECT r.id, r.student_id, r.book_id, r.reserved_at, r.expires_at, r.status, r.fulfilled_at, r.created_at, r.updated_at, r.notified_at, s.first_name, s.last_name, s.student_id as student_code, b.title, b.author, b.book_id as book_code
 FROM reservations r
 JOIN students s ON r.student_id = s.id
 JOIN books b ON r.book_id = b.id
@@ -150,6 +165,7 @@ type GetReservationByIDRow struct {
 	FulfilledAt pgtype.Timestamp `db:"fulfilled_at" json:"fulfilled_at"`
 	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt   pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	NotifiedAt  pgtype.Timestamp `db:"notified_at" json:"notified_at"`
 	FirstName   string           `db:"first_name" json:"first_name"`
 	LastName    string           `db:"last_name" json:"last_name"`
 	StudentCode string           `db:"student_code" json:"student_code"`
@@ -171,6 +187,7 @@ func (q *Queries) GetReservationByID(ctx context.Context, id int32) (GetReservat
 		&i.FulfilledAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.NotifiedAt,
 		&i.FirstName,
 		&i.LastName,
 		&i.StudentCode,
@@ -182,7 +199,7 @@ func (q *Queries) GetReservationByID(ctx context.Context, id int32) (GetReservat
 }
 
 const getStudentReservationForBook = `-- name: GetStudentReservationForBook :one
-SELECT r.id, r.student_id, r.book_id, r.reserved_at, r.expires_at, r.status, r.fulfilled_at, r.created_at, r.updated_at, s.first_name, s.last_name, s.student_id as student_code
+SELECT r.id, r.student_id, r.book_id, r.reserved_at, r.expires_at, r.status, r.fulfilled_at, r.created_at, r.updated_at, r.notified_at, s.first_name, s.last_name, s.student_id as student_code
 FROM reservations r
 JOIN students s ON r.student_id = s.id
 WHERE r.student_id = $1 AND r.book_id = $2 AND r.status = $3
@@ -206,6 +223,7 @@ type GetStudentReservationForBookRow struct {
 	FulfilledAt pgtype.Timestamp `db:"fulfilled_at" json:"fulfilled_at"`
 	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt   pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	NotifiedAt  pgtype.Timestamp `db:"notified_at" json:"notified_at"`
 	FirstName   string           `db:"first_name" json:"first_name"`
 	LastName    string           `db:"last_name" json:"last_name"`
 	StudentCode string           `db:"student_code" json:"student_code"`
@@ -224,6 +242,7 @@ func (q *Queries) GetStudentReservationForBook(ctx context.Context, arg GetStude
 		&i.FulfilledAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.NotifiedAt,
 		&i.FirstName,
 		&i.LastName,
 		&i.StudentCode,
@@ -232,7 +251,7 @@ func (q *Queries) GetStudentReservationForBook(ctx context.Context, arg GetStude
 }
 
 const listActiveReservations = `-- name: ListActiveReservations :many
-SELECT r.id, r.student_id, r.book_id, r.reserved_at, r.expires_at, r.status, r.fulfilled_at, r.created_at, r.updated_at, s.first_name, s.last_name, s.student_id as student_code, b.title, b.author, b.book_id as book_code
+SELECT r.id, r.student_id, r.book_id, r.reserved_at, r.expires_at, r.status, r.fulfilled_at, r.created_at, r.updated_at, r.notified_at, s.first_name, s.last_name, s.student_id as student_code, b.title, b.author, b.book_id as book_code
 FROM reservations r
 JOIN students s ON r.student_id = s.id
 JOIN books b ON r.book_id = b.id
@@ -250,6 +269,7 @@ type ListActiveReservationsRow struct {
 	FulfilledAt pgtype.Timestamp `db:"fulfilled_at" json:"fulfilled_at"`
 	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt   pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	NotifiedAt  pgtype.Timestamp `db:"notified_at" json:"notified_at"`
 	FirstName   string           `db:"first_name" json:"first_name"`
 	LastName    string           `db:"last_name" json:"last_name"`
 	StudentCode string           `db:"student_code" json:"student_code"`
@@ -277,6 +297,7 @@ func (q *Queries) ListActiveReservations(ctx context.Context) ([]ListActiveReser
 			&i.FulfilledAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.NotifiedAt,
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentCode,
@@ -296,7 +317,7 @@ func (q *Queries) ListActiveReservations(ctx context.Context) ([]ListActiveReser
 
 const listActiveReservationsForAvailableBook = `-- name: ListActiveReservationsForAvailableBook :many
 
-SELECT r.id, r.student_id, r.book_id, r.reserved_at, r.expires_at, r.status, r.fulfilled_at, r.created_at, r.updated_at, s.first_name, s.last_name, s.student_id as student_code, s.email, b.title, b.author, b.book_id as book_code
+SELECT r.id, r.student_id, r.book_id, r.reserved_at, r.expires_at, r.status, r.fulfilled_at, r.created_at, r.updated_at, r.notified_at, s.first_name, s.last_name, s.student_id as student_code, s.email, b.title, b.author, b.book_id as book_code
 FROM reservations r
 JOIN students s ON r.student_id = s.id
 JOIN books b ON r.book_id = b.id
@@ -316,6 +337,7 @@ type ListActiveReservationsForAvailableBookRow struct {
 	FulfilledAt pgtype.Timestamp `db:"fulfilled_at" json:"fulfilled_at"`
 	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt   pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	NotifiedAt  pgtype.Timestamp `db:"notified_at" json:"notified_at"`
 	FirstName   string           `db:"first_name" json:"first_name"`
 	LastName    string           `db:"last_name" json:"last_name"`
 	StudentCode string           `db:"student_code" json:"student_code"`
@@ -345,6 +367,7 @@ func (q *Queries) ListActiveReservationsForAvailableBook(ctx context.Context, bo
 			&i.FulfilledAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.NotifiedAt,
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentCode,
@@ -364,7 +387,7 @@ func (q *Queries) ListActiveReservationsForAvailableBook(ctx context.Context, bo
 }
 
 const listExpiredReservations = `-- name: ListExpiredReservations :many
-SELECT r.id, r.student_id, r.book_id, r.reserved_at, r.expires_at, r.status, r.fulfilled_at, r.created_at, r.updated_at, s.first_name, s.last_name, s.student_id as student_code, b.title, b.author, b.book_id as book_code
+SELECT r.id, r.student_id, r.book_id, r.reserved_at, r.expires_at, r.status, r.fulfilled_at, r.created_at, r.updated_at, r.notified_at, s.first_name, s.last_name, s.student_id as student_code, b.title, b.author, b.book_id as book_code
 FROM reservations r
 JOIN students s ON r.student_id = s.id
 JOIN books b ON r.book_id = b.id
@@ -382,6 +405,7 @@ type ListExpiredReservationsRow struct {
 	FulfilledAt pgtype.Timestamp `db:"fulfilled_at" json:"fulfilled_at"`
 	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt   pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	NotifiedAt  pgtype.Timestamp `db:"notified_at" json:"notified_at"`
 	FirstName   string           `db:"first_name" json:"first_name"`
 	LastName    string           `db:"last_name" json:"last_name"`
 	StudentCode string           `db:"student_code" json:"student_code"`
@@ -409,6 +433,7 @@ func (q *Queries) ListExpiredReservations(ctx context.Context) ([]ListExpiredRes
 			&i.FulfilledAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.NotifiedAt,
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentCode,
@@ -427,7 +452,7 @@ func (q *Queries) ListExpiredReservations(ctx context.Context) ([]ListExpiredRes
 }
 
 const listReservations = `-- name: ListReservations :many
-SELECT r.id, r.student_id, r.book_id, r.reserved_at, r.expires_at, r.status, r.fulfilled_at, r.created_at, r.updated_at, s.first_name, s.last_name, s.student_id as student_code, b.title, b.author, b.book_id as book_code
+SELECT r.id, r.student_id, r.book_id, r.reserved_at, r.expires_at, r.status, r.fulfilled_at, r.created_at, r.updated_at, r.notified_at, s.first_name, s.last_name, s.student_id as student_code, b.title, b.author, b.book_id as book_code
 FROM reservations r
 JOIN students s ON r.student_id = s.id
 JOIN books b ON r.book_id = b.id
@@ -450,6 +475,7 @@ type ListReservationsRow struct {
 	FulfilledAt pgtype.Timestamp `db:"fulfilled_at" json:"fulfilled_at"`
 	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt   pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	NotifiedAt  pgtype.Timestamp `db:"notified_at" json:"notified_at"`
 	FirstName   string           `db:"first_name" json:"first_name"`
 	LastName    string           `db:"last_name" json:"last_name"`
 	StudentCode string           `db:"student_code" json:"student_code"`
@@ -477,6 +503,7 @@ func (q *Queries) ListReservations(ctx context.Context, arg ListReservationsPara
 			&i.FulfilledAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.NotifiedAt,
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentCode,
@@ -495,7 +522,7 @@ func (q *Queries) ListReservations(ctx context.Context, arg ListReservationsPara
 }
 
 const listReservationsByBook = `-- name: ListReservationsByBook :many
-SELECT r.id, r.student_id, r.book_id, r.reserved_at, r.expires_at, r.status, r.fulfilled_at, r.created_at, r.updated_at, s.first_name, s.last_name, s.student_id as student_code
+SELECT r.id, r.student_id, r.book_id, r.reserved_at, r.expires_at, r.status, r.fulfilled_at, r.created_at, r.updated_at, r.notified_at, s.first_name, s.last_name, s.student_id as student_code
 FROM reservations r
 JOIN students s ON r.student_id = s.id
 WHERE r.book_id = $1 AND r.status = 'active'
@@ -512,6 +539,7 @@ type ListReservationsByBookRow struct {
 	FulfilledAt pgtype.Timestamp `db:"fulfilled_at" json:"fulfilled_at"`
 	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt   pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	NotifiedAt  pgtype.Timestamp `db:"notified_at" json:"notified_at"`
 	FirstName   string           `db:"first_name" json:"first_name"`
 	LastName    string           `db:"last_name" json:"last_name"`
 	StudentCode string           `db:"student_code" json:"student_code"`
@@ -536,6 +564,7 @@ func (q *Queries) ListReservationsByBook(ctx context.Context, bookID int32) ([]L
 			&i.FulfilledAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.NotifiedAt,
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentCode,
@@ -551,7 +580,7 @@ func (q *Queries) ListReservationsByBook(ctx context.Context, bookID int32) ([]L
 }
 
 const listReservationsByStudent = `-- name: ListReservationsByStudent :many
-SELECT r.id, r.student_id, r.book_id, r.reserved_at, r.expires_at, r.status, r.fulfilled_at, r.created_at, r.updated_at, b.title, b.author, b.book_id as book_code
+SELECT r.id, r.student_id, r.book_id, r.reserved_at, r.expires_at, r.status, r.fulfilled_at, r.created_at, r.updated_at, r.notified_at, b.title, b.author, b.book_id as book_code
 FROM reservations r
 JOIN books b ON r.book_id = b.id
 WHERE r.student_id = $1
@@ -575,6 +604,7 @@ type ListReservationsByStudentRow struct {
 	FulfilledAt pgtype.Timestamp `db:"fulfilled_at" json:"fulfilled_at"`
 	CreatedAt   pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt   pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	NotifiedAt  pgtype.Timestamp `db:"notified_at" json:"notified_at"`
 	Title       string           `db:"title" json:"title"`
 	Author      string           `db:"author" json:"author"`
 	BookCode    string           `db:"book_code" json:"book_code"`
@@ -599,6 +629,7 @@ func (q *Queries) ListReservationsByStudent(ctx context.Context, arg ListReserva
 			&i.FulfilledAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.NotifiedAt,
 			&i.Title,
 			&i.Author,
 			&i.BookCode,
@@ -613,11 +644,36 @@ func (q *Queries) ListReservationsByStudent(ctx context.Context, arg ListReserva
 	return items, nil
 }
 
+const markReservationNotified = `-- name: MarkReservationNotified :one
+UPDATE reservations
+SET notified_at = NOW(), updated_at = NOW()
+WHERE id = $1
+RETURNING id, student_id, book_id, reserved_at, expires_at, status, fulfilled_at, created_at, updated_at, notified_at
+`
+
+func (q *Queries) MarkReservationNotified(ctx context.Context, id int32) (Reservation, error) {
+	row := q.db.QueryRow(ctx, markReservationNotified, id)
+	var i Reservation
+	err := row.Scan(
+		&i.ID,
+		&i.StudentID,
+		&i.BookID,
+		&i.ReservedAt,
+		&i.ExpiresAt,
+		&i.Status,
+		&i.FulfilledAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.NotifiedAt,
+	)
+	return i, err
+}
+
 const updateReservationStatus = `-- name: UpdateReservationStatus :one
 UPDATE reservations
 SET status = $2, fulfilled_at = $3, updated_at = NOW()
 WHERE id = $1
-RETURNING id, student_id, book_id, reserved_at, expires_at, status, fulfilled_at, created_at, updated_at
+RETURNING id, student_id, book_id, reserved_at, expires_at, status, fulfilled_at, created_at, updated_at, notified_at
 `
 
 type UpdateReservationStatusParams struct {
@@ -639,6 +695,7 @@ func (q *Queries) UpdateReservationStatus(ctx context.Context, arg UpdateReserva
 		&i.FulfilledAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.NotifiedAt,
 	)
 	return i, err
 }

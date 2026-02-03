@@ -16,6 +16,12 @@ SET status = $2, fulfilled_at = $3, updated_at = NOW()
 WHERE id = $1
 RETURNING *;
 
+-- name: MarkReservationNotified :one
+UPDATE reservations
+SET notified_at = NOW(), updated_at = NOW()
+WHERE id = $1
+RETURNING *;
+
 -- name: ListReservations :many
 SELECT r.*, s.first_name, s.last_name, s.student_id as student_code, b.title, b.author, b.book_id as book_code
 FROM reservations r
@@ -62,6 +68,9 @@ WHERE student_id = $1 AND status = 'active';
 -- name: CountActiveReservationsByBook :one
 SELECT COUNT(*) FROM reservations
 WHERE book_id = $1 AND status = 'active';
+
+-- name: CountAllReservations :one
+SELECT COUNT(*) FROM reservations;
 
 -- name: GetNextReservationForBook :one
 SELECT r.*, s.first_name, s.last_name, s.student_id as student_code

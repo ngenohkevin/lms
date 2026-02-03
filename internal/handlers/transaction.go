@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -24,6 +25,8 @@ type TransactionServiceInterface interface {
 	RenewBook(ctx context.Context, transactionID, librarianID int32) (*services.TransactionResponse, error)
 	GetOverdueTransactions(ctx context.Context) ([]queries.ListOverdueTransactionsRow, error)
 	PayFine(ctx context.Context, transactionID int32) error
+	CancelTransaction(ctx context.Context, transactionID int32, reason string) (*services.TransactionResponse, error)
+	MarkAsLost(ctx context.Context, transactionID int32, reason string) (*services.TransactionResponse, error)
 	GetTransactionHistory(ctx context.Context, studentID int32, limit, offset int32) ([]queries.ListTransactionsByStudentRow, error)
 	// Phase 6.7: Enhanced Renewal System methods
 	CanBookBeRenewed(ctx context.Context, transactionID int32) (bool, string, error)
@@ -87,6 +90,7 @@ func (h *TransactionHandler) BorrowBook(c *gin.Context) {
 			CopyID:      req.CopyID,
 			Barcode:     req.Barcode,
 			Notes:       req.Notes,
+			DueDays:     req.DueDays,
 		},
 	)
 	if err != nil {
@@ -263,6 +267,161 @@ func (h *TransactionHandler) GetOverdueTransactions(c *gin.Context) {
 	})
 }
 
+// CancelTransaction handles transaction cancellation requests
+// @Summary Cancel a transaction
+// @Description Cancel an active borrow transaction within the grace period (1 hour)
+// @Tags transactions
+// @Accept json
+// @Produce json
+// @Param id path int true "Transaction ID"
+// @Param request body object{reason=string} true "Cancellation reason"
+// @Success 200 {object} SuccessResponse{data=models.TransactionResponse}
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 422 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/transactions/{id}/cancel [post]
+func (h *TransactionHandler) CancelTransaction(c *gin.Context) {
+	idStr := c.Param("id")
+	transactionID, err := strconv.ParseInt(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid transaction ID",
+				Details: "Transaction ID must be a valid integer",
+			},
+		})
+		return
+	}
+
+	var req struct {
+		Reason string `json:"reason" binding:"required,min=1"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Cancellation reason is required",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	transaction, err := h.transactionService.CancelTransaction(
+		c.Request.Context(),
+		int32(transactionID),
+		req.Reason,
+	)
+	if err != nil {
+		statusCode := http.StatusBadRequest
+		errMsg := err.Error()
+		if errMsg == "transaction not found" {
+			statusCode = http.StatusNotFound
+		} else if errMsg == "cannot cancel: transaction already returned" ||
+			errMsg == "cannot cancel: only borrow transactions can be cancelled" ||
+			strings.Contains(errMsg, "grace period expired") {
+			statusCode = http.StatusUnprocessableEntity
+		}
+
+		c.JSON(statusCode, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "CANCEL_ERROR",
+				Message: err.Error(),
+			},
+		})
+		return
+	}
+
+	response := convertToTransactionResponse(transaction)
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    response,
+		Message: "Transaction cancelled successfully",
+	})
+}
+
+// MarkAsLost handles marking a transaction as lost
+// @Summary Mark a transaction as lost
+// @Description Mark an active borrow transaction as lost - applies replacement fine and marks copy as lost
+// @Tags transactions
+// @Accept json
+// @Produce json
+// @Param id path int true "Transaction ID"
+// @Param request body object{reason=string} true "Reason for marking as lost"
+// @Success 200 {object} SuccessResponse{data=models.TransactionResponse}
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 422 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/transactions/{id}/lost [post]
+func (h *TransactionHandler) MarkAsLost(c *gin.Context) {
+	idStr := c.Param("id")
+	transactionID, err := strconv.ParseInt(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid transaction ID",
+				Details: "Transaction ID must be a valid integer",
+			},
+		})
+		return
+	}
+
+	var req struct {
+		Reason string `json:"reason" binding:"required,min=1"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Reason for marking as lost is required",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	transaction, err := h.transactionService.MarkAsLost(
+		c.Request.Context(),
+		int32(transactionID),
+		req.Reason,
+	)
+	if err != nil {
+		statusCode := http.StatusBadRequest
+		errMsg := err.Error()
+		if errMsg == "transaction not found" {
+			statusCode = http.StatusNotFound
+		} else if strings.Contains(errMsg, "already returned") ||
+			strings.Contains(errMsg, "only borrow transactions") {
+			statusCode = http.StatusUnprocessableEntity
+		}
+
+		c.JSON(statusCode, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "LOST_ERROR",
+				Message: err.Error(),
+			},
+		})
+		return
+	}
+
+	response := convertToTransactionResponse(transaction)
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    response,
+		Message: "Transaction marked as lost successfully",
+	})
+}
+
 // PayFine handles fine payment requests
 // @Summary Pay a fine
 // @Description Mark a transaction fine as paid
@@ -382,7 +541,7 @@ func (h *TransactionHandler) GetTransactionHistory(c *gin.Context) {
 // Helper functions to convert between service and model types
 
 func convertToTransactionResponse(tx *services.TransactionResponse) models.TransactionResponse {
-	return models.TransactionResponse{
+	resp := models.TransactionResponse{
 		ID:              tx.ID,
 		StudentID:       tx.StudentID,
 		BookID:          tx.BookID,
@@ -397,6 +556,16 @@ func convertToTransactionResponse(tx *services.TransactionResponse) models.Trans
 		CreatedAt:       tx.CreatedAt,
 		UpdatedAt:       tx.UpdatedAt,
 	}
+
+	// Map return condition fields if present
+	if tx.ReturnCondition != "" {
+		resp.ReturnCondition = &tx.ReturnCondition
+	}
+	if tx.ConditionNotes != "" {
+		resp.ConditionNotes = &tx.ConditionNotes
+	}
+
+	return resp
 }
 
 func convertToOverdueTransactionResponse(tx queries.ListOverdueTransactionsRow) models.OverdueTransactionResponse {
@@ -924,5 +1093,14 @@ func convertToTransactionResponseWithCopy(tx *services.TransactionResponse) mode
 		CopyBarcode:     tx.CopyBarcode,
 		CopyCondition:   tx.CopyCondition,
 	}
+
+	// Map return condition fields if present
+	if tx.ReturnCondition != "" {
+		resp.ReturnCondition = &tx.ReturnCondition
+	}
+	if tx.ConditionNotes != "" {
+		resp.ConditionNotes = &tx.ConditionNotes
+	}
+
 	return resp
 }

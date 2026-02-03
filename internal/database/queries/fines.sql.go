@@ -11,6 +11,52 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const bulkPayFines = `-- name: BulkPayFines :execrows
+UPDATE transactions
+SET fine_paid = true,
+    fine_paid_at = NOW(),
+    updated_at = NOW()
+WHERE id = ANY($1::int[])
+    AND fine_amount > 0
+    AND fine_paid = false
+`
+
+func (q *Queries) BulkPayFines(ctx context.Context, dollar_1 []int32) (int64, error) {
+	result, err := q.db.Exec(ctx, bulkPayFines, dollar_1)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const bulkWaiveFines = `-- name: BulkWaiveFines :execrows
+UPDATE transactions
+SET fine_waived = true,
+    fine_waived_at = NOW(),
+    fine_waived_by = $2,
+    fine_waived_reason = $3,
+    fine_paid = true,
+    fine_paid_at = NOW(),
+    updated_at = NOW()
+WHERE id = ANY($1::int[])
+    AND fine_amount > 0
+    AND fine_paid = false
+`
+
+type BulkWaiveFinesParams struct {
+	Column1          []int32     `db:"column_1" json:"column_1"`
+	FineWaivedBy     pgtype.Int4 `db:"fine_waived_by" json:"fine_waived_by"`
+	FineWaivedReason pgtype.Text `db:"fine_waived_reason" json:"fine_waived_reason"`
+}
+
+func (q *Queries) BulkWaiveFines(ctx context.Context, arg BulkWaiveFinesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, bulkWaiveFines, arg.Column1, arg.FineWaivedBy, arg.FineWaivedReason)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const countFines = `-- name: CountFines :one
 SELECT COUNT(*) FROM transactions t
 INNER JOIN students s ON t.student_id = s.id
@@ -481,7 +527,7 @@ SET fine_paid = true,
 WHERE id = $1
     AND fine_amount > 0
     AND fine_paid = false
-RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id
+RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status
 `
 
 func (q *Queries) PayFineByTransactionID(ctx context.Context, id int32) (Transaction, error) {
@@ -509,6 +555,7 @@ func (q *Queries) PayFineByTransactionID(ctx context.Context, id int32) (Transac
 		&i.FineWaivedReason,
 		&i.FinePaidAt,
 		&i.CopyID,
+		&i.Status,
 	)
 	return i, err
 }
@@ -542,7 +589,7 @@ SET fine_waived = true,
 WHERE id = $1
     AND fine_amount > 0
     AND fine_paid = false
-RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id
+RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status
 `
 
 type WaiveFineByTransactionIDParams struct {
@@ -576,6 +623,7 @@ func (q *Queries) WaiveFineByTransactionID(ctx context.Context, arg WaiveFineByT
 		&i.FineWaivedReason,
 		&i.FinePaidAt,
 		&i.CopyID,
+		&i.Status,
 	)
 	return i, err
 }

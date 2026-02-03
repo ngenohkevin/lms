@@ -21,7 +21,7 @@ type ReservationServiceInterface interface {
 	GetBookReservations(ctx context.Context, bookID int32) ([]services.ReservationResponse, error)
 	GetNextReservationForBook(ctx context.Context, bookID int32) (*services.ReservationResponse, error)
 	ExpireReservations(ctx context.Context) (int, error)
-	GetAllReservations(ctx context.Context, limit, offset int32) ([]services.ReservationResponse, error)
+	GetAllReservations(ctx context.Context, limit, offset int32) (*services.ReservationListResponse, error)
 	GetQueuePosition(ctx context.Context, studentID, bookID int32) (*services.QueuePositionResponse, error)
 	MarkReservationReady(ctx context.Context, reservationID int32) (*services.ReservationResponse, error)
 }
@@ -412,7 +412,7 @@ func (h *ReservationHandler) GetAllReservations(c *gin.Context) {
 	// Parse pagination parameters
 	limit, offset := h.parsePaginationParams(c)
 
-	reservations, err := h.reservationService.GetAllReservations(c.Request.Context(), limit, offset)
+	result, err := h.reservationService.GetAllReservations(c.Request.Context(), limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Success: false,
@@ -425,14 +425,22 @@ func (h *ReservationHandler) GetAllReservations(c *gin.Context) {
 		return
 	}
 
-	response := make([]models.ReservationDetailsResponse, len(reservations))
-	for i, reservation := range reservations {
-		response[i] = convertToReservationDetailsResponse(&reservation)
+	// Convert to model response type
+	reservations := make([]models.ReservationDetailsResponse, len(result.Reservations))
+	for i, reservation := range result.Reservations {
+		reservations[i] = convertToReservationDetailsResponse(&reservation)
 	}
 
+	// Return paginated response in the format expected by frontend
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
-		Data:    response,
+		Data: models.ReservationListResponse{
+			Reservations: reservations,
+			Total:        int(result.Pagination.Total),
+			Page:         int(result.Pagination.Page),
+			Limit:        int(result.Pagination.Limit),
+			TotalPages:   int(result.Pagination.TotalPages),
+		},
 		Message: "Reservations retrieved successfully",
 	})
 }

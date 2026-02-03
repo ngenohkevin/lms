@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shopspring/decimal"
 
 	"github.com/ngenohkevin/lms/internal/database/queries"
@@ -58,13 +59,20 @@ type TransactionQuerier interface {
 	// Search queries
 	SearchTransactions(ctx context.Context, arg queries.SearchTransactionsParams) ([]queries.SearchTransactionsRow, error)
 	CountSearchTransactions(ctx context.Context, arg queries.CountSearchTransactionsParams) (int64, error)
+	// Cancel transaction queries
+	GetTransactionAge(ctx context.Context, id int32) (int32, error)
+	CancelTransaction(ctx context.Context, arg queries.CancelTransactionParams) (queries.Transaction, error)
+	// Mark as lost query
+	MarkTransactionAsLost(ctx context.Context, arg queries.MarkTransactionAsLostParams) (queries.Transaction, error)
 }
 
 // TransactionService handles all business logic related to book transactions
 type TransactionService struct {
 	queries         TransactionQuerier
+	pool            *pgxpool.Pool // Database pool for transaction support
 	defaultLoanDays int
 	finePerDay      decimal.Decimal
+	lostBookFine    decimal.Decimal // Default fine for lost books
 	maxBooksPerUser int
 	maxRenewals     int // Maximum number of renewals per book per student
 }
@@ -73,11 +81,18 @@ type TransactionService struct {
 func NewTransactionService(queries TransactionQuerier) *TransactionService {
 	return &TransactionService{
 		queries:         queries,
-		defaultLoanDays: 14,                         // 2 weeks default loan period
-		finePerDay:      decimal.NewFromFloat(0.50), // $0.50 per day fine
-		maxBooksPerUser: 5,                          // Max 5 books per student
-		maxRenewals:     2,                          // Max 2 renewals per book per student
+		defaultLoanDays: 14,                          // 2 weeks default loan period
+		finePerDay:      decimal.NewFromFloat(0.50),  // $0.50 per day fine
+		lostBookFine:    decimal.NewFromFloat(50.00), // $50 default lost book fine
+		maxBooksPerUser: 5,                           // Max 5 books per student
+		maxRenewals:     2,                           // Max 2 renewals per book per student
 	}
+}
+
+// WithPool sets the database pool for transaction support
+func (s *TransactionService) WithPool(pool *pgxpool.Pool) *TransactionService {
+	s.pool = pool
+	return s
 }
 
 // WithBorrowingPeriod allows customizing the borrowing period
@@ -151,6 +166,7 @@ type BorrowBookWithCopyRequest struct {
 	CopyID      *int32  `json:"copy_id,omitempty"`
 	Barcode     *string `json:"barcode,omitempty"`
 	Notes       string  `json:"notes"`
+	DueDays     *int32  `json:"due_days,omitempty"` // Custom due period in days (overrides year-based default)
 }
 
 // BorrowByBarcodeRequest represents a quick checkout by barcode
@@ -278,43 +294,85 @@ func (s *TransactionService) BorrowBookWithCopy(ctx context.Context, req BorrowB
 		}
 	}
 
-	// Calculate due date based on student year and borrowing rules
-	dueDate := s.calculateDueDate(student)
+	// Calculate due date based on student year and borrowing rules (or custom due_days if provided)
+	dueDate := s.calculateDueDate(student, req.DueDays)
 
 	var transaction queries.Transaction
 
 	if selectedCopy != nil {
-		// Copy-level tracking mode
-		// Update copy status to "borrowed"
-		_, err = s.queries.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
-			ID:     selectedCopy.ID,
-			Status: pgtype.Text{String: "borrowed", Valid: true},
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to update copy status: %w", err)
-		}
+		// Copy-level tracking mode - use database transaction to prevent race conditions
+		if s.pool != nil {
+			// Use database transaction for atomicity
+			tx, err := s.pool.Begin(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to start database transaction: %w", err)
+			}
+			defer tx.Rollback(ctx) // Will be no-op if committed
 
-		// Create transaction with copy_id
-		transaction, err = s.queries.CreateTransactionWithCopy(ctx, queries.CreateTransactionWithCopyParams{
-			StudentID:       req.StudentID,
-			BookID:          bookID,
-			CopyID:          pgtype.Int4{Int32: selectedCopy.ID, Valid: true},
-			TransactionType: "borrow",
-			DueDate:         pgtype.Timestamp{Time: dueDate, Valid: true},
-			LibrarianID:     pgtype.Int4{Int32: req.LibrarianID, Valid: true},
-			Notes:           pgtype.Text{String: req.Notes, Valid: req.Notes != ""},
-		})
-		if err != nil {
-			// Rollback: revert copy status
-			_, _ = s.queries.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
+			// Create transactional querier
+			qtx := queries.New(tx)
+
+			// Update copy status to "borrowed"
+			_, err = qtx.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
 				ID:     selectedCopy.ID,
-				Status: pgtype.Text{String: "available", Valid: true},
+				Status: pgtype.Text{String: "borrowed", Valid: true},
 			})
-			return nil, fmt.Errorf("failed to create transaction: %w", err)
-		}
+			if err != nil {
+				return nil, fmt.Errorf("failed to update copy status: %w", err)
+			}
 
-		// Sync book's available_copies count
-		_ = s.queries.SyncBookCopyCounts(ctx, bookID)
+			// Create transaction with copy_id
+			transaction, err = qtx.CreateTransactionWithCopy(ctx, queries.CreateTransactionWithCopyParams{
+				StudentID:       req.StudentID,
+				BookID:          bookID,
+				CopyID:          pgtype.Int4{Int32: selectedCopy.ID, Valid: true},
+				TransactionType: "borrow",
+				DueDate:         pgtype.Timestamp{Time: dueDate, Valid: true},
+				LibrarianID:     pgtype.Int4{Int32: req.LibrarianID, Valid: true},
+				Notes:           pgtype.Text{String: req.Notes, Valid: req.Notes != ""},
+			})
+			if err != nil {
+				return nil, fmt.Errorf("failed to create transaction: %w", err)
+			}
+
+			// Sync book's available_copies count
+			_ = qtx.SyncBookCopyCounts(ctx, bookID)
+
+			// Commit the transaction
+			if err := tx.Commit(ctx); err != nil {
+				return nil, fmt.Errorf("failed to commit transaction: %w", err)
+			}
+		} else {
+			// Fallback: no pool available, use manual rollback (legacy behavior)
+			_, err = s.queries.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
+				ID:     selectedCopy.ID,
+				Status: pgtype.Text{String: "borrowed", Valid: true},
+			})
+			if err != nil {
+				return nil, fmt.Errorf("failed to update copy status: %w", err)
+			}
+
+			transaction, err = s.queries.CreateTransactionWithCopy(ctx, queries.CreateTransactionWithCopyParams{
+				StudentID:       req.StudentID,
+				BookID:          bookID,
+				CopyID:          pgtype.Int4{Int32: selectedCopy.ID, Valid: true},
+				TransactionType: "borrow",
+				DueDate:         pgtype.Timestamp{Time: dueDate, Valid: true},
+				LibrarianID:     pgtype.Int4{Int32: req.LibrarianID, Valid: true},
+				Notes:           pgtype.Text{String: req.Notes, Valid: req.Notes != ""},
+			})
+			if err != nil {
+				// Rollback: revert copy status
+				_, _ = s.queries.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
+					ID:     selectedCopy.ID,
+					Status: pgtype.Text{String: "available", Valid: true},
+				})
+				return nil, fmt.Errorf("failed to create transaction: %w", err)
+			}
+
+			// Sync book's available_copies count
+			_ = s.queries.SyncBookCopyCounts(ctx, bookID)
+		}
 	} else {
 		// Legacy mode - no book copies exist, use old availability tracking
 		_, err = s.queries.DecrementBookAvailability(ctx, bookID)
@@ -584,7 +642,7 @@ func (s *TransactionService) RenewBook(ctx context.Context, transactionID, libra
 		return nil, fmt.Errorf("failed to get student: %w", err)
 	}
 
-	newDueDate := s.calculateDueDate(student)
+	newDueDate := s.calculateDueDate(student, nil) // Renewals always use year-based default
 
 	// Create renewal transaction
 	transaction, err := s.queries.CreateTransaction(ctx, queries.CreateTransactionParams{
@@ -618,6 +676,132 @@ func (s *TransactionService) PayFine(ctx context.Context, transactionID int32) e
 		return fmt.Errorf("failed to pay fine: %w", err)
 	}
 	return nil
+}
+
+// CancelTransactionGracePeriodMinutes is the time window (in minutes) within which a transaction can be cancelled
+const CancelTransactionGracePeriodMinutes = 60 // 1 hour
+
+// CancelTransaction cancels an active borrow transaction within the grace period
+// This restores the book's availability and marks the transaction as cancelled
+func (s *TransactionService) CancelTransaction(ctx context.Context, transactionID int32, reason string) (*TransactionResponse, error) {
+	if reason == "" {
+		return nil, fmt.Errorf("cancellation reason is required")
+	}
+
+	// Get the transaction to verify it exists and get copy info
+	tx, err := s.queries.GetTransactionByIDWithCopy(ctx, transactionID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("transaction not found")
+		}
+		return nil, fmt.Errorf("failed to get transaction: %w", err)
+	}
+
+	// Validate transaction can be cancelled
+	if tx.ReturnedDate.Valid {
+		return nil, fmt.Errorf("cannot cancel: transaction already returned")
+	}
+	if tx.TransactionType != "borrow" {
+		return nil, fmt.Errorf("cannot cancel: only borrow transactions can be cancelled")
+	}
+
+	// Check grace period - only allow cancellation within the first hour
+	ageMinutes, err := s.queries.GetTransactionAge(ctx, transactionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check transaction age: %w", err)
+	}
+	if ageMinutes > int32(CancelTransactionGracePeriodMinutes) {
+		return nil, fmt.Errorf("cannot cancel: transaction is older than %d minutes (grace period expired)", CancelTransactionGracePeriodMinutes)
+	}
+
+	// Cancel the transaction
+	cancelledTx, err := s.queries.CancelTransaction(ctx, queries.CancelTransactionParams{
+		ID:           transactionID,
+		CancelReason: reason,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to cancel transaction: %w", err)
+	}
+
+	// Restore book availability
+	if tx.CopyID.Valid {
+		// Copy-level tracking mode - restore copy status to available
+		_, err = s.queries.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
+			ID:     tx.CopyID.Int32,
+			Status: pgtype.Text{String: "available", Valid: true},
+		})
+		if err != nil {
+			// Log but don't fail - the cancel already happened
+			// In production, this should be logged properly
+		}
+		// Sync book's available_copies count
+		_ = s.queries.SyncBookCopyCounts(ctx, tx.BookID)
+	} else {
+		// Legacy mode - increment book availability
+		_, err = s.queries.IncrementBookAvailability(ctx, tx.BookID)
+		if err != nil {
+			// Log but don't fail
+		}
+	}
+
+	return s.convertToTransactionResponse(cancelledTx), nil
+}
+
+// MarkAsLost marks a transaction as lost - the book was not returned and is considered lost
+// This applies a replacement fine and marks the copy as lost
+func (s *TransactionService) MarkAsLost(ctx context.Context, transactionID int32, reason string) (*TransactionResponse, error) {
+	if reason == "" {
+		return nil, fmt.Errorf("reason for marking as lost is required")
+	}
+
+	// Get the transaction to verify it exists and get copy info
+	tx, err := s.queries.GetTransactionByIDWithCopy(ctx, transactionID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("transaction not found")
+		}
+		return nil, fmt.Errorf("failed to get transaction: %w", err)
+	}
+
+	// Validate transaction can be marked as lost
+	if tx.ReturnedDate.Valid {
+		return nil, fmt.Errorf("cannot mark as lost: transaction already returned")
+	}
+	if tx.TransactionType != "borrow" {
+		return nil, fmt.Errorf("cannot mark as lost: only borrow transactions can be marked as lost")
+	}
+
+	// Get the replacement fine amount
+	replacementFine := s.lostBookFine
+
+	// Mark the transaction as lost with the replacement fine
+	lostTx, err := s.queries.MarkTransactionAsLost(ctx, queries.MarkTransactionAsLostParams{
+		ID:              transactionID,
+		ReplacementFine: pgtype.Numeric{Int: replacementFine.BigInt(), Exp: replacementFine.Exponent(), Valid: true},
+		LostReason:      reason,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to mark transaction as lost: %w", err)
+	}
+
+	// Update copy status to "lost" if copy tracking is enabled
+	if tx.CopyID.Valid {
+		_, err = s.queries.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
+			ID:     tx.CopyID.Int32,
+			Status: pgtype.Text{String: "lost", Valid: true},
+		})
+		if err != nil {
+			// Log but don't fail - the lost marking already happened
+		}
+		// Sync book's available_copies count
+		_ = s.queries.SyncBookCopyCounts(ctx, tx.BookID)
+	} else {
+		// Legacy mode - decrement total copies for the book
+		// Note: In legacy mode, we don't track individual copies, so we just mark it as lost
+		// The availability was already decremented when the book was borrowed
+	}
+
+	return s.convertToTransactionResponse(lostTx), nil
 }
 
 // GetTransactionHistory returns transaction history for a student
@@ -766,8 +950,14 @@ func (s *TransactionService) validateBorrowingPeriod(student queries.Student) in
 }
 
 // calculateDueDate calculates the due date based on student type and borrowing rules
-func (s *TransactionService) calculateDueDate(student queries.Student) time.Time {
-	loanPeriod := s.validateBorrowingPeriod(student)
+// If customDueDays is provided and non-nil, it overrides the year-based default
+func (s *TransactionService) calculateDueDate(student queries.Student, customDueDays *int32) time.Time {
+	var loanPeriod int
+	if customDueDays != nil && *customDueDays > 0 {
+		loanPeriod = int(*customDueDays)
+	} else {
+		loanPeriod = s.validateBorrowingPeriod(student)
+	}
 	return time.Now().AddDate(0, 0, loanPeriod)
 }
 
@@ -1116,10 +1306,10 @@ func (s *TransactionService) GetTransactionStats(ctx context.Context) (*Transact
 	totalUnpaidFines := decimal.Zero
 	for _, tx := range overdueTransactions {
 		if tx.FineAmount.Valid && (!tx.FinePaid.Valid || !tx.FinePaid.Bool) {
-			fineAmount, err := decimal.NewFromString(tx.FineAmount.Int.String())
-			if err == nil {
-				totalUnpaidFines = totalUnpaidFines.Add(fineAmount)
-			}
+			// Properly reconstruct decimal from pgtype.Numeric using Int and Exp
+			// This preserves precision (e.g., 0.50 instead of just 50)
+			fineAmount := decimal.NewFromBigInt(tx.FineAmount.Int, tx.FineAmount.Exp)
+			totalUnpaidFines = totalUnpaidFines.Add(fineAmount)
 		}
 	}
 

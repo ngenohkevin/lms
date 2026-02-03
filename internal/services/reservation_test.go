@@ -34,6 +34,11 @@ func (m *MockReservationQuerier) UpdateReservationStatus(ctx context.Context, ar
 	return args.Get(0).(queries.Reservation), args.Error(1)
 }
 
+func (m *MockReservationQuerier) MarkReservationNotified(ctx context.Context, id int32) (queries.Reservation, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(queries.Reservation), args.Error(1)
+}
+
 func (m *MockReservationQuerier) ListReservations(ctx context.Context, arg queries.ListReservationsParams) ([]queries.ListReservationsRow, error) {
 	args := m.Called(ctx, arg)
 	return args.Get(0).([]queries.ListReservationsRow), args.Error(1)
@@ -66,6 +71,11 @@ func (m *MockReservationQuerier) CountActiveReservationsByStudent(ctx context.Co
 
 func (m *MockReservationQuerier) CountActiveReservationsByBook(ctx context.Context, bookID int32) (int64, error) {
 	args := m.Called(ctx, bookID)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockReservationQuerier) CountAllReservations(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
 	return args.Get(0).(int64), args.Error(1)
 }
 
@@ -741,14 +751,15 @@ func TestReservationService_GetAllReservations_Success(t *testing.T) {
 	}
 
 	mockQuerier.On("ListReservations", ctx, mock.AnythingOfType("queries.ListReservationsParams")).Return(reservations, nil)
+	mockQuerier.On("CountAllReservations", ctx).Return(int64(1), nil)
 
 	results, err := service.GetAllReservations(ctx, 10, 0)
 
 	assert.NoError(t, err)
-	assert.Len(t, results, 1)
-	assert.Equal(t, int32(1), results[0].ID)
-	assert.Equal(t, "John Doe", results[0].StudentName)
-	assert.Equal(t, "Test Book", results[0].BookTitle)
+	assert.Len(t, results.Reservations, 1)
+	assert.Equal(t, int32(1), results.Reservations[0].ID)
+	assert.Equal(t, "John Doe", results.Reservations[0].StudentName)
+	assert.Equal(t, "Test Book", results.Reservations[0].BookTitle)
 	mockQuerier.AssertExpectations(t)
 }
 

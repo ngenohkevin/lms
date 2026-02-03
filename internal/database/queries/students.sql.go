@@ -46,6 +46,25 @@ func (q *Queries) ActivateStudent(ctx context.Context, id int32) (Student, error
 	return i, err
 }
 
+const bulkUpdateStudentDepartment = `-- name: BulkUpdateStudentDepartment :execrows
+UPDATE students
+SET department_id = $2, updated_at = NOW()
+WHERE id = ANY($1::int[]) AND deleted_at IS NULL
+`
+
+type BulkUpdateStudentDepartmentParams struct {
+	Column1      []int32     `db:"column_1" json:"column_1"`
+	DepartmentID pgtype.Int4 `db:"department_id" json:"department_id"`
+}
+
+func (q *Queries) BulkUpdateStudentDepartment(ctx context.Context, arg BulkUpdateStudentDepartmentParams) (int64, error) {
+	result, err := q.db.Exec(ctx, bulkUpdateStudentDepartment, arg.Column1, arg.DepartmentID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const bulkUpdateStudentStatus = `-- name: BulkUpdateStudentStatus :exec
 UPDATE students 
 SET is_active = $2, updated_at = NOW() 

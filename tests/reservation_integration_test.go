@@ -116,7 +116,7 @@ func TestReservationIntegration_CompleteWorkflow(t *testing.T) {
 	updatedReservation, err := reservationService.GetReservationByID(ctx, student2ReservationID)
 	require.NoError(t, err)
 	assert.Equal(t, "ready", updatedReservation.Status) // "ready" means book available for pickup
-	assert.NotNil(t, updatedReservation.FulfilledAt)    // FulfilledAt is used as notified_at for ready status
+	assert.NotNil(t, updatedReservation.NotifiedAt)     // NotifiedAt is set when reservation is marked ready
 
 	// Test 8: Student 2 can now borrow the book (their reservation is ready for pickup)
 	// Check eligibility first

@@ -85,6 +85,16 @@ func (m *MockFineQuerier) GetStudentsWithHighFines(ctx context.Context, fineAmou
 	return args.Get(0).([]queries.GetStudentsWithHighFinesRow), args.Error(1)
 }
 
+func (m *MockFineQuerier) BulkPayFines(ctx context.Context, ids []int32) (int64, error) {
+	args := m.Called(ctx, ids)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockFineQuerier) BulkWaiveFines(ctx context.Context, arg queries.BulkWaiveFinesParams) (int64, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 func TestNewFineService(t *testing.T) {
 	mockQuerier := new(MockFineQuerier)
 

@@ -12,6 +12,7 @@ type Reservation struct {
 	ReservedAt  time.Time  `json:"reserved_at"`
 	ExpiresAt   time.Time  `json:"expires_at"`
 	Status      string     `json:"status"`
+	NotifiedAt  *time.Time `json:"notified_at,omitempty"`
 	FulfilledAt *time.Time `json:"fulfilled_at,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
@@ -31,6 +32,7 @@ type ReservationResponse struct {
 	ReservedAt    time.Time  `json:"reserved_at"`
 	ExpiresAt     time.Time  `json:"expires_at"`
 	Status        string     `json:"status"`
+	NotifiedAt    *time.Time `json:"notified_at,omitempty"`
 	FulfilledAt   *time.Time `json:"fulfilled_at,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at"`
@@ -45,6 +47,7 @@ type ReservationDetailsResponse struct {
 	ReservedAt    time.Time  `json:"reserved_at"`
 	ExpiresAt     time.Time  `json:"expires_at"`
 	Status        string     `json:"status"`
+	NotifiedAt    *time.Time `json:"notified_at,omitempty"`
 	FulfilledAt   *time.Time `json:"fulfilled_at,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at"`
@@ -66,6 +69,7 @@ type StudentReservationResponse struct {
 	ReservedAt  time.Time  `json:"reserved_at"`
 	ExpiresAt   time.Time  `json:"expires_at"`
 	Status      string     `json:"status"`
+	NotifiedAt  *time.Time `json:"notified_at,omitempty"`
 	FulfilledAt *time.Time `json:"fulfilled_at,omitempty"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
@@ -83,6 +87,7 @@ type BookReservationResponse struct {
 	ReservedAt    time.Time  `json:"reserved_at"`
 	ExpiresAt     time.Time  `json:"expires_at"`
 	Status        string     `json:"status"`
+	NotifiedAt    *time.Time `json:"notified_at,omitempty"`
 	FulfilledAt   *time.Time `json:"fulfilled_at,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at"`

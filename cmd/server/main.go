@@ -112,7 +112,7 @@ func main() {
 
 	studentService := services.NewStudentService(db.Queries, authService, cacheService)
 	bookService := services.NewBookService(db.Queries, cacheService)
-	transactionService := services.NewTransactionService(db.Queries)
+	transactionService := services.NewTransactionService(db.Queries).WithPool(db.Pool)
 	reservationService := services.NewReservationService(db.Queries)
 	reportService := services.NewReportService(db.Queries, cacheService)
 	isbnService := services.NewISBNService()
@@ -483,6 +483,7 @@ func setupRoutes(
 				students.POST("/bulk-import", requirePerm("students.create"), studentHandler.BulkImportStudents)
 				students.POST("/generate-id", requirePerm("students.create"), studentHandler.GenerateStudentID)
 				students.PUT("/status/bulk", requirePerm("students.update"), studentHandler.BulkUpdateStatus)
+				students.PUT("/department/bulk", requirePerm("students.update"), studentHandler.BulkUpdateDepartment)
 				students.POST("/export", requirePerm("reports.export"), studentHandler.ExportStudents)
 			}
 
@@ -505,6 +506,8 @@ func setupRoutes(
 				transactions.POST("/:id/return", requirePerm("transactions.return"), transactionHandler.ReturnBook)
 				transactions.POST("/:id/renew", requirePerm("transactions.view"), transactionHandler.RenewBook)
 				transactions.POST("/:id/pay-fine", requirePerm("fines.manage"), transactionHandler.PayFine)
+				transactions.POST("/:id/cancel", requirePerm("transactions.borrow"), transactionHandler.CancelTransaction)
+				transactions.POST("/:id/lost", requirePerm("transactions.return"), transactionHandler.MarkAsLost)
 			}
 
 			// Reservation routes
@@ -524,6 +527,7 @@ func setupRoutes(
 				// Routes with :id parameter placed last to avoid conflicts
 				reservations.GET("/:id", requirePerm("reservations.view"), reservationHandler.GetReservation)
 				reservations.DELETE("/:id", requirePerm("reservations.manage"), reservationHandler.CancelReservation)
+				reservations.POST("/:id/cancel", requirePerm("reservations.manage"), reservationHandler.CancelReservation) // POST alias for frontend compatibility
 				reservations.POST("/:id/fulfill", requirePerm("reservations.manage"), reservationHandler.FulfillReservation)
 				reservations.POST("/:id/ready", requirePerm("reservations.manage"), reservationHandler.MarkReservationReady)
 			}
