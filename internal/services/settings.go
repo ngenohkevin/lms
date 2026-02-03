@@ -32,12 +32,12 @@ type FineSettings struct {
 
 // SettingResponse represents a setting for API responses
 type SettingResponse struct {
-	Key         string  `json:"key"`
-	Value       string  `json:"value"`
-	Description string  `json:"description,omitempty"`
-	Category    string  `json:"category"`
-	UpdatedBy   *int32  `json:"updated_by,omitempty"`
-	UpdatedAt   string  `json:"updated_at"`
+	Key         string `json:"key"`
+	Value       string `json:"value"`
+	Description string `json:"description,omitempty"`
+	Category    string `json:"category"`
+	UpdatedBy   *int32 `json:"updated_by,omitempty"`
+	UpdatedAt   string `json:"updated_at"`
 }
 
 // SettingsService handles settings operations

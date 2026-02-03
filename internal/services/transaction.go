@@ -159,9 +159,9 @@ type TransactionResponse struct {
 	CopyBarcode   *string `json:"copy_barcode,omitempty"`
 	CopyCondition *string `json:"copy_condition,omitempty"`
 	// Renewal tracking fields
-	RenewalCount   int32      `json:"renewal_count"`
-	LastRenewedAt  *time.Time `json:"last_renewed_at,omitempty"`
-	LastRenewedBy  *int32     `json:"last_renewed_by,omitempty"`
+	RenewalCount  int32      `json:"renewal_count"`
+	LastRenewedAt *time.Time `json:"last_renewed_at,omitempty"`
+	LastRenewedBy *int32     `json:"last_renewed_by,omitempty"`
 }
 
 // BorrowBookWithCopyRequest represents a book borrowing request with optional copy specification
