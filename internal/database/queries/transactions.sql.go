@@ -1740,6 +1740,7 @@ func (q *Queries) ListTransactionsWithUnpaidFines(ctx context.Context) ([]ListTr
 const markTransactionAsLost = `-- name: MarkTransactionAsLost :one
 UPDATE transactions
 SET
+    transaction_type = 'lost',
     returned_date = NOW(),
     fine_amount = $1::numeric,
     fine_paid = false,
@@ -1760,7 +1761,7 @@ type MarkTransactionAsLostParams struct {
 	ID              int32          `db:"id" json:"id"`
 }
 
-// Mark a transaction as lost: sets returned_date, applies replacement fine, and adds lost note
+// Mark a transaction as lost: sets transaction_type to 'lost', returned_date, applies replacement fine, and adds lost note
 func (q *Queries) MarkTransactionAsLost(ctx context.Context, arg MarkTransactionAsLostParams) (Transaction, error) {
 	row := q.db.QueryRow(ctx, markTransactionAsLost, arg.ReplacementFine, arg.LostReason, arg.ID)
 	var i Transaction

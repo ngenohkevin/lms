@@ -353,7 +353,7 @@ type Querier interface {
 	MarkNotificationAsRead(ctx context.Context, id int32) error
 	MarkNotificationAsSent(ctx context.Context, id int32) error
 	MarkReservationNotified(ctx context.Context, id int32) (Reservation, error)
-	// Mark a transaction as lost: sets returned_date, applies replacement fine, and adds lost note
+	// Mark a transaction as lost: sets transaction_type to 'lost', returned_date, applies replacement fine, and adds lost note
 	MarkTransactionAsLost(ctx context.Context, arg MarkTransactionAsLostParams) (Transaction, error)
 	PayFineByTransactionID(ctx context.Context, id int32) (Transaction, error)
 	PayTransactionFine(ctx context.Context, id int32) error

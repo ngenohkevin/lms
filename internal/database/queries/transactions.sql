@@ -288,9 +288,10 @@ WHERE
     AND (sqlc.narg('to_date')::timestamp IS NULL OR t.transaction_date <= sqlc.narg('to_date'));
 
 -- name: MarkTransactionAsLost :one
--- Mark a transaction as lost: sets returned_date, applies replacement fine, and adds lost note
+-- Mark a transaction as lost: sets transaction_type to 'lost', returned_date, applies replacement fine, and adds lost note
 UPDATE transactions
 SET
+    transaction_type = 'lost',
     returned_date = NOW(),
     fine_amount = sqlc.arg(replacement_fine)::numeric,
     fine_paid = false,

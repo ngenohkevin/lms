@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -803,9 +804,10 @@ func (s *TransactionService) MarkAsLost(ctx context.Context, transactionID int32
 }
 
 // DeleteTransaction deletes a transaction by ID
+// If the transaction is active (not returned), it restores the copy to available status
 func (s *TransactionService) DeleteTransaction(ctx context.Context, transactionID int32) error {
-	// First check if the transaction exists
-	_, err := s.queries.GetTransactionByID(ctx, transactionID)
+	// Get transaction with copy info to determine if we need to restore copy status
+	tx, err := s.queries.GetTransactionByIDWithCopy(ctx, transactionID)
 	if err != nil {
 		return fmt.Errorf("transaction not found")
 	}
@@ -814,6 +816,32 @@ func (s *TransactionService) DeleteTransaction(ctx context.Context, transactionI
 	err = s.queries.DeleteTransaction(ctx, transactionID)
 	if err != nil {
 		return fmt.Errorf("failed to delete transaction: %w", err)
+	}
+
+	// If the transaction was active (not returned) and has a copy, restore copy to available
+	if !tx.ReturnedDate.Valid && tx.CopyID.Valid {
+		_, copyErr := s.queries.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
+			ID:     tx.CopyID.Int32,
+			Status: pgtype.Text{String: "available", Valid: true},
+		})
+		if copyErr != nil {
+			// Log but don't fail - the delete already happened
+			slog.Warn("Failed to restore copy status after transaction delete",
+				"transaction_id", transactionID,
+				"copy_id", tx.CopyID.Int32,
+				"error", copyErr)
+		}
+		// Sync book's available_copies count
+		_ = s.queries.SyncBookCopyCounts(ctx, tx.BookID)
+	} else if !tx.ReturnedDate.Valid && !tx.CopyID.Valid {
+		// Legacy mode - increment book availability
+		_, incErr := s.queries.IncrementBookAvailability(ctx, tx.BookID)
+		if incErr != nil {
+			slog.Warn("Failed to increment book availability after transaction delete",
+				"transaction_id", transactionID,
+				"book_id", tx.BookID,
+				"error", incErr)
+		}
 	}
 
 	return nil

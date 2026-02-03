@@ -78,6 +78,8 @@ func (suite *TransactionIntegrationTestSuite) SetupSuite() {
 		v1.POST("/transactions/borrow", transactionHandler.BorrowBook)
 		v1.POST("/transactions/:id/return", transactionHandler.ReturnBook)
 		v1.POST("/transactions/:id/renew", transactionHandler.RenewBook)
+		v1.POST("/transactions/:id/lost", transactionHandler.MarkAsLost)
+		v1.DELETE("/transactions/:id", transactionHandler.DeleteTransaction)
 		v1.GET("/transactions/overdue", transactionHandler.GetOverdueTransactions)
 		v1.POST("/transactions/:id/pay-fine", transactionHandler.PayFine)
 		v1.GET("/transactions/history/:studentId", transactionHandler.GetTransactionHistory)
@@ -532,6 +534,158 @@ func (suite *TransactionIntegrationTestSuite) TestValidationErrors() {
 
 	assert.False(suite.T(), response.Success)
 	assert.Equal(suite.T(), "VALIDATION_ERROR", response.Error.Code)
+}
+
+// Test marking a transaction as lost sets transaction_type to 'lost'
+func (suite *TransactionIntegrationTestSuite) TestMarkAsLost_SetsTransactionTypeLost() {
+	// First borrow a book
+	suite.TestBorrowBook_Success()
+
+	// Mark the transaction as lost
+	url := fmt.Sprintf("/api/v1/transactions/%d/lost", suite.testTransaction.ID)
+	requestBody := map[string]string{
+		"reason": "Book was damaged beyond repair",
+	}
+	jsonBody, err := json.Marshal(requestBody)
+	require.NoError(suite.T(), err)
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	require.NoError(suite.T(), err)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	suite.router.ServeHTTP(w, req)
+
+	// Assert HTTP response
+	assert.Equal(suite.T(), http.StatusOK, w.Code)
+
+	// Verify transaction type is 'lost' (not just checking returned_date)
+	lostTransaction, err := suite.queries.GetTransactionByID(suite.ctx, suite.testTransaction.ID)
+	require.NoError(suite.T(), err)
+
+	// CRITICAL: transaction_type should be 'lost', not 'borrow' or 'return'
+	assert.Equal(suite.T(), "lost", lostTransaction.TransactionType, "transaction_type should be 'lost'")
+
+	// Also verify returned_date is set
+	assert.True(suite.T(), lostTransaction.ReturnedDate.Valid, "returned_date should be set")
+
+	// Verify fine was applied (replacement fine)
+	assert.True(suite.T(), lostTransaction.FineAmount.Valid, "fine_amount should be set for lost book")
+}
+
+// Test deleting a transaction restores copy status to available
+func (suite *TransactionIntegrationTestSuite) TestDeleteTransaction_RestoresCopyStatus() {
+	// Create a book copy for this test
+	barcode := fmt.Sprintf("DELTEST%d", time.Now().UnixNano()%100000)
+	copy, err := suite.queries.CreateBookCopy(suite.ctx, queries.CreateBookCopyParams{
+		BookID:     suite.testBook.ID,
+		CopyNumber: "DEL-001",
+		Barcode:    pgtype.Text{String: barcode, Valid: true},
+		Condition:  pgtype.Text{String: "good", Valid: true},
+		Status:     pgtype.Text{String: "available", Valid: true},
+	})
+	require.NoError(suite.T(), err)
+
+	// Borrow the book with a specific copy
+	requestBody := models.BorrowBookRequest{
+		StudentID:   suite.testStudent.ID,
+		BookID:      suite.testBook.ID,
+		LibrarianID: suite.testUser.ID,
+		CopyID:      copy.ID,
+		Notes:       "Borrow for delete test",
+	}
+
+	jsonBody, err := json.Marshal(requestBody)
+	require.NoError(suite.T(), err)
+
+	req, err := http.NewRequest("POST", "/api/v1/transactions/borrow", bytes.NewBuffer(jsonBody))
+	require.NoError(suite.T(), err)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	suite.router.ServeHTTP(w, req)
+	require.Equal(suite.T(), http.StatusCreated, w.Code)
+
+	// Get the created transaction
+	var response handlers.SuccessResponse
+	err = json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(suite.T(), err)
+
+	// Find the transaction ID from active transactions
+	transactions, err := suite.queries.ListActiveTransactionsByStudent(suite.ctx, suite.testStudent.ID)
+	require.NoError(suite.T(), err)
+	require.GreaterOrEqual(suite.T(), len(transactions), 1)
+
+	// Find the transaction for this specific copy
+	var transactionID int32
+	for _, tx := range transactions {
+		if tx.CopyID.Valid && tx.CopyID.Int32 == copy.ID {
+			transactionID = tx.ID
+			break
+		}
+	}
+	require.NotZero(suite.T(), transactionID, "Should find the transaction for the borrowed copy")
+
+	// Verify copy status is 'borrowed'
+	borrowedCopy, err := suite.queries.GetBookCopyByID(suite.ctx, copy.ID)
+	require.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "borrowed", borrowedCopy.Status.String, "Copy should be 'borrowed' after borrow")
+
+	// Delete the transaction
+	url := fmt.Sprintf("/api/v1/transactions/%d", transactionID)
+	req, err = http.NewRequest("DELETE", url, nil)
+	require.NoError(suite.T(), err)
+
+	w = httptest.NewRecorder()
+	suite.router.ServeHTTP(w, req)
+
+	assert.Equal(suite.T(), http.StatusOK, w.Code, "Delete should succeed")
+
+	// Verify copy status is restored to 'available'
+	restoredCopy, err := suite.queries.GetBookCopyByID(suite.ctx, copy.ID)
+	require.NoError(suite.T(), err)
+	assert.Equal(suite.T(), "available", restoredCopy.Status.String, "Copy should be restored to 'available' after delete")
+}
+
+// Test borrowing with custom due_days sets correct due date
+func (suite *TransactionIntegrationTestSuite) TestBorrowBook_WithCustomDueDays() {
+	// Borrow with custom due_days (7 days instead of default 14)
+	customDueDays := 7
+	requestBody := map[string]interface{}{
+		"student_id":   suite.testStudent.ID,
+		"book_id":      suite.testBook.ID,
+		"librarian_id": suite.testUser.ID,
+		"due_days":     customDueDays,
+		"notes":        "Test custom due days",
+	}
+
+	jsonBody, err := json.Marshal(requestBody)
+	require.NoError(suite.T(), err)
+
+	req, err := http.NewRequest("POST", "/api/v1/transactions/borrow", bytes.NewBuffer(jsonBody))
+	require.NoError(suite.T(), err)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	suite.router.ServeHTTP(w, req)
+
+	assert.Equal(suite.T(), http.StatusCreated, w.Code)
+
+	// Get the transaction and verify due date
+	transactions, err := suite.queries.ListActiveTransactionsByStudent(suite.ctx, suite.testStudent.ID)
+	require.NoError(suite.T(), err)
+	require.GreaterOrEqual(suite.T(), len(transactions), 1)
+
+	transaction := transactions[0]
+
+	// Calculate expected due date (should be approximately 7 days from now)
+	expectedDueDate := time.Now().AddDate(0, 0, customDueDays)
+	actualDueDate := transaction.DueDate.Time
+
+	// Allow 1 minute tolerance for test execution time
+	timeDiff := actualDueDate.Sub(expectedDueDate)
+	assert.True(suite.T(), timeDiff > -time.Minute && timeDiff < time.Minute,
+		"Due date should be approximately %d days from now (got diff: %v)", customDueDays, timeDiff)
 }
 
 // Run the test suite

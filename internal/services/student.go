@@ -195,10 +195,24 @@ func (s *StudentService) GetStudentByID(ctx context.Context, id int32) (*models.
 		return nil, models.ErrStudentNotFound
 	}
 
-	// Get borrowing stats
-	currentBooks, _ := s.queries.CountActiveBorrowingsByStudent(ctx, id)
-	totalBorrowed, _ := s.queries.GetStudentTotalBorrowed(ctx, id)
-	fineStats, _ := s.queries.GetStudentFineStats(ctx, id)
+	// Get borrowing stats with error logging
+	currentBooks, err := s.queries.CountActiveBorrowingsByStudent(ctx, id)
+	if err != nil {
+		slog.Warn("Failed to count active borrowings for student", "student_id", id, "error", err)
+		currentBooks = 0
+	}
+
+	totalBorrowed, err := s.queries.GetStudentTotalBorrowed(ctx, id)
+	if err != nil {
+		slog.Warn("Failed to get total borrowed for student", "student_id", id, "error", err)
+		totalBorrowed = 0
+	}
+
+	fineStats, err := s.queries.GetStudentFineStats(ctx, id)
+	if err != nil {
+		slog.Warn("Failed to get fine stats for student", "student_id", id, "error", err)
+		fineStats = queries.GetStudentFineStatsRow{}
+	}
 
 	// Convert fine stats to float64
 	var totalFines, unpaidFines float64
