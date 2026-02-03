@@ -238,6 +238,11 @@ func (m *MockTransactionQueries) RenewTransaction(ctx context.Context, arg queri
 	return args.Get(0).(queries.Transaction), args.Error(1)
 }
 
+func (m *MockTransactionQueries) CancelRenewal(ctx context.Context, arg queries.CancelRenewalParams) (queries.Transaction, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(queries.Transaction), args.Error(1)
+}
+
 // Test helper functions
 func createTestTransaction() queries.Transaction {
 	now := time.Now()

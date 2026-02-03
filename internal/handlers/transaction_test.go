@@ -160,6 +160,14 @@ func (m *MockTransactionService) DeleteTransaction(ctx context.Context, transact
 	return args.Error(0)
 }
 
+func (m *MockTransactionService) CancelRenewal(ctx context.Context, transactionID int32, newDueDate time.Time) (*services.TransactionResponse, error) {
+	args := m.Called(ctx, transactionID, newDueDate)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*services.TransactionResponse), args.Error(1)
+}
+
 // Test helper functions
 func setupTransactionRouter() (*gin.Engine, *MockTransactionService) {
 	gin.SetMode(gin.TestMode)
