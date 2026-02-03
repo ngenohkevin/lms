@@ -370,7 +370,8 @@ func (suite *TransactionIntegrationTestSuite) TestRenewBook_Success() {
 	assert.Equal(suite.T(), suite.testBook.ID, updatedTransaction.BookID)
 
 	// Renewal count should be incremented
-	assert.Equal(suite.T(), int32(1), updatedTransaction.RenewalCount)
+	assert.True(suite.T(), updatedTransaction.RenewalCount.Valid)
+	assert.Equal(suite.T(), int32(1), updatedTransaction.RenewalCount.Int32)
 
 	// Due date should be extended (verify it's in the future)
 	assert.True(suite.T(), updatedTransaction.DueDate.Valid)
