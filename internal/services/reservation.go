@@ -27,6 +27,7 @@ type ReservationQuerier interface {
 	CountAllReservations(ctx context.Context) (int64, error)
 	GetNextReservationForBook(ctx context.Context, bookID int32) (queries.GetNextReservationForBookRow, error)
 	CancelReservation(ctx context.Context, id int32) (queries.Reservation, error)
+	DeleteReservation(ctx context.Context, id int32) error
 	GetStudentReservationForBook(ctx context.Context, arg queries.GetStudentReservationForBookParams) (queries.GetStudentReservationForBookRow, error)
 	GetBookByID(ctx context.Context, id int32) (queries.Book, error)
 	GetStudentByID(ctx context.Context, id int32) (queries.Student, error)
@@ -175,6 +176,25 @@ func (s *ReservationService) CancelReservation(ctx context.Context, id int32) (*
 	}
 
 	return s.convertToReservationResponse(reservation, 0), nil
+}
+
+// DeleteReservation permanently removes a reservation from the database
+func (s *ReservationService) DeleteReservation(ctx context.Context, id int32) error {
+	// Verify the reservation exists first
+	_, err := s.queries.GetReservationByID(ctx, id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("reservation not found")
+		}
+		return fmt.Errorf("failed to get reservation: %w", err)
+	}
+
+	err = s.queries.DeleteReservation(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete reservation: %w", err)
+	}
+
+	return nil
 }
 
 // FulfillReservation fulfills a reservation when a book becomes available

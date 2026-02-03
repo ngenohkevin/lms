@@ -101,6 +101,16 @@ func (q *Queries) CreateReservation(ctx context.Context, arg CreateReservationPa
 	return i, err
 }
 
+const deleteReservation = `-- name: DeleteReservation :exec
+DELETE FROM reservations
+WHERE id = $1
+`
+
+func (q *Queries) DeleteReservation(ctx context.Context, id int32) error {
+	_, err := q.db.Exec(ctx, deleteReservation, id)
+	return err
+}
+
 const getNextReservationForBook = `-- name: GetNextReservationForBook :one
 SELECT r.id, r.student_id, r.book_id, r.reserved_at, r.expires_at, r.status, r.fulfilled_at, r.created_at, r.updated_at, r.notified_at, s.first_name, s.last_name, s.student_id as student_code
 FROM reservations r

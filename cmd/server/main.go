@@ -530,7 +530,7 @@ func setupRoutes(
 
 				// Routes with :id parameter placed last to avoid conflicts
 				reservations.GET("/:id", requirePerm("reservations.view"), reservationHandler.GetReservation)
-				reservations.DELETE("/:id", requirePerm("reservations.manage"), reservationHandler.CancelReservation)
+				reservations.DELETE("/:id", requirePerm("reservations.manage"), reservationHandler.DeleteReservation)
 				reservations.POST("/:id/cancel", requirePerm("reservations.manage"), reservationHandler.CancelReservation) // POST alias for frontend compatibility
 				reservations.POST("/:id/fulfill", requirePerm("reservations.manage"), reservationHandler.FulfillReservation)
 				reservations.POST("/:id/ready", requirePerm("reservations.manage"), reservationHandler.MarkReservationReady)

@@ -48,6 +48,11 @@ func (m *MockReservationService) CancelReservation(ctx context.Context, id int32
 	return args.Get(0).(*services.ReservationResponse), args.Error(1)
 }
 
+func (m *MockReservationService) DeleteReservation(ctx context.Context, id int32) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
 func (m *MockReservationService) FulfillReservation(ctx context.Context, reservationID int32) (*services.ReservationResponse, error) {
 	args := m.Called(ctx, reservationID)
 	if args.Get(0) == nil {

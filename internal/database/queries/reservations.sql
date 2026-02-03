@@ -105,3 +105,7 @@ WHERE r.book_id = $1 AND r.status = 'active'
   AND s.is_active = true
   AND s.deleted_at IS NULL
 ORDER BY r.reserved_at ASC;
+
+-- name: DeleteReservation :exec
+DELETE FROM reservations
+WHERE id = $1;

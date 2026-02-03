@@ -16,6 +16,7 @@ type ReservationServiceInterface interface {
 	ReserveBook(ctx context.Context, studentID, bookID int32) (*services.ReservationResponse, error)
 	GetReservationByID(ctx context.Context, id int32) (*services.ReservationResponse, error)
 	CancelReservation(ctx context.Context, id int32) (*services.ReservationResponse, error)
+	DeleteReservation(ctx context.Context, id int32) error
 	FulfillReservation(ctx context.Context, reservationID int32) (*services.ReservationResponse, error)
 	GetStudentReservations(ctx context.Context, studentID int32, limit, offset int32) ([]services.ReservationResponse, error)
 	GetBookReservations(ctx context.Context, bookID int32) ([]services.ReservationResponse, error)
@@ -183,6 +184,52 @@ func (h *ReservationHandler) CancelReservation(c *gin.Context) {
 		Success: true,
 		Data:    response,
 		Message: "Reservation cancelled successfully",
+	})
+}
+
+// DeleteReservation handles permanent deletion of a reservation
+// @Summary Delete a reservation
+// @Description Permanently delete a reservation (librarian only)
+// @Tags reservations
+// @Produce json
+// @Param id path int true "Reservation ID"
+// @Success 200 {object} SuccessResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/reservations/{id} [delete]
+func (h *ReservationHandler) DeleteReservation(c *gin.Context) {
+	idStr := c.Param("id")
+	reservationID, err := strconv.ParseInt(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    models.ReservationErrorCodeValidationError,
+				Message: "Invalid reservation ID",
+				Details: "Reservation ID must be a valid integer",
+			},
+		})
+		return
+	}
+
+	err = h.reservationService.DeleteReservation(c.Request.Context(), int32(reservationID))
+	if err != nil {
+		statusCode, errorCode := h.getErrorCodeAndStatus(err)
+		c.JSON(statusCode, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    errorCode,
+				Message: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    nil,
+		Message: "Reservation deleted successfully",
 	})
 }
 

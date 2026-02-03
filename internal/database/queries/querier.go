@@ -143,6 +143,7 @@ type Querier interface {
 	DeleteOldNotifications(ctx context.Context, createdAt pgtype.Timestamp) error
 	DeleteOldQueueItems(ctx context.Context, createdAt pgtype.Timestamp) error
 	DeletePermission(ctx context.Context, id int32) error
+	DeleteReservation(ctx context.Context, id int32) error
 	DeleteSeries(ctx context.Context, id int32) error
 	DeleteSetting(ctx context.Context, key string) error
 	// Delete a transaction by ID (admin only)
