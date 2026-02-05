@@ -119,6 +119,84 @@ func (m *MockReportQuerier) GetRiskAnalysis(ctx context.Context) ([]queries.GetR
 	return args.Get(0).([]queries.GetRiskAnalysisRow), args.Error(1)
 }
 
+// Individual Student Report Mock Methods
+func (m *MockReportQuerier) GetIndividualStudentProfile(ctx context.Context, id int32) (queries.GetIndividualStudentProfileRow, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(queries.GetIndividualStudentProfileRow), args.Error(1)
+}
+
+func (m *MockReportQuerier) GetStudentTransactionHistory(ctx context.Context, arg queries.GetStudentTransactionHistoryParams) ([]queries.GetStudentTransactionHistoryRow, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).([]queries.GetStudentTransactionHistoryRow), args.Error(1)
+}
+
+func (m *MockReportQuerier) GetStudentReadingStats(ctx context.Context, studentID int32) ([]queries.GetStudentReadingStatsRow, error) {
+	args := m.Called(ctx, studentID)
+	return args.Get(0).([]queries.GetStudentReadingStatsRow), args.Error(1)
+}
+
+func (m *MockReportQuerier) GetStudentMonthlyActivity(ctx context.Context, arg queries.GetStudentMonthlyActivityParams) ([]queries.GetStudentMonthlyActivityRow, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).([]queries.GetStudentMonthlyActivityRow), args.Error(1)
+}
+
+// Lost Books Report Mock Methods
+func (m *MockReportQuerier) GetLostBooksReport(ctx context.Context, arg queries.GetLostBooksReportParams) ([]queries.GetLostBooksReportRow, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).([]queries.GetLostBooksReportRow), args.Error(1)
+}
+
+func (m *MockReportQuerier) GetLostBooksSummary(ctx context.Context, arg queries.GetLostBooksSummaryParams) (queries.GetLostBooksSummaryRow, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(queries.GetLostBooksSummaryRow), args.Error(1)
+}
+
+func (m *MockReportQuerier) GetLostBooksTrend(ctx context.Context, arg queries.GetLostBooksTrendParams) ([]queries.GetLostBooksTrendRow, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).([]queries.GetLostBooksTrendRow), args.Error(1)
+}
+
+func (m *MockReportQuerier) GetLostBooksByCategory(ctx context.Context, arg queries.GetLostBooksByCategoryParams) ([]queries.GetLostBooksByCategoryRow, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).([]queries.GetLostBooksByCategoryRow), args.Error(1)
+}
+
+func (m *MockReportQuerier) GetLostBooksByDepartment(ctx context.Context, arg queries.GetLostBooksByDepartmentParams) ([]queries.GetLostBooksByDepartmentRow, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).([]queries.GetLostBooksByDepartmentRow), args.Error(1)
+}
+
+// Fines Collection Report Mock Methods
+func (m *MockReportQuerier) GetFinesCollectionSummary(ctx context.Context, arg queries.GetFinesCollectionSummaryParams) (queries.GetFinesCollectionSummaryRow, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(queries.GetFinesCollectionSummaryRow), args.Error(1)
+}
+
+func (m *MockReportQuerier) GetFinesByYearOfStudy(ctx context.Context, arg queries.GetFinesByYearOfStudyParams) ([]queries.GetFinesByYearOfStudyRow, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).([]queries.GetFinesByYearOfStudyRow), args.Error(1)
+}
+
+func (m *MockReportQuerier) GetFinesByDepartment(ctx context.Context, arg queries.GetFinesByDepartmentParams) ([]queries.GetFinesByDepartmentRow, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).([]queries.GetFinesByDepartmentRow), args.Error(1)
+}
+
+func (m *MockReportQuerier) GetFinesCollectionTrend(ctx context.Context, arg queries.GetFinesCollectionTrendParams) ([]queries.GetFinesCollectionTrendRow, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).([]queries.GetFinesCollectionTrendRow), args.Error(1)
+}
+
+func (m *MockReportQuerier) GetFinePaymentHistory(ctx context.Context, arg queries.GetFinePaymentHistoryParams) ([]queries.GetFinePaymentHistoryRow, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).([]queries.GetFinePaymentHistoryRow), args.Error(1)
+}
+
+func (m *MockReportQuerier) GetTopFineDefaulters(ctx context.Context, limit int32) ([]queries.GetTopFineDefaultersRow, error) {
+	args := m.Called(ctx, limit)
+	return args.Get(0).([]queries.GetTopFineDefaultersRow), args.Error(1)
+}
+
 // ReportServiceTestSuite for comprehensive testing
 type ReportServiceTestSuite struct {
 	suite.Suite

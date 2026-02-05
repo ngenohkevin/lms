@@ -192,8 +192,16 @@ type Querier interface {
 	GetFailedEmailDeliveries(ctx context.Context, limit int32) ([]EmailDelivery, error)
 	GetFineByTransactionID(ctx context.Context, id int32) (GetFineByTransactionIDRow, error)
 	GetFineOverviewStats(ctx context.Context) (GetFineOverviewStatsRow, error)
+	GetFinePaymentHistory(ctx context.Context, arg GetFinePaymentHistoryParams) ([]GetFinePaymentHistoryRow, error)
 	GetFineSettings(ctx context.Context) ([]Setting, error)
 	GetFineStatistics(ctx context.Context, arg GetFineStatisticsParams) (GetFineStatisticsRow, error)
+	GetFinesByDepartment(ctx context.Context, arg GetFinesByDepartmentParams) ([]GetFinesByDepartmentRow, error)
+	GetFinesByYearOfStudy(ctx context.Context, arg GetFinesByYearOfStudyParams) ([]GetFinesByYearOfStudyRow, error)
+	// ============================================
+	// Fines Collection Report Queries
+	// ============================================
+	GetFinesCollectionSummary(ctx context.Context, arg GetFinesCollectionSummaryParams) (GetFinesCollectionSummaryRow, error)
+	GetFinesCollectionTrend(ctx context.Context, arg GetFinesCollectionTrendParams) ([]GetFinesCollectionTrendRow, error)
 	GetFirstAvailableCopy(ctx context.Context, bookID int32) (BookCopy, error)
 	GetGenrePopularity(ctx context.Context, arg GetGenrePopularityParams) ([]GetGenrePopularityRow, error)
 	GetImportErrorsByHistoryID(ctx context.Context, importHistoryID int32) ([]ImportError, error)
@@ -201,6 +209,10 @@ type Querier interface {
 	GetImportHistoryByID(ctx context.Context, id int32) (ImportHistory, error)
 	GetImportHistoryByUserID(ctx context.Context, arg GetImportHistoryByUserIDParams) ([]ImportHistory, error)
 	GetImportHistoryStats(ctx context.Context, userID int32) (GetImportHistoryStatsRow, error)
+	// ============================================
+	// Individual Student Report Queries
+	// ============================================
+	GetIndividualStudentProfile(ctx context.Context, id int32) (GetIndividualStudentProfileRow, error)
 	GetInventoryStatus(ctx context.Context) ([]GetInventoryStatusRow, error)
 	GetInviteByEmail(ctx context.Context, email string) (UserInvite, error)
 	GetInviteByID(ctx context.Context, id int32) (GetInviteByIDRow, error)
@@ -208,6 +220,14 @@ type Querier interface {
 	GetLanguageByCode(ctx context.Context, code string) (Language, error)
 	GetLanguageByID(ctx context.Context, id int32) (Language, error)
 	GetLibraryOverview(ctx context.Context) (GetLibraryOverviewRow, error)
+	GetLostBooksByCategory(ctx context.Context, arg GetLostBooksByCategoryParams) ([]GetLostBooksByCategoryRow, error)
+	GetLostBooksByDepartment(ctx context.Context, arg GetLostBooksByDepartmentParams) ([]GetLostBooksByDepartmentRow, error)
+	// ============================================
+	// Lost Books Report Queries
+	// ============================================
+	GetLostBooksReport(ctx context.Context, arg GetLostBooksReportParams) ([]GetLostBooksReportRow, error)
+	GetLostBooksSummary(ctx context.Context, arg GetLostBooksSummaryParams) (GetLostBooksSummaryRow, error)
+	GetLostBooksTrend(ctx context.Context, arg GetLostBooksTrendParams) ([]GetLostBooksTrendRow, error)
 	GetMonthlyTrends(ctx context.Context, arg GetMonthlyTrendsParams) ([]GetMonthlyTrendsRow, error)
 	GetNextQueueItems(ctx context.Context, limit int32) ([]EmailQueue, error)
 	GetNextReservationForBook(ctx context.Context, bookID int32) (GetNextReservationForBookRow, error)
@@ -241,13 +261,17 @@ type Querier interface {
 	GetStudentCountByYearAndDepartment(ctx context.Context) ([]GetStudentCountByYearAndDepartmentRow, error)
 	GetStudentEnrollmentTrends(ctx context.Context, arg GetStudentEnrollmentTrendsParams) ([]GetStudentEnrollmentTrendsRow, error)
 	GetStudentFineStats(ctx context.Context, studentID int32) (GetStudentFineStatsRow, error)
+	GetStudentMonthlyActivity(ctx context.Context, arg GetStudentMonthlyActivityParams) ([]GetStudentMonthlyActivityRow, error)
+	GetStudentReadingStats(ctx context.Context, studentID int32) ([]GetStudentReadingStatsRow, error)
 	GetStudentReservationForBook(ctx context.Context, arg GetStudentReservationForBookParams) (GetStudentReservationForBookRow, error)
 	GetStudentTotalBorrowed(ctx context.Context, studentID int32) (int64, error)
+	GetStudentTransactionHistory(ctx context.Context, arg GetStudentTransactionHistoryParams) ([]GetStudentTransactionHistoryRow, error)
 	GetStudentWithDepartment(ctx context.Context, id int32) (GetStudentWithDepartmentRow, error)
 	GetStudentsByStatus(ctx context.Context, arg GetStudentsByStatusParams) ([]Student, error)
 	GetStudentsByStatusType(ctx context.Context, arg GetStudentsByStatusTypeParams) ([]Student, error)
 	GetStudentsWithHighFines(ctx context.Context, fineAmount pgtype.Numeric) ([]GetStudentsWithHighFinesRow, error)
 	GetTopBorrowingStudents(ctx context.Context, arg GetTopBorrowingStudentsParams) ([]GetTopBorrowingStudentsRow, error)
+	GetTopFineDefaulters(ctx context.Context, limit int32) ([]GetTopFineDefaultersRow, error)
 	GetTotalUnpaidFinesByStudent(ctx context.Context, studentID int32) (pgtype.Numeric, error)
 	// Get transaction age in minutes (for cancel time window validation)
 	GetTransactionAge(ctx context.Context, id int32) (int32, error)

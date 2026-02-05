@@ -38,6 +38,27 @@ type ReportQuerier interface {
 	GetStudentBehaviorAnalysis(ctx context.Context, arg queries.GetStudentBehaviorAnalysisParams) ([]queries.GetStudentBehaviorAnalysisRow, error)
 	GetCapacityPlanningAnalysis(ctx context.Context) (queries.GetCapacityPlanningAnalysisRow, error)
 	GetRiskAnalysis(ctx context.Context) ([]queries.GetRiskAnalysisRow, error)
+
+	// Individual Student Report Methods
+	GetIndividualStudentProfile(ctx context.Context, id int32) (queries.GetIndividualStudentProfileRow, error)
+	GetStudentTransactionHistory(ctx context.Context, arg queries.GetStudentTransactionHistoryParams) ([]queries.GetStudentTransactionHistoryRow, error)
+	GetStudentReadingStats(ctx context.Context, studentID int32) ([]queries.GetStudentReadingStatsRow, error)
+	GetStudentMonthlyActivity(ctx context.Context, arg queries.GetStudentMonthlyActivityParams) ([]queries.GetStudentMonthlyActivityRow, error)
+
+	// Lost Books Report Methods
+	GetLostBooksReport(ctx context.Context, arg queries.GetLostBooksReportParams) ([]queries.GetLostBooksReportRow, error)
+	GetLostBooksSummary(ctx context.Context, arg queries.GetLostBooksSummaryParams) (queries.GetLostBooksSummaryRow, error)
+	GetLostBooksTrend(ctx context.Context, arg queries.GetLostBooksTrendParams) ([]queries.GetLostBooksTrendRow, error)
+	GetLostBooksByCategory(ctx context.Context, arg queries.GetLostBooksByCategoryParams) ([]queries.GetLostBooksByCategoryRow, error)
+	GetLostBooksByDepartment(ctx context.Context, arg queries.GetLostBooksByDepartmentParams) ([]queries.GetLostBooksByDepartmentRow, error)
+
+	// Fines Collection Report Methods
+	GetFinesCollectionSummary(ctx context.Context, arg queries.GetFinesCollectionSummaryParams) (queries.GetFinesCollectionSummaryRow, error)
+	GetFinesByYearOfStudy(ctx context.Context, arg queries.GetFinesByYearOfStudyParams) ([]queries.GetFinesByYearOfStudyRow, error)
+	GetFinesByDepartment(ctx context.Context, arg queries.GetFinesByDepartmentParams) ([]queries.GetFinesByDepartmentRow, error)
+	GetFinesCollectionTrend(ctx context.Context, arg queries.GetFinesCollectionTrendParams) ([]queries.GetFinesCollectionTrendRow, error)
+	GetFinePaymentHistory(ctx context.Context, arg queries.GetFinePaymentHistoryParams) ([]queries.GetFinePaymentHistoryRow, error)
+	GetTopFineDefaulters(ctx context.Context, limit int32) ([]queries.GetTopFineDefaultersRow, error)
 }
 
 // ReportService handles all reporting and analytics functionality
@@ -1271,4 +1292,595 @@ func (rs *ReportService) generateSeasonalTrendsVisualization(ctx context.Context
 		{Label: "Fall", Value: 290, Category: "season"},
 		{Label: "Winter", Value: 210, Category: "season"},
 	}, nil
+}
+
+// ============================================
+// Individual Student Report Methods
+// ============================================
+
+// GetIndividualStudentReport generates a comprehensive report for a single student
+func (rs *ReportService) GetIndividualStudentReport(ctx context.Context, studentID int32, limit int32, startDate, endDate time.Time) (*models.IndividualStudentReport, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+
+	// Get student profile
+	profile, err := rs.db.GetIndividualStudentProfile(ctx, studentID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get student profile: %w", err)
+	}
+
+	// Get transaction history
+	historyParams := queries.GetStudentTransactionHistoryParams{
+		StudentID: studentID,
+		Limit:     limit,
+		Offset:    0,
+	}
+	history, err := rs.db.GetStudentTransactionHistory(ctx, historyParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get transaction history: %w", err)
+	}
+
+	// Get reading stats by genre
+	readingStats, err := rs.db.GetStudentReadingStats(ctx, studentID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get reading stats: %w", err)
+	}
+
+	// Get monthly activity
+	if startDate.IsZero() {
+		startDate = time.Now().AddDate(-1, 0, 0) // Default to last year
+	}
+	if endDate.IsZero() {
+		endDate = time.Now()
+	}
+
+	activityParams := queries.GetStudentMonthlyActivityParams{
+		StudentID: studentID,
+		Column2:   pgtype.Timestamp{Time: startDate, Valid: true},
+		Column3:   pgtype.Timestamp{Time: endDate, Valid: true},
+	}
+	monthlyActivity, err := rs.db.GetStudentMonthlyActivity(ctx, activityParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get monthly activity: %w", err)
+	}
+
+	return rs.buildIndividualStudentReport(profile, history, readingStats, monthlyActivity), nil
+}
+
+func (rs *ReportService) buildIndividualStudentReport(
+	profile queries.GetIndividualStudentProfileRow,
+	history []queries.GetStudentTransactionHistoryRow,
+	readingStats []queries.GetStudentReadingStatsRow,
+	monthlyActivity []queries.GetStudentMonthlyActivityRow,
+) *models.IndividualStudentReport {
+
+	// Build profile
+	studentProfile := models.StudentProfile{
+		ID:          profile.ID,
+		StudentID:   profile.StudentID,
+		FirstName:   profile.FirstName,
+		LastName:    profile.LastName,
+		YearOfStudy: profile.YearOfStudy,
+		MaxBooks:    profile.MaxBooks,
+		IsActive:    profile.IsActive.Valid && profile.IsActive.Bool,
+	}
+	if profile.Email.Valid {
+		studentProfile.Email = profile.Email.String
+	}
+	if profile.Phone.Valid {
+		studentProfile.Phone = profile.Phone.String
+	}
+	if profile.Department.Valid {
+		studentProfile.Department = profile.Department.String
+	}
+	if profile.MemberSince.Valid {
+		studentProfile.MemberSince = profile.MemberSince.Time
+	}
+
+	// Build transaction stats
+	transactionStats := models.TransactionStats{
+		TotalBooksBorrowed: profile.TotalBooksBorrowed,
+		CurrentlyBorrowed:  profile.CurrentlyBorrowed,
+		OverdueCount:       profile.OverdueCount,
+	}
+
+	// Build fines summary
+	finesSummary := models.StudentFinesSummary{
+		OutstandingFines: profile.OutstandingFines,
+		TotalFinesPaid:   profile.TotalFinesPaid,
+	}
+
+	// Build reading stats
+	readingStatsList := make([]models.ReadingStatsByGenre, len(readingStats))
+	for i, stat := range readingStats {
+		readingStatsList[i] = models.ReadingStatsByGenre{
+			Genre:       stat.Genre,
+			BooksRead:   stat.BooksRead,
+			AvgDaysHeld: stat.AvgDaysHeld,
+		}
+	}
+
+	// Build monthly activity
+	monthlyActivityList := make([]models.MonthlyActivityData, len(monthlyActivity))
+	for i, activity := range monthlyActivity {
+		monthlyActivityList[i] = models.MonthlyActivityData{
+			Month:         activity.Month,
+			Borrowed:      activity.Borrowed,
+			Returned:      activity.Returned,
+			FinesIncurred: activity.FinesIncurred,
+		}
+	}
+
+	// Build transaction history
+	historyList := make([]models.TransactionHistoryItem, len(history))
+	for i, h := range history {
+		item := models.TransactionHistoryItem{
+			TransactionID:   h.TransactionID,
+			TransactionType: h.TransactionType,
+			BookCode:        h.BookCode,
+			BookTitle:       h.BookTitle,
+			BookAuthor:      h.BookAuthor,
+			Status:          h.Status,
+			DaysOverdue:     h.DaysOverdue,
+		}
+		if h.TransactionDate.Valid {
+			item.TransactionDate = h.TransactionDate.Time
+		}
+		if h.DueDate.Valid {
+			item.DueDate = h.DueDate.Time
+		}
+		if h.ReturnedDate.Valid {
+			returnedDate := h.ReturnedDate.Time
+			item.ReturnedDate = &returnedDate
+		}
+		if h.FineAmount.Valid {
+			item.FineAmount = h.FineAmount.Int.String()
+		} else {
+			item.FineAmount = "0.00"
+		}
+		if h.FinePaid.Valid {
+			item.FinePaid = h.FinePaid.Bool
+		}
+		if h.RenewalCount.Valid {
+			item.RenewalCount = h.RenewalCount.Int32
+		}
+		if h.Genre.Valid {
+			item.Genre = h.Genre.String
+		}
+		historyList[i] = item
+	}
+
+	return &models.IndividualStudentReport{
+		Profile:          studentProfile,
+		TransactionStats: transactionStats,
+		FinesSummary:     finesSummary,
+		ReadingStats:     readingStatsList,
+		MonthlyActivity:  monthlyActivityList,
+		RecentHistory:    historyList,
+		GeneratedAt:      time.Now(),
+	}
+}
+
+// ============================================
+// Lost Books Report Methods
+// ============================================
+
+// GetLostBooksReport generates a comprehensive lost books report
+func (rs *ReportService) GetLostBooksReport(ctx context.Context, startDate, endDate time.Time, department, genre *string, interval string) (*models.LostBooksReport, error) {
+	if interval == "" {
+		interval = "month"
+	}
+
+	// Build params
+	var deptValue, genreValue string
+	if department != nil {
+		deptValue = *department
+	}
+	if genre != nil {
+		genreValue = *genre
+	}
+
+	reportParams := queries.GetLostBooksReportParams{
+		Column1: pgtype.Timestamp{Time: startDate, Valid: !startDate.IsZero()},
+		Column2: pgtype.Timestamp{Time: endDate, Valid: !endDate.IsZero()},
+		Column3: deptValue,
+		Column4: genreValue,
+	}
+
+	// Get lost books details
+	lostBooks, err := rs.db.GetLostBooksReport(ctx, reportParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get lost books: %w", err)
+	}
+
+	// Get summary
+	summaryParams := queries.GetLostBooksSummaryParams{
+		Column1: pgtype.Timestamp{Time: startDate, Valid: !startDate.IsZero()},
+		Column2: pgtype.Timestamp{Time: endDate, Valid: !endDate.IsZero()},
+	}
+	summary, err := rs.db.GetLostBooksSummary(ctx, summaryParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get lost books summary: %w", err)
+	}
+
+	// Get trends (only if we have a date range)
+	var trends []queries.GetLostBooksTrendRow
+	if !startDate.IsZero() && !endDate.IsZero() {
+		trendParams := queries.GetLostBooksTrendParams{
+			Column1: pgtype.Timestamp{Time: startDate, Valid: true},
+			Column2: pgtype.Timestamp{Time: endDate, Valid: true},
+			Column3: interval,
+		}
+		trends, err = rs.db.GetLostBooksTrend(ctx, trendParams)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get lost books trend: %w", err)
+		}
+	}
+
+	// Get by category
+	categoryParams := queries.GetLostBooksByCategoryParams{
+		Column1: pgtype.Timestamp{Time: startDate, Valid: !startDate.IsZero()},
+		Column2: pgtype.Timestamp{Time: endDate, Valid: !endDate.IsZero()},
+	}
+	byCategory, err := rs.db.GetLostBooksByCategory(ctx, categoryParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get lost books by category: %w", err)
+	}
+
+	// Get by department
+	deptParams := queries.GetLostBooksByDepartmentParams{
+		Column1: pgtype.Timestamp{Time: startDate, Valid: !startDate.IsZero()},
+		Column2: pgtype.Timestamp{Time: endDate, Valid: !endDate.IsZero()},
+	}
+	byDepartment, err := rs.db.GetLostBooksByDepartment(ctx, deptParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get lost books by department: %w", err)
+	}
+
+	return rs.buildLostBooksReport(lostBooks, summary, trends, byCategory, byDepartment), nil
+}
+
+func (rs *ReportService) buildLostBooksReport(
+	lostBooks []queries.GetLostBooksReportRow,
+	summary queries.GetLostBooksSummaryRow,
+	trends []queries.GetLostBooksTrendRow,
+	byCategory []queries.GetLostBooksByCategoryRow,
+	byDepartment []queries.GetLostBooksByDepartmentRow,
+) *models.LostBooksReport {
+
+	// Build lost books list
+	booksList := make([]models.LostBookDetail, len(lostBooks))
+	for i, book := range lostBooks {
+		item := models.LostBookDetail{
+			TransactionID: book.TransactionID,
+			StudentCode:   book.StudentCode,
+			BookCode:      book.BookCode,
+			BookTitle:     book.BookTitle,
+			BookAuthor:    book.BookAuthor,
+			YearOfStudy:   book.YearOfStudy,
+		}
+		if book.LostDate.Valid {
+			item.LostDate = book.LostDate.Time
+		}
+		if book.ReplacementCost.Valid {
+			item.ReplacementCost = book.ReplacementCost.Int.String()
+		} else {
+			item.ReplacementCost = "0.00"
+		}
+		if book.FinePaid.Valid {
+			item.FinePaid = book.FinePaid.Bool
+		}
+		if book.Notes.Valid {
+			item.Notes = book.Notes.String
+		}
+		if book.StudentName != nil {
+			item.StudentName = fmt.Sprintf("%v", book.StudentName)
+		}
+		if book.Department.Valid {
+			item.Department = book.Department.String
+		}
+		if book.Genre.Valid {
+			item.Genre = book.Genre.String
+		}
+		if book.Isbn.Valid {
+			item.ISBN = book.Isbn.String
+		}
+		item.OriginalPrice = book.OriginalPrice
+		booksList[i] = item
+	}
+
+	// Build summary
+	reportSummary := models.LostBooksSummary{
+		TotalLostBooks:        summary.TotalLostBooks,
+		TotalReplacementValue: summary.TotalReplacementValue,
+		CollectedAmount:       summary.CollectedAmount,
+		OutstandingAmount:     summary.OutstandingAmount,
+		StudentsAffected:      summary.StudentsAffected,
+		GenresAffected:        summary.GenresAffected,
+	}
+
+	// Build trends
+	trendsList := make([]models.LostBooksTrendItem, len(trends))
+	for i, trend := range trends {
+		trendsList[i] = models.LostBooksTrendItem{
+			Period:           trend.Period,
+			LostCount:        trend.LostCount,
+			ReplacementValue: trend.ReplacementValue,
+		}
+	}
+
+	// Build by category
+	categoryList := make([]models.LostBooksByCategory, len(byCategory))
+	for i, cat := range byCategory {
+		categoryList[i] = models.LostBooksByCategory{
+			Genre:      cat.Genre,
+			LostCount:  cat.LostCount,
+			TotalValue: cat.TotalValue,
+			AvgValue:   cat.AvgValue,
+		}
+	}
+
+	// Build by department
+	deptList := make([]models.LostBooksByDepartment, len(byDepartment))
+	for i, dept := range byDepartment {
+		deptList[i] = models.LostBooksByDepartment{
+			Department:       dept.Department,
+			LostCount:        dept.LostCount,
+			TotalValue:       dept.TotalValue,
+			StudentsAffected: dept.StudentsAffected,
+		}
+	}
+
+	return &models.LostBooksReport{
+		LostBooks:    booksList,
+		Summary:      reportSummary,
+		Trends:       trendsList,
+		ByCategory:   categoryList,
+		ByDepartment: deptList,
+		GeneratedAt:  time.Now(),
+	}
+}
+
+// ============================================
+// Fines Collection Report Methods
+// ============================================
+
+// GetFinesCollectionReport generates a comprehensive fines collection report
+func (rs *ReportService) GetFinesCollectionReport(ctx context.Context, startDate, endDate time.Time, interval string, paidOnly *bool, limit int32) (*models.FinesCollectionReport, error) {
+	if interval == "" {
+		interval = "month"
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+
+	// Get summary
+	summaryParams := queries.GetFinesCollectionSummaryParams{
+		Column1: pgtype.Timestamp{Time: startDate, Valid: !startDate.IsZero()},
+		Column2: pgtype.Timestamp{Time: endDate, Valid: !endDate.IsZero()},
+	}
+	summary, err := rs.db.GetFinesCollectionSummary(ctx, summaryParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get fines summary: %w", err)
+	}
+
+	// Get by year of study
+	yearParams := queries.GetFinesByYearOfStudyParams{
+		Column1: pgtype.Timestamp{Time: startDate, Valid: !startDate.IsZero()},
+		Column2: pgtype.Timestamp{Time: endDate, Valid: !endDate.IsZero()},
+	}
+	byYear, err := rs.db.GetFinesByYearOfStudy(ctx, yearParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get fines by year: %w", err)
+	}
+
+	// Get by department
+	deptParams := queries.GetFinesByDepartmentParams{
+		Column1: pgtype.Timestamp{Time: startDate, Valid: !startDate.IsZero()},
+		Column2: pgtype.Timestamp{Time: endDate, Valid: !endDate.IsZero()},
+	}
+	byDept, err := rs.db.GetFinesByDepartment(ctx, deptParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get fines by department: %w", err)
+	}
+
+	// Get trends (only if we have a date range)
+	var trends []queries.GetFinesCollectionTrendRow
+	if !startDate.IsZero() && !endDate.IsZero() {
+		trendParams := queries.GetFinesCollectionTrendParams{
+			Column1: pgtype.Timestamp{Time: startDate, Valid: true},
+			Column2: pgtype.Timestamp{Time: endDate, Valid: true},
+			Column3: interval,
+		}
+		trends, err = rs.db.GetFinesCollectionTrend(ctx, trendParams)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get fines trend: %w", err)
+		}
+	}
+
+	// Get top defaulters
+	defaulters, err := rs.db.GetTopFineDefaulters(ctx, 20)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get top defaulters: %w", err)
+	}
+
+	// Get recent fines
+	paidOnlyFilter := false
+	if paidOnly != nil && *paidOnly {
+		paidOnlyFilter = true
+	}
+	recentParams := queries.GetFinePaymentHistoryParams{
+		Column1: pgtype.Timestamp{Time: startDate, Valid: !startDate.IsZero()},
+		Column2: pgtype.Timestamp{Time: endDate, Valid: !endDate.IsZero()},
+		Column3: paidOnlyFilter,
+		Limit:   limit,
+		Offset:  0,
+	}
+	recentFines, err := rs.db.GetFinePaymentHistory(ctx, recentParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get recent fines: %w", err)
+	}
+
+	return rs.buildFinesCollectionReport(summary, byYear, byDept, trends, defaulters, recentFines), nil
+}
+
+func (rs *ReportService) buildFinesCollectionReport(
+	summary queries.GetFinesCollectionSummaryRow,
+	byYear []queries.GetFinesByYearOfStudyRow,
+	byDept []queries.GetFinesByDepartmentRow,
+	trends []queries.GetFinesCollectionTrendRow,
+	defaulters []queries.GetTopFineDefaultersRow,
+	recentFines []queries.GetFinePaymentHistoryRow,
+) *models.FinesCollectionReport {
+
+	// Calculate collection rate
+	collectionRate := "0.00"
+	totalGenerated, _ := strconv.ParseFloat(summary.TotalFinesGenerated, 64)
+	totalCollected, _ := strconv.ParseFloat(summary.TotalCollected, 64)
+	if totalGenerated > 0 {
+		collectionRate = fmt.Sprintf("%.2f", (totalCollected/totalGenerated)*100)
+	}
+
+	// Build summary
+	reportSummary := models.FinesCollectionSummary{
+		TotalFineRecords:        summary.TotalFineRecords,
+		StudentsWithOutstanding: summary.StudentsWithOutstanding,
+		TotalFinesGenerated:     summary.TotalFinesGenerated,
+		TotalCollected:          summary.TotalCollected,
+		TotalOutstanding:        summary.TotalOutstanding,
+		TotalWaived:             summary.TotalWaived,
+		AverageFine:             summary.AverageFine,
+		CollectionRate:          collectionRate,
+	}
+
+	// Build by year of study
+	yearList := make([]models.FinesByYearItem, len(byYear))
+	for i, y := range byYear {
+		yearList[i] = models.FinesByYearItem{
+			YearOfStudy:       y.YearOfStudy,
+			FineCount:         y.FineCount,
+			StudentsAffected:  y.StudentsAffected,
+			TotalFines:        y.TotalFines,
+			PaidAmount:        y.PaidAmount,
+			OutstandingAmount: y.OutstandingAmount,
+		}
+	}
+
+	// Build by department
+	deptList := make([]models.FinesByDepartmentItem, len(byDept))
+	for i, d := range byDept {
+		deptList[i] = models.FinesByDepartmentItem{
+			Department:        d.Department,
+			FineCount:         d.FineCount,
+			StudentsAffected:  d.StudentsAffected,
+			TotalFines:        d.TotalFines,
+			PaidAmount:        d.PaidAmount,
+			OutstandingAmount: d.OutstandingAmount,
+		}
+	}
+
+	// Build trends
+	trendList := make([]models.FinesCollectionTrend, len(trends))
+	for i, t := range trends {
+		trendList[i] = models.FinesCollectionTrend{
+			Period:      t.Period,
+			FineCount:   t.FineCount,
+			Generated:   t.Generated,
+			Collected:   t.Collected,
+			Outstanding: t.Outstanding,
+		}
+	}
+
+	// Build defaulters
+	defaulterList := make([]models.FineDefaulterItem, len(defaulters))
+	for i, d := range defaulters {
+		item := models.FineDefaulterItem{
+			StudentID:        d.StudentID,
+			StudentCode:      d.StudentCode,
+			YearOfStudy:      d.YearOfStudy,
+			FineCount:        d.FineCount,
+			TotalFines:       d.TotalFines,
+			OutstandingFines: d.OutstandingFines,
+		}
+		if d.StudentName != nil {
+			item.StudentName = fmt.Sprintf("%v", d.StudentName)
+		}
+		if d.Department.Valid {
+			item.Department = d.Department.String
+		}
+		if d.Email.Valid {
+			item.Email = d.Email.String
+		}
+		defaulterList[i] = item
+	}
+
+	// Build recent fines
+	finesList := make([]models.FinePaymentHistoryItem, len(recentFines))
+	for i, f := range recentFines {
+		// Convert pgtype.Numeric to string
+		fineAmount := "0.00"
+		if f.FineAmount.Valid {
+			fineAmount = f.FineAmount.Int.String()
+		}
+		// Convert pgtype.Bool to bool
+		finePaid := f.FinePaid.Valid && f.FinePaid.Bool
+		// Convert interface{} to int32
+		var daysOverdue int32
+		if f.DaysOverdue != nil {
+			switch v := f.DaysOverdue.(type) {
+			case int64:
+				daysOverdue = int32(v)
+			case int32:
+				daysOverdue = v
+			case float64:
+				daysOverdue = int32(v)
+			}
+		}
+		item := models.FinePaymentHistoryItem{
+			TransactionID: f.TransactionID,
+			FineAmount:    fineAmount,
+			FinePaid:      finePaid,
+			FineWaived:    f.FineWaived,
+			DaysOverdue:   daysOverdue,
+			StudentCode:   f.StudentCode,
+			BookCode:      f.BookCode,
+			BookTitle:     f.BookTitle,
+		}
+		if f.FinePaidAt.Valid {
+			paidAt := f.FinePaidAt.Time
+			item.FinePaidAt = &paidAt
+		}
+		if f.FineWaivedAt.Valid {
+			waivedAt := f.FineWaivedAt.Time
+			item.FineWaivedAt = &waivedAt
+		}
+		if f.FineWaivedReason.Valid {
+			item.FineWaivedReason = f.FineWaivedReason.String
+		}
+		if f.DueDate.Valid {
+			item.DueDate = f.DueDate.Time
+		}
+		if f.ReturnedDate.Valid {
+			returnedDate := f.ReturnedDate.Time
+			item.ReturnedDate = &returnedDate
+		}
+		if f.StudentName != nil {
+			item.StudentName = fmt.Sprintf("%v", f.StudentName)
+		}
+		if f.Department.Valid {
+			item.Department = f.Department.String
+		}
+		finesList[i] = item
+	}
+
+	return &models.FinesCollectionReport{
+		Summary:       reportSummary,
+		ByYearOfStudy: yearList,
+		ByDepartment:  deptList,
+		Trends:        trendList,
+		TopDefaulters: defaulterList,
+		RecentFines:   finesList,
+		GeneratedAt:   time.Now(),
+	}
 }

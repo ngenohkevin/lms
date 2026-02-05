@@ -138,6 +138,31 @@ func (m *MockReportService) GetDataVisualization(ctx context.Context, reportType
 	return args.Get(0).(*models.DataVisualizationReport), args.Error(1)
 }
 
+// New Report Methods - Individual Student, Lost Books, Fines Collection
+func (m *MockReportService) GetIndividualStudentReport(ctx context.Context, studentID int32, limit int32, startDate, endDate time.Time) (*models.IndividualStudentReport, error) {
+	args := m.Called(ctx, studentID, limit, startDate, endDate)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.IndividualStudentReport), args.Error(1)
+}
+
+func (m *MockReportService) GetLostBooksReport(ctx context.Context, startDate, endDate time.Time, department, genre *string, interval string) (*models.LostBooksReport, error) {
+	args := m.Called(ctx, startDate, endDate, department, genre, interval)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.LostBooksReport), args.Error(1)
+}
+
+func (m *MockReportService) GetFinesCollectionReport(ctx context.Context, startDate, endDate time.Time, interval string, paidOnly *bool, limit int32) (*models.FinesCollectionReport, error) {
+	args := m.Called(ctx, startDate, endDate, interval, paidOnly, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.FinesCollectionReport), args.Error(1)
+}
+
 // ReportHandlerTestSuite for comprehensive testing
 type ReportHandlerTestSuite struct {
 	suite.Suite

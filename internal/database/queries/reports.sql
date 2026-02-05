@@ -561,43 +561,43 @@ SELECT
     END as capacity_recommendation;
 
 -- name: GetRiskAnalysis :many
-SELECT 
+SELECT
     'overdue_books' as risk_category,
     COUNT(*)::int as risk_count,
-    CASE 
+    CASE
         WHEN COUNT(*) > 100 THEN 'High'
         WHEN COUNT(*) > 50 THEN 'Medium'
         ELSE 'Low'
     END as risk_level,
     COALESCE(SUM(fine_amount), 0)::text as financial_impact,
     'Books overdue for more than 7 days' as description
-FROM transactions 
-WHERE due_date < NOW() - INTERVAL '7 days' 
+FROM transactions
+WHERE due_date < NOW() - INTERVAL '7 days'
 AND returned_date IS NULL
 
 UNION ALL
 
-SELECT 
+SELECT
     'students_with_multiple_overdue' as risk_category,
     COUNT(DISTINCT student_id)::int as risk_count,
-    CASE 
+    CASE
         WHEN COUNT(DISTINCT student_id) > 20 THEN 'High'
         WHEN COUNT(DISTINCT student_id) > 10 THEN 'Medium'
         ELSE 'Low'
     END as risk_level,
     COALESCE(SUM(fine_amount), 0)::text as financial_impact,
     'Students with 3+ overdue books' as description
-FROM transactions 
+FROM transactions
 WHERE due_date < NOW() AND returned_date IS NULL
 GROUP BY student_id
 HAVING COUNT(*) >= 3
 
 UNION ALL
 
-SELECT 
+SELECT
     'high_demand_books_low_copies' as risk_category,
     COUNT(*)::int as risk_count,
-    CASE 
+    CASE
         WHEN COUNT(*) > 10 THEN 'High'
         WHEN COUNT(*) > 5 THEN 'Medium'
         ELSE 'Low'
@@ -608,7 +608,7 @@ FROM (
     SELECT b.id
     FROM books b
     WHERE (
-        SELECT COUNT(*) FROM reservations r 
+        SELECT COUNT(*) FROM reservations r
         WHERE r.book_id = b.id AND r.status = 'active' AND r.expires_at > NOW()
     ) >= b.total_copies * 0.5
     AND b.total_copies < 5
@@ -618,23 +618,337 @@ FROM (
 
 UNION ALL
 
-SELECT 
+SELECT
     'unpaid_fines' as risk_category,
     COUNT(DISTINCT student_id)::int as risk_count,
-    CASE 
+    CASE
         WHEN COALESCE(SUM(fine_amount), 0) > 1000 THEN 'High'
         WHEN COALESCE(SUM(fine_amount), 0) > 500 THEN 'Medium'
         ELSE 'Low'
     END as risk_level,
     COALESCE(SUM(fine_amount), 0)::text as financial_impact,
     'Outstanding unpaid fines' as description
-FROM transactions 
+FROM transactions
 WHERE fine_amount > 0 AND fine_paid = false
 
-ORDER BY 
-    CASE risk_level 
-        WHEN 'High' THEN 1 
-        WHEN 'Medium' THEN 2 
-        ELSE 3 
+ORDER BY
+    CASE risk_level
+        WHEN 'High' THEN 1
+        WHEN 'Medium' THEN 2
+        ELSE 3
     END,
     risk_count DESC;
+
+-- ============================================
+-- Individual Student Report Queries
+-- ============================================
+
+-- name: GetIndividualStudentProfile :one
+SELECT
+    s.id,
+    s.student_id,
+    s.first_name,
+    s.last_name,
+    s.email,
+    s.phone,
+    s.year_of_study,
+    s.department,
+    s.max_books,
+    s.is_active,
+    s.created_at as member_since,
+    (SELECT COUNT(*) FROM transactions WHERE student_id = s.id AND transaction_type = 'borrow')::int as total_books_borrowed,
+    (SELECT COUNT(*) FROM transactions WHERE student_id = s.id AND returned_date IS NULL)::int as currently_borrowed,
+    (SELECT COUNT(*) FROM transactions WHERE student_id = s.id AND due_date < NOW() AND returned_date IS NULL)::int as overdue_count,
+    COALESCE((SELECT SUM(fine_amount) FROM transactions WHERE student_id = s.id AND fine_paid = false AND COALESCE(fine_waived, false) = false), 0)::text as outstanding_fines,
+    COALESCE((SELECT SUM(fine_amount) FROM transactions WHERE student_id = s.id AND fine_paid = true), 0)::text as total_fines_paid
+FROM students s
+WHERE s.id = $1 AND s.deleted_at IS NULL;
+
+-- name: GetStudentTransactionHistory :many
+SELECT
+    t.id as transaction_id,
+    t.transaction_type,
+    t.transaction_date,
+    t.due_date,
+    t.returned_date,
+    t.fine_amount,
+    t.fine_paid,
+    t.renewal_count,
+    b.book_id as book_code,
+    b.title as book_title,
+    b.author as book_author,
+    b.genre,
+    CASE
+        WHEN t.returned_date IS NULL AND t.due_date < NOW() THEN 'overdue'
+        WHEN t.returned_date IS NULL THEN 'borrowed'
+        WHEN t.transaction_type = 'lost' THEN 'lost'
+        ELSE 'returned'
+    END as status,
+    CASE
+        WHEN t.returned_date IS NULL AND t.due_date < NOW() THEN
+            EXTRACT(DAY FROM (NOW() - t.due_date))::int
+        ELSE 0
+    END as days_overdue
+FROM transactions t
+INNER JOIN books b ON t.book_id = b.id
+WHERE t.student_id = $1
+    AND b.deleted_at IS NULL
+ORDER BY t.transaction_date DESC
+LIMIT $2 OFFSET $3;
+
+-- name: GetStudentReadingStats :many
+SELECT
+    COALESCE(b.genre, 'Uncategorized') as genre,
+    COUNT(t.id)::int as books_read,
+    COALESCE(AVG(EXTRACT(DAY FROM (t.returned_date - t.transaction_date))), 0)::int as avg_days_held
+FROM transactions t
+INNER JOIN books b ON t.book_id = b.id
+WHERE t.student_id = $1
+    AND t.transaction_type = 'borrow'
+    AND b.deleted_at IS NULL
+GROUP BY b.genre
+ORDER BY books_read DESC;
+
+-- name: GetStudentMonthlyActivity :many
+SELECT
+    TO_CHAR(DATE_TRUNC('month', t.transaction_date), 'YYYY-MM') as month,
+    COUNT(CASE WHEN t.transaction_type = 'borrow' THEN 1 END)::int as borrowed,
+    COUNT(CASE WHEN t.returned_date IS NOT NULL THEN 1 END)::int as returned,
+    COALESCE(SUM(t.fine_amount), 0)::text as fines_incurred
+FROM transactions t
+WHERE t.student_id = $1
+    AND t.transaction_date >= $2::timestamp
+    AND t.transaction_date <= $3::timestamp
+GROUP BY DATE_TRUNC('month', t.transaction_date)
+ORDER BY month;
+
+-- ============================================
+-- Lost Books Report Queries
+-- ============================================
+
+-- name: GetLostBooksReport :many
+SELECT
+    t.id as transaction_id,
+    t.transaction_date as lost_date,
+    t.fine_amount as replacement_cost,
+    t.fine_paid,
+    t.notes,
+    s.student_id as student_code,
+    CONCAT(s.first_name, ' ', s.last_name) as student_name,
+    s.year_of_study,
+    s.department,
+    b.book_id as book_code,
+    b.title as book_title,
+    b.author as book_author,
+    b.genre,
+    b.isbn,
+    COALESCE(b.price, 0)::text as original_price
+FROM transactions t
+INNER JOIN students s ON t.student_id = s.id
+INNER JOIN books b ON t.book_id = b.id
+WHERE t.transaction_type = 'lost'
+    AND s.deleted_at IS NULL
+    AND b.deleted_at IS NULL
+    AND ($1::timestamp IS NULL OR t.transaction_date >= $1::timestamp)
+    AND ($2::timestamp IS NULL OR t.transaction_date <= $2::timestamp)
+    AND ($3::text IS NULL OR $3 = '' OR s.department = $3::text)
+    AND ($4::text IS NULL OR $4 = '' OR b.genre = $4::text)
+ORDER BY t.transaction_date DESC;
+
+-- name: GetLostBooksSummary :one
+SELECT
+    COUNT(*)::int as total_lost_books,
+    COALESCE(SUM(t.fine_amount), 0)::text as total_replacement_value,
+    COALESCE(SUM(CASE WHEN t.fine_paid = true THEN t.fine_amount ELSE 0 END), 0)::text as collected_amount,
+    COALESCE(SUM(CASE WHEN t.fine_paid = false THEN t.fine_amount ELSE 0 END), 0)::text as outstanding_amount,
+    COUNT(DISTINCT t.student_id)::int as students_affected,
+    COUNT(DISTINCT b.genre)::int as genres_affected
+FROM transactions t
+INNER JOIN students s ON t.student_id = s.id
+INNER JOIN books b ON t.book_id = b.id
+WHERE t.transaction_type = 'lost'
+    AND s.deleted_at IS NULL
+    AND b.deleted_at IS NULL
+    AND ($1::timestamp IS NULL OR t.transaction_date >= $1::timestamp)
+    AND ($2::timestamp IS NULL OR t.transaction_date <= $2::timestamp);
+
+-- name: GetLostBooksTrend :many
+SELECT
+    TO_CHAR(DATE_TRUNC($3::text, t.transaction_date),
+        CASE
+            WHEN $3::text = 'day' THEN 'YYYY-MM-DD'
+            WHEN $3::text = 'week' THEN 'YYYY-"W"IW'
+            WHEN $3::text = 'month' THEN 'YYYY-MM'
+            WHEN $3::text = 'year' THEN 'YYYY'
+            ELSE 'YYYY-MM'
+        END
+    ) as period,
+    COUNT(*)::int as lost_count,
+    COALESCE(SUM(t.fine_amount), 0)::text as replacement_value
+FROM transactions t
+INNER JOIN students s ON t.student_id = s.id
+WHERE t.transaction_type = 'lost'
+    AND s.deleted_at IS NULL
+    AND t.transaction_date >= $1::timestamp
+    AND t.transaction_date <= $2::timestamp
+GROUP BY DATE_TRUNC($3::text, t.transaction_date)
+ORDER BY period;
+
+-- name: GetLostBooksByCategory :many
+SELECT
+    COALESCE(b.genre, 'Uncategorized') as genre,
+    COUNT(*)::int as lost_count,
+    COALESCE(SUM(t.fine_amount), 0)::text as total_value,
+    COALESCE(AVG(t.fine_amount), 0)::text as avg_value
+FROM transactions t
+INNER JOIN books b ON t.book_id = b.id
+WHERE t.transaction_type = 'lost'
+    AND b.deleted_at IS NULL
+    AND ($1::timestamp IS NULL OR t.transaction_date >= $1::timestamp)
+    AND ($2::timestamp IS NULL OR t.transaction_date <= $2::timestamp)
+GROUP BY b.genre
+ORDER BY lost_count DESC;
+
+-- name: GetLostBooksByDepartment :many
+SELECT
+    COALESCE(s.department, 'Unknown') as department,
+    COUNT(*)::int as lost_count,
+    COALESCE(SUM(t.fine_amount), 0)::text as total_value,
+    COUNT(DISTINCT s.id)::int as students_affected
+FROM transactions t
+INNER JOIN students s ON t.student_id = s.id
+WHERE t.transaction_type = 'lost'
+    AND s.deleted_at IS NULL
+    AND ($1::timestamp IS NULL OR t.transaction_date >= $1::timestamp)
+    AND ($2::timestamp IS NULL OR t.transaction_date <= $2::timestamp)
+GROUP BY s.department
+ORDER BY lost_count DESC;
+
+-- ============================================
+-- Fines Collection Report Queries
+-- ============================================
+
+-- name: GetFinesCollectionSummary :one
+SELECT
+    COUNT(*) FILTER (WHERE t.fine_amount > 0)::int as total_fine_records,
+    COUNT(DISTINCT t.student_id) FILTER (WHERE t.fine_amount > 0 AND t.fine_paid = false AND COALESCE(t.fine_waived, false) = false)::int as students_with_outstanding,
+    COALESCE(SUM(t.fine_amount), 0)::text as total_fines_generated,
+    COALESCE(SUM(CASE WHEN t.fine_paid = true AND COALESCE(t.fine_waived, false) = false THEN t.fine_amount ELSE 0 END), 0)::text as total_collected,
+    COALESCE(SUM(CASE WHEN t.fine_paid = false AND COALESCE(t.fine_waived, false) = false THEN t.fine_amount ELSE 0 END), 0)::text as total_outstanding,
+    COALESCE(SUM(CASE WHEN COALESCE(t.fine_waived, false) = true THEN t.fine_amount ELSE 0 END), 0)::text as total_waived,
+    COALESCE(AVG(t.fine_amount) FILTER (WHERE t.fine_amount > 0), 0)::text as average_fine
+FROM transactions t
+INNER JOIN students s ON t.student_id = s.id
+WHERE s.deleted_at IS NULL
+    AND ($1::timestamp IS NULL OR t.transaction_date >= $1::timestamp)
+    AND ($2::timestamp IS NULL OR t.transaction_date <= $2::timestamp);
+
+-- name: GetFinesByYearOfStudy :many
+SELECT
+    s.year_of_study,
+    COUNT(*)::int as fine_count,
+    COUNT(DISTINCT s.id)::int as students_affected,
+    COALESCE(SUM(t.fine_amount), 0)::text as total_fines,
+    COALESCE(SUM(CASE WHEN t.fine_paid = true THEN t.fine_amount ELSE 0 END), 0)::text as paid_amount,
+    COALESCE(SUM(CASE WHEN t.fine_paid = false THEN t.fine_amount ELSE 0 END), 0)::text as outstanding_amount
+FROM transactions t
+INNER JOIN students s ON t.student_id = s.id
+WHERE t.fine_amount > 0
+    AND s.deleted_at IS NULL
+    AND ($1::timestamp IS NULL OR t.transaction_date >= $1::timestamp)
+    AND ($2::timestamp IS NULL OR t.transaction_date <= $2::timestamp)
+GROUP BY s.year_of_study
+ORDER BY s.year_of_study;
+
+-- name: GetFinesByDepartment :many
+SELECT
+    COALESCE(s.department, 'Unknown') as department,
+    COUNT(*)::int as fine_count,
+    COUNT(DISTINCT s.id)::int as students_affected,
+    COALESCE(SUM(t.fine_amount), 0)::text as total_fines,
+    COALESCE(SUM(CASE WHEN t.fine_paid = true THEN t.fine_amount ELSE 0 END), 0)::text as paid_amount,
+    COALESCE(SUM(CASE WHEN t.fine_paid = false THEN t.fine_amount ELSE 0 END), 0)::text as outstanding_amount
+FROM transactions t
+INNER JOIN students s ON t.student_id = s.id
+WHERE t.fine_amount > 0
+    AND s.deleted_at IS NULL
+    AND ($1::timestamp IS NULL OR t.transaction_date >= $1::timestamp)
+    AND ($2::timestamp IS NULL OR t.transaction_date <= $2::timestamp)
+GROUP BY s.department
+ORDER BY total_fines DESC;
+
+-- name: GetFinesCollectionTrend :many
+SELECT
+    TO_CHAR(DATE_TRUNC($3::text, t.transaction_date),
+        CASE
+            WHEN $3::text = 'day' THEN 'YYYY-MM-DD'
+            WHEN $3::text = 'week' THEN 'YYYY-"W"IW'
+            WHEN $3::text = 'month' THEN 'YYYY-MM'
+            WHEN $3::text = 'year' THEN 'YYYY'
+            ELSE 'YYYY-MM'
+        END
+    ) as period,
+    COUNT(*)::int as fine_count,
+    COALESCE(SUM(t.fine_amount), 0)::text as generated,
+    COALESCE(SUM(CASE WHEN t.fine_paid = true THEN t.fine_amount ELSE 0 END), 0)::text as collected,
+    COALESCE(SUM(CASE WHEN t.fine_paid = false THEN t.fine_amount ELSE 0 END), 0)::text as outstanding
+FROM transactions t
+INNER JOIN students s ON t.student_id = s.id
+WHERE t.fine_amount > 0
+    AND s.deleted_at IS NULL
+    AND t.transaction_date >= $1::timestamp
+    AND t.transaction_date <= $2::timestamp
+GROUP BY DATE_TRUNC($3::text, t.transaction_date)
+ORDER BY period;
+
+-- name: GetFinePaymentHistory :many
+SELECT
+    t.id as transaction_id,
+    t.fine_amount,
+    t.fine_paid,
+    t.fine_paid_at,
+    COALESCE(t.fine_waived, false) as fine_waived,
+    t.fine_waived_at,
+    t.fine_waived_reason,
+    t.due_date,
+    t.returned_date,
+    GREATEST(EXTRACT(DAY FROM (COALESCE(t.returned_date, NOW()) - t.due_date))::int, 0) as days_overdue,
+    s.student_id as student_code,
+    CONCAT(s.first_name, ' ', s.last_name) as student_name,
+    s.department,
+    b.book_id as book_code,
+    b.title as book_title
+FROM transactions t
+INNER JOIN students s ON t.student_id = s.id
+INNER JOIN books b ON t.book_id = b.id
+WHERE t.fine_amount > 0
+    AND s.deleted_at IS NULL
+    AND b.deleted_at IS NULL
+    AND ($1::timestamp IS NULL OR t.transaction_date >= $1::timestamp)
+    AND ($2::timestamp IS NULL OR t.transaction_date <= $2::timestamp)
+    AND ($3::bool IS NULL OR t.fine_paid = $3::bool)
+ORDER BY
+    CASE WHEN t.fine_paid = false THEN 0 ELSE 1 END,
+    t.fine_amount DESC
+LIMIT $4 OFFSET $5;
+
+-- name: GetTopFineDefaulters :many
+SELECT
+    s.id as student_id,
+    s.student_id as student_code,
+    CONCAT(s.first_name, ' ', s.last_name) as student_name,
+    s.year_of_study,
+    s.department,
+    s.email,
+    COUNT(t.id)::int as fine_count,
+    COALESCE(SUM(t.fine_amount), 0)::text as total_fines,
+    COALESCE(SUM(CASE WHEN t.fine_paid = false THEN t.fine_amount ELSE 0 END), 0)::text as outstanding_fines
+FROM students s
+INNER JOIN transactions t ON s.id = t.student_id
+WHERE t.fine_amount > 0
+    AND t.fine_paid = false
+    AND COALESCE(t.fine_waived, false) = false
+    AND s.deleted_at IS NULL
+GROUP BY s.id, s.student_id, s.first_name, s.last_name, s.year_of_study, s.department, s.email
+ORDER BY outstanding_fines DESC
+LIMIT $1;

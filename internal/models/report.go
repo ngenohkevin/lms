@@ -665,3 +665,258 @@ type DataVisualizationRequest struct {
 	Title      string                 `json:"title,omitempty"`
 	Colors     []string               `json:"colors,omitempty"`
 }
+
+// ============================================
+// Individual Student Report Models
+// ============================================
+
+// IndividualStudentReport represents a comprehensive report for a single student
+type IndividualStudentReport struct {
+	Profile          StudentProfile           `json:"profile"`
+	TransactionStats TransactionStats         `json:"transaction_stats"`
+	FinesSummary     StudentFinesSummary      `json:"fines_summary"`
+	ReadingStats     []ReadingStatsByGenre    `json:"reading_stats"`
+	MonthlyActivity  []MonthlyActivityData    `json:"monthly_activity"`
+	RecentHistory    []TransactionHistoryItem `json:"recent_history"`
+	GeneratedAt      time.Time                `json:"generated_at"`
+}
+
+// StudentProfile represents the student's profile information
+type StudentProfile struct {
+	ID          int32     `json:"id"`
+	StudentID   string    `json:"student_id"`
+	FirstName   string    `json:"first_name"`
+	LastName    string    `json:"last_name"`
+	Email       string    `json:"email"`
+	Phone       string    `json:"phone"`
+	YearOfStudy int32     `json:"year_of_study"`
+	Department  string    `json:"department"`
+	MaxBooks    int32     `json:"max_books"`
+	IsActive    bool      `json:"is_active"`
+	MemberSince time.Time `json:"member_since"`
+}
+
+// TransactionStats represents borrowing statistics for a student
+type TransactionStats struct {
+	TotalBooksBorrowed int32 `json:"total_books_borrowed"`
+	CurrentlyBorrowed  int32 `json:"currently_borrowed"`
+	OverdueCount       int32 `json:"overdue_count"`
+}
+
+// StudentFinesSummary represents fine statistics for a student
+type StudentFinesSummary struct {
+	OutstandingFines string `json:"outstanding_fines"`
+	TotalFinesPaid   string `json:"total_fines_paid"`
+}
+
+// ReadingStatsByGenre represents reading statistics by genre
+type ReadingStatsByGenre struct {
+	Genre       string `json:"genre"`
+	BooksRead   int32  `json:"books_read"`
+	AvgDaysHeld int32  `json:"avg_days_held"`
+}
+
+// MonthlyActivityData represents monthly borrowing activity
+type MonthlyActivityData struct {
+	Month         string `json:"month"`
+	Borrowed      int32  `json:"borrowed"`
+	Returned      int32  `json:"returned"`
+	FinesIncurred string `json:"fines_incurred"`
+}
+
+// TransactionHistoryItem represents a single transaction in history
+type TransactionHistoryItem struct {
+	TransactionID   int32      `json:"transaction_id"`
+	TransactionType string     `json:"transaction_type"`
+	TransactionDate time.Time  `json:"transaction_date"`
+	DueDate         time.Time  `json:"due_date"`
+	ReturnedDate    *time.Time `json:"returned_date,omitempty"`
+	FineAmount      string     `json:"fine_amount"`
+	FinePaid        bool       `json:"fine_paid"`
+	RenewalCount    int32      `json:"renewal_count"`
+	BookCode        string     `json:"book_code"`
+	BookTitle       string     `json:"book_title"`
+	BookAuthor      string     `json:"book_author"`
+	Genre           string     `json:"genre"`
+	Status          string     `json:"status"`
+	DaysOverdue     int32      `json:"days_overdue"`
+}
+
+// IndividualStudentReportRequest represents request for individual student report
+type IndividualStudentReportRequest struct {
+	Limit     int32     `json:"limit,omitempty"`
+	StartDate time.Time `json:"start_date,omitempty"`
+	EndDate   time.Time `json:"end_date,omitempty"`
+}
+
+// ============================================
+// Lost Books Report Models
+// ============================================
+
+// LostBooksReport represents a comprehensive lost books report
+type LostBooksReport struct {
+	LostBooks    []LostBookDetail        `json:"lost_books"`
+	Summary      LostBooksSummary        `json:"summary"`
+	Trends       []LostBooksTrendItem    `json:"trends"`
+	ByCategory   []LostBooksByCategory   `json:"by_category"`
+	ByDepartment []LostBooksByDepartment `json:"by_department"`
+	GeneratedAt  time.Time               `json:"generated_at"`
+}
+
+// LostBookDetail represents details of a lost book
+type LostBookDetail struct {
+	TransactionID   int32     `json:"transaction_id"`
+	LostDate        time.Time `json:"lost_date"`
+	ReplacementCost string    `json:"replacement_cost"`
+	FinePaid        bool      `json:"fine_paid"`
+	Notes           string    `json:"notes"`
+	StudentCode     string    `json:"student_code"`
+	StudentName     string    `json:"student_name"`
+	YearOfStudy     int32     `json:"year_of_study"`
+	Department      string    `json:"department"`
+	BookCode        string    `json:"book_code"`
+	BookTitle       string    `json:"book_title"`
+	BookAuthor      string    `json:"book_author"`
+	Genre           string    `json:"genre"`
+	ISBN            string    `json:"isbn"`
+	OriginalPrice   string    `json:"original_price"`
+}
+
+// LostBooksSummary represents summary statistics for lost books
+type LostBooksSummary struct {
+	TotalLostBooks        int32  `json:"total_lost_books"`
+	TotalReplacementValue string `json:"total_replacement_value"`
+	CollectedAmount       string `json:"collected_amount"`
+	OutstandingAmount     string `json:"outstanding_amount"`
+	StudentsAffected      int32  `json:"students_affected"`
+	GenresAffected        int32  `json:"genres_affected"`
+}
+
+// LostBooksTrendItem represents a trend data point for lost books
+type LostBooksTrendItem struct {
+	Period           string `json:"period"`
+	LostCount        int32  `json:"lost_count"`
+	ReplacementValue string `json:"replacement_value"`
+}
+
+// LostBooksByCategory represents lost books grouped by category/genre
+type LostBooksByCategory struct {
+	Genre      string `json:"genre"`
+	LostCount  int32  `json:"lost_count"`
+	TotalValue string `json:"total_value"`
+	AvgValue   string `json:"avg_value"`
+}
+
+// LostBooksByDepartment represents lost books grouped by department
+type LostBooksByDepartment struct {
+	Department       string `json:"department"`
+	LostCount        int32  `json:"lost_count"`
+	TotalValue       string `json:"total_value"`
+	StudentsAffected int32  `json:"students_affected"`
+}
+
+// LostBooksReportRequest represents request for lost books report
+type LostBooksReportRequest struct {
+	StartDate  time.Time `json:"start_date,omitempty"`
+	EndDate    time.Time `json:"end_date,omitempty"`
+	Department *string   `json:"department,omitempty"`
+	Genre      *string   `json:"genre,omitempty"`
+	Interval   string    `json:"interval,omitempty"` // day, week, month, year
+}
+
+// ============================================
+// Fines Collection Report Models
+// ============================================
+
+// FinesCollectionReport represents a comprehensive fines collection report
+type FinesCollectionReport struct {
+	Summary       FinesCollectionSummary   `json:"summary"`
+	ByYearOfStudy []FinesByYearItem        `json:"by_year_of_study"`
+	ByDepartment  []FinesByDepartmentItem  `json:"by_department"`
+	Trends        []FinesCollectionTrend   `json:"trends"`
+	TopDefaulters []FineDefaulterItem      `json:"top_defaulters"`
+	RecentFines   []FinePaymentHistoryItem `json:"recent_fines"`
+	GeneratedAt   time.Time                `json:"generated_at"`
+}
+
+// FinesCollectionSummary represents overall fines summary
+type FinesCollectionSummary struct {
+	TotalFineRecords        int32  `json:"total_fine_records"`
+	StudentsWithOutstanding int32  `json:"students_with_outstanding"`
+	TotalFinesGenerated     string `json:"total_fines_generated"`
+	TotalCollected          string `json:"total_collected"`
+	TotalOutstanding        string `json:"total_outstanding"`
+	TotalWaived             string `json:"total_waived"`
+	AverageFine             string `json:"average_fine"`
+	CollectionRate          string `json:"collection_rate"`
+}
+
+// FinesByYearItem represents fines grouped by year of study
+type FinesByYearItem struct {
+	YearOfStudy       int32  `json:"year_of_study"`
+	FineCount         int32  `json:"fine_count"`
+	StudentsAffected  int32  `json:"students_affected"`
+	TotalFines        string `json:"total_fines"`
+	PaidAmount        string `json:"paid_amount"`
+	OutstandingAmount string `json:"outstanding_amount"`
+}
+
+// FinesByDepartmentItem represents fines grouped by department
+type FinesByDepartmentItem struct {
+	Department        string `json:"department"`
+	FineCount         int32  `json:"fine_count"`
+	StudentsAffected  int32  `json:"students_affected"`
+	TotalFines        string `json:"total_fines"`
+	PaidAmount        string `json:"paid_amount"`
+	OutstandingAmount string `json:"outstanding_amount"`
+}
+
+// FinesCollectionTrend represents fines trend over time
+type FinesCollectionTrend struct {
+	Period      string `json:"period"`
+	FineCount   int32  `json:"fine_count"`
+	Generated   string `json:"generated"`
+	Collected   string `json:"collected"`
+	Outstanding string `json:"outstanding"`
+}
+
+// FineDefaulterItem represents a student with outstanding fines
+type FineDefaulterItem struct {
+	StudentID        int32  `json:"student_id"`
+	StudentCode      string `json:"student_code"`
+	StudentName      string `json:"student_name"`
+	YearOfStudy      int32  `json:"year_of_study"`
+	Department       string `json:"department"`
+	Email            string `json:"email"`
+	FineCount        int32  `json:"fine_count"`
+	TotalFines       string `json:"total_fines"`
+	OutstandingFines string `json:"outstanding_fines"`
+}
+
+// FinePaymentHistoryItem represents a single fine record
+type FinePaymentHistoryItem struct {
+	TransactionID    int32      `json:"transaction_id"`
+	FineAmount       string     `json:"fine_amount"`
+	FinePaid         bool       `json:"fine_paid"`
+	FinePaidAt       *time.Time `json:"fine_paid_at,omitempty"`
+	FineWaived       bool       `json:"fine_waived"`
+	FineWaivedAt     *time.Time `json:"fine_waived_at,omitempty"`
+	FineWaivedReason string     `json:"fine_waived_reason"`
+	DueDate          time.Time  `json:"due_date"`
+	ReturnedDate     *time.Time `json:"returned_date,omitempty"`
+	DaysOverdue      int32      `json:"days_overdue"`
+	StudentCode      string     `json:"student_code"`
+	StudentName      string     `json:"student_name"`
+	Department       string     `json:"department"`
+	BookCode         string     `json:"book_code"`
+	BookTitle        string     `json:"book_title"`
+}
+
+// FinesCollectionReportRequest represents request for fines collection report
+type FinesCollectionReportRequest struct {
+	StartDate time.Time `json:"start_date,omitempty"`
+	EndDate   time.Time `json:"end_date,omitempty"`
+	Interval  string    `json:"interval,omitempty"` // day, week, month, year
+	PaidOnly  *bool     `json:"paid_only,omitempty"`
+	Limit     int32     `json:"limit,omitempty"`
+}

@@ -44,6 +44,11 @@ type ReportService interface {
 	GetCapacityPlanningAnalysis(ctx context.Context) (*models.CapacityPlanningReport, error)
 	GetRiskAnalysis(ctx context.Context) (*models.RiskAnalysisReport, error)
 	GetDataVisualization(ctx context.Context, reportType, chartType string, parameters map[string]interface{}, title string, colors []string) (*models.DataVisualizationReport, error)
+
+	// New Report Methods - Individual Student, Lost Books, Fines Collection
+	GetIndividualStudentReport(ctx context.Context, studentID int32, limit int32, startDate, endDate time.Time) (*models.IndividualStudentReport, error)
+	GetLostBooksReport(ctx context.Context, startDate, endDate time.Time, department, genre *string, interval string) (*models.LostBooksReport, error)
+	GetFinesCollectionReport(ctx context.Context, startDate, endDate time.Time, interval string, paidOnly *bool, limit int32) (*models.FinesCollectionReport, error)
 }
 
 // ReportHandler handles all report-related HTTP requests
@@ -95,6 +100,11 @@ func (rh *ReportHandler) RegisterRoutes(router *gin.RouterGroup, permMiddleware 
 
 		// Dashboard metrics
 		reports.GET("/dashboard-metrics", requirePerm("reports.view"), rh.GetDashboardMetrics)
+
+		// New Report Types - Individual Student, Lost Books, Fines Collection
+		reports.GET("/individual-student/:id", requirePerm("reports.view"), rh.GetIndividualStudentReport)
+		reports.POST("/lost-books", requirePerm("reports.view"), rh.GetLostBooksReport)
+		reports.POST("/fines-collection", requirePerm("reports.view"), rh.GetFinesCollectionReport)
 
 		// Export functionality requires reports.export permission
 		reports.POST("/export", requirePerm("reports.export"), rh.ExportReport)
@@ -1637,4 +1647,217 @@ func extractStudentActivityParams(params map[string]interface{}) (limit int32, s
 
 func extractInventoryParams(_ map[string]interface{}) {
 	// No special parameters needed for inventory status
+}
+
+// ============================================
+// New Report Handlers - Individual Student, Lost Books, Fines Collection
+// ============================================
+
+// GetIndividualStudentReport generates a comprehensive report for a single student
+func (rh *ReportHandler) GetIndividualStudentReport(c *gin.Context) {
+	// Parse student ID from URL
+	studentIDStr := c.Param("id")
+	studentID, err := strconv.ParseInt(studentIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid student ID",
+				Details: "Student ID must be a valid integer",
+			},
+		})
+		return
+	}
+
+	// Parse optional limit from query params (defaults to 50)
+	limit := int32(50)
+	if limitStr := c.Query("limit"); limitStr != "" {
+		parsedLimit, err := strconv.ParseInt(limitStr, 10, 32)
+		if err == nil && parsedLimit > 0 && parsedLimit <= 100 {
+			limit = int32(parsedLimit)
+		}
+	}
+
+	// Parse optional date range from query params (defaults to last year)
+	var startDate, endDate time.Time
+	if startStr := c.Query("start_date"); startStr != "" {
+		startDate, _ = time.Parse("2006-01-02", startStr)
+	}
+	if endStr := c.Query("end_date"); endStr != "" {
+		endDate, _ = time.Parse("2006-01-02", endStr)
+	}
+	if startDate.IsZero() {
+		startDate = time.Now().AddDate(-1, 0, 0)
+	}
+	if endDate.IsZero() {
+		endDate = time.Now()
+	}
+
+	report, err := rh.reportService.GetIndividualStudentReport(c.Request.Context(), int32(studentID), limit, startDate, endDate)
+	if err != nil {
+		if strings.Contains(err.Error(), "no rows") {
+			c.JSON(http.StatusNotFound, ErrorResponse{
+				Success: false,
+				Error: ErrorDetail{
+					Code:    "NOT_FOUND",
+					Message: "Student not found",
+					Details: fmt.Sprintf("No student found with ID %d", studentID),
+				},
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "REPORT_ERROR",
+				Message: "Failed to generate individual student report",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Message: "Individual student report generated successfully",
+		Data:    report,
+	})
+}
+
+// GetLostBooksReport generates a comprehensive lost books report
+func (rh *ReportHandler) GetLostBooksReport(c *gin.Context) {
+	var req models.LostBooksReportRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid request payload",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	// Set defaults for dates if not provided
+	startDate := req.StartDate
+	endDate := req.EndDate
+	if startDate.IsZero() {
+		startDate = time.Now().AddDate(-1, 0, 0) // Default to last year
+	}
+	if endDate.IsZero() {
+		endDate = time.Now()
+	}
+
+	// Validate date range
+	if startDate.After(endDate) {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid date range",
+				Details: "Start date cannot be after end date",
+			},
+		})
+		return
+	}
+
+	// Set default interval
+	interval := req.Interval
+	if interval == "" {
+		interval = "month"
+	}
+
+	report, err := rh.reportService.GetLostBooksReport(c.Request.Context(), startDate, endDate, req.Department, req.Genre, interval)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "REPORT_ERROR",
+				Message: "Failed to generate lost books report",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Message: "Lost books report generated successfully",
+		Data:    report,
+	})
+}
+
+// GetFinesCollectionReport generates a comprehensive fines collection report
+func (rh *ReportHandler) GetFinesCollectionReport(c *gin.Context) {
+	var req models.FinesCollectionReportRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid request payload",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	// Set defaults for dates if not provided
+	startDate := req.StartDate
+	endDate := req.EndDate
+	if startDate.IsZero() {
+		startDate = time.Now().AddDate(-1, 0, 0) // Default to last year
+	}
+	if endDate.IsZero() {
+		endDate = time.Now()
+	}
+
+	// Validate date range
+	if startDate.After(endDate) {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid date range",
+				Details: "Start date cannot be after end date",
+			},
+		})
+		return
+	}
+
+	// Set default interval
+	interval := req.Interval
+	if interval == "" {
+		interval = "month"
+	}
+
+	// Set default limit
+	limit := req.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	report, err := rh.reportService.GetFinesCollectionReport(c.Request.Context(), startDate, endDate, interval, req.PaidOnly, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "REPORT_ERROR",
+				Message: "Failed to generate fines collection report",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Message: "Fines collection report generated successfully",
+		Data:    report,
+	})
 }
