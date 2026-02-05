@@ -119,4 +119,10 @@ type TransactionHistoryResponse struct {
 	BookTitle       string          `json:"book_title"`
 	BookAuthor      string          `json:"book_author"`
 	BookIDCode      string          `json:"book_id_code"`
+	Status          string          `json:"status,omitempty"`
+	Notes           string          `json:"notes,omitempty"`
+	RenewalCount    int32           `json:"renewal_count"`
+	LastRenewedAt   *time.Time      `json:"last_renewed_at,omitempty"`
+	LastRenewedBy   *int32          `json:"last_renewed_by,omitempty"`
+	CopyID          *int32          `json:"copy_id,omitempty"`
 }

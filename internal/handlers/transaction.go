@@ -760,10 +760,33 @@ func convertToTransactionHistoryResponse(tx queries.ListTransactionsByStudentRow
 		BookTitle:       tx.Title,
 		BookAuthor:      tx.Author,
 		BookIDCode:      tx.BookID_2,
+		RenewalCount:    tx.RenewalCount.Int32,
 	}
 
 	if tx.ReturnedDate.Valid {
 		response.ReturnedDate = &tx.ReturnedDate.Time
+	}
+
+	if tx.Status.Valid {
+		response.Status = tx.Status.String
+	}
+
+	if tx.Notes.Valid {
+		response.Notes = tx.Notes.String
+	}
+
+	if tx.LastRenewedAt.Valid {
+		response.LastRenewedAt = &tx.LastRenewedAt.Time
+	}
+
+	if tx.LastRenewedBy.Valid {
+		renewedBy := tx.LastRenewedBy.Int32
+		response.LastRenewedBy = &renewedBy
+	}
+
+	if tx.CopyID.Valid {
+		copyID := tx.CopyID.Int32
+		response.CopyID = &copyID
 	}
 
 	return response
