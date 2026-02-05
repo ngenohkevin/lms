@@ -72,10 +72,16 @@ type TransactionQuerier interface {
 	DeleteTransaction(ctx context.Context, id int32) error
 }
 
+// CacheInvalidator defines the interface for cache invalidation
+type CacheInvalidator interface {
+	InvalidateStudentProfile(ctx context.Context, studentID int) error
+}
+
 // TransactionService handles all business logic related to book transactions
 type TransactionService struct {
 	queries         TransactionQuerier
 	pool            *pgxpool.Pool // Database pool for transaction support
+	cacheService    CacheInvalidator
 	defaultLoanDays int
 	finePerDay      decimal.Decimal
 	lostBookFine    decimal.Decimal // Default fine for lost books
@@ -123,6 +129,21 @@ func (s *TransactionService) WithFinePerDay(fine decimal.Decimal) *TransactionSe
 func (s *TransactionService) WithMaxRenewals(maxRenewals int) *TransactionService {
 	s.maxRenewals = maxRenewals
 	return s
+}
+
+// WithCacheService sets the cache service for invalidation after transactions
+func (s *TransactionService) WithCacheService(cacheService CacheInvalidator) *TransactionService {
+	s.cacheService = cacheService
+	return s
+}
+
+// invalidateStudentCache invalidates the student profile cache after a transaction
+func (s *TransactionService) invalidateStudentCache(ctx context.Context, studentID int32) {
+	if s.cacheService != nil {
+		if err := s.cacheService.InvalidateStudentProfile(ctx, int(studentID)); err != nil {
+			slog.Warn("Failed to invalidate student cache", "student_id", studentID, "error", err)
+		}
+	}
 }
 
 // BorrowBookRequest represents a book borrowing request
@@ -406,6 +427,9 @@ func (s *TransactionService) BorrowBookWithCopy(ctx context.Context, req BorrowB
 		}
 	}
 
+	// Invalidate student cache so borrowing stats are refreshed
+	s.invalidateStudentCache(ctx, req.StudentID)
+
 	// Build response
 	response := s.convertToTransactionResponse(transaction)
 
@@ -522,6 +546,9 @@ func (s *TransactionService) ReturnBookWithCondition(ctx context.Context, transa
 	if err := s.updateBookConditionIfNeeded(ctx, transactionRow.BookID, book, returnCondition); err != nil {
 		return nil, fmt.Errorf("failed to update book condition: %w", err)
 	}
+
+	// Invalidate student cache so borrowing stats are refreshed
+	s.invalidateStudentCache(ctx, transactionRow.StudentID)
 
 	response := s.convertToTransactionResponse(transaction)
 
@@ -678,6 +705,9 @@ func (s *TransactionService) RenewBook(ctx context.Context, transactionID, libra
 		return nil, fmt.Errorf("failed to renew transaction: %w", err)
 	}
 
+	// Invalidate student cache so borrowing stats are refreshed
+	s.invalidateStudentCache(ctx, transactionRow.StudentID)
+
 	return s.convertToTransactionResponse(transaction), nil
 }
 
@@ -715,6 +745,9 @@ func (s *TransactionService) CancelRenewal(ctx context.Context, transactionID in
 		return nil, fmt.Errorf("failed to cancel renewal: %w", err)
 	}
 
+	// Invalidate student cache so borrowing stats are refreshed
+	s.invalidateStudentCache(ctx, transactionRow.StudentID)
+
 	return s.convertToTransactionResponse(transaction), nil
 }
 
@@ -729,10 +762,20 @@ func (s *TransactionService) GetOverdueTransactions(ctx context.Context) ([]quer
 
 // PayFine marks a transaction fine as paid
 func (s *TransactionService) PayFine(ctx context.Context, transactionID int32) error {
-	err := s.queries.PayTransactionFine(ctx, transactionID)
+	// Get the transaction to get the student ID for cache invalidation
+	tx, err := s.queries.GetTransactionByID(ctx, transactionID)
+	if err != nil {
+		return fmt.Errorf("failed to get transaction: %w", err)
+	}
+
+	err = s.queries.PayTransactionFine(ctx, transactionID)
 	if err != nil {
 		return fmt.Errorf("failed to pay fine: %w", err)
 	}
+
+	// Invalidate student cache so fine stats are refreshed
+	s.invalidateStudentCache(ctx, tx.StudentID)
+
 	return nil
 }
 
@@ -797,6 +840,9 @@ func (s *TransactionService) CancelTransaction(ctx context.Context, transactionI
 		_ = incErr // Log but don't fail
 	}
 
+	// Invalidate student cache so borrowing stats are refreshed
+	s.invalidateStudentCache(ctx, tx.StudentID)
+
 	return s.convertToTransactionResponse(cancelledTx), nil
 }
 
@@ -850,6 +896,9 @@ func (s *TransactionService) MarkAsLost(ctx context.Context, transactionID int32
 	// Note: In legacy mode (no copy tracking), we don't need to do anything here
 	// The availability was already decremented when the book was borrowed
 
+	// Invalidate student cache so borrowing stats are refreshed
+	s.invalidateStudentCache(ctx, tx.StudentID)
+
 	return s.convertToTransactionResponse(lostTx), nil
 }
 
@@ -893,6 +942,9 @@ func (s *TransactionService) DeleteTransaction(ctx context.Context, transactionI
 				"error", incErr)
 		}
 	}
+
+	// Invalidate student cache so borrowing stats are refreshed
+	s.invalidateStudentCache(ctx, tx.StudentID)
 
 	return nil
 }

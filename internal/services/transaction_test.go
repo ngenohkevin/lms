@@ -688,8 +688,14 @@ func TestTransactionService_PayFine_Success(t *testing.T) {
 
 	ctx := context.Background()
 	transactionID := int32(1)
+	studentID := int32(1)
 
-	// Setup mock
+	// Setup mock - first GetTransactionByID to get student for cache invalidation
+	transaction := queries.GetTransactionByIDRow{
+		ID:        transactionID,
+		StudentID: studentID,
+	}
+	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
 	mockQueries.On("PayTransactionFine", ctx, transactionID).Return(nil)
 
 	// Execute
@@ -698,6 +704,43 @@ func TestTransactionService_PayFine_Success(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	mockQueries.AssertExpectations(t)
+}
+
+// MockCacheInvalidator implements the CacheInvalidator interface for testing
+type MockCacheInvalidator struct {
+	mock.Mock
+}
+
+func (m *MockCacheInvalidator) InvalidateStudentProfile(ctx context.Context, studentID int) error {
+	args := m.Called(ctx, studentID)
+	return args.Error(0)
+}
+
+func TestTransactionService_PayFine_InvalidatesStudentCache(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	mockCache := &MockCacheInvalidator{}
+	service := NewTransactionService(mockQueries).WithCacheService(mockCache)
+
+	ctx := context.Background()
+	transactionID := int32(1)
+	studentID := int32(42)
+
+	// Setup mocks
+	transaction := queries.GetTransactionByIDRow{
+		ID:        transactionID,
+		StudentID: studentID,
+	}
+	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
+	mockQueries.On("PayTransactionFine", ctx, transactionID).Return(nil)
+	mockCache.On("InvalidateStudentProfile", ctx, int(studentID)).Return(nil)
+
+	// Execute
+	err := service.PayFine(ctx, transactionID)
+
+	// Assert
+	require.NoError(t, err)
+	mockQueries.AssertExpectations(t)
+	mockCache.AssertExpectations(t)
 }
 
 func TestTransactionService_GetTransactionHistory_Success(t *testing.T) {

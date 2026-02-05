@@ -112,7 +112,7 @@ func main() {
 
 	studentService := services.NewStudentService(db.Queries, authService, cacheService)
 	bookService := services.NewBookService(db.Queries, cacheService)
-	transactionService := services.NewTransactionService(db.Queries).WithPool(db.Pool)
+	transactionService := services.NewTransactionService(db.Queries).WithPool(db.Pool).WithCacheService(cacheService)
 	reservationService := services.NewReservationService(db.Queries)
 	reportService := services.NewReportService(db.Queries, cacheService)
 	isbnService := services.NewISBNService()
