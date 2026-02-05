@@ -480,7 +480,6 @@ func TestStudentService_ExportByYear(t *testing.T) {
 	_ = os.RemoveAll("./exports")
 }
 
-
 // TestStudentService_CleanupExpiredExports tests the cleanup functionality
 func TestStudentService_CleanupExpiredExports(t *testing.T) {
 	service := &StudentService{}

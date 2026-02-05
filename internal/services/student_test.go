@@ -194,7 +194,6 @@ func (m *MockQueries) UpdateStudentAdminNotes(ctx context.Context, params querie
 	return args.Get(0).(queries.Student), args.Error(1)
 }
 
-
 // Helper function to create a mock student
 func createMockStudent() queries.Student {
 	now := time.Now()

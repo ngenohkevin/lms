@@ -748,12 +748,12 @@ type IndividualStudentReportRequest struct {
 
 // LostBooksReport represents a comprehensive lost books report
 type LostBooksReport struct {
-	LostBooks      []LostBookDetail          `json:"lost_books"`
-	Summary        LostBooksSummary          `json:"summary"`
-	Trends         []LostBooksTrendItem      `json:"trends"`
-	ByCategory     []LostBooksByCategory     `json:"by_category"`
-	ByYearOfStudy  []LostBooksByYearOfStudy  `json:"by_year_of_study"`
-	GeneratedAt    time.Time                 `json:"generated_at"`
+	LostBooks     []LostBookDetail         `json:"lost_books"`
+	Summary       LostBooksSummary         `json:"summary"`
+	Trends        []LostBooksTrendItem     `json:"trends"`
+	ByCategory    []LostBooksByCategory    `json:"by_category"`
+	ByYearOfStudy []LostBooksByYearOfStudy `json:"by_year_of_study"`
+	GeneratedAt   time.Time                `json:"generated_at"`
 }
 
 // LostBookDetail represents details of a lost book
@@ -810,11 +810,11 @@ type LostBooksByYearOfStudy struct {
 
 // LostBooksReportRequest represents request for lost books report
 type LostBooksReportRequest struct {
-	StartDate    time.Time `json:"start_date,omitempty"`
-	EndDate      time.Time `json:"end_date,omitempty"`
-	YearOfStudy  *int32    `json:"year_of_study,omitempty"`
-	Genre        *string   `json:"genre,omitempty"`
-	Interval     string    `json:"interval,omitempty"` // day, week, month, year
+	StartDate   time.Time `json:"start_date,omitempty"`
+	EndDate     time.Time `json:"end_date,omitempty"`
+	YearOfStudy *int32    `json:"year_of_study,omitempty"`
+	Genre       *string   `json:"genre,omitempty"`
+	Interval    string    `json:"interval,omitempty"` // day, week, month, year
 }
 
 // ============================================
@@ -852,7 +852,6 @@ type FinesByYearItem struct {
 	PaidAmount        string `json:"paid_amount"`
 	OutstandingAmount string `json:"outstanding_amount"`
 }
-
 
 // FinesCollectionTrend represents fines trend over time
 type FinesCollectionTrend struct {
