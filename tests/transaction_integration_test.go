@@ -585,11 +585,10 @@ func (suite *TransactionIntegrationTestSuite) TestDeleteTransaction_RestoresCopy
 	// Create a book copy for this test
 	barcode := fmt.Sprintf("DELTEST%d", time.Now().UnixNano()%100000)
 	copy, err := suite.queries.CreateBookCopy(suite.ctx, queries.CreateBookCopyParams{
-		BookID:     suite.testBook.ID,
-		CopyNumber: "DEL-001",
-		Barcode:    pgtype.Text{String: barcode, Valid: true},
-		Condition:  pgtype.Text{String: "good", Valid: true},
-		Status:     pgtype.Text{String: "available", Valid: true},
+		BookID:    suite.testBook.ID,
+		Barcode:   barcode,
+		Condition: pgtype.Text{String: "good", Valid: true},
+		Status:    pgtype.Text{String: "available", Valid: true},
 	})
 	require.NoError(suite.T(), err)
 

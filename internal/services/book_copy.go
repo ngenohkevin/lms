@@ -14,7 +14,7 @@ import (
 type BookCopyQuerier interface {
 	CreateBookCopy(ctx context.Context, arg queries.CreateBookCopyParams) (queries.BookCopy, error)
 	GetBookCopyByID(ctx context.Context, id int32) (queries.BookCopy, error)
-	GetBookCopyByBarcode(ctx context.Context, barcode pgtype.Text) (queries.BookCopy, error)
+	GetBookCopyByBarcode(ctx context.Context, barcode string) (queries.BookCopy, error)
 	ListBookCopies(ctx context.Context, bookID int32) ([]queries.BookCopy, error)
 	CountBookCopies(ctx context.Context, bookID int32) (int64, error)
 	CountAvailableCopies(ctx context.Context, bookID int32) (int64, error)
@@ -87,12 +87,8 @@ func (s *BookCopyService) CreateBookCopy(ctx context.Context, req models.CreateB
 	}
 
 	params := queries.CreateBookCopyParams{
-		BookID:     req.BookID,
-		CopyNumber: req.CopyNumber,
-	}
-
-	if req.Barcode != nil {
-		params.Barcode = pgtype.Text{String: *req.Barcode, Valid: true}
+		BookID:  req.BookID,
+		Barcode: req.Barcode,
 	}
 
 	if req.Condition != nil {
@@ -147,7 +143,7 @@ func (s *BookCopyService) GetBookCopyByID(ctx context.Context, id int32) (*model
 
 // GetBookCopyByBarcode retrieves a book copy by its barcode
 func (s *BookCopyService) GetBookCopyByBarcode(ctx context.Context, barcode string) (*models.BookCopyResponse, error) {
-	copy, err := s.querier.GetBookCopyByBarcode(ctx, pgtype.Text{String: barcode, Valid: true})
+	copy, err := s.querier.GetBookCopyByBarcode(ctx, barcode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get book copy by barcode: %w", err)
 	}
@@ -181,7 +177,6 @@ func (s *BookCopyService) UpdateBookCopy(ctx context.Context, id int32, req mode
 
 	params := queries.UpdateBookCopyParams{
 		ID:              id,
-		CopyNumber:      existing.CopyNumber,
 		Barcode:         existing.Barcode,
 		Condition:       existing.Condition,
 		AcquisitionDate: existing.AcquisitionDate,
@@ -189,15 +184,8 @@ func (s *BookCopyService) UpdateBookCopy(ctx context.Context, id int32, req mode
 		Notes:           existing.Notes,
 	}
 
-	if req.CopyNumber != nil {
-		params.CopyNumber = *req.CopyNumber
-	}
 	if req.Barcode != nil {
-		if *req.Barcode == "" {
-			params.Barcode = pgtype.Text{Valid: false}
-		} else {
-			params.Barcode = pgtype.Text{String: *req.Barcode, Valid: true}
-		}
+		params.Barcode = *req.Barcode
 	}
 	if req.Condition != nil {
 		params.Condition = pgtype.Text{String: *req.Condition, Valid: true}
@@ -321,22 +309,19 @@ func (s *BookCopyService) GenerateCopies(ctx context.Context, bookID int32, coun
 	copies := make([]models.BookCopyResponse, 0, count)
 
 	for i := int32(0); i < count; i++ {
-		// Generate copy number with 6-digit sequence for consistency with book ID format
-		copyNumber := fmt.Sprintf("%s-COPY-%06d", bookCode, startNum+int(i))
-		// Barcode is the same as copy number
-		barcode := copyNumber
+		// Generate barcode with 6-digit sequence for consistency with book ID format
+		barcode := fmt.Sprintf("%s-COPY-%06d", bookCode, startNum+int(i))
 
 		params := queries.CreateBookCopyParams{
-			BookID:     bookID,
-			CopyNumber: copyNumber,
-			Barcode:    pgtype.Text{String: barcode, Valid: true},
-			Condition:  pgtype.Text{String: "good", Valid: true},
-			Status:     pgtype.Text{String: "available", Valid: true},
+			BookID:    bookID,
+			Barcode:   barcode,
+			Condition: pgtype.Text{String: "good", Valid: true},
+			Status:    pgtype.Text{String: "available", Valid: true},
 		}
 
 		copy, err := s.querier.CreateBookCopy(ctx, params)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create copy %s: %w", copyNumber, err)
+			return nil, fmt.Errorf("failed to create copy %s: %w", barcode, err)
 		}
 
 		copies = append(copies, *bookCopyToResponse(&copy))
@@ -465,15 +450,11 @@ func (s *BookCopyService) GetCopyBorrowingHistory(ctx context.Context, copyID in
 // bookCopyToResponse converts queries.BookCopy to models.BookCopyResponse
 func bookCopyToResponse(c *queries.BookCopy) *models.BookCopyResponse {
 	resp := &models.BookCopyResponse{
-		ID:         c.ID,
-		BookID:     c.BookID,
-		CopyNumber: c.CopyNumber,
-		Condition:  models.CopyConditionGood,
-		Status:     models.CopyStatusAvailable,
-	}
-
-	if c.Barcode.Valid {
-		resp.Barcode = &c.Barcode.String
+		ID:        c.ID,
+		BookID:    c.BookID,
+		Barcode:   c.Barcode,
+		Condition: models.CopyConditionGood,
+		Status:    models.CopyStatusAvailable,
 	}
 	if c.Condition.Valid {
 		resp.Condition = models.CopyCondition(c.Condition.String)

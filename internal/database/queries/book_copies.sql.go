@@ -48,15 +48,14 @@ func (q *Queries) CountCopyBorrowings(ctx context.Context, copyID pgtype.Int4) (
 }
 
 const createBookCopy = `-- name: CreateBookCopy :one
-INSERT INTO book_copies (book_id, copy_number, barcode, condition, acquisition_date, status, notes)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, book_id, copy_number, barcode, condition, acquisition_date, status, notes, created_at, updated_at
+INSERT INTO book_copies (book_id, barcode, condition, acquisition_date, status, notes)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, book_id, barcode, condition, acquisition_date, status, notes, created_at, updated_at
 `
 
 type CreateBookCopyParams struct {
 	BookID          int32       `db:"book_id" json:"book_id"`
-	CopyNumber      string      `db:"copy_number" json:"copy_number"`
-	Barcode         pgtype.Text `db:"barcode" json:"barcode"`
+	Barcode         string      `db:"barcode" json:"barcode"`
 	Condition       pgtype.Text `db:"condition" json:"condition"`
 	AcquisitionDate pgtype.Date `db:"acquisition_date" json:"acquisition_date"`
 	Status          pgtype.Text `db:"status" json:"status"`
@@ -66,7 +65,6 @@ type CreateBookCopyParams struct {
 func (q *Queries) CreateBookCopy(ctx context.Context, arg CreateBookCopyParams) (BookCopy, error) {
 	row := q.db.QueryRow(ctx, createBookCopy,
 		arg.BookID,
-		arg.CopyNumber,
 		arg.Barcode,
 		arg.Condition,
 		arg.AcquisitionDate,
@@ -77,7 +75,6 @@ func (q *Queries) CreateBookCopy(ctx context.Context, arg CreateBookCopyParams) 
 	err := row.Scan(
 		&i.ID,
 		&i.BookID,
-		&i.CopyNumber,
 		&i.Barcode,
 		&i.Condition,
 		&i.AcquisitionDate,
@@ -175,17 +172,16 @@ func (q *Queries) GetActiveBorrowingByCopy(ctx context.Context, copyID pgtype.In
 }
 
 const getBookCopyByBarcode = `-- name: GetBookCopyByBarcode :one
-SELECT id, book_id, copy_number, barcode, condition, acquisition_date, status, notes, created_at, updated_at FROM book_copies
+SELECT id, book_id, barcode, condition, acquisition_date, status, notes, created_at, updated_at FROM book_copies
 WHERE barcode = $1
 `
 
-func (q *Queries) GetBookCopyByBarcode(ctx context.Context, barcode pgtype.Text) (BookCopy, error) {
+func (q *Queries) GetBookCopyByBarcode(ctx context.Context, barcode string) (BookCopy, error) {
 	row := q.db.QueryRow(ctx, getBookCopyByBarcode, barcode)
 	var i BookCopy
 	err := row.Scan(
 		&i.ID,
 		&i.BookID,
-		&i.CopyNumber,
 		&i.Barcode,
 		&i.Condition,
 		&i.AcquisitionDate,
@@ -198,7 +194,7 @@ func (q *Queries) GetBookCopyByBarcode(ctx context.Context, barcode pgtype.Text)
 }
 
 const getBookCopyByBookID = `-- name: GetBookCopyByBookID :one
-SELECT id, book_id, copy_number, barcode, condition, acquisition_date, status, notes, created_at, updated_at FROM book_copies
+SELECT id, book_id, barcode, condition, acquisition_date, status, notes, created_at, updated_at FROM book_copies
 WHERE book_id = $1 AND id = $2
 `
 
@@ -213,7 +209,6 @@ func (q *Queries) GetBookCopyByBookID(ctx context.Context, arg GetBookCopyByBook
 	err := row.Scan(
 		&i.ID,
 		&i.BookID,
-		&i.CopyNumber,
 		&i.Barcode,
 		&i.Condition,
 		&i.AcquisitionDate,
@@ -226,7 +221,7 @@ func (q *Queries) GetBookCopyByBookID(ctx context.Context, arg GetBookCopyByBook
 }
 
 const getBookCopyByID = `-- name: GetBookCopyByID :one
-SELECT id, book_id, copy_number, barcode, condition, acquisition_date, status, notes, created_at, updated_at FROM book_copies
+SELECT id, book_id, barcode, condition, acquisition_date, status, notes, created_at, updated_at FROM book_copies
 WHERE id = $1
 `
 
@@ -236,7 +231,6 @@ func (q *Queries) GetBookCopyByID(ctx context.Context, id int32) (BookCopy, erro
 	err := row.Scan(
 		&i.ID,
 		&i.BookID,
-		&i.CopyNumber,
 		&i.Barcode,
 		&i.Condition,
 		&i.AcquisitionDate,
@@ -344,7 +338,7 @@ func (q *Queries) GetCopyBorrowingHistory(ctx context.Context, arg GetCopyBorrow
 }
 
 const getCopyByBarcodeWithBookInfo = `-- name: GetCopyByBarcodeWithBookInfo :one
-SELECT bc.id, bc.book_id, bc.copy_number, bc.barcode, bc.condition, bc.acquisition_date, bc.status, bc.notes, bc.created_at, bc.updated_at, b.id as book_db_id, b.title, b.author, b.book_id as book_code, b.isbn
+SELECT bc.id, bc.book_id, bc.barcode, bc.condition, bc.acquisition_date, bc.status, bc.notes, bc.created_at, bc.updated_at, b.id as book_db_id, b.title, b.author, b.book_id as book_code, b.isbn
 FROM book_copies bc
 JOIN books b ON bc.book_id = b.id
 WHERE bc.barcode = $1
@@ -353,8 +347,7 @@ WHERE bc.barcode = $1
 type GetCopyByBarcodeWithBookInfoRow struct {
 	ID              int32            `db:"id" json:"id"`
 	BookID          int32            `db:"book_id" json:"book_id"`
-	CopyNumber      string           `db:"copy_number" json:"copy_number"`
-	Barcode         pgtype.Text      `db:"barcode" json:"barcode"`
+	Barcode         string           `db:"barcode" json:"barcode"`
 	Condition       pgtype.Text      `db:"condition" json:"condition"`
 	AcquisitionDate pgtype.Date      `db:"acquisition_date" json:"acquisition_date"`
 	Status          pgtype.Text      `db:"status" json:"status"`
@@ -368,13 +361,12 @@ type GetCopyByBarcodeWithBookInfoRow struct {
 	Isbn            pgtype.Text      `db:"isbn" json:"isbn"`
 }
 
-func (q *Queries) GetCopyByBarcodeWithBookInfo(ctx context.Context, barcode pgtype.Text) (GetCopyByBarcodeWithBookInfoRow, error) {
+func (q *Queries) GetCopyByBarcodeWithBookInfo(ctx context.Context, barcode string) (GetCopyByBarcodeWithBookInfoRow, error) {
 	row := q.db.QueryRow(ctx, getCopyByBarcodeWithBookInfo, barcode)
 	var i GetCopyByBarcodeWithBookInfoRow
 	err := row.Scan(
 		&i.ID,
 		&i.BookID,
-		&i.CopyNumber,
 		&i.Barcode,
 		&i.Condition,
 		&i.AcquisitionDate,
@@ -392,9 +384,9 @@ func (q *Queries) GetCopyByBarcodeWithBookInfo(ctx context.Context, barcode pgty
 }
 
 const getFirstAvailableCopy = `-- name: GetFirstAvailableCopy :one
-SELECT id, book_id, copy_number, barcode, condition, acquisition_date, status, notes, created_at, updated_at FROM book_copies
+SELECT id, book_id, barcode, condition, acquisition_date, status, notes, created_at, updated_at FROM book_copies
 WHERE book_id = $1 AND status = 'available'
-ORDER BY copy_number
+ORDER BY barcode
 LIMIT 1
 `
 
@@ -404,7 +396,6 @@ func (q *Queries) GetFirstAvailableCopy(ctx context.Context, bookID int32) (Book
 	err := row.Scan(
 		&i.ID,
 		&i.BookID,
-		&i.CopyNumber,
 		&i.Barcode,
 		&i.Condition,
 		&i.AcquisitionDate,
@@ -417,9 +408,9 @@ func (q *Queries) GetFirstAvailableCopy(ctx context.Context, bookID int32) (Book
 }
 
 const listBookCopies = `-- name: ListBookCopies :many
-SELECT id, book_id, copy_number, barcode, condition, acquisition_date, status, notes, created_at, updated_at FROM book_copies
+SELECT id, book_id, barcode, condition, acquisition_date, status, notes, created_at, updated_at FROM book_copies
 WHERE book_id = $1
-ORDER BY copy_number
+ORDER BY barcode
 `
 
 func (q *Queries) ListBookCopies(ctx context.Context, bookID int32) ([]BookCopy, error) {
@@ -434,7 +425,6 @@ func (q *Queries) ListBookCopies(ctx context.Context, bookID int32) ([]BookCopy,
 		if err := rows.Scan(
 			&i.ID,
 			&i.BookID,
-			&i.CopyNumber,
 			&i.Barcode,
 			&i.Condition,
 			&i.AcquisitionDate,
@@ -454,9 +444,9 @@ func (q *Queries) ListBookCopies(ctx context.Context, bookID int32) ([]BookCopy,
 }
 
 const listBookCopiesByStatus = `-- name: ListBookCopiesByStatus :many
-SELECT id, book_id, copy_number, barcode, condition, acquisition_date, status, notes, created_at, updated_at FROM book_copies
+SELECT id, book_id, barcode, condition, acquisition_date, status, notes, created_at, updated_at FROM book_copies
 WHERE book_id = $1 AND status = $2
-ORDER BY copy_number
+ORDER BY barcode
 `
 
 type ListBookCopiesByStatusParams struct {
@@ -476,7 +466,6 @@ func (q *Queries) ListBookCopiesByStatus(ctx context.Context, arg ListBookCopies
 		if err := rows.Scan(
 			&i.ID,
 			&i.BookID,
-			&i.CopyNumber,
 			&i.Barcode,
 			&i.Condition,
 			&i.AcquisitionDate,
@@ -496,14 +485,13 @@ func (q *Queries) ListBookCopiesByStatus(ctx context.Context, arg ListBookCopies
 }
 
 const searchBookCopies = `-- name: SearchBookCopies :many
-SELECT id, book_id, copy_number, barcode, condition, acquisition_date, status, notes, created_at, updated_at FROM book_copies
+SELECT id, book_id, barcode, condition, acquisition_date, status, notes, created_at, updated_at FROM book_copies
 WHERE book_id = $1
 AND (
-    copy_number ILIKE '%' || $2 || '%'
-    OR barcode ILIKE '%' || $2 || '%'
+    barcode ILIKE '%' || $2 || '%'
     OR notes ILIKE '%' || $2 || '%'
 )
-ORDER BY copy_number
+ORDER BY barcode
 `
 
 type SearchBookCopiesParams struct {
@@ -523,7 +511,6 @@ func (q *Queries) SearchBookCopies(ctx context.Context, arg SearchBookCopiesPara
 		if err := rows.Scan(
 			&i.ID,
 			&i.BookID,
-			&i.CopyNumber,
 			&i.Barcode,
 			&i.Condition,
 			&i.AcquisitionDate,
@@ -544,15 +531,14 @@ func (q *Queries) SearchBookCopies(ctx context.Context, arg SearchBookCopiesPara
 
 const updateBookCopy = `-- name: UpdateBookCopy :one
 UPDATE book_copies
-SET copy_number = $2, barcode = $3, condition = $4, acquisition_date = $5, status = $6, notes = $7, updated_at = NOW()
+SET barcode = $2, condition = $3, acquisition_date = $4, status = $5, notes = $6, updated_at = NOW()
 WHERE id = $1
-RETURNING id, book_id, copy_number, barcode, condition, acquisition_date, status, notes, created_at, updated_at
+RETURNING id, book_id, barcode, condition, acquisition_date, status, notes, created_at, updated_at
 `
 
 type UpdateBookCopyParams struct {
 	ID              int32       `db:"id" json:"id"`
-	CopyNumber      string      `db:"copy_number" json:"copy_number"`
-	Barcode         pgtype.Text `db:"barcode" json:"barcode"`
+	Barcode         string      `db:"barcode" json:"barcode"`
 	Condition       pgtype.Text `db:"condition" json:"condition"`
 	AcquisitionDate pgtype.Date `db:"acquisition_date" json:"acquisition_date"`
 	Status          pgtype.Text `db:"status" json:"status"`
@@ -562,7 +548,6 @@ type UpdateBookCopyParams struct {
 func (q *Queries) UpdateBookCopy(ctx context.Context, arg UpdateBookCopyParams) (BookCopy, error) {
 	row := q.db.QueryRow(ctx, updateBookCopy,
 		arg.ID,
-		arg.CopyNumber,
 		arg.Barcode,
 		arg.Condition,
 		arg.AcquisitionDate,
@@ -573,7 +558,6 @@ func (q *Queries) UpdateBookCopy(ctx context.Context, arg UpdateBookCopyParams) 
 	err := row.Scan(
 		&i.ID,
 		&i.BookID,
-		&i.CopyNumber,
 		&i.Barcode,
 		&i.Condition,
 		&i.AcquisitionDate,
@@ -589,7 +573,7 @@ const updateBookCopyCondition = `-- name: UpdateBookCopyCondition :one
 UPDATE book_copies
 SET condition = $2, updated_at = NOW()
 WHERE id = $1
-RETURNING id, book_id, copy_number, barcode, condition, acquisition_date, status, notes, created_at, updated_at
+RETURNING id, book_id, barcode, condition, acquisition_date, status, notes, created_at, updated_at
 `
 
 type UpdateBookCopyConditionParams struct {
@@ -603,7 +587,6 @@ func (q *Queries) UpdateBookCopyCondition(ctx context.Context, arg UpdateBookCop
 	err := row.Scan(
 		&i.ID,
 		&i.BookID,
-		&i.CopyNumber,
 		&i.Barcode,
 		&i.Condition,
 		&i.AcquisitionDate,
@@ -619,7 +602,7 @@ const updateBookCopyStatus = `-- name: UpdateBookCopyStatus :one
 UPDATE book_copies
 SET status = $2, updated_at = NOW()
 WHERE id = $1
-RETURNING id, book_id, copy_number, barcode, condition, acquisition_date, status, notes, created_at, updated_at
+RETURNING id, book_id, barcode, condition, acquisition_date, status, notes, created_at, updated_at
 `
 
 type UpdateBookCopyStatusParams struct {
@@ -633,7 +616,6 @@ func (q *Queries) UpdateBookCopyStatus(ctx context.Context, arg UpdateBookCopySt
 	err := row.Scan(
 		&i.ID,
 		&i.BookID,
-		&i.CopyNumber,
 		&i.Barcode,
 		&i.Condition,
 		&i.AcquisitionDate,
@@ -649,7 +631,7 @@ const updateBookCopyStatusAndCondition = `-- name: UpdateBookCopyStatusAndCondit
 UPDATE book_copies
 SET status = $2, condition = $3, updated_at = NOW()
 WHERE id = $1
-RETURNING id, book_id, copy_number, barcode, condition, acquisition_date, status, notes, created_at, updated_at
+RETURNING id, book_id, barcode, condition, acquisition_date, status, notes, created_at, updated_at
 `
 
 type UpdateBookCopyStatusAndConditionParams struct {
@@ -664,7 +646,6 @@ func (q *Queries) UpdateBookCopyStatusAndCondition(ctx context.Context, arg Upda
 	err := row.Scan(
 		&i.ID,
 		&i.BookID,
-		&i.CopyNumber,
 		&i.Barcode,
 		&i.Condition,
 		&i.AcquisitionDate,

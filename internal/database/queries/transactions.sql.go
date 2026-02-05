@@ -594,7 +594,7 @@ const getTransactionByIDWithCopy = `-- name: GetTransactionByIDWithCopy :one
 SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by,
        s.first_name, s.last_name, s.student_id,
        b.title, b.author, b.book_id,
-       bc.copy_number, bc.barcode as copy_barcode, bc.condition as copy_condition
+       bc.barcode as copy_barcode, bc.condition as copy_condition
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
@@ -634,7 +634,6 @@ type GetTransactionByIDWithCopyRow struct {
 	Title            string           `db:"title" json:"title"`
 	Author           string           `db:"author" json:"author"`
 	BookID_2         string           `db:"book_id_2" json:"book_id_2"`
-	CopyNumber       pgtype.Text      `db:"copy_number" json:"copy_number"`
 	CopyBarcode      pgtype.Text      `db:"copy_barcode" json:"copy_barcode"`
 	CopyCondition    pgtype.Text      `db:"copy_condition" json:"copy_condition"`
 }
@@ -675,7 +674,6 @@ func (q *Queries) GetTransactionByIDWithCopy(ctx context.Context, id int32) (Get
 		&i.Title,
 		&i.Author,
 		&i.BookID_2,
-		&i.CopyNumber,
 		&i.CopyBarcode,
 		&i.CopyCondition,
 	)
@@ -1587,7 +1585,7 @@ const listTransactionsWithCopies = `-- name: ListTransactionsWithCopies :many
 SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by,
        s.first_name, s.last_name, s.student_id,
        b.title, b.author, b.book_id,
-       bc.copy_number, bc.barcode as copy_barcode, bc.condition as copy_condition
+       bc.barcode as copy_barcode, bc.condition as copy_condition
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
@@ -1633,7 +1631,6 @@ type ListTransactionsWithCopiesRow struct {
 	Title            string           `db:"title" json:"title"`
 	Author           string           `db:"author" json:"author"`
 	BookID_2         string           `db:"book_id_2" json:"book_id_2"`
-	CopyNumber       pgtype.Text      `db:"copy_number" json:"copy_number"`
 	CopyBarcode      pgtype.Text      `db:"copy_barcode" json:"copy_barcode"`
 	CopyCondition    pgtype.Text      `db:"copy_condition" json:"copy_condition"`
 }
@@ -1679,7 +1676,6 @@ func (q *Queries) ListTransactionsWithCopies(ctx context.Context, arg ListTransa
 			&i.Title,
 			&i.Author,
 			&i.BookID_2,
-			&i.CopyNumber,
 			&i.CopyBarcode,
 			&i.CopyCondition,
 		); err != nil {
@@ -1976,7 +1972,7 @@ const searchTransactions = `-- name: SearchTransactions :many
 SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by,
        s.first_name, s.last_name, s.student_id as student_code,
        b.title, b.author, b.book_id as book_code,
-       bc.copy_number, bc.barcode as copy_barcode, bc.condition as copy_condition
+       bc.barcode as copy_barcode, bc.condition as copy_condition
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
@@ -2048,7 +2044,6 @@ type SearchTransactionsRow struct {
 	Title            string           `db:"title" json:"title"`
 	Author           string           `db:"author" json:"author"`
 	BookCode         string           `db:"book_code" json:"book_code"`
-	CopyNumber       pgtype.Text      `db:"copy_number" json:"copy_number"`
 	CopyBarcode      pgtype.Text      `db:"copy_barcode" json:"copy_barcode"`
 	CopyCondition    pgtype.Text      `db:"copy_condition" json:"copy_condition"`
 }
@@ -2105,7 +2100,6 @@ func (q *Queries) SearchTransactions(ctx context.Context, arg SearchTransactions
 			&i.Title,
 			&i.Author,
 			&i.BookCode,
-			&i.CopyNumber,
 			&i.CopyBarcode,
 			&i.CopyCondition,
 		); err != nil {

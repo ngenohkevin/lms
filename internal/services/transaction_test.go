@@ -162,7 +162,7 @@ func (m *MockTransactionQueries) GetFirstAvailableCopy(ctx context.Context, book
 	return args.Get(0).(queries.BookCopy), args.Error(1)
 }
 
-func (m *MockTransactionQueries) GetCopyByBarcodeWithBookInfo(ctx context.Context, barcode pgtype.Text) (queries.GetCopyByBarcodeWithBookInfoRow, error) {
+func (m *MockTransactionQueries) GetCopyByBarcodeWithBookInfo(ctx context.Context, barcode string) (queries.GetCopyByBarcodeWithBookInfoRow, error) {
 	args := m.Called(ctx, barcode)
 	return args.Get(0).(queries.GetCopyByBarcodeWithBookInfoRow), args.Error(1)
 }
@@ -314,11 +314,11 @@ func TestTransactionService_BorrowBook_Success(t *testing.T) {
 
 	// Create a test book copy
 	bookCopy := queries.BookCopy{
-		ID:         1,
-		BookID:     bookID,
-		CopyNumber: "COPY-001",
-		Status:     pgtype.Text{String: "available", Valid: true},
-		Condition:  pgtype.Text{String: "good", Valid: true},
+		ID:        1,
+		BookID:    bookID,
+		Barcode:   "COPY-001",
+		Status:    pgtype.Text{String: "available", Valid: true},
+		Condition: pgtype.Text{String: "good", Valid: true},
 	}
 
 	mockQueries.On("GetBookByID", ctx, bookID).Return(book, nil)
@@ -1534,11 +1534,11 @@ func TestTransactionService_BorrowBook_AvailabilityUpdate_Success(t *testing.T) 
 
 	// Create a test book copy
 	bookCopy := queries.BookCopy{
-		ID:         1,
-		BookID:     bookID,
-		CopyNumber: "COPY-001",
-		Status:     pgtype.Text{String: "available", Valid: true},
-		Condition:  pgtype.Text{String: "good", Valid: true},
+		ID:        1,
+		BookID:    bookID,
+		Barcode:   "COPY-001",
+		Status:    pgtype.Text{String: "available", Valid: true},
+		Condition: pgtype.Text{String: "good", Valid: true},
 	}
 
 	mockQueries.On("GetBookByID", ctx, bookID).Return(book, nil)

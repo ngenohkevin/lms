@@ -33,8 +33,7 @@ const (
 type BookCopyResponse struct {
 	ID              int32         `json:"id"`
 	BookID          int32         `json:"book_id"`
-	CopyNumber      string        `json:"copy_number"`
-	Barcode         *string       `json:"barcode"`
+	Barcode         string        `json:"barcode"`
 	Condition       CopyCondition `json:"condition"`
 	AcquisitionDate *time.Time    `json:"acquisition_date"`
 	Status          CopyStatus    `json:"status"`
@@ -52,8 +51,7 @@ type BookCopyListResponse struct {
 // CreateBookCopyRequest represents the request to create a book copy
 type CreateBookCopyRequest struct {
 	BookID          int32   `json:"book_id"` // Set from URL path parameter
-	CopyNumber      string  `json:"copy_number" binding:"required,max=50"`
-	Barcode         *string `json:"barcode" binding:"omitempty,max=100"`
+	Barcode         string  `json:"barcode" binding:"required,max=100"`
 	Condition       *string `json:"condition" binding:"omitempty,oneof=excellent good fair poor damaged"`
 	AcquisitionDate *string `json:"acquisition_date" binding:"omitempty"`
 	Status          *string `json:"status" binding:"omitempty,oneof=available borrowed reserved maintenance lost damaged"`
@@ -62,7 +60,6 @@ type CreateBookCopyRequest struct {
 
 // UpdateBookCopyRequest represents the request to update a book copy
 type UpdateBookCopyRequest struct {
-	CopyNumber      *string `json:"copy_number" binding:"omitempty,max=50"`
 	Barcode         *string `json:"barcode" binding:"omitempty,max=100"`
 	Condition       *string `json:"condition" binding:"omitempty,oneof=excellent good fair poor damaged"`
 	AcquisitionDate *string `json:"acquisition_date" binding:"omitempty"`
@@ -72,24 +69,12 @@ type UpdateBookCopyRequest struct {
 
 // Validate validates the CreateBookCopyRequest
 func (r *CreateBookCopyRequest) Validate() error {
-	r.CopyNumber = strings.TrimSpace(r.CopyNumber)
-	if r.CopyNumber == "" {
-		return errors.New("copy_number is required")
+	r.Barcode = strings.TrimSpace(r.Barcode)
+	if r.Barcode == "" {
+		return errors.New("barcode is required")
 	}
-	if len(r.CopyNumber) > 50 {
-		return errors.New("copy_number cannot exceed 50 characters")
-	}
-
-	if r.Barcode != nil {
-		barcode := strings.TrimSpace(*r.Barcode)
-		if len(barcode) > 100 {
-			return errors.New("barcode cannot exceed 100 characters")
-		}
-		if barcode != "" {
-			r.Barcode = &barcode
-		} else {
-			r.Barcode = nil
-		}
+	if len(r.Barcode) > 100 {
+		return errors.New("barcode cannot exceed 100 characters")
 	}
 
 	return nil
@@ -97,27 +82,15 @@ func (r *CreateBookCopyRequest) Validate() error {
 
 // Validate validates the UpdateBookCopyRequest
 func (r *UpdateBookCopyRequest) Validate() error {
-	if r.CopyNumber != nil {
-		copyNumber := strings.TrimSpace(*r.CopyNumber)
-		if copyNumber == "" {
-			return errors.New("copy_number cannot be empty")
-		}
-		if len(copyNumber) > 50 {
-			return errors.New("copy_number cannot exceed 50 characters")
-		}
-		r.CopyNumber = &copyNumber
-	}
-
 	if r.Barcode != nil {
 		barcode := strings.TrimSpace(*r.Barcode)
+		if barcode == "" {
+			return errors.New("barcode cannot be empty")
+		}
 		if len(barcode) > 100 {
 			return errors.New("barcode cannot exceed 100 characters")
 		}
-		if barcode != "" {
-			r.Barcode = &barcode
-		} else {
-			r.Barcode = nil
-		}
+		r.Barcode = &barcode
 	}
 
 	return nil
@@ -136,7 +109,7 @@ type CopyBorrowingHistoryEntry struct {
 // CopyBorrowingHistoryResponse represents the response for copy borrowing history
 type CopyBorrowingHistoryResponse struct {
 	CopyID     int32                       `json:"copy_id"`
-	CopyNumber string                      `json:"copy_number"`
+	Barcode    string                      `json:"barcode"`
 	History    []CopyBorrowingHistoryEntry `json:"history"`
 	TotalCount int64                       `json:"total_count"`
 }

@@ -1255,7 +1255,6 @@ func convertToTransactionResponseWithCopy(tx *services.TransactionResponse) mode
 		CreatedAt:       tx.CreatedAt,
 		UpdatedAt:       tx.UpdatedAt,
 		CopyID:          tx.CopyID,
-		CopyNumber:      tx.CopyNumber,
 		CopyBarcode:     tx.CopyBarcode,
 		CopyCondition:   tx.CopyCondition,
 		RenewalCount:    tx.RenewalCount,

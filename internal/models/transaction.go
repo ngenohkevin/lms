@@ -77,7 +77,6 @@ type TransactionResponse struct {
 	UpdatedAt       time.Time       `json:"updated_at"`
 	// Copy-level tracking fields
 	CopyID        *int32  `json:"copy_id,omitempty"`
-	CopyNumber    *string `json:"copy_number,omitempty"`
 	CopyBarcode   *string `json:"copy_barcode,omitempty"`
 	CopyCondition *string `json:"copy_condition,omitempty"`
 	// Return condition fields

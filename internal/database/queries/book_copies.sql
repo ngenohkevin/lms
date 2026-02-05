@@ -1,6 +1,6 @@
 -- name: CreateBookCopy :one
-INSERT INTO book_copies (book_id, copy_number, barcode, condition, acquisition_date, status, notes)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO book_copies (book_id, barcode, condition, acquisition_date, status, notes)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
 -- name: GetBookCopyByID :one
@@ -14,7 +14,7 @@ WHERE barcode = $1;
 -- name: ListBookCopies :many
 SELECT * FROM book_copies
 WHERE book_id = $1
-ORDER BY copy_number;
+ORDER BY barcode;
 
 -- name: CountBookCopies :one
 SELECT COUNT(*) FROM book_copies
@@ -26,7 +26,7 @@ WHERE book_id = $1 AND status = 'available';
 
 -- name: UpdateBookCopy :one
 UPDATE book_copies
-SET copy_number = $2, barcode = $3, condition = $4, acquisition_date = $5, status = $6, notes = $7, updated_at = NOW()
+SET barcode = $2, condition = $3, acquisition_date = $4, status = $5, notes = $6, updated_at = NOW()
 WHERE id = $1
 RETURNING *;
 
@@ -49,17 +49,16 @@ WHERE id = $1;
 -- name: ListBookCopiesByStatus :many
 SELECT * FROM book_copies
 WHERE book_id = $1 AND status = $2
-ORDER BY copy_number;
+ORDER BY barcode;
 
 -- name: SearchBookCopies :many
 SELECT * FROM book_copies
 WHERE book_id = $1
 AND (
-    copy_number ILIKE '%' || $2 || '%'
-    OR barcode ILIKE '%' || $2 || '%'
+    barcode ILIKE '%' || $2 || '%'
     OR notes ILIKE '%' || $2 || '%'
 )
-ORDER BY copy_number;
+ORDER BY barcode;
 
 -- name: GetBookCopyByBookID :one
 SELECT * FROM book_copies
@@ -68,7 +67,7 @@ WHERE book_id = $1 AND id = $2;
 -- name: GetFirstAvailableCopy :one
 SELECT * FROM book_copies
 WHERE book_id = $1 AND status = 'available'
-ORDER BY copy_number
+ORDER BY barcode
 LIMIT 1;
 
 -- name: GetCopyByBarcodeWithBookInfo :one

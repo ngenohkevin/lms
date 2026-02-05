@@ -53,7 +53,7 @@ type TransactionQuerier interface {
 	GetTotalUnpaidFinesByStudent(ctx context.Context, studentID int32) (pgtype.Numeric, error)
 	// Copy-level transaction queries
 	GetFirstAvailableCopy(ctx context.Context, bookID int32) (queries.BookCopy, error)
-	GetCopyByBarcodeWithBookInfo(ctx context.Context, barcode pgtype.Text) (queries.GetCopyByBarcodeWithBookInfoRow, error)
+	GetCopyByBarcodeWithBookInfo(ctx context.Context, barcode string) (queries.GetCopyByBarcodeWithBookInfoRow, error)
 	GetBookCopyByID(ctx context.Context, id int32) (queries.BookCopy, error)
 	UpdateBookCopyStatus(ctx context.Context, arg queries.UpdateBookCopyStatusParams) (queries.BookCopy, error)
 	UpdateBookCopyStatusAndCondition(ctx context.Context, arg queries.UpdateBookCopyStatusAndConditionParams) (queries.BookCopy, error)
@@ -180,7 +180,6 @@ type TransactionResponse struct {
 	UpdatedAt       time.Time       `json:"updated_at"`
 	// Copy-level tracking fields
 	CopyID        *int32  `json:"copy_id,omitempty"`
-	CopyNumber    *string `json:"copy_number,omitempty"`
 	CopyBarcode   *string `json:"copy_barcode,omitempty"`
 	CopyCondition *string `json:"copy_condition,omitempty"`
 	// Renewal tracking fields
@@ -218,7 +217,6 @@ type ReturnByBarcodeRequest struct {
 // BarcodeScanResult represents the result of scanning a barcode
 type BarcodeScanResult struct {
 	CopyID          int32                `json:"copy_id"`
-	CopyNumber      string               `json:"copy_number"`
 	Barcode         string               `json:"barcode"`
 	Condition       string               `json:"condition"`
 	Status          string               `json:"status"`
@@ -257,7 +255,7 @@ func (s *TransactionService) BorrowBookWithCopy(ctx context.Context, req BorrowB
 
 	// If barcode is provided, look up the copy and book
 	if req.Barcode != nil && *req.Barcode != "" {
-		copyInfo, err := s.queries.GetCopyByBarcodeWithBookInfo(ctx, pgtype.Text{String: *req.Barcode, Valid: true})
+		copyInfo, err := s.queries.GetCopyByBarcodeWithBookInfo(ctx, *req.Barcode)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return nil, fmt.Errorf("no copy found with barcode: %s", *req.Barcode)
@@ -436,11 +434,7 @@ func (s *TransactionService) BorrowBookWithCopy(ctx context.Context, req BorrowB
 	// Add copy info if using copy-level tracking
 	if selectedCopy != nil {
 		response.CopyID = &selectedCopy.ID
-		copyNumber := selectedCopy.CopyNumber
-		response.CopyNumber = &copyNumber
-		if selectedCopy.Barcode.Valid {
-			response.CopyBarcode = &selectedCopy.Barcode.String
-		}
+		response.CopyBarcode = &selectedCopy.Barcode
 		if selectedCopy.Condition.Valid {
 			response.CopyCondition = &selectedCopy.Condition.String
 		}
@@ -555,9 +549,6 @@ func (s *TransactionService) ReturnBookWithCondition(ctx context.Context, transa
 	// Add copy info to response if available
 	if transactionRow.CopyID.Valid {
 		response.CopyID = &transactionRow.CopyID.Int32
-		if transactionRow.CopyNumber.Valid {
-			response.CopyNumber = &transactionRow.CopyNumber.String
-		}
 		if transactionRow.CopyBarcode.Valid {
 			response.CopyBarcode = &transactionRow.CopyBarcode.String
 		}
@@ -572,7 +563,7 @@ func (s *TransactionService) ReturnBookWithCondition(ctx context.Context, transa
 // ReturnByBarcode processes a quick return by scanning barcode
 func (s *TransactionService) ReturnByBarcode(ctx context.Context, req ReturnByBarcodeRequest) (*TransactionResponse, error) {
 	// Look up the copy by barcode
-	copyInfo, err := s.queries.GetCopyByBarcodeWithBookInfo(ctx, pgtype.Text{String: req.Barcode, Valid: true})
+	copyInfo, err := s.queries.GetCopyByBarcodeWithBookInfo(ctx, req.Barcode)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("no copy found with barcode: %s", req.Barcode)
@@ -606,7 +597,7 @@ func (s *TransactionService) ReturnByBarcode(ctx context.Context, req ReturnByBa
 // ScanBarcode looks up a copy by barcode and returns detailed information
 func (s *TransactionService) ScanBarcode(ctx context.Context, barcode string) (*BarcodeScanResult, error) {
 	// Look up the copy by barcode
-	copyInfo, err := s.queries.GetCopyByBarcodeWithBookInfo(ctx, pgtype.Text{String: barcode, Valid: true})
+	copyInfo, err := s.queries.GetCopyByBarcodeWithBookInfo(ctx, barcode)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("no copy found with barcode: %s", barcode)
@@ -616,7 +607,6 @@ func (s *TransactionService) ScanBarcode(ctx context.Context, barcode string) (*
 
 	result := &BarcodeScanResult{
 		CopyID:     copyInfo.ID,
-		CopyNumber: copyInfo.CopyNumber,
 		Barcode:    barcode,
 		Condition:  copyInfo.Condition.String,
 		Status:     copyInfo.Status.String,
@@ -1543,7 +1533,6 @@ type TransactionSearchResult struct {
 	BookAuthor      string          `json:"book_author"`
 	BookCode        string          `json:"book_code"`
 	CopyID          *int32          `json:"copy_id,omitempty"`
-	CopyNumber      *string         `json:"copy_number,omitempty"`
 	CopyBarcode     *string         `json:"copy_barcode,omitempty"`
 	CopyCondition   *string         `json:"copy_condition,omitempty"`
 	// Renewal tracking fields
@@ -1669,9 +1658,6 @@ func (s *TransactionService) SearchTransactions(ctx context.Context, params Tran
 		// Copy info
 		if row.CopyID.Valid {
 			result.CopyID = &row.CopyID.Int32
-		}
-		if row.CopyNumber.Valid {
-			result.CopyNumber = &row.CopyNumber.String
 		}
 		if row.CopyBarcode.Valid {
 			result.CopyBarcode = &row.CopyBarcode.String

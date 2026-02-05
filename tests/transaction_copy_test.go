@@ -146,31 +146,28 @@ func (suite *TransactionCopyTestSuite) SetupTest() {
 	barcode3 := fmt.Sprintf("BC%d003", time.Now().UnixNano()%100000)
 
 	copy1, err := suite.queries.CreateBookCopy(suite.ctx, queries.CreateBookCopyParams{
-		BookID:     testBook.ID,
-		CopyNumber: "Copy-1",
-		Barcode:    pgtype.Text{String: barcode1, Valid: true},
-		Condition:  pgtype.Text{String: "excellent", Valid: true},
-		Status:     pgtype.Text{String: "available", Valid: true},
+		BookID:    testBook.ID,
+		Barcode:   barcode1,
+		Condition: pgtype.Text{String: "excellent", Valid: true},
+		Status:    pgtype.Text{String: "available", Valid: true},
 	})
 	require.NoError(suite.T(), err)
 	suite.testCopy1 = copy1
 
 	copy2, err := suite.queries.CreateBookCopy(suite.ctx, queries.CreateBookCopyParams{
-		BookID:     testBook.ID,
-		CopyNumber: "Copy-2",
-		Barcode:    pgtype.Text{String: barcode2, Valid: true},
-		Condition:  pgtype.Text{String: "good", Valid: true},
-		Status:     pgtype.Text{String: "available", Valid: true},
+		BookID:    testBook.ID,
+		Barcode:   barcode2,
+		Condition: pgtype.Text{String: "good", Valid: true},
+		Status:    pgtype.Text{String: "available", Valid: true},
 	})
 	require.NoError(suite.T(), err)
 	suite.testCopy2 = copy2
 
 	copy3, err := suite.queries.CreateBookCopy(suite.ctx, queries.CreateBookCopyParams{
-		BookID:     testBook.ID,
-		CopyNumber: "Copy-3",
-		Barcode:    pgtype.Text{String: barcode3, Valid: true},
-		Condition:  pgtype.Text{String: "fair", Valid: true},
-		Status:     pgtype.Text{String: "available", Valid: true},
+		BookID:    testBook.ID,
+		Barcode:   barcode3,
+		Condition: pgtype.Text{String: "fair", Valid: true},
+		Status:    pgtype.Text{String: "available", Valid: true},
 	})
 	require.NoError(suite.T(), err)
 	suite.testCopy3 = copy3
@@ -304,7 +301,7 @@ func (suite *TransactionCopyTestSuite) TestBorrowBookAutoSelectsCopy() {
 // TestBorrowByBarcode tests borrowing a book by scanning the copy's barcode
 func (suite *TransactionCopyTestSuite) TestBorrowByBarcode() {
 	requestBody := map[string]interface{}{
-		"barcode":      suite.testCopy1.Barcode.String,
+		"barcode":      suite.testCopy1.Barcode,
 		"student_id":   suite.testStudent.ID,
 		"librarian_id": suite.testUser.ID,
 		"notes":        "Borrowed by barcode scan",
@@ -337,7 +334,7 @@ func (suite *TransactionCopyTestSuite) TestBorrowByBarcode() {
 func (suite *TransactionCopyTestSuite) TestReturnByBarcode() {
 	// First, borrow the book by barcode
 	borrowBody := map[string]interface{}{
-		"barcode":      suite.testCopy1.Barcode.String,
+		"barcode":      suite.testCopy1.Barcode,
 		"student_id":   suite.testStudent.ID,
 		"librarian_id": suite.testUser.ID,
 	}
@@ -355,7 +352,7 @@ func (suite *TransactionCopyTestSuite) TestReturnByBarcode() {
 
 	// Now return by barcode
 	returnBody := map[string]interface{}{
-		"barcode":          suite.testCopy1.Barcode.String,
+		"barcode":          suite.testCopy1.Barcode,
 		"return_condition": "good",
 		"condition_notes":  "Minor wear on cover",
 	}
@@ -390,7 +387,7 @@ func (suite *TransactionCopyTestSuite) TestReturnByBarcode() {
 func (suite *TransactionCopyTestSuite) TestReturnUpdatesCondition() {
 	// First, borrow the book
 	borrowBody := map[string]interface{}{
-		"barcode":      suite.testCopy1.Barcode.String,
+		"barcode":      suite.testCopy1.Barcode,
 		"student_id":   suite.testStudent.ID,
 		"librarian_id": suite.testUser.ID,
 	}
@@ -408,7 +405,7 @@ func (suite *TransactionCopyTestSuite) TestReturnUpdatesCondition() {
 
 	// Original condition was "excellent", return as "fair"
 	returnBody := map[string]interface{}{
-		"barcode":          suite.testCopy1.Barcode.String,
+		"barcode":          suite.testCopy1.Barcode,
 		"return_condition": "fair",
 		"condition_notes":  "Pages have some marks",
 	}
@@ -433,7 +430,7 @@ func (suite *TransactionCopyTestSuite) TestReturnUpdatesCondition() {
 // TestScanBarcode tests the barcode scanning endpoint
 func (suite *TransactionCopyTestSuite) TestScanBarcode() {
 	// Test scanning an available copy
-	url := fmt.Sprintf("/api/v1/transactions/scan?barcode=%s", suite.testCopy1.Barcode.String)
+	url := fmt.Sprintf("/api/v1/transactions/scan?barcode=%s", suite.testCopy1.Barcode)
 	req, err := http.NewRequest("GET", url, nil)
 	require.NoError(suite.T(), err)
 
@@ -451,7 +448,7 @@ func (suite *TransactionCopyTestSuite) TestScanBarcode() {
 	data, ok := response.Data.(map[string]interface{})
 	require.True(suite.T(), ok)
 
-	assert.Equal(suite.T(), suite.testCopy1.Barcode.String, data["barcode"])
+	assert.Equal(suite.T(), suite.testCopy1.Barcode, data["barcode"])
 	assert.Equal(suite.T(), "available", data["status"])
 	assert.Equal(suite.T(), false, data["is_borrowed"])
 	assert.Equal(suite.T(), true, data["can_borrow"])
@@ -461,7 +458,7 @@ func (suite *TransactionCopyTestSuite) TestScanBarcode() {
 func (suite *TransactionCopyTestSuite) TestScanBarcodeForBorrowedCopy() {
 	// First, borrow the copy
 	borrowBody := map[string]interface{}{
-		"barcode":      suite.testCopy1.Barcode.String,
+		"barcode":      suite.testCopy1.Barcode,
 		"student_id":   suite.testStudent.ID,
 		"librarian_id": suite.testUser.ID,
 	}
@@ -478,7 +475,7 @@ func (suite *TransactionCopyTestSuite) TestScanBarcodeForBorrowedCopy() {
 	require.Equal(suite.T(), http.StatusCreated, w.Code)
 
 	// Now scan the borrowed copy
-	url := fmt.Sprintf("/api/v1/transactions/scan?barcode=%s", suite.testCopy1.Barcode.String)
+	url := fmt.Sprintf("/api/v1/transactions/scan?barcode=%s", suite.testCopy1.Barcode)
 	req, err = http.NewRequest("GET", url, nil)
 	require.NoError(suite.T(), err)
 
@@ -510,7 +507,7 @@ func (suite *TransactionCopyTestSuite) TestScanBarcodeForBorrowedCopy() {
 func (suite *TransactionCopyTestSuite) TestCanRenewActiveTransaction() {
 	// Create a borrow transaction
 	borrowBody := map[string]interface{}{
-		"barcode":      suite.testCopy1.Barcode.String,
+		"barcode":      suite.testCopy1.Barcode,
 		"student_id":   suite.testStudent.ID,
 		"librarian_id": suite.testUser.ID,
 	}
@@ -559,7 +556,7 @@ func (suite *TransactionCopyTestSuite) TestCanRenewActiveTransaction() {
 func (suite *TransactionCopyTestSuite) TestCannotRenewReturnedTransaction() {
 	// Borrow and return a book
 	borrowBody := map[string]interface{}{
-		"barcode":      suite.testCopy1.Barcode.String,
+		"barcode":      suite.testCopy1.Barcode,
 		"student_id":   suite.testStudent.ID,
 		"librarian_id": suite.testUser.ID,
 	}
@@ -585,7 +582,7 @@ func (suite *TransactionCopyTestSuite) TestCannotRenewReturnedTransaction() {
 
 	// Return the book
 	returnBody := map[string]interface{}{
-		"barcode":          suite.testCopy1.Barcode.String,
+		"barcode":          suite.testCopy1.Barcode,
 		"return_condition": "good",
 	}
 
@@ -623,7 +620,7 @@ func (suite *TransactionCopyTestSuite) TestCannotRenewReturnedTransaction() {
 func (suite *TransactionCopyTestSuite) TestRenewActiveTransaction() {
 	// Create a borrow transaction
 	borrowBody := map[string]interface{}{
-		"barcode":      suite.testCopy1.Barcode.String,
+		"barcode":      suite.testCopy1.Barcode,
 		"student_id":   suite.testStudent.ID,
 		"librarian_id": suite.testUser.ID,
 	}
@@ -710,7 +707,7 @@ func (suite *TransactionCopyTestSuite) TestBorrowByBarcodeInvalidBarcode() {
 func (suite *TransactionCopyTestSuite) TestReturnByBarcodeNotBorrowed() {
 	// Try to return a copy that was never borrowed
 	returnBody := map[string]interface{}{
-		"barcode":          suite.testCopy1.Barcode.String,
+		"barcode":          suite.testCopy1.Barcode,
 		"return_condition": "good",
 	}
 

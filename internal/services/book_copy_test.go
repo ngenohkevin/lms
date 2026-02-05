@@ -28,7 +28,7 @@ func (m *MockBookCopyQuerier) GetBookCopyByID(ctx context.Context, id int32) (qu
 	return args.Get(0).(queries.BookCopy), args.Error(1)
 }
 
-func (m *MockBookCopyQuerier) GetBookCopyByBarcode(ctx context.Context, barcode pgtype.Text) (queries.BookCopy, error) {
+func (m *MockBookCopyQuerier) GetBookCopyByBarcode(ctx context.Context, barcode string) (queries.BookCopy, error) {
 	args := m.Called(ctx, barcode)
 	return args.Get(0).(queries.BookCopy), args.Error(1)
 }
@@ -94,16 +94,15 @@ func (m *MockBookCopyQuerier) CountCopyBorrowings(ctx context.Context, copyID pg
 }
 
 // Helper to create test book copy
-func createTestBookCopy(id, bookID int32, copyNumber, barcode string) queries.BookCopy {
+func createTestBookCopy(id, bookID int32, barcode string) queries.BookCopy {
 	return queries.BookCopy{
-		ID:         id,
-		BookID:     bookID,
-		CopyNumber: copyNumber,
-		Barcode:    pgtype.Text{String: barcode, Valid: true},
-		Condition:  pgtype.Text{String: "good", Valid: true},
-		Status:     pgtype.Text{String: "available", Valid: true},
-		CreatedAt:  pgtype.Timestamp{Time: time.Now(), Valid: true},
-		UpdatedAt:  pgtype.Timestamp{Time: time.Now(), Valid: true},
+		ID:        id,
+		BookID:    bookID,
+		Barcode:   barcode,
+		Condition: pgtype.Text{String: "good", Valid: true},
+		Status:    pgtype.Text{String: "available", Valid: true},
+		CreatedAt: pgtype.Timestamp{Time: time.Now(), Valid: true},
+		UpdatedAt: pgtype.Timestamp{Time: time.Now(), Valid: true},
 	}
 }
 
@@ -112,16 +111,14 @@ func TestBookCopyService_CreateBookCopy_Success(t *testing.T) {
 	service := NewBookCopyService(mockQuerier, nil)
 	ctx := context.Background()
 
-	barcode := "BC001"
 	condition := "good"
 	req := models.CreateBookCopyRequest{
-		BookID:     1,
-		CopyNumber: "COPY-001",
-		Barcode:    &barcode,
-		Condition:  &condition,
+		BookID:    1,
+		Barcode:   "BC001",
+		Condition: &condition,
 	}
 
-	expectedCopy := createTestBookCopy(1, 1, "COPY-001", "BC001")
+	expectedCopy := createTestBookCopy(1, 1, "BC001")
 	mockQuerier.On("CreateBookCopy", ctx, mock.AnythingOfType("queries.CreateBookCopyParams")).Return(expectedCopy, nil)
 
 	result, err := service.CreateBookCopy(ctx, req)
@@ -129,8 +126,7 @@ func TestBookCopyService_CreateBookCopy_Success(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Equal(t, int32(1), result.ID)
-	assert.Equal(t, "COPY-001", result.CopyNumber)
-	assert.Equal(t, &barcode, result.Barcode)
+	assert.Equal(t, "BC001", result.Barcode)
 	mockQuerier.AssertExpectations(t)
 }
 
@@ -139,10 +135,10 @@ func TestBookCopyService_CreateBookCopy_ValidationError(t *testing.T) {
 	service := NewBookCopyService(mockQuerier, nil)
 	ctx := context.Background()
 
-	// Empty copy number should fail validation
+	// Empty barcode should fail validation
 	req := models.CreateBookCopyRequest{
-		BookID:     1,
-		CopyNumber: "",
+		BookID:  1,
+		Barcode: "",
 	}
 
 	result, err := service.CreateBookCopy(ctx, req)
@@ -158,8 +154,8 @@ func TestBookCopyService_CreateBookCopy_DatabaseError(t *testing.T) {
 	ctx := context.Background()
 
 	req := models.CreateBookCopyRequest{
-		BookID:     1,
-		CopyNumber: "COPY-001",
+		BookID:  1,
+		Barcode: "COPY-001",
 	}
 
 	mockQuerier.On("CreateBookCopy", ctx, mock.AnythingOfType("queries.CreateBookCopyParams")).
@@ -178,7 +174,7 @@ func TestBookCopyService_GetBookCopyByID_Success(t *testing.T) {
 	service := NewBookCopyService(mockQuerier, nil)
 	ctx := context.Background()
 
-	expectedCopy := createTestBookCopy(1, 1, "COPY-001", "BC001")
+	expectedCopy := createTestBookCopy(1, 1, "BC001")
 	mockQuerier.On("GetBookCopyByID", ctx, int32(1)).Return(expectedCopy, nil)
 
 	result, err := service.GetBookCopyByID(ctx, 1)
@@ -209,15 +205,14 @@ func TestBookCopyService_GetBookCopyByBarcode_Success(t *testing.T) {
 	service := NewBookCopyService(mockQuerier, nil)
 	ctx := context.Background()
 
-	barcode := pgtype.Text{String: "BC001", Valid: true}
-	expectedCopy := createTestBookCopy(1, 1, "COPY-001", "BC001")
-	mockQuerier.On("GetBookCopyByBarcode", ctx, barcode).Return(expectedCopy, nil)
+	expectedCopy := createTestBookCopy(1, 1, "BC001")
+	mockQuerier.On("GetBookCopyByBarcode", ctx, "BC001").Return(expectedCopy, nil)
 
 	result, err := service.GetBookCopyByBarcode(ctx, "BC001")
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.Equal(t, "BC001", *result.Barcode)
+	assert.Equal(t, "BC001", result.Barcode)
 	mockQuerier.AssertExpectations(t)
 }
 
@@ -227,8 +222,8 @@ func TestBookCopyService_ListBookCopies_Success(t *testing.T) {
 	ctx := context.Background()
 
 	copies := []queries.BookCopy{
-		createTestBookCopy(1, 1, "COPY-001", "BC001"),
-		createTestBookCopy(2, 1, "COPY-002", "BC002"),
+		createTestBookCopy(1, 1, "BC001"),
+		createTestBookCopy(2, 1, "BC002"),
 	}
 	mockQuerier.On("ListBookCopies", ctx, int32(1)).Return(copies, nil)
 
@@ -236,8 +231,8 @@ func TestBookCopyService_ListBookCopies_Success(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Len(t, result, 2)
-	assert.Equal(t, "COPY-001", result[0].CopyNumber)
-	assert.Equal(t, "COPY-002", result[1].CopyNumber)
+	assert.Equal(t, "BC001", result[0].Barcode)
+	assert.Equal(t, "BC002", result[1].Barcode)
 	mockQuerier.AssertExpectations(t)
 }
 
@@ -260,14 +255,14 @@ func TestBookCopyService_UpdateBookCopy_Success(t *testing.T) {
 	service := NewBookCopyService(mockQuerier, nil)
 	ctx := context.Background()
 
-	existingCopy := createTestBookCopy(1, 1, "COPY-001", "BC001")
+	existingCopy := createTestBookCopy(1, 1, "BC001")
 	newBarcode := "BC001-UPDATED"
 	req := models.UpdateBookCopyRequest{
 		Barcode: &newBarcode,
 	}
 
 	updatedCopy := existingCopy
-	updatedCopy.Barcode = pgtype.Text{String: newBarcode, Valid: true}
+	updatedCopy.Barcode = newBarcode
 
 	mockQuerier.On("GetBookCopyByID", ctx, int32(1)).Return(existingCopy, nil)
 	mockQuerier.On("UpdateBookCopy", ctx, mock.AnythingOfType("queries.UpdateBookCopyParams")).Return(updatedCopy, nil)
@@ -276,7 +271,7 @@ func TestBookCopyService_UpdateBookCopy_Success(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.Equal(t, newBarcode, *result.Barcode)
+	assert.Equal(t, newBarcode, result.Barcode)
 	mockQuerier.AssertExpectations(t)
 }
 
@@ -306,8 +301,8 @@ func TestBookCopyService_UpdateBookCopyStatus_Success(t *testing.T) {
 	service := NewBookCopyService(mockQuerier, nil)
 	ctx := context.Background()
 
-	existingCopy := createTestBookCopy(1, 1, "COPY-001", "BC001")
-	updatedCopy := createTestBookCopy(1, 1, "COPY-001", "BC001")
+	existingCopy := createTestBookCopy(1, 1, "BC001")
+	updatedCopy := createTestBookCopy(1, 1, "BC001")
 	updatedCopy.Status = pgtype.Text{String: "borrowed", Valid: true}
 
 	mockQuerier.On("GetBookCopyByID", ctx, int32(1)).Return(existingCopy, nil)
@@ -329,7 +324,7 @@ func TestBookCopyService_DeleteBookCopy_Success(t *testing.T) {
 	service := NewBookCopyService(mockQuerier, nil)
 	ctx := context.Background()
 
-	existingCopy := createTestBookCopy(1, 1, "COPY-001", "BC001")
+	existingCopy := createTestBookCopy(1, 1, "BC001")
 	mockQuerier.On("GetBookCopyByID", ctx, int32(1)).Return(existingCopy, nil)
 	mockQuerier.On("DeleteBookCopy", ctx, int32(1)).Return(nil)
 
@@ -344,7 +339,7 @@ func TestBookCopyService_DeleteBookCopy_Error(t *testing.T) {
 	service := NewBookCopyService(mockQuerier, nil)
 	ctx := context.Background()
 
-	existingCopy := createTestBookCopy(1, 1, "COPY-001", "BC001")
+	existingCopy := createTestBookCopy(1, 1, "BC001")
 	mockQuerier.On("GetBookCopyByID", ctx, int32(1)).Return(existingCopy, nil)
 	mockQuerier.On("DeleteBookCopy", ctx, int32(1)).Return(errors.New("delete failed"))
 
@@ -363,11 +358,11 @@ func TestBookCopyService_CreateBookCopy_WithAcquisitionDate(t *testing.T) {
 	acqDate := "2024-01-15"
 	req := models.CreateBookCopyRequest{
 		BookID:          1,
-		CopyNumber:      "COPY-001",
+		Barcode:         "COPY-001",
 		AcquisitionDate: &acqDate,
 	}
 
-	expectedCopy := createTestBookCopy(1, 1, "COPY-001", "")
+	expectedCopy := createTestBookCopy(1, 1, "COPY-001")
 	expectedCopy.AcquisitionDate = pgtype.Date{Time: time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC), Valid: true}
 
 	mockQuerier.On("CreateBookCopy", ctx, mock.AnythingOfType("queries.CreateBookCopyParams")).Return(expectedCopy, nil)
@@ -388,7 +383,7 @@ func TestBookCopyService_CreateBookCopy_InvalidAcquisitionDate(t *testing.T) {
 	invalidDate := "not-a-date"
 	req := models.CreateBookCopyRequest{
 		BookID:          1,
-		CopyNumber:      "COPY-001",
+		Barcode:         "COPY-001",
 		AcquisitionDate: &invalidDate,
 	}
 
@@ -407,11 +402,11 @@ func TestBookCopyService_MarkCopyBorrowed_Success(t *testing.T) {
 	ctx := context.Background()
 
 	// Create an available copy
-	existingCopy := createTestBookCopy(1, 1, "COPY-001", "BC001")
+	existingCopy := createTestBookCopy(1, 1, "BC001")
 	existingCopy.Status = pgtype.Text{String: "available", Valid: true}
 
 	// Expected borrowed copy
-	borrowedCopy := createTestBookCopy(1, 1, "COPY-001", "BC001")
+	borrowedCopy := createTestBookCopy(1, 1, "BC001")
 	borrowedCopy.Status = pgtype.Text{String: "borrowed", Valid: true}
 
 	mockQuerier.On("GetBookCopyByID", ctx, int32(1)).Return(existingCopy, nil)
@@ -434,7 +429,7 @@ func TestBookCopyService_MarkCopyBorrowed_NotAvailable(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a borrowed copy (not available)
-	existingCopy := createTestBookCopy(1, 1, "COPY-001", "BC001")
+	existingCopy := createTestBookCopy(1, 1, "BC001")
 	existingCopy.Status = pgtype.Text{String: "borrowed", Valid: true}
 
 	mockQuerier.On("GetBookCopyByID", ctx, int32(1)).Return(existingCopy, nil)
@@ -469,11 +464,11 @@ func TestBookCopyService_MarkCopyReturned_Success(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a borrowed copy
-	existingCopy := createTestBookCopy(1, 1, "COPY-001", "BC001")
+	existingCopy := createTestBookCopy(1, 1, "BC001")
 	existingCopy.Status = pgtype.Text{String: "borrowed", Valid: true}
 
 	// Expected returned copy
-	returnedCopy := createTestBookCopy(1, 1, "COPY-001", "BC001")
+	returnedCopy := createTestBookCopy(1, 1, "BC001")
 	returnedCopy.Status = pgtype.Text{String: "available", Valid: true}
 	returnedCopy.Condition = pgtype.Text{String: "good", Valid: true}
 
@@ -499,11 +494,11 @@ func TestBookCopyService_MarkCopyReturned_WithDamagedCondition(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a borrowed copy
-	existingCopy := createTestBookCopy(1, 1, "COPY-001", "BC001")
+	existingCopy := createTestBookCopy(1, 1, "BC001")
 	existingCopy.Status = pgtype.Text{String: "borrowed", Valid: true}
 
 	// Expected returned copy with damaged status
-	returnedCopy := createTestBookCopy(1, 1, "COPY-001", "BC001")
+	returnedCopy := createTestBookCopy(1, 1, "BC001")
 	returnedCopy.Status = pgtype.Text{String: "damaged", Valid: true}
 	returnedCopy.Condition = pgtype.Text{String: "damaged", Valid: true}
 
@@ -529,12 +524,12 @@ func TestBookCopyService_MarkCopyReturned_KeepExistingCondition(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a borrowed copy with fair condition
-	existingCopy := createTestBookCopy(1, 1, "COPY-001", "BC001")
+	existingCopy := createTestBookCopy(1, 1, "BC001")
 	existingCopy.Status = pgtype.Text{String: "borrowed", Valid: true}
 	existingCopy.Condition = pgtype.Text{String: "fair", Valid: true}
 
 	// Expected returned copy keeping existing condition
-	returnedCopy := createTestBookCopy(1, 1, "COPY-001", "BC001")
+	returnedCopy := createTestBookCopy(1, 1, "BC001")
 	returnedCopy.Status = pgtype.Text{String: "available", Valid: true}
 	returnedCopy.Condition = pgtype.Text{String: "fair", Valid: true}
 

@@ -93,11 +93,7 @@ func (h *QRCodeHandler) GetCopyQR(c *gin.Context) {
 		return
 	}
 
-	// Get barcode if available
-	barcode := ""
-	if copy.Barcode != nil {
-		barcode = *copy.Barcode
-	}
+	barcode := copy.Barcode
 
 	// Generate QR code
 	png, err := h.qrService.GenerateCopyQR(c.Request.Context(), int32(copyID), barcode, h.baseURL)

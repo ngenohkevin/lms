@@ -80,8 +80,7 @@ type BookAuthor struct {
 type BookCopy struct {
 	ID              int32            `db:"id" json:"id"`
 	BookID          int32            `db:"book_id" json:"book_id"`
-	CopyNumber      string           `db:"copy_number" json:"copy_number"`
-	Barcode         pgtype.Text      `db:"barcode" json:"barcode"`
+	Barcode         string           `db:"barcode" json:"barcode"`
 	Condition       pgtype.Text      `db:"condition" json:"condition"`
 	AcquisitionDate pgtype.Date      `db:"acquisition_date" json:"acquisition_date"`
 	Status          pgtype.Text      `db:"status" json:"status"`
