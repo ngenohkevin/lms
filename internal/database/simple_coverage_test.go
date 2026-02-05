@@ -168,7 +168,7 @@ func TestDatabaseCoverageSimple(t *testing.T) {
 		// Create book
 		book, err := q.CreateBook(ctx, queries.CreateBookParams{
 			BookID:          "COVTEST001",
-		BookType:        "textbook",
+			BookType:        "textbook",
 			Title:           "Test Coverage Book",
 			Author:          "Test Author",
 			Genre:           pgtype.Text{String: "Testing", Valid: true},
@@ -257,7 +257,7 @@ func TestDatabaseCoverageSimple(t *testing.T) {
 
 		book, err := q.CreateBook(ctx, queries.CreateBookParams{
 			BookID:          "COVTEST002",
-		BookType:        "textbook",
+			BookType:        "textbook",
 			Title:           "Transaction Test Book",
 			Author:          "Test Author",
 			TotalCopies:     pgtype.Int4{Int32: 5, Valid: true},
@@ -316,7 +316,7 @@ func TestDatabaseCoverageSimple(t *testing.T) {
 
 		book, err := q.CreateBook(ctx, queries.CreateBookParams{
 			BookID:          "COVTEST003",
-		BookType:        "textbook",
+			BookType:        "textbook",
 			Title:           "Reservation Test Book",
 			Author:          "Test Author",
 			TotalCopies:     pgtype.Int4{Int32: 1, Valid: true},
