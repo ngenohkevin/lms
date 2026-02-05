@@ -1590,14 +1590,14 @@ func (rs *ReportService) buildLostBooksReport(
 		booksList[i] = item
 	}
 
-	// Build summary
+	// Build summary - map database fields to frontend expected fields
 	reportSummary := models.LostBooksSummary{
-		TotalLostBooks:        summary.TotalLostBooks,
+		TotalLost:             summary.TotalLostBooks,
 		TotalReplacementValue: summary.TotalReplacementValue,
-		CollectedAmount:       summary.CollectedAmount,
-		OutstandingAmount:     summary.OutstandingAmount,
-		StudentsAffected:      summary.StudentsAffected,
-		GenresAffected:        summary.GenresAffected,
+		TotalPaid:             summary.CollectedAmount,
+		TotalOutstanding:      summary.OutstandingAmount,
+		PendingPaymentCount:   summary.StudentsAffected, // Students with pending payments
+		RecoveredCount:        0,                        // Not tracked in current schema
 	}
 
 	// Build trends
@@ -1607,6 +1607,7 @@ func (rs *ReportService) buildLostBooksReport(
 			Period:           trend.Period,
 			LostCount:        trend.LostCount,
 			ReplacementValue: trend.ReplacementValue,
+			Recovered:        0, // Not tracked in current schema
 		}
 	}
 
@@ -1614,10 +1615,10 @@ func (rs *ReportService) buildLostBooksReport(
 	categoryList := make([]models.LostBooksByCategory, len(byCategory))
 	for i, cat := range byCategory {
 		categoryList[i] = models.LostBooksByCategory{
-			Genre:      cat.Genre,
-			LostCount:  cat.LostCount,
-			TotalValue: cat.TotalValue,
-			AvgValue:   cat.AvgValue,
+			Genre:              cat.Genre,
+			LostCount:          cat.LostCount,
+			ReplacementValue:   cat.TotalValue,
+			AvgReplacementCost: cat.AvgValue,
 		}
 	}
 
@@ -1627,7 +1628,7 @@ func (rs *ReportService) buildLostBooksReport(
 		deptList[i] = models.LostBooksByDepartment{
 			Department:       dept.Department,
 			LostCount:        dept.LostCount,
-			TotalValue:       dept.TotalValue,
+			ReplacementValue: dept.TotalValue,
 			StudentsAffected: dept.StudentsAffected,
 		}
 	}

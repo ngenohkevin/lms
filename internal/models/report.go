@@ -784,12 +784,12 @@ type LostBookDetail struct {
 
 // LostBooksSummary represents summary statistics for lost books
 type LostBooksSummary struct {
-	TotalLostBooks        int32  `json:"total_lost_books"`
+	TotalLost             int32  `json:"total_lost"`
 	TotalReplacementValue string `json:"total_replacement_value"`
-	CollectedAmount       string `json:"collected_amount"`
-	OutstandingAmount     string `json:"outstanding_amount"`
-	StudentsAffected      int32  `json:"students_affected"`
-	GenresAffected        int32  `json:"genres_affected"`
+	TotalPaid             string `json:"total_paid"`
+	TotalOutstanding      string `json:"total_outstanding"`
+	PendingPaymentCount   int32  `json:"pending_payment_count"`
+	RecoveredCount        int32  `json:"recovered_count"`
 }
 
 // LostBooksTrendItem represents a trend data point for lost books
@@ -797,21 +797,22 @@ type LostBooksTrendItem struct {
 	Period           string `json:"period"`
 	LostCount        int32  `json:"lost_count"`
 	ReplacementValue string `json:"replacement_value"`
+	Recovered        int32  `json:"recovered"`
 }
 
 // LostBooksByCategory represents lost books grouped by category/genre
 type LostBooksByCategory struct {
-	Genre      string `json:"genre"`
-	LostCount  int32  `json:"lost_count"`
-	TotalValue string `json:"total_value"`
-	AvgValue   string `json:"avg_value"`
+	Genre              string `json:"genre"`
+	LostCount          int32  `json:"lost_count"`
+	ReplacementValue   string `json:"replacement_value"`
+	AvgReplacementCost string `json:"avg_replacement_cost"`
 }
 
 // LostBooksByDepartment represents lost books grouped by department
 type LostBooksByDepartment struct {
 	Department       string `json:"department"`
 	LostCount        int32  `json:"lost_count"`
-	TotalValue       string `json:"total_value"`
+	ReplacementValue string `json:"replacement_value"`
 	StudentsAffected int32  `json:"students_affected"`
 }
 
