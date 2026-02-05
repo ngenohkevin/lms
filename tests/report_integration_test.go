@@ -60,7 +60,6 @@ func (suite *ReportIntegrationTestSuite) createTestDataForReports() {
 		LastName:    "Doe",
 		YearOfStudy: 1,
 		MaxBooks:    5,
-		Department:  pgtype.Text{String: "Computer Science", Valid: true},
 	})
 	assert.NoError(suite.T(), err)
 
@@ -70,7 +69,6 @@ func (suite *ReportIntegrationTestSuite) createTestDataForReports() {
 		LastName:    "Smith",
 		YearOfStudy: 2,
 		MaxBooks:    5,
-		Department:  pgtype.Text{String: "Engineering", Valid: true},
 	})
 	assert.NoError(suite.T(), err)
 }
@@ -116,7 +114,7 @@ func (suite *ReportIntegrationTestSuite) TestGetBorrowingStatistics() {
 func (suite *ReportIntegrationTestSuite) TestGetOverdueBooks() {
 	ctx := context.Background()
 
-	report, err := suite.reportService.GetOverdueBooks(ctx, nil, nil)
+	report, err := suite.reportService.GetOverdueBooks(ctx, nil)
 
 	assert.NoError(suite.T(), err)
 	assert.NotNil(suite.T(), report)
@@ -145,7 +143,7 @@ func (suite *ReportIntegrationTestSuite) TestGetStudentActivity() {
 	startDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	endDate := time.Date(2024, 12, 31, 23, 59, 59, 0, time.UTC)
 
-	report, err := suite.reportService.GetStudentActivity(ctx, nil, nil, startDate, endDate)
+	report, err := suite.reportService.GetStudentActivity(ctx, nil, startDate, endDate)
 
 	assert.NoError(suite.T(), err)
 	assert.NotNil(suite.T(), report)

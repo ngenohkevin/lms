@@ -19,9 +19,6 @@ type StudentDB struct {
 	Email            pgtype.Text      `json:"email"`
 	Phone            pgtype.Text      `json:"phone"`
 	YearOfStudy      int32            `json:"year_of_study"`
-	Department       pgtype.Text      `json:"department"`
-	DepartmentID     pgtype.Int4      `json:"department_id"`
-	DepartmentName   pgtype.Text      `json:"department_name"` // From join with departments table
 	EnrollmentDate   pgtype.Date      `json:"enrollment_date"`
 	PasswordHash     pgtype.Text      `json:"password_hash,omitempty"`
 	IsActive         pgtype.Bool      `json:"is_active"`
@@ -47,7 +44,6 @@ type CreateStudentRequest struct {
 	Email       string `json:"email" binding:"omitempty,email"`
 	Phone       string `json:"phone" binding:"omitempty"`
 	YearOfStudy int32  `json:"year_of_study" binding:"required,min=1,max=8"`
-	Department  string `json:"department" binding:"omitempty"`
 	MaxBooks    int32  `json:"max_books" binding:"omitempty,min=1,max=20"`
 }
 
@@ -58,7 +54,6 @@ type UpdateStudentRequest struct {
 	Email       string `json:"email" binding:"omitempty,email"`
 	Phone       string `json:"phone" binding:"omitempty"`
 	YearOfStudy int32  `json:"year_of_study" binding:"required,min=1,max=8"`
-	Department  string `json:"department" binding:"omitempty"`
 	MaxBooks    int32  `json:"max_books" binding:"omitempty,min=1,max=20"`
 }
 
@@ -79,9 +74,6 @@ type StudentResponse struct {
 	Email            string  `json:"email,omitempty"`
 	Phone            string  `json:"phone,omitempty"`
 	YearOfStudy      int32   `json:"year_of_study"`
-	Department       string  `json:"department,omitempty"`
-	DepartmentID     *int32  `json:"department_id,omitempty"`
-	DepartmentName   string  `json:"department_name,omitempty"`
 	EnrollmentDate   string  `json:"enrollment_date"`
 	IsActive         bool    `json:"is_active"`
 	Status           string  `json:"status"`
@@ -107,7 +99,6 @@ type StudentListResponse struct {
 type StudentSearchRequest struct {
 	Query       string `form:"q" binding:"omitempty"`
 	YearOfStudy int32  `form:"year" binding:"omitempty,min=1,max=8"`
-	Department  string `form:"department" binding:"omitempty"`
 	IsActive    *bool  `form:"active" binding:"omitempty"`
 	HasFines    *bool  `form:"has_fines" binding:"omitempty"`   // Filter students with unpaid fines
 	HasOverdue  *bool  `form:"has_overdue" binding:"omitempty"` // Filter students with overdue books
@@ -123,7 +114,6 @@ type BulkImportStudentRequest struct {
 	Email       string `csv:"email" binding:"omitempty,email"`
 	Phone       string `csv:"phone" binding:"omitempty"`
 	YearOfStudy int32  `csv:"year_of_study" binding:"required,min=1,max=8"`
-	Department  string `csv:"department" binding:"omitempty"`
 }
 
 // BulkImportResponse represents the response for bulk import operations
@@ -173,7 +163,6 @@ func (r *CreateStudentRequest) Validate() error {
 	r.LastName = strings.TrimSpace(r.LastName)
 	r.Email = strings.TrimSpace(r.Email)
 	r.Phone = strings.TrimSpace(r.Phone)
-	r.Department = strings.TrimSpace(r.Department)
 
 	// Validate student ID format
 	if !StudentIDPattern.MatchString(r.StudentID) {
@@ -208,7 +197,6 @@ func (r *UpdateStudentRequest) Validate() error {
 	r.LastName = strings.TrimSpace(r.LastName)
 	r.Email = strings.TrimSpace(r.Email)
 	r.Phone = strings.TrimSpace(r.Phone)
-	r.Department = strings.TrimSpace(r.Department)
 
 	// Validate required fields
 	if r.FirstName == "" {
@@ -263,7 +251,6 @@ func (r *BulkImportStudentRequest) Validate() error {
 	r.LastName = strings.TrimSpace(r.LastName)
 	r.Email = strings.TrimSpace(r.Email)
 	r.Phone = strings.TrimSpace(r.Phone)
-	r.Department = strings.TrimSpace(r.Department)
 
 	// Validate student ID format
 	if !StudentIDPattern.MatchString(r.StudentID) {
@@ -322,16 +309,6 @@ func (s *StudentDB) ToResponse() StudentResponse {
 	}
 	if s.Phone.Valid {
 		response.Phone = s.Phone.String
-	}
-	if s.Department.Valid {
-		response.Department = s.Department.String
-	}
-	if s.DepartmentID.Valid {
-		deptID := s.DepartmentID.Int32
-		response.DepartmentID = &deptID
-	}
-	if s.DepartmentName.Valid {
-		response.DepartmentName = s.DepartmentName.String
 	}
 	if s.SuspensionReason.Valid {
 		response.SuspensionReason = s.SuspensionReason.String
@@ -394,7 +371,6 @@ func (r *StudentSearchRequest) Normalize() {
 
 	// Trim whitespace from string fields
 	r.Query = strings.TrimSpace(r.Query)
-	r.Department = strings.TrimSpace(r.Department)
 }
 
 // GetOffset calculates the database offset for pagination

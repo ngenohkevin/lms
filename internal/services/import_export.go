@@ -169,8 +169,9 @@ func (s *ImportExportService) processImport(ctx context.Context, importData []mo
 		}
 
 		// Convert to CreateBookRequest
+		// BookType defaults to textbook for imports, BookID is auto-generated
 		createReq := models.CreateBookRequest{
-			BookID:          bookData.BookID,
+			BookType:        models.BookTypeTextbook,
 			Title:           bookData.Title,
 			Author:          bookData.Author,
 			ISBN:            bookData.ISBN,

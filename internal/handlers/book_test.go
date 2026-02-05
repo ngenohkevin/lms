@@ -134,7 +134,7 @@ func TestBookHandler_CreateBook(t *testing.T) {
 		{
 			name: "successful book creation",
 			requestBody: models.CreateBookRequest{
-				BookID:          "BK001",
+				BookType:        models.BookTypeTextbook,
 				Title:           "Test Book",
 				Author:          "Test Author",
 				ISBN:            stringPtr("1234567890"),
@@ -143,12 +143,13 @@ func TestBookHandler_CreateBook(t *testing.T) {
 			},
 			setup: func() {
 				mockService.On("CreateBook", mock.Anything, mock.MatchedBy(func(req models.CreateBookRequest) bool {
-					return req.BookID == "BK001" && req.Title == "Test Book"
+					return req.BookType == models.BookTypeTextbook && req.Title == "Test Book"
 				})).Return(&models.BookResponse{
 					ID:              1,
-					BookID:          "BK001",
+					BookID:          "HGL-T000001",
 					Title:           "Test Book",
 					Author:          "Test Author",
+					BookType:        models.BookTypeTextbook,
 					ISBN:            stringPtr("1234567890"),
 					TotalCopies:     5,
 					AvailableCopies: 5,
@@ -160,9 +161,9 @@ func TestBookHandler_CreateBook(t *testing.T) {
 		{
 			name: "validation error",
 			requestBody: models.CreateBookRequest{
-				BookID: "BK001",
-				Title:  "", // Empty title should cause validation error
-				Author: "Test Author",
+				BookType: models.BookTypeTextbook,
+				Title:    "", // Empty title should cause validation error
+				Author:   "Test Author",
 			},
 			setup: func() {
 				mockService.On("CreateBook", mock.Anything, mock.Anything).Return(nil, errors.New("validation error: title is required"))
@@ -170,14 +171,15 @@ func TestBookHandler_CreateBook(t *testing.T) {
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
-			name: "conflict error - duplicate book ID",
+			name: "conflict error - duplicate ISBN",
 			requestBody: models.CreateBookRequest{
-				BookID: "BK001",
-				Title:  "Test Book",
-				Author: "Test Author",
+				BookType: models.BookTypeTextbook,
+				Title:    "Test Book",
+				Author:   "Test Author",
+				ISBN:     stringPtr("1234567890"),
 			},
 			setup: func() {
-				mockService.On("CreateBook", mock.Anything, mock.Anything).Return(nil, errors.New("book with ID BK001 already exists"))
+				mockService.On("CreateBook", mock.Anything, mock.Anything).Return(nil, errors.New("book with ISBN 1234567890 already exists"))
 			},
 			expectedStatus: http.StatusConflict,
 		},
@@ -190,9 +192,9 @@ func TestBookHandler_CreateBook(t *testing.T) {
 		{
 			name: "internal server error",
 			requestBody: models.CreateBookRequest{
-				BookID: "BK001",
-				Title:  "Test Book",
-				Author: "Test Author",
+				BookType: models.BookTypeTextbook,
+				Title:    "Test Book",
+				Author:   "Test Author",
 			},
 			setup: func() {
 				mockService.On("CreateBook", mock.Anything, mock.Anything).Return(nil, errors.New("database error"))

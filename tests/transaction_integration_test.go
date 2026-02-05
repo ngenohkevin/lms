@@ -114,7 +114,6 @@ func (suite *TransactionIntegrationTestSuite) SetupTest() {
 		Email:        pgtype.Text{String: "john.doe@test.com", Valid: true},
 		YearOfStudy:  2,
 		MaxBooks:     5,
-		Department:   pgtype.Text{String: "Computer Science", Valid: true},
 		PasswordHash: pgtype.Text{String: "$2a$10$abcdefghijklmnopqrstuv", Valid: true},
 	})
 	require.NoError(suite.T(), err)

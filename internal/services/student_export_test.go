@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -159,10 +158,9 @@ func TestStudentService_DataExport(t *testing.T) {
 			},
 		},
 		{
-			name: "export with department filter",
+			name: "export active students to CSV",
 			request: &models.StudentExportRequest{
 				Format:          models.ExportFormatCSV,
-				Department:      "Computer Science",
 				IncludeInactive: false,
 			},
 			setupMocks: func(m *MockQueries) {
@@ -175,7 +173,6 @@ func TestStudentService_DataExport(t *testing.T) {
 						FirstName:   "John",
 						LastName:    "Doe",
 						YearOfStudy: 1,
-						Department:  pgtype.Text{String: "Computer Science", Valid: true},
 						IsActive:    pgtype.Bool{Bool: true, Valid: true},
 					},
 				}, nil)
@@ -185,7 +182,8 @@ func TestStudentService_DataExport(t *testing.T) {
 			},
 			expectError: false,
 			validateResult: func(t *testing.T, result *models.StudentExportResponse) {
-				assert.Contains(t, result.FileName, "Computer_Science")
+				assert.Contains(t, result.FileName, ".csv")
+				assert.FileExists(t, filepath.Join("./exports", result.FileName))
 			},
 		},
 		{
@@ -311,7 +309,6 @@ func TestStudentService_ExportValidation(t *testing.T) {
 			request: &models.StudentExportRequest{
 				Format:          models.ExportFormatCSV,
 				YearOfStudy:     func() *int32 { y := int32(1); return &y }(),
-				Department:      "Computer Science",
 				IncludeInactive: false,
 				Fields:          []string{"student_id", "first_name", "last_name"},
 			},
@@ -483,81 +480,6 @@ func TestStudentService_ExportByYear(t *testing.T) {
 	_ = os.RemoveAll("./exports")
 }
 
-// TestStudentService_ExportByDepartment tests department-specific export functionality
-func TestStudentService_ExportByDepartment(t *testing.T) {
-	tests := []struct {
-		name        string
-		department  string
-		format      models.StudentExportFormat
-		setupMocks  func(*MockQueries)
-		expectError bool
-	}{
-		{
-			name:       "export Computer Science students to JSON",
-			department: "Computer Science",
-			format:     models.ExportFormatJSON,
-			setupMocks: func(m *MockQueries) {
-				m.On("GetStudentsByStatus", mock.Anything, mock.MatchedBy(func(params queries.GetStudentsByStatusParams) bool {
-					return params.IsActive.Bool == true
-				})).Return([]queries.Student{
-					{
-						ID:         1,
-						StudentID:  "STU2024001",
-						FirstName:  "John",
-						LastName:   "Doe",
-						Department: pgtype.Text{String: "Computer Science", Valid: true},
-						IsActive:   pgtype.Bool{Bool: true, Valid: true},
-					},
-				}, nil)
-
-				m.On("CountStudentsByStatus", mock.Anything, pgtype.Bool{Bool: true, Valid: true}).Return(int64(1), nil)
-				m.On("GetStudentBorrowingStats", mock.Anything).Return([]queries.GetStudentBorrowingStatsRow{}, nil)
-			},
-			expectError: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Clean up before test
-			if err := os.RemoveAll("./exports"); err != nil {
-				t.Logf("Failed to clean up exports directory: %v", err)
-			}
-
-			mockQueries := new(MockQueries)
-			tt.setupMocks(mockQueries)
-
-			mockAuth := &MockAuthService{}
-			service := NewStudentService(mockQueries, mockAuth, nil)
-			ctx := context.Background()
-
-			result, err := service.ExportStudentsByDepartment(ctx, tt.department, tt.format)
-
-			if tt.expectError {
-				assert.Error(t, err)
-				assert.Nil(t, result)
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, result)
-				assert.Contains(t, result.FileName, strings.ReplaceAll(tt.department, " ", "_"))
-				assert.Equal(t, string(tt.format), result.Format)
-
-				// Verify file was created
-				assert.FileExists(t, filepath.Join("./exports", result.FileName))
-			}
-
-			mockQueries.AssertExpectations(t)
-
-			// Clean up after test
-			if result != nil {
-				_ = os.Remove(filepath.Join("./exports", result.FileName))
-			}
-		})
-	}
-
-	// Clean up exports directory after all tests
-	_ = os.RemoveAll("./exports")
-}
 
 // TestStudentService_CleanupExpiredExports tests the cleanup functionality
 func TestStudentService_CleanupExpiredExports(t *testing.T) {
@@ -621,11 +543,10 @@ func TestStudentService_GenerateExportFilename(t *testing.T) {
 	service := &StudentService{}
 
 	tests := []struct {
-		name       string
-		format     models.StudentExportFormat
-		year       *int32
-		department string
-		contains   []string
+		name     string
+		format   models.StudentExportFormat
+		year     *int32
+		contains []string
 	}{
 		{
 			name:     "basic CSV filename",
@@ -639,23 +560,21 @@ func TestStudentService_GenerateExportFilename(t *testing.T) {
 			contains: []string{"students_export_", "year3", ".json"},
 		},
 		{
-			name:       "XLSX filename with department",
-			format:     models.ExportFormatXLSX,
-			department: "Computer Science",
-			contains:   []string{"students_export_", "Computer_Science", ".xlsx"},
+			name:     "XLSX filename",
+			format:   models.ExportFormatXLSX,
+			contains: []string{"students_export_", ".xlsx"},
 		},
 		{
-			name:       "filename with year and department",
-			format:     models.ExportFormatCSV,
-			year:       func() *int32 { y := int32(2); return &y }(),
-			department: "Mathematics",
-			contains:   []string{"students_export_", "year2", "Mathematics", ".csv"},
+			name:     "filename with year",
+			format:   models.ExportFormatCSV,
+			year:     func() *int32 { y := int32(2); return &y }(),
+			contains: []string{"students_export_", "year2", ".csv"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			filename := service.GenerateExportFilename(tt.format, tt.year, tt.department)
+			filename := service.GenerateExportFilename(tt.format, tt.year)
 
 			for _, expectedSubstring := range tt.contains {
 				assert.Contains(t, filename, expectedSubstring)

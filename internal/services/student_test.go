@@ -122,9 +122,9 @@ func (m *MockQueries) BulkUpdateStudentStatus(ctx context.Context, params querie
 }
 
 // Enhanced Statistics Mock Methods
-func (m *MockQueries) GetStudentCountByYearAndDepartment(ctx context.Context) ([]queries.GetStudentCountByYearAndDepartmentRow, error) {
+func (m *MockQueries) GetStudentCountByYear(ctx context.Context) ([]queries.GetStudentCountByYearRow, error) {
 	args := m.Called(ctx)
-	return args.Get(0).([]queries.GetStudentCountByYearAndDepartmentRow), args.Error(1)
+	return args.Get(0).([]queries.GetStudentCountByYearRow), args.Error(1)
 }
 
 func (m *MockQueries) GetStudentEnrollmentTrends(ctx context.Context, params queries.GetStudentEnrollmentTrendsParams) ([]queries.GetStudentEnrollmentTrendsRow, error) {
@@ -194,10 +194,6 @@ func (m *MockQueries) UpdateStudentAdminNotes(ctx context.Context, params querie
 	return args.Get(0).(queries.Student), args.Error(1)
 }
 
-func (m *MockQueries) BulkUpdateStudentDepartment(ctx context.Context, params queries.BulkUpdateStudentDepartmentParams) (int64, error) {
-	args := m.Called(ctx, params)
-	return args.Get(0).(int64), args.Error(1)
-}
 
 // Helper function to create a mock student
 func createMockStudent() queries.Student {
@@ -210,7 +206,6 @@ func createMockStudent() queries.Student {
 		Email:          pgtype.Text{String: "john.doe@test.com", Valid: true},
 		Phone:          pgtype.Text{String: "+1234567890", Valid: true},
 		YearOfStudy:    1,
-		Department:     pgtype.Text{String: "Computer Science", Valid: true},
 		EnrollmentDate: pgtype.Date{Time: now, Valid: true},
 		PasswordHash:   pgtype.Text{String: "hashedpassword", Valid: true},
 		IsActive:       pgtype.Bool{Bool: true, Valid: true},
@@ -237,7 +232,6 @@ func TestStudentService_CreateStudent(t *testing.T) {
 				Email:       "john.doe@test.com",
 				Phone:       "+1234567890",
 				YearOfStudy: 1,
-				Department:  "Computer Science",
 			},
 			setupMocks: func(m *MockQueries) {
 				// Student ID doesn't exist
@@ -442,7 +436,6 @@ func TestStudentService_UpdateStudent(t *testing.T) {
 				LastName:    "UpdatedDoe",
 				Email:       "updated@test.com",
 				YearOfStudy: 2,
-				Department:  "Mathematics",
 			},
 			setupMocks: func(m *MockQueries) {
 				// Student exists
@@ -1007,7 +1000,6 @@ func TestStudentRequestValidation(t *testing.T) {
 			Email:       "john@test.com",
 			Phone:       "+1234567890",
 			YearOfStudy: 1,
-			Department:  "Computer Science",
 		}
 
 		assert.NoError(t, validRequest.Validate())
@@ -1282,7 +1274,6 @@ func TestStudentService_QuickAccountCreation(t *testing.T) {
 				Email:       "jane.smith@university.edu",
 				Phone:       "+1234567890",
 				YearOfStudy: 2,
-				Department:  "Mathematics",
 			},
 			setupMocks: func(m *MockQueries, a *MockAuthService) {
 				// Student ID doesn't exist
@@ -1303,7 +1294,6 @@ func TestStudentService_QuickAccountCreation(t *testing.T) {
 				mockStudent.Email = pgtype.Text{String: "jane.smith@university.edu", Valid: true}
 				mockStudent.Phone = pgtype.Text{String: "+1234567890", Valid: true}
 				mockStudent.YearOfStudy = 2
-				mockStudent.Department = pgtype.Text{String: "Mathematics", Valid: true}
 				mockStudent.PasswordHash = pgtype.Text{String: "hashed_STU2024002", Valid: true}
 
 				m.On("CreateStudent", mock.Anything, mock.MatchedBy(func(params queries.CreateStudentParams) bool {
@@ -1313,7 +1303,6 @@ func TestStudentService_QuickAccountCreation(t *testing.T) {
 						params.Email.String == "jane.smith@university.edu" &&
 						params.Phone.String == "+1234567890" &&
 						params.YearOfStudy == 2 &&
-						params.Department.String == "Mathematics" &&
 						params.PasswordHash.Valid == true &&
 						params.PasswordHash.String == "hashed_STU2024002"
 				})).Return(mockStudent, nil)

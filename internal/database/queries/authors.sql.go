@@ -123,7 +123,7 @@ func (q *Queries) GetAuthorByName(ctx context.Context, name string) (Author, err
 }
 
 const listAuthorBooks = `-- name: ListAuthorBooks :many
-SELECT b.id, b.book_id, b.isbn, b.title, b.author, b.publisher, b.published_year, b.genre, b.description, b.cover_image_url, b.total_copies, b.available_copies, b.shelf_location, b.is_active, b.deleted_at, b.created_at, b.updated_at, b.condition, b.category_id, b.series_id, b.series_number, b.language, b.page_count, b.edition, b.format FROM books b
+SELECT b.id, b.book_id, b.isbn, b.title, b.author, b.publisher, b.published_year, b.genre, b.description, b.cover_image_url, b.total_copies, b.available_copies, b.shelf_location, b.is_active, b.deleted_at, b.created_at, b.updated_at, b.condition, b.category_id, b.series_id, b.series_number, b.language, b.page_count, b.edition, b.format, b.book_type FROM books b
 JOIN book_authors ba ON b.id = ba.book_id
 WHERE ba.author_id = $1 AND b.deleted_at IS NULL
 ORDER BY b.title
@@ -164,6 +164,7 @@ func (q *Queries) ListAuthorBooks(ctx context.Context, authorID int32) ([]Book, 
 			&i.PageCount,
 			&i.Edition,
 			&i.Format,
+			&i.BookType,
 		); err != nil {
 			return nil, err
 		}

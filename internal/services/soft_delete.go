@@ -137,11 +137,11 @@ func (s *SoftDeleteService) ListDeletedUsers(ctx context.Context, limit, offset 
 // ListDeletedStudents returns all soft-deleted students
 func (s *SoftDeleteService) ListDeletedStudents(ctx context.Context, limit, offset int32) ([]queries.Student, error) {
 	query := `
-		SELECT id, student_id, first_name, last_name, email, phone, year_of_study, 
-		       department, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at
-		FROM students 
-		WHERE deleted_at IS NOT NULL 
-		ORDER BY deleted_at DESC 
+		SELECT id, student_id, first_name, last_name, email, phone, year_of_study,
+		       enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at
+		FROM students
+		WHERE deleted_at IS NOT NULL
+		ORDER BY deleted_at DESC
 		LIMIT $1 OFFSET $2`
 
 	rows, err := s.db.Query(ctx, query, limit, offset)
@@ -155,7 +155,7 @@ func (s *SoftDeleteService) ListDeletedStudents(ctx context.Context, limit, offs
 		var student queries.Student
 		err := rows.Scan(
 			&student.ID, &student.StudentID, &student.FirstName, &student.LastName,
-			&student.Email, &student.Phone, &student.YearOfStudy, &student.Department,
+			&student.Email, &student.Phone, &student.YearOfStudy,
 			&student.EnrollmentDate, &student.PasswordHash, &student.IsActive,
 			&student.DeletedAt, &student.CreatedAt, &student.UpdatedAt,
 		)

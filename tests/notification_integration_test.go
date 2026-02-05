@@ -109,7 +109,6 @@ func (suite *NotificationIntegrationTestSuite) createTestData() {
 		Phone:        pgtype.Text{String: "123-456-7890", Valid: true},
 		YearOfStudy:  1,
 		MaxBooks:     5,
-		Department:   pgtype.Text{String: "Computer Science", Valid: true},
 		PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
 	})
 	require.NoError(suite.T(), err)
@@ -408,7 +407,6 @@ func (suite *NotificationIntegrationTestSuite) TestPhase7_2_BatchNotifications()
 		Phone:        pgtype.Text{String: "123-456-7891", Valid: true},
 		YearOfStudy:  2,
 		MaxBooks:     5,
-		Department:   pgtype.Text{String: "Computer Science", Valid: true},
 		PasswordHash: pgtype.Text{String: "hashedpassword", Valid: true},
 	})
 	require.NoError(t, err)

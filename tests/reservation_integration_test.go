@@ -346,7 +346,6 @@ func createTestStudentWithStatus(t *testing.T, querier *queries.Queries, firstNa
 		LastName:    lastName,
 		YearOfStudy: 1,
 		MaxBooks:    5,
-		Department:  pgtype.Text{String: "Computer Science", Valid: true},
 		Email:       pgtype.Text{String: firstName + "." + lastName + "@example.com", Valid: true},
 	})
 	require.NoError(t, err)

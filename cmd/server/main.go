@@ -486,7 +486,6 @@ func setupRoutes(
 				students.POST("/bulk-import", requirePerm("students.create"), studentHandler.BulkImportStudents)
 				students.POST("/generate-id", requirePerm("students.create"), studentHandler.GenerateStudentID)
 				students.PUT("/status/bulk", requirePerm("students.update"), studentHandler.BulkUpdateStatus)
-				students.PUT("/department/bulk", requirePerm("students.update"), studentHandler.BulkUpdateDepartment)
 				students.POST("/export", requirePerm("reports.export"), studentHandler.ExportStudents)
 			}
 

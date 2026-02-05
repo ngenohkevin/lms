@@ -169,7 +169,6 @@ func (suite *SQLInjectionSecurityTestSuite) createTestData() {
 			Email:       pgtype.Text{String: "student@example.com", Valid: true},
 			YearOfStudy: 1,
 			MaxBooks:    5,
-			Department:  pgtype.Text{String: "Computer Science", Valid: true},
 		})
 		require.NoError(suite.T(), err)
 	}

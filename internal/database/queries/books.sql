@@ -1,7 +1,13 @@
 -- name: CreateBook :one
-INSERT INTO books (book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, category_id, series_id, series_number, language, page_count, edition, format)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+INSERT INTO books (book_id, book_type, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, category_id, series_id, series_number, language, page_count, edition, format)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
 RETURNING *;
+
+-- name: GetNextBookSequence :one
+UPDATE book_id_sequences
+SET current_sequence = current_sequence + 1, updated_at = NOW()
+WHERE book_type = $1
+RETURNING current_sequence;
 
 -- name: GetBookByID :one
 SELECT * FROM books
@@ -17,7 +23,7 @@ WHERE isbn = $1 AND deleted_at IS NULL;
 
 -- name: UpdateBook :one
 UPDATE books
-SET book_id = $2, isbn = $3, title = $4, author = $5, publisher = $6, published_year = $7, genre = $8, description = $9, cover_image_url = $10, total_copies = $11, available_copies = $12, shelf_location = $13, category_id = $14, series_id = $15, series_number = $16, language = $17, page_count = $18, edition = $19, format = $20, updated_at = NOW()
+SET book_id = $2, book_type = $3, isbn = $4, title = $5, author = $6, publisher = $7, published_year = $8, genre = $9, description = $10, cover_image_url = $11, total_copies = $12, available_copies = $13, shelf_location = $14, category_id = $15, series_id = $16, series_number = $17, language = $18, page_count = $19, edition = $20, format = $21, updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;
 

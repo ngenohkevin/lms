@@ -80,6 +80,11 @@ func (b *Book) ToResponse() models.BookResponse {
 		resp.Format = &b.Format.String
 	}
 
+	// Set book type
+	if bookType, ok := b.BookType.(string); ok && bookType != "" {
+		resp.BookType = models.BookType(bookType)
+	}
+
 	// Calculate status based on actual database values
 	resp.Status = b.GetStatus()
 

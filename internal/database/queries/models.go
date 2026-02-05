@@ -68,6 +68,7 @@ type Book struct {
 	PageCount       pgtype.Int4      `db:"page_count" json:"page_count"`
 	Edition         pgtype.Text      `db:"edition" json:"edition"`
 	Format          pgtype.Text      `db:"format" json:"format"`
+	BookType        interface{}      `db:"book_type" json:"book_type"`
 }
 
 type BookAuthor struct {
@@ -85,6 +86,15 @@ type BookCopy struct {
 	AcquisitionDate pgtype.Date      `db:"acquisition_date" json:"acquisition_date"`
 	Status          pgtype.Text      `db:"status" json:"status"`
 	Notes           pgtype.Text      `db:"notes" json:"notes"`
+	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+}
+
+type BookIDSequence struct {
+	ID              int32            `db:"id" json:"id"`
+	BookType        interface{}      `db:"book_type" json:"book_type"`
+	CurrentSequence int32            `db:"current_sequence" json:"current_sequence"`
+	Prefix          string           `db:"prefix" json:"prefix"`
 	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
 	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
 }
@@ -277,7 +287,6 @@ type Student struct {
 	Email          pgtype.Text      `db:"email" json:"email"`
 	Phone          pgtype.Text      `db:"phone" json:"phone"`
 	YearOfStudy    int32            `db:"year_of_study" json:"year_of_study"`
-	Department     pgtype.Text      `db:"department" json:"department"`
 	EnrollmentDate pgtype.Date      `db:"enrollment_date" json:"enrollment_date"`
 	PasswordHash   pgtype.Text      `db:"password_hash" json:"password_hash"`
 	IsActive       pgtype.Bool      `db:"is_active" json:"is_active"`
@@ -290,7 +299,6 @@ type Student struct {
 	SuspensionReason pgtype.Text      `db:"suspension_reason" json:"suspension_reason"`
 	GraduatedAt      pgtype.Timestamp `db:"graduated_at" json:"graduated_at"`
 	AdminNotes       pgtype.Text      `db:"admin_notes" json:"admin_notes"`
-	DepartmentID     pgtype.Int4      `db:"department_id" json:"department_id"`
 }
 
 type Transaction struct {

@@ -15,7 +15,7 @@ import (
 // ReportQuerier interface defines the database operations needed for reports
 type ReportQuerier interface {
 	GetBorrowingStatistics(ctx context.Context, arg queries.GetBorrowingStatisticsParams) ([]queries.GetBorrowingStatisticsRow, error)
-	GetOverdueBooksByYear(ctx context.Context, arg queries.GetOverdueBooksByYearParams) ([]queries.GetOverdueBooksByYearRow, error)
+	GetOverdueBooksByYear(ctx context.Context, yearOfStudy int32) ([]queries.GetOverdueBooksByYearRow, error)
 	GetPopularBooks(ctx context.Context, arg queries.GetPopularBooksParams) ([]queries.GetPopularBooksRow, error)
 	GetStudentActivity(ctx context.Context, arg queries.GetStudentActivityParams) ([]queries.GetStudentActivityRow, error)
 	GetInventoryStatus(ctx context.Context) ([]queries.GetInventoryStatusRow, error)
@@ -50,12 +50,12 @@ type ReportQuerier interface {
 	GetLostBooksSummary(ctx context.Context, arg queries.GetLostBooksSummaryParams) (queries.GetLostBooksSummaryRow, error)
 	GetLostBooksTrend(ctx context.Context, arg queries.GetLostBooksTrendParams) ([]queries.GetLostBooksTrendRow, error)
 	GetLostBooksByCategory(ctx context.Context, arg queries.GetLostBooksByCategoryParams) ([]queries.GetLostBooksByCategoryRow, error)
-	GetLostBooksByDepartment(ctx context.Context, arg queries.GetLostBooksByDepartmentParams) ([]queries.GetLostBooksByDepartmentRow, error)
+	GetLostBooksByYearOfStudy(ctx context.Context, arg queries.GetLostBooksByYearOfStudyParams) ([]queries.GetLostBooksByYearOfStudyRow, error)
 
 	// Fines Collection Report Methods
 	GetFinesCollectionSummary(ctx context.Context, arg queries.GetFinesCollectionSummaryParams) (queries.GetFinesCollectionSummaryRow, error)
 	GetFinesByYearOfStudy(ctx context.Context, arg queries.GetFinesByYearOfStudyParams) ([]queries.GetFinesByYearOfStudyRow, error)
-	GetFinesByDepartment(ctx context.Context, arg queries.GetFinesByDepartmentParams) ([]queries.GetFinesByDepartmentRow, error)
+	GetFinesByYearOfStudyDetailed(ctx context.Context, arg queries.GetFinesByYearOfStudyDetailedParams) ([]queries.GetFinesByYearOfStudyDetailedRow, error)
 	GetFinesCollectionTrend(ctx context.Context, arg queries.GetFinesCollectionTrendParams) ([]queries.GetFinesCollectionTrendRow, error)
 	GetFinePaymentHistory(ctx context.Context, arg queries.GetFinePaymentHistoryParams) ([]queries.GetFinePaymentHistoryRow, error)
 	GetTopFineDefaulters(ctx context.Context, limit int32) ([]queries.GetTopFineDefaultersRow, error)
@@ -101,25 +101,15 @@ func (rs *ReportService) GetBorrowingStatistics(ctx context.Context, startDate, 
 	return rs.buildBorrowingStatisticsReport(rows), nil
 }
 
-// GetOverdueBooks gets all overdue books with optional filtering
-func (rs *ReportService) GetOverdueBooks(ctx context.Context, yearOfStudy *int32, department *string) (*models.OverdueBooksReport, error) {
-	// Convert parameters to match the generated structure
+// GetOverdueBooks gets all overdue books with optional filtering by year of study
+func (rs *ReportService) GetOverdueBooks(ctx context.Context, yearOfStudy *int32) (*models.OverdueBooksReport, error) {
+	// Convert yearOfStudy pointer to value for the query
 	var yearValue int32
-	var deptValue string
-
 	if yearOfStudy != nil {
 		yearValue = *yearOfStudy
 	}
-	if department != nil {
-		deptValue = *department
-	}
 
-	params := queries.GetOverdueBooksByYearParams{
-		Column1: yearValue,
-		Column2: deptValue,
-	}
-
-	rows, err := rs.db.GetOverdueBooksByYear(ctx, params)
+	rows, err := rs.db.GetOverdueBooksByYear(ctx, yearValue)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get overdue books: %w", err)
 	}
@@ -185,26 +175,20 @@ func (rs *ReportService) GetPopularBooks(ctx context.Context, startDate, endDate
 }
 
 // GetStudentActivity generates student activity report
-func (rs *ReportService) GetStudentActivity(ctx context.Context, yearOfStudy *int32, department *string, startDate, endDate time.Time) (*models.StudentActivityReport, error) {
+func (rs *ReportService) GetStudentActivity(ctx context.Context, yearOfStudy *int32, startDate, endDate time.Time) (*models.StudentActivityReport, error) {
 	if err := rs.validateDateRange(startDate, endDate); err != nil {
 		return nil, err
 	}
 
 	var yearValue int32
-	var deptValue string
-
 	if yearOfStudy != nil {
 		yearValue = *yearOfStudy
-	}
-	if department != nil {
-		deptValue = *department
 	}
 
 	params := queries.GetStudentActivityParams{
 		Column1: yearValue,
-		Column2: deptValue,
-		Column3: pgtype.Timestamp{Time: startDate, Valid: true},
-		Column4: pgtype.Timestamp{Time: endDate, Valid: true},
+		Column2: pgtype.Timestamp{Time: startDate, Valid: true},
+		Column3: pgtype.Timestamp{Time: endDate, Valid: true},
 	}
 
 	rows, err := rs.db.GetStudentActivity(ctx, params)
@@ -352,11 +336,6 @@ func (rs *ReportService) buildOverdueBooksReport(rows []queries.GetOverdueBooksB
 			studentName = fmt.Sprintf("%v", row.StudentName)
 		}
 
-		department := ""
-		if row.Department.Valid {
-			department = row.Department.String
-		}
-
 		fineAmount := "0.00"
 		if row.FineAmount != nil {
 			fineAmount = fmt.Sprintf("%v", row.FineAmount)
@@ -371,7 +350,6 @@ func (rs *ReportService) buildOverdueBooksReport(rows []queries.GetOverdueBooksB
 			StudentID:     row.StudentID,
 			StudentName:   studentName,
 			YearOfStudy:   row.YearOfStudy,
-			Department:    department,
 			BookTitle:     row.BookTitle,
 			BookAuthor:    row.BookAuthor,
 			DueDate:       dueDate,
@@ -439,11 +417,6 @@ func (rs *ReportService) buildStudentActivityReport(rows []queries.GetStudentAct
 			studentName = fmt.Sprintf("%v", row.StudentName)
 		}
 
-		department := ""
-		if row.Department.Valid {
-			department = row.Department.String
-		}
-
 		totalFines := "0.00"
 		if row.TotalFines != nil {
 			totalFines = fmt.Sprintf("%v", row.TotalFines)
@@ -458,7 +431,6 @@ func (rs *ReportService) buildStudentActivityReport(rows []queries.GetStudentAct
 			StudentID:    row.StudentID,
 			StudentName:  studentName,
 			YearOfStudy:  row.YearOfStudy,
-			Department:   department,
 			TotalBorrows: row.TotalBorrows,
 			TotalReturns: row.TotalReturns,
 			CurrentBooks: row.CurrentBooks,
@@ -883,26 +855,20 @@ func (rs *ReportService) GetBookDemandPrediction(ctx context.Context, startDate,
 }
 
 // GetStudentBehaviorAnalysis generates student behavior analysis
-func (rs *ReportService) GetStudentBehaviorAnalysis(ctx context.Context, startDate, endDate time.Time, yearOfStudy *int32, department *string) (*models.StudentBehaviorAnalysisReport, error) {
+func (rs *ReportService) GetStudentBehaviorAnalysis(ctx context.Context, startDate, endDate time.Time, yearOfStudy *int32) (*models.StudentBehaviorAnalysisReport, error) {
 	if err := rs.validateDateRange(startDate, endDate); err != nil {
 		return nil, err
 	}
 
 	var yearValue int32
-	var deptValue string
-
 	if yearOfStudy != nil {
 		yearValue = *yearOfStudy
-	}
-	if department != nil {
-		deptValue = *department
 	}
 
 	params := queries.GetStudentBehaviorAnalysisParams{
 		Column1: pgtype.Timestamp{Time: startDate, Valid: true},
 		Column2: pgtype.Timestamp{Time: endDate, Valid: true},
 		Column3: yearValue,
-		Column4: deptValue,
 	}
 
 	rows, err := rs.db.GetStudentBehaviorAnalysis(ctx, params)
@@ -1154,15 +1120,9 @@ func (rs *ReportService) buildStudentBehaviorAnalysisReport(rows []queries.GetSt
 	behaviorData := make([]models.StudentBehaviorData, len(rows))
 	var totalStudents int32
 	var mostActiveYear int32
-	var mostActiveDepartment string
 	var maxStudents int32
 
 	for i, row := range rows {
-		department := ""
-		if row.Department.Valid {
-			department = row.Department.String
-		}
-
 		popularGenres := ""
 		if row.PopularGenres != nil {
 			popularGenres = string(row.PopularGenres)
@@ -1170,7 +1130,6 @@ func (rs *ReportService) buildStudentBehaviorAnalysisReport(rows []queries.GetSt
 
 		behaviorData[i] = models.StudentBehaviorData{
 			YearOfStudy:           row.YearOfStudy,
-			Department:            department,
 			TotalStudents:         row.TotalStudents,
 			AvgBorrowsPerStudent:  row.AvgBorrowsPerStudent,
 			AvgLoanDurationDays:   row.AvgLoanDurationDays,
@@ -1185,7 +1144,6 @@ func (rs *ReportService) buildStudentBehaviorAnalysisReport(rows []queries.GetSt
 		if row.TotalStudents > maxStudents {
 			maxStudents = row.TotalStudents
 			mostActiveYear = row.YearOfStudy
-			mostActiveDepartment = department
 		}
 	}
 
@@ -1194,7 +1152,6 @@ func (rs *ReportService) buildStudentBehaviorAnalysisReport(rows []queries.GetSt
 		Summary: models.StudentBehaviorSummary{
 			TotalAnalyzedStudents: totalStudents,
 			MostActiveYear:        mostActiveYear,
-			MostActiveDepartment:  mostActiveDepartment,
 			OverallEngagementRate: "75%", // Placeholder calculation
 		},
 		GeneratedAt: time.Now(),
@@ -1371,9 +1328,6 @@ func (rs *ReportService) buildIndividualStudentReport(
 	if profile.Phone.Valid {
 		studentProfile.Phone = profile.Phone.String
 	}
-	if profile.Department.Valid {
-		studentProfile.Department = profile.Department.String
-	}
 	if profile.MemberSince.Valid {
 		studentProfile.MemberSince = profile.MemberSince.Time
 	}
@@ -1467,16 +1421,13 @@ func (rs *ReportService) buildIndividualStudentReport(
 // ============================================
 
 // GetLostBooksReport generates a comprehensive lost books report
-func (rs *ReportService) GetLostBooksReport(ctx context.Context, startDate, endDate time.Time, department, genre *string, interval string) (*models.LostBooksReport, error) {
+func (rs *ReportService) GetLostBooksReport(ctx context.Context, startDate, endDate time.Time, yearOfStudy *int32, genre *string, interval string) (*models.LostBooksReport, error) {
 	if interval == "" {
 		interval = "month"
 	}
 
 	// Build params
-	var deptValue, genreValue string
-	if department != nil {
-		deptValue = *department
-	}
+	var genreValue string
 	if genre != nil {
 		genreValue = *genre
 	}
@@ -1484,8 +1435,7 @@ func (rs *ReportService) GetLostBooksReport(ctx context.Context, startDate, endD
 	reportParams := queries.GetLostBooksReportParams{
 		Column1: pgtype.Timestamp{Time: startDate, Valid: !startDate.IsZero()},
 		Column2: pgtype.Timestamp{Time: endDate, Valid: !endDate.IsZero()},
-		Column3: deptValue,
-		Column4: genreValue,
+		Column3: genreValue,
 	}
 
 	// Get lost books details
@@ -1528,17 +1478,17 @@ func (rs *ReportService) GetLostBooksReport(ctx context.Context, startDate, endD
 		return nil, fmt.Errorf("failed to get lost books by category: %w", err)
 	}
 
-	// Get by department
-	deptParams := queries.GetLostBooksByDepartmentParams{
+	// Get by year of study
+	yearParams := queries.GetLostBooksByYearOfStudyParams{
 		Column1: pgtype.Timestamp{Time: startDate, Valid: !startDate.IsZero()},
 		Column2: pgtype.Timestamp{Time: endDate, Valid: !endDate.IsZero()},
 	}
-	byDepartment, err := rs.db.GetLostBooksByDepartment(ctx, deptParams)
+	byYearOfStudy, err := rs.db.GetLostBooksByYearOfStudy(ctx, yearParams)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get lost books by department: %w", err)
+		return nil, fmt.Errorf("failed to get lost books by year of study: %w", err)
 	}
 
-	return rs.buildLostBooksReport(lostBooks, summary, trends, byCategory, byDepartment), nil
+	return rs.buildLostBooksReport(lostBooks, summary, trends, byCategory, byYearOfStudy), nil
 }
 
 func (rs *ReportService) buildLostBooksReport(
@@ -1546,7 +1496,7 @@ func (rs *ReportService) buildLostBooksReport(
 	summary queries.GetLostBooksSummaryRow,
 	trends []queries.GetLostBooksTrendRow,
 	byCategory []queries.GetLostBooksByCategoryRow,
-	byDepartment []queries.GetLostBooksByDepartmentRow,
+	byYearOfStudy []queries.GetLostBooksByYearOfStudyRow,
 ) *models.LostBooksReport {
 
 	// Build lost books list
@@ -1576,9 +1526,6 @@ func (rs *ReportService) buildLostBooksReport(
 		}
 		if book.StudentName != nil {
 			item.StudentName = fmt.Sprintf("%v", book.StudentName)
-		}
-		if book.Department.Valid {
-			item.Department = book.Department.String
 		}
 		if book.Genre.Valid {
 			item.Genre = book.Genre.String
@@ -1622,24 +1569,24 @@ func (rs *ReportService) buildLostBooksReport(
 		}
 	}
 
-	// Build by department
-	deptList := make([]models.LostBooksByDepartment, len(byDepartment))
-	for i, dept := range byDepartment {
-		deptList[i] = models.LostBooksByDepartment{
-			Department:       dept.Department,
-			LostCount:        dept.LostCount,
-			ReplacementValue: dept.TotalValue,
-			StudentsAffected: dept.StudentsAffected,
+	// Build by year of study
+	yearList := make([]models.LostBooksByYearOfStudy, len(byYearOfStudy))
+	for i, year := range byYearOfStudy {
+		yearList[i] = models.LostBooksByYearOfStudy{
+			YearOfStudy:      year.YearOfStudy,
+			LostCount:        year.LostCount,
+			ReplacementValue: year.TotalValue,
+			StudentsAffected: year.StudentsAffected,
 		}
 	}
 
 	return &models.LostBooksReport{
-		LostBooks:    booksList,
-		Summary:      reportSummary,
-		Trends:       trendsList,
-		ByCategory:   categoryList,
-		ByDepartment: deptList,
-		GeneratedAt:  time.Now(),
+		LostBooks:     booksList,
+		Summary:       reportSummary,
+		Trends:        trendsList,
+		ByCategory:    categoryList,
+		ByYearOfStudy: yearList,
+		GeneratedAt:   time.Now(),
 	}
 }
 
@@ -1674,16 +1621,6 @@ func (rs *ReportService) GetFinesCollectionReport(ctx context.Context, startDate
 	byYear, err := rs.db.GetFinesByYearOfStudy(ctx, yearParams)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get fines by year: %w", err)
-	}
-
-	// Get by department
-	deptParams := queries.GetFinesByDepartmentParams{
-		Column1: pgtype.Timestamp{Time: startDate, Valid: !startDate.IsZero()},
-		Column2: pgtype.Timestamp{Time: endDate, Valid: !endDate.IsZero()},
-	}
-	byDept, err := rs.db.GetFinesByDepartment(ctx, deptParams)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get fines by department: %w", err)
 	}
 
 	// Get trends (only if we have a date range)
@@ -1723,13 +1660,12 @@ func (rs *ReportService) GetFinesCollectionReport(ctx context.Context, startDate
 		return nil, fmt.Errorf("failed to get recent fines: %w", err)
 	}
 
-	return rs.buildFinesCollectionReport(summary, byYear, byDept, trends, defaulters, recentFines), nil
+	return rs.buildFinesCollectionReport(summary, byYear, trends, defaulters, recentFines), nil
 }
 
 func (rs *ReportService) buildFinesCollectionReport(
 	summary queries.GetFinesCollectionSummaryRow,
 	byYear []queries.GetFinesByYearOfStudyRow,
-	byDept []queries.GetFinesByDepartmentRow,
 	trends []queries.GetFinesCollectionTrendRow,
 	defaulters []queries.GetTopFineDefaultersRow,
 	recentFines []queries.GetFinePaymentHistoryRow,
@@ -1768,19 +1704,6 @@ func (rs *ReportService) buildFinesCollectionReport(
 		}
 	}
 
-	// Build by department
-	deptList := make([]models.FinesByDepartmentItem, len(byDept))
-	for i, d := range byDept {
-		deptList[i] = models.FinesByDepartmentItem{
-			Department:        d.Department,
-			FineCount:         d.FineCount,
-			StudentsAffected:  d.StudentsAffected,
-			TotalFines:        d.TotalFines,
-			PaidAmount:        d.PaidAmount,
-			OutstandingAmount: d.OutstandingAmount,
-		}
-	}
-
 	// Build trends
 	trendList := make([]models.FinesCollectionTrend, len(trends))
 	for i, t := range trends {
@@ -1806,9 +1729,6 @@ func (rs *ReportService) buildFinesCollectionReport(
 		}
 		if d.StudentName != nil {
 			item.StudentName = fmt.Sprintf("%v", d.StudentName)
-		}
-		if d.Department.Valid {
-			item.Department = d.Department.String
 		}
 		if d.Email.Valid {
 			item.Email = d.Email.String
@@ -1869,16 +1789,13 @@ func (rs *ReportService) buildFinesCollectionReport(
 		if f.StudentName != nil {
 			item.StudentName = fmt.Sprintf("%v", f.StudentName)
 		}
-		if f.Department.Valid {
-			item.Department = f.Department.String
-		}
+		item.YearOfStudy = f.YearOfStudy
 		finesList[i] = item
 	}
 
 	return &models.FinesCollectionReport{
 		Summary:       reportSummary,
 		ByYearOfStudy: yearList,
-		ByDepartment:  deptList,
 		Trends:        trendList,
 		TopDefaulters: defaulterList,
 		RecentFines:   finesList,

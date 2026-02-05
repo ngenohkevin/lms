@@ -44,7 +44,7 @@ type StudentQuerier interface {
 	BulkUpdateStudentStatus(ctx context.Context, params queries.BulkUpdateStudentStatusParams) error
 
 	// Enhanced Statistics
-	GetStudentCountByYearAndDepartment(ctx context.Context) ([]queries.GetStudentCountByYearAndDepartmentRow, error)
+	GetStudentCountByYear(ctx context.Context) ([]queries.GetStudentCountByYearRow, error)
 	GetStudentEnrollmentTrends(ctx context.Context, params queries.GetStudentEnrollmentTrendsParams) ([]queries.GetStudentEnrollmentTrendsRow, error)
 
 	// Borrowing stats (from transactions)
@@ -64,7 +64,6 @@ type StudentQuerier interface {
 	ActivateStudent(ctx context.Context, id int32) (queries.Student, error)
 	GraduateStudent(ctx context.Context, params queries.GraduateStudentParams) (queries.Student, error)
 	UpdateStudentAdminNotes(ctx context.Context, params queries.UpdateStudentAdminNotesParams) (queries.Student, error)
-	BulkUpdateStudentDepartment(ctx context.Context, arg queries.BulkUpdateStudentDepartmentParams) (int64, error)
 }
 
 // AuthServiceInterface defines the interface for auth-related operations
@@ -126,9 +125,6 @@ func (s *StudentService) CreateStudent(ctx context.Context, req *models.CreateSt
 	if req.Phone != "" {
 		params.Phone = pgtype.Text{String: req.Phone, Valid: true}
 	}
-	if req.Department != "" {
-		params.Department = pgtype.Text{String: req.Department, Valid: true}
-	}
 	// Set max_books with default value of 5 if not specified
 	if req.MaxBooks > 0 {
 		params.MaxBooks = req.MaxBooks
@@ -158,7 +154,6 @@ func (s *StudentService) CreateStudent(ctx context.Context, req *models.CreateSt
 		Email:          student.Email,
 		Phone:          student.Phone,
 		YearOfStudy:    student.YearOfStudy,
-		Department:     student.Department,
 		EnrollmentDate: student.EnrollmentDate,
 		PasswordHash:   student.PasswordHash,
 		IsActive:       student.IsActive,
@@ -238,7 +233,6 @@ func (s *StudentService) GetStudentByID(ctx context.Context, id int32) (*models.
 		Email:          student.Email,
 		Phone:          student.Phone,
 		YearOfStudy:    student.YearOfStudy,
-		Department:     student.Department,
 		EnrollmentDate: student.EnrollmentDate,
 		PasswordHash:   student.PasswordHash,
 		IsActive:       student.IsActive,
@@ -276,7 +270,6 @@ func (s *StudentService) GetStudentByStudentID(ctx context.Context, studentID st
 		Email:          student.Email,
 		Phone:          student.Phone,
 		YearOfStudy:    student.YearOfStudy,
-		Department:     student.Department,
 		EnrollmentDate: student.EnrollmentDate,
 		PasswordHash:   student.PasswordHash,
 		IsActive:       student.IsActive,
@@ -326,9 +319,6 @@ func (s *StudentService) UpdateStudent(ctx context.Context, id int32, req *model
 	if req.Phone != "" {
 		params.Phone = pgtype.Text{String: req.Phone, Valid: true}
 	}
-	if req.Department != "" {
-		params.Department = pgtype.Text{String: req.Department, Valid: true}
-	}
 	// Set max_books - keep current value if not specified
 	if req.MaxBooks > 0 {
 		params.MaxBooks = req.MaxBooks
@@ -353,7 +343,6 @@ func (s *StudentService) UpdateStudent(ctx context.Context, id int32, req *model
 		Email:          student.Email,
 		Phone:          student.Phone,
 		YearOfStudy:    student.YearOfStudy,
-		Department:     student.Department,
 		EnrollmentDate: student.EnrollmentDate,
 		PasswordHash:   student.PasswordHash,
 		IsActive:       student.IsActive,
@@ -388,13 +377,12 @@ func (s *StudentService) UpdateStudentProfile(ctx context.Context, id int32, req
 		}
 	}
 
-	// Prepare update parameters (keep current year, department, and max_books)
+	// Prepare update parameters (keep current year and max_books)
 	params := queries.UpdateStudentParams{
 		ID:          id,
 		FirstName:   req.FirstName,
 		LastName:    req.LastName,
 		YearOfStudy: currentStudent.YearOfStudy, // Keep current year
-		Department:  currentStudent.Department,  // Keep current department
 		MaxBooks:    currentStudent.MaxBooks,    // Keep current max_books
 	}
 
@@ -421,7 +409,6 @@ func (s *StudentService) UpdateStudentProfile(ctx context.Context, id int32, req
 		Email:          student.Email,
 		Phone:          student.Phone,
 		YearOfStudy:    student.YearOfStudy,
-		Department:     student.Department,
 		EnrollmentDate: student.EnrollmentDate,
 		PasswordHash:   student.PasswordHash,
 		IsActive:       student.IsActive,
@@ -569,7 +556,6 @@ func (s *StudentService) ListStudents(ctx context.Context, req *models.StudentSe
 			Email:          student.Email,
 			Phone:          student.Phone,
 			YearOfStudy:    student.YearOfStudy,
-			Department:     student.Department,
 			EnrollmentDate: student.EnrollmentDate,
 			PasswordHash:   student.PasswordHash,
 			IsActive:       student.IsActive,
@@ -662,7 +648,6 @@ func (s *StudentService) SearchStudents(ctx context.Context, req *models.Student
 			Email:          student.Email,
 			Phone:          student.Phone,
 			YearOfStudy:    student.YearOfStudy,
-			Department:     student.Department,
 			EnrollmentDate: student.EnrollmentDate,
 			PasswordHash:   student.PasswordHash,
 			IsActive:       student.IsActive,
@@ -720,7 +705,6 @@ func (s *StudentService) BulkImportStudents(ctx context.Context, requests []mode
 			Email:       req.Email,
 			Phone:       req.Phone,
 			YearOfStudy: req.YearOfStudy,
-			Department:  req.Department,
 		}
 
 		// Try to create the student
@@ -987,7 +971,6 @@ func (s *StudentService) ListStudentsByYearWithDetails(ctx context.Context, year
 			Email:          student.Email,
 			Phone:          student.Phone,
 			YearOfStudy:    student.YearOfStudy,
-			Department:     student.Department,
 			EnrollmentDate: student.EnrollmentDate,
 			PasswordHash:   student.PasswordHash,
 			IsActive:       student.IsActive,
@@ -1337,7 +1320,6 @@ func (s *StudentService) UpdateStudentStatus(ctx context.Context, studentID int3
 		Email:          student.Email,
 		Phone:          student.Phone,
 		YearOfStudy:    student.YearOfStudy,
-		Department:     student.Department,
 		EnrollmentDate: student.EnrollmentDate,
 		PasswordHash:   student.PasswordHash,
 		IsActive:       student.IsActive,
@@ -1393,7 +1375,6 @@ func (s *StudentService) GetStudentsByStatus(ctx context.Context, isActive bool,
 			Email:          student.Email,
 			Phone:          student.Phone,
 			YearOfStudy:    student.YearOfStudy,
-			Department:     student.Department,
 			EnrollmentDate: student.EnrollmentDate,
 			PasswordHash:   student.PasswordHash,
 			IsActive:       student.IsActive,
@@ -1491,43 +1472,23 @@ func (s *StudentService) GetStudentDemographics(ctx context.Context) (*models.St
 		return nil, fmt.Errorf("failed to count total students: %w", err)
 	}
 
-	// Get year and department breakdown
-	countData, err := s.queries.GetStudentCountByYearAndDepartment(ctx)
+	// Get year breakdown
+	countData, err := s.queries.GetStudentCountByYear(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get student count by year and department: %w", err)
+		return nil, fmt.Errorf("failed to get student count by year: %w", err)
 	}
 
-	departmentBreakdown := make(map[string]int64)
 	yearBreakdown := make(map[string]int64)
-	yearDepartmentMatrix := make(map[string]map[string]int64)
 
 	for _, row := range countData {
-		department := "Unknown"
-		if row.Department.Valid {
-			department = row.Department.String
-		}
-
 		yearKey := fmt.Sprintf("year_%d", row.YearOfStudy)
-
-		// Department breakdown
-		departmentBreakdown[department] += row.Count
-
-		// Year breakdown
-		yearBreakdown[yearKey] += row.Count
-
-		// Year-Department matrix
-		if yearDepartmentMatrix[yearKey] == nil {
-			yearDepartmentMatrix[yearKey] = make(map[string]int64)
-		}
-		yearDepartmentMatrix[yearKey][department] = row.Count
+		yearBreakdown[yearKey] = row.Count
 	}
 
 	return &models.StudentDemographics{
-		TotalStudents:        totalStudents,
-		DepartmentBreakdown:  departmentBreakdown,
-		YearBreakdown:        yearBreakdown,
-		YearDepartmentMatrix: yearDepartmentMatrix,
-		GeneratedAt:          time.Now(),
+		TotalStudents: totalStudents,
+		YearBreakdown: yearBreakdown,
+		GeneratedAt:   time.Now(),
 	}, nil
 }
 
@@ -1584,9 +1545,6 @@ func (s *StudentService) ExportStudents(ctx context.Context, req *models.Student
 	if req.YearOfStudy != nil {
 		searchReq.YearOfStudy = *req.YearOfStudy
 	}
-	if req.Department != "" {
-		searchReq.Department = req.Department
-	}
 
 	// Get students based on active status filter
 	var students []models.StudentResponse
@@ -1609,7 +1567,7 @@ func (s *StudentService) ExportStudents(ctx context.Context, req *models.Student
 	}
 
 	// Generate filename
-	filename := s.GenerateExportFilename(req.Format, req.YearOfStudy, req.Department)
+	filename := s.GenerateExportFilename(req.Format, req.YearOfStudy)
 
 	// Create export directory if it doesn't exist
 	exportDir := "./exports"
@@ -1674,16 +1632,12 @@ func (s *StudentService) validateExportRequest(req *models.StudentExportRequest)
 }
 
 // GenerateExportFilename generates a consistent filename for exports
-func (s *StudentService) GenerateExportFilename(format models.StudentExportFormat, year *int32, department string) string {
+func (s *StudentService) GenerateExportFilename(format models.StudentExportFormat, year *int32) string {
 	timestamp := time.Now().Format("20060102_150405")
 	filename := fmt.Sprintf("students_export_%s", timestamp)
 
 	if year != nil {
 		filename += fmt.Sprintf("_year%d", *year)
-	}
-
-	if department != "" {
-		filename += fmt.Sprintf("_%s", strings.ReplaceAll(department, " ", "_"))
 	}
 
 	filename += fmt.Sprintf(".%s", format)
@@ -1701,7 +1655,7 @@ func (s *StudentService) exportToCSV(students []models.StudentResponse, filePath
 	writer := csv.NewWriter(file)
 
 	// Determine which fields to export
-	allFields := []string{"id", "student_id", "first_name", "last_name", "email", "phone", "year_of_study", "department", "enrollment_date", "is_active", "created_at"}
+	allFields := []string{"id", "student_id", "first_name", "last_name", "email", "phone", "year_of_study", "enrollment_date", "is_active", "created_at"}
 	exportFields := allFields
 	if len(fields) > 0 {
 		exportFields = fields
@@ -1793,7 +1747,7 @@ func (s *StudentService) exportToXLSX(students []models.StudentResponse, filePat
 	}
 
 	// Determine which fields to export
-	allFields := []string{"id", "student_id", "first_name", "last_name", "email", "phone", "year_of_study", "department", "enrollment_date", "is_active", "created_at"}
+	allFields := []string{"id", "student_id", "first_name", "last_name", "email", "phone", "year_of_study", "enrollment_date", "is_active", "created_at"}
 	exportFields := allFields
 	if len(fields) > 0 {
 		exportFields = fields
@@ -1847,8 +1801,6 @@ func (s *StudentService) getStudentFieldValue(student models.StudentResponse, fi
 		return student.Phone
 	case "year_of_study":
 		return fmt.Sprintf("%d", student.YearOfStudy)
-	case "department":
-		return student.Department
 	case "enrollment_date":
 		return student.EnrollmentDate
 	case "is_active":
@@ -1870,16 +1822,6 @@ func (s *StudentService) ExportStudentsByYear(ctx context.Context, year int32, f
 	req := &models.StudentExportRequest{
 		Format:          format,
 		YearOfStudy:     &year,
-		IncludeInactive: false,
-	}
-	return s.ExportStudents(ctx, req)
-}
-
-// ExportStudentsByDepartment exports students for a specific department
-func (s *StudentService) ExportStudentsByDepartment(ctx context.Context, department string, format models.StudentExportFormat) (*models.StudentExportResponse, error) {
-	req := &models.StudentExportRequest{
-		Format:          format,
-		Department:      department,
 		IncludeInactive: false,
 	}
 	return s.ExportStudents(ctx, req)
@@ -1971,7 +1913,6 @@ func (s *StudentService) SuspendStudent(ctx context.Context, id int32, reason st
 		Email:            suspendedStudent.Email,
 		Phone:            suspendedStudent.Phone,
 		YearOfStudy:      suspendedStudent.YearOfStudy,
-		Department:       suspendedStudent.Department,
 		EnrollmentDate:   suspendedStudent.EnrollmentDate,
 		PasswordHash:     suspendedStudent.PasswordHash,
 		IsActive:         suspendedStudent.IsActive,
@@ -2031,7 +1972,6 @@ func (s *StudentService) ReactivateStudent(ctx context.Context, id int32) (*mode
 		Email:            activatedStudent.Email,
 		Phone:            activatedStudent.Phone,
 		YearOfStudy:      activatedStudent.YearOfStudy,
-		Department:       activatedStudent.Department,
 		EnrollmentDate:   activatedStudent.EnrollmentDate,
 		PasswordHash:     activatedStudent.PasswordHash,
 		IsActive:         activatedStudent.IsActive,
@@ -2096,7 +2036,6 @@ func (s *StudentService) GraduateStudent(ctx context.Context, id int32, graduate
 		Email:            graduatedStudent.Email,
 		Phone:            graduatedStudent.Phone,
 		YearOfStudy:      graduatedStudent.YearOfStudy,
-		Department:       graduatedStudent.Department,
 		EnrollmentDate:   graduatedStudent.EnrollmentDate,
 		PasswordHash:     graduatedStudent.PasswordHash,
 		IsActive:         graduatedStudent.IsActive,
@@ -2145,7 +2084,6 @@ func (s *StudentService) UpdateAdminNotes(ctx context.Context, id int32, notes s
 		Email:            updatedStudent.Email,
 		Phone:            updatedStudent.Phone,
 		YearOfStudy:      updatedStudent.YearOfStudy,
-		Department:       updatedStudent.Department,
 		EnrollmentDate:   updatedStudent.EnrollmentDate,
 		PasswordHash:     updatedStudent.PasswordHash,
 		IsActive:         updatedStudent.IsActive,
@@ -2158,38 +2096,4 @@ func (s *StudentService) UpdateAdminNotes(ctx context.Context, id int32, notes s
 		CreatedAt:        updatedStudent.CreatedAt,
 		UpdatedAt:        updatedStudent.UpdatedAt,
 	}, nil
-}
-
-// BulkUpdateDepartment updates the department for multiple students
-func (s *StudentService) BulkUpdateDepartment(ctx context.Context, studentIDs []int32, departmentID int32) (int64, error) {
-	if len(studentIDs) == 0 {
-		return 0, fmt.Errorf("no student IDs provided")
-	}
-
-	// Verify all students exist before updating
-	for _, studentID := range studentIDs {
-		_, err := s.queries.GetStudentByID(ctx, studentID)
-		if err != nil {
-			return 0, fmt.Errorf("student with ID %d not found", studentID)
-		}
-	}
-
-	// Perform bulk update
-	count, err := s.queries.BulkUpdateStudentDepartment(ctx, queries.BulkUpdateStudentDepartmentParams{
-		Column1:      studentIDs,
-		DepartmentID: pgtype.Int4{Int32: departmentID, Valid: true},
-	})
-	if err != nil {
-		return 0, fmt.Errorf("failed to bulk update student departments: %w", err)
-	}
-
-	// Invalidate caches for all updated students
-	if s.cacheService != nil {
-		_ = s.cacheService.InvalidateByPattern(ctx, "students:*")
-		for _, id := range studentIDs {
-			_ = s.cacheService.InvalidateStudentProfile(ctx, int(id))
-		}
-	}
-
-	return count, nil
 }

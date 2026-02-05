@@ -107,7 +107,6 @@ func (suite *TransactionCopyTestSuite) SetupTest() {
 		Email:        pgtype.Text{String: fmt.Sprintf("copy_student_%d@test.com", time.Now().UnixNano()%100000), Valid: true},
 		YearOfStudy:  2,
 		MaxBooks:     5,
-		Department:   pgtype.Text{String: "Computer Science", Valid: true},
 		PasswordHash: pgtype.Text{String: "$2a$10$abcdefghijklmnopqrstuv", Valid: true},
 	})
 	require.NoError(suite.T(), err)
@@ -120,7 +119,6 @@ func (suite *TransactionCopyTestSuite) SetupTest() {
 		Email:        pgtype.Text{String: fmt.Sprintf("copy_student2_%d@test.com", time.Now().UnixNano()%100000), Valid: true},
 		YearOfStudy:  3,
 		MaxBooks:     5,
-		Department:   pgtype.Text{String: "Mathematics", Valid: true},
 		PasswordHash: pgtype.Text{String: "$2a$10$abcdefghijklmnopqrstuv", Valid: true},
 	})
 	require.NoError(suite.T(), err)

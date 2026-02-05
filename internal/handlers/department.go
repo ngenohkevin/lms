@@ -436,20 +436,7 @@ func (h *DepartmentHandler) DeleteDepartment(c *gin.Context) {
 		return
 	}
 
-	// Check if department has students
-	count, err := h.queries.CountStudentsByDepartment(c.Request.Context(), pgtype.Int4{Int32: int32(id), Valid: true})
-	if err == nil && count > 0 {
-		c.JSON(http.StatusConflict, ErrorResponse{
-			Success: false,
-			Error: ErrorDetail{
-				Code:    "CONFLICT_ERROR",
-				Message: "Cannot delete department",
-				Details: "This department has students assigned to it. Please reassign or remove students first.",
-			},
-		})
-		return
-	}
-
+	// Delete the department (students no longer have department association)
 	err = h.queries.DeleteDepartment(c.Request.Context(), int32(id))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{

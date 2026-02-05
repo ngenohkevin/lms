@@ -630,6 +630,10 @@ func TestTransactionService_RenewBook_Success(t *testing.T) {
 
 	student := createTestStudent()
 
+	// Create test book for renewal (storybook for year-based calculation)
+	book := createTestBook()
+	book.BookType = "storybook"
+
 	// Setup mocks for comprehensive renewal validation
 	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
 	mockQueries.On("GetTransactionRenewalCount", ctx, transactionID).Return(int32(0), nil)
@@ -638,6 +642,7 @@ func TestTransactionService_RenewBook_Success(t *testing.T) {
 		StudentID: studentID,
 	}).Return(false, nil)
 	mockQueries.On("GetStudentByID", ctx, studentID).Return(student, nil)
+	mockQueries.On("GetBookByID", ctx, bookID).Return(book, nil)
 	mockQueries.On("RenewTransaction", ctx, mock.AnythingOfType("queries.RenewTransactionParams")).Return(renewedTransaction, nil)
 
 	// Execute
@@ -849,7 +854,7 @@ func TestTransactionService_ValidateBorrowingPeriod_JuniorStudent(t *testing.T) 
 	student := createTestStudent()
 	student.YearOfStudy = 1
 
-	period := service.validateBorrowingPeriod(student)
+	period := service.validateBorrowingPeriodByStudentYear(student)
 	assert.Equal(t, 14, period)
 }
 
@@ -859,7 +864,7 @@ func TestTransactionService_ValidateBorrowingPeriod_SeniorStudent(t *testing.T) 
 	student := createTestStudent()
 	student.YearOfStudy = 3
 
-	period := service.validateBorrowingPeriod(student)
+	period := service.validateBorrowingPeriodByStudentYear(student)
 	assert.Equal(t, 21, period)
 }
 
@@ -869,7 +874,7 @@ func TestTransactionService_ValidateBorrowingPeriod_GraduateStudent(t *testing.T
 	student := createTestStudent()
 	student.YearOfStudy = 5
 
-	period := service.validateBorrowingPeriod(student)
+	period := service.validateBorrowingPeriodByStudentYear(student)
 	assert.Equal(t, 28, period)
 }
 
@@ -888,11 +893,15 @@ func TestTransactionService_CalculateDueDate_DifferentYears(t *testing.T) {
 		{6, 28},
 	}
 
+	// Create a storybook for testing year-based calculation
+	storybookBook := createTestBook()
+	storybookBook.BookType = "storybook"
+
 	for _, tc := range testCases {
 		student := createTestStudent()
 		student.YearOfStudy = tc.year
 
-		dueDate := service.calculateDueDate(student, nil) // nil for default year-based calculation
+		dueDate := service.calculateDueDate(storybookBook, student, nil) // nil for default year-based calculation
 		expectedDate := time.Now().AddDate(0, 0, tc.expected)
 
 		// Allow for slight time differences during test execution
@@ -1776,11 +1785,16 @@ func TestTransactionService_RenewBook_CreateTransactionFailure(t *testing.T) {
 		ReturnedDate:    pgtype.Timestamp{Valid: false},
 	}
 
+	// Create test book for renewal
+	book := createTestBook()
+	book.BookType = "storybook"
+
 	// Setup mocks
 	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
 	mockQueries.On("GetTransactionRenewalCount", ctx, transactionID).Return(int32(0), nil)
 	mockQueries.On("HasActiveReservationsByOtherStudents", ctx, mock.AnythingOfType("queries.HasActiveReservationsByOtherStudentsParams")).Return(false, nil)
 	mockQueries.On("GetStudentByID", ctx, studentID).Return(createTestStudent(), nil)
+	mockQueries.On("GetBookByID", ctx, bookID).Return(book, nil)
 	mockQueries.On("RenewTransaction", ctx, mock.AnythingOfType("queries.RenewTransactionParams")).Return(queries.Transaction{}, assert.AnError)
 
 	// Execute

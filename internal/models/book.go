@@ -50,20 +50,46 @@ const (
 	BookFormatAudiobook BookFormat = "audiobook"
 )
 
+// BookType represents the type of book (textbook or storybook)
+type BookType string
+
+const (
+	BookTypeTextbook  BookType = "textbook"
+	BookTypeStorybook BookType = "storybook"
+)
+
+// Prefix returns the ID prefix for this book type
+func (bt BookType) Prefix() string {
+	switch bt {
+	case BookTypeTextbook:
+		return "HGL-T"
+	case BookTypeStorybook:
+		return "HGL-S"
+	default:
+		return "HGL-T"
+	}
+}
+
+// IsValid checks if the book type is valid
+func (bt BookType) IsValid() bool {
+	return bt == BookTypeTextbook || bt == BookTypeStorybook
+}
+
 // CreateBookRequest represents the request to create a new book
 type CreateBookRequest struct {
-	BookID          string  `json:"book_id" binding:"required,min=1,max=50"`
-	ISBN            *string `json:"isbn" binding:"omitempty,min=10,max=20"`
-	Title           string  `json:"title" binding:"required,min=1,max=255"`
-	Author          string  `json:"author" binding:"required,min=1,max=255"`
-	Publisher       *string `json:"publisher" binding:"omitempty,max=255"`
-	PublishedYear   *int32  `json:"published_year" binding:"omitempty,min=1000"`
-	Genre           *string `json:"genre" binding:"omitempty,max=100"`
-	Description     *string `json:"description" binding:"omitempty,max=5000"`
-	CoverImageURL   *string `json:"cover_image_url" binding:"omitempty,max=2000"`
-	TotalCopies     *int32  `json:"total_copies" binding:"omitempty,min=0"`
-	AvailableCopies *int32  `json:"available_copies" binding:"omitempty,min=0"`
-	ShelfLocation   *string `json:"shelf_location" binding:"omitempty,max=50"`
+	// BookID is auto-generated based on BookType, not provided by user
+	BookType        BookType `json:"book_type" binding:"required,oneof=textbook storybook"`
+	ISBN            *string  `json:"isbn" binding:"omitempty,min=10,max=20"`
+	Title           string   `json:"title" binding:"required,min=1,max=255"`
+	Author          string   `json:"author" binding:"required,min=1,max=255"`
+	Publisher       *string  `json:"publisher" binding:"omitempty,max=255"`
+	PublishedYear   *int32   `json:"published_year" binding:"omitempty,min=1000"`
+	Genre           *string  `json:"genre" binding:"omitempty,max=100"`
+	Description     *string  `json:"description" binding:"omitempty,max=5000"`
+	CoverImageURL   *string  `json:"cover_image_url" binding:"omitempty,max=2000"`
+	TotalCopies     *int32   `json:"total_copies" binding:"omitempty,min=0"`
+	AvailableCopies *int32   `json:"available_copies" binding:"omitempty,min=0"`
+	ShelfLocation   *string  `json:"shelf_location" binding:"omitempty,max=50"`
 	// New metadata fields
 	CategoryID   *int32  `json:"category_id" binding:"omitempty"`
 	SeriesID     *int32  `json:"series_id" binding:"omitempty"`
@@ -118,6 +144,7 @@ type BookSearchRequest struct {
 type BookResponse struct {
 	ID              int32      `json:"id"`
 	BookID          string     `json:"book_id"`
+	BookType        BookType   `json:"book_type"`
 	ISBN            *string    `json:"isbn"`
 	Title           string     `json:"title"`
 	Author          string     `json:"author"`
@@ -233,13 +260,9 @@ type Pagination struct {
 
 // Validate validates the CreateBookRequest
 func (r *CreateBookRequest) Validate() error {
-	// Normalize and validate BookID
-	r.BookID = strings.TrimSpace(r.BookID)
-	if r.BookID == "" {
-		return errors.New("book_id is required")
-	}
-	if len(r.BookID) > 50 {
-		return errors.New("book_id cannot exceed 50 characters")
+	// Validate BookType
+	if !r.BookType.IsValid() {
+		return errors.New("book_type must be either 'textbook' or 'storybook'")
 	}
 
 	// Normalize and validate Title

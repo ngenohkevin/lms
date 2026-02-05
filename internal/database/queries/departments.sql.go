@@ -34,18 +34,6 @@ func (q *Queries) CountDepartments(ctx context.Context) (int64, error) {
 	return count, err
 }
 
-const countStudentsByDepartment = `-- name: CountStudentsByDepartment :one
-SELECT COUNT(*) FROM students
-WHERE department_id = $1 AND deleted_at IS NULL
-`
-
-func (q *Queries) CountStudentsByDepartment(ctx context.Context, departmentID pgtype.Int4) (int64, error) {
-	row := q.db.QueryRow(ctx, countStudentsByDepartment, departmentID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const createDepartment = `-- name: CreateDepartment :one
 INSERT INTO departments (name, code, description)
 VALUES ($1, $2, $3)

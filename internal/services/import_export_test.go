@@ -164,12 +164,12 @@ TEST002,Test Book 2,Test Author 2,978-0-123456-79-6,Test Publisher,2023,Non-Fict
 
 		// Set up mock expectations
 		mockBookService.On("CreateBook", mock.Anything, mock.MatchedBy(func(req models.CreateBookRequest) bool {
-			return req.BookID == "TEST001"
-		})).Return(models.BookResponse{ID: 1, BookID: "TEST001", Title: "Test Book 1"}, nil)
+			return req.Title == "Test Book 1"
+		})).Return(models.BookResponse{ID: 1, BookID: "HGL-T000001", Title: "Test Book 1"}, nil)
 
 		mockBookService.On("CreateBook", mock.Anything, mock.MatchedBy(func(req models.CreateBookRequest) bool {
-			return req.BookID == "TEST002"
-		})).Return(models.BookResponse{ID: 2, BookID: "TEST002", Title: "Test Book 2"}, nil)
+			return req.Title == "Test Book 2"
+		})).Return(models.BookResponse{ID: 2, BookID: "HGL-T000002", Title: "Test Book 2"}, nil)
 
 		// Note: History tracking will be skipped in this test since queries is nil
 

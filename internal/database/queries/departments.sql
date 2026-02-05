@@ -47,7 +47,3 @@ ORDER BY name;
 -- name: CountDepartments :one
 SELECT COUNT(*) FROM departments
 WHERE is_active = true;
-
--- name: CountStudentsByDepartment :one
-SELECT COUNT(*) FROM students
-WHERE department_id = $1 AND deleted_at IS NULL;

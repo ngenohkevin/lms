@@ -299,9 +299,9 @@ func (q *Queries) GetBorrowingStatistics(ctx context.Context, arg GetBorrowingSt
 	return items, nil
 }
 
-const getBorrowingStatisticsByDepartment = `-- name: GetBorrowingStatisticsByDepartment :many
-SELECT 
-    s.department,
+const getBorrowingStatisticsByYearOfStudy = `-- name: GetBorrowingStatisticsByYearOfStudy :many
+SELECT
+    s.year_of_study,
     TO_CHAR(DATE_TRUNC('month', t.transaction_date), 'YYYY-MM') as month,
     COUNT(CASE WHEN t.transaction_type = 'borrow' THEN 1 END)::int as total_borrows,
     COUNT(CASE WHEN t.transaction_type = 'return' THEN 1 END)::int as total_returns,
@@ -311,36 +311,36 @@ INNER JOIN students s ON t.student_id = s.id
 WHERE t.transaction_date >= $1::timestamp
     AND t.transaction_date <= $2::timestamp
     AND s.deleted_at IS NULL
-    AND ($3::text IS NULL OR s.department = $3::text)
-GROUP BY s.department, DATE_TRUNC('month', t.transaction_date)
-ORDER BY s.department, month
+    AND ($3::int IS NULL OR s.year_of_study = $3::int)
+GROUP BY s.year_of_study, DATE_TRUNC('month', t.transaction_date)
+ORDER BY s.year_of_study, month
 `
 
-type GetBorrowingStatisticsByDepartmentParams struct {
+type GetBorrowingStatisticsByYearOfStudyParams struct {
 	Column1 pgtype.Timestamp `db:"column_1" json:"column_1"`
 	Column2 pgtype.Timestamp `db:"column_2" json:"column_2"`
-	Column3 string           `db:"column_3" json:"column_3"`
+	Column3 int32            `db:"column_3" json:"column_3"`
 }
 
-type GetBorrowingStatisticsByDepartmentRow struct {
-	Department     pgtype.Text `db:"department" json:"department"`
-	Month          string      `db:"month" json:"month"`
-	TotalBorrows   int32       `db:"total_borrows" json:"total_borrows"`
-	TotalReturns   int32       `db:"total_returns" json:"total_returns"`
-	UniqueStudents int32       `db:"unique_students" json:"unique_students"`
+type GetBorrowingStatisticsByYearOfStudyRow struct {
+	YearOfStudy    int32  `db:"year_of_study" json:"year_of_study"`
+	Month          string `db:"month" json:"month"`
+	TotalBorrows   int32  `db:"total_borrows" json:"total_borrows"`
+	TotalReturns   int32  `db:"total_returns" json:"total_returns"`
+	UniqueStudents int32  `db:"unique_students" json:"unique_students"`
 }
 
-func (q *Queries) GetBorrowingStatisticsByDepartment(ctx context.Context, arg GetBorrowingStatisticsByDepartmentParams) ([]GetBorrowingStatisticsByDepartmentRow, error) {
-	rows, err := q.db.Query(ctx, getBorrowingStatisticsByDepartment, arg.Column1, arg.Column2, arg.Column3)
+func (q *Queries) GetBorrowingStatisticsByYearOfStudy(ctx context.Context, arg GetBorrowingStatisticsByYearOfStudyParams) ([]GetBorrowingStatisticsByYearOfStudyRow, error) {
+	rows, err := q.db.Query(ctx, getBorrowingStatisticsByYearOfStudy, arg.Column1, arg.Column2, arg.Column3)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []GetBorrowingStatisticsByDepartmentRow{}
+	items := []GetBorrowingStatisticsByYearOfStudyRow{}
 	for rows.Next() {
-		var i GetBorrowingStatisticsByDepartmentRow
+		var i GetBorrowingStatisticsByYearOfStudyRow
 		if err := rows.Scan(
-			&i.Department,
+			&i.YearOfStudy,
 			&i.Month,
 			&i.TotalBorrows,
 			&i.TotalReturns,
@@ -535,7 +535,7 @@ SELECT
     GREATEST(EXTRACT(DAY FROM (COALESCE(t.returned_date, NOW()) - t.due_date))::int, 0) as days_overdue,
     s.student_id as student_code,
     CONCAT(s.first_name, ' ', s.last_name) as student_name,
-    s.department,
+    s.year_of_study,
     b.book_id as book_code,
     b.title as book_title
 FROM transactions t
@@ -574,7 +574,7 @@ type GetFinePaymentHistoryRow struct {
 	DaysOverdue      interface{}      `db:"days_overdue" json:"days_overdue"`
 	StudentCode      string           `db:"student_code" json:"student_code"`
 	StudentName      interface{}      `db:"student_name" json:"student_name"`
-	Department       pgtype.Text      `db:"department" json:"department"`
+	YearOfStudy      int32            `db:"year_of_study" json:"year_of_study"`
 	BookCode         string           `db:"book_code" json:"book_code"`
 	BookTitle        string           `db:"book_title" json:"book_title"`
 }
@@ -607,7 +607,7 @@ func (q *Queries) GetFinePaymentHistory(ctx context.Context, arg GetFinePaymentH
 			&i.DaysOverdue,
 			&i.StudentCode,
 			&i.StudentName,
-			&i.Department,
+			&i.YearOfStudy,
 			&i.BookCode,
 			&i.BookTitle,
 		); err != nil {
@@ -660,65 +660,6 @@ func (q *Queries) GetFineStatistics(ctx context.Context, arg GetFineStatisticsPa
 	return i, err
 }
 
-const getFinesByDepartment = `-- name: GetFinesByDepartment :many
-SELECT
-    COALESCE(s.department, 'Unknown') as department,
-    COUNT(*)::int as fine_count,
-    COUNT(DISTINCT s.id)::int as students_affected,
-    COALESCE(SUM(t.fine_amount), 0)::text as total_fines,
-    COALESCE(SUM(CASE WHEN t.fine_paid = true THEN t.fine_amount ELSE 0 END), 0)::text as paid_amount,
-    COALESCE(SUM(CASE WHEN t.fine_paid = false THEN t.fine_amount ELSE 0 END), 0)::text as outstanding_amount
-FROM transactions t
-INNER JOIN students s ON t.student_id = s.id
-WHERE t.fine_amount > 0
-    AND s.deleted_at IS NULL
-    AND ($1::timestamp IS NULL OR t.transaction_date >= $1::timestamp)
-    AND ($2::timestamp IS NULL OR t.transaction_date <= $2::timestamp)
-GROUP BY s.department
-ORDER BY total_fines DESC
-`
-
-type GetFinesByDepartmentParams struct {
-	Column1 pgtype.Timestamp `db:"column_1" json:"column_1"`
-	Column2 pgtype.Timestamp `db:"column_2" json:"column_2"`
-}
-
-type GetFinesByDepartmentRow struct {
-	Department        string `db:"department" json:"department"`
-	FineCount         int32  `db:"fine_count" json:"fine_count"`
-	StudentsAffected  int32  `db:"students_affected" json:"students_affected"`
-	TotalFines        string `db:"total_fines" json:"total_fines"`
-	PaidAmount        string `db:"paid_amount" json:"paid_amount"`
-	OutstandingAmount string `db:"outstanding_amount" json:"outstanding_amount"`
-}
-
-func (q *Queries) GetFinesByDepartment(ctx context.Context, arg GetFinesByDepartmentParams) ([]GetFinesByDepartmentRow, error) {
-	rows, err := q.db.Query(ctx, getFinesByDepartment, arg.Column1, arg.Column2)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GetFinesByDepartmentRow{}
-	for rows.Next() {
-		var i GetFinesByDepartmentRow
-		if err := rows.Scan(
-			&i.Department,
-			&i.FineCount,
-			&i.StudentsAffected,
-			&i.TotalFines,
-			&i.PaidAmount,
-			&i.OutstandingAmount,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getFinesByYearOfStudy = `-- name: GetFinesByYearOfStudy :many
 SELECT
     s.year_of_study,
@@ -760,6 +701,65 @@ func (q *Queries) GetFinesByYearOfStudy(ctx context.Context, arg GetFinesByYearO
 	items := []GetFinesByYearOfStudyRow{}
 	for rows.Next() {
 		var i GetFinesByYearOfStudyRow
+		if err := rows.Scan(
+			&i.YearOfStudy,
+			&i.FineCount,
+			&i.StudentsAffected,
+			&i.TotalFines,
+			&i.PaidAmount,
+			&i.OutstandingAmount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getFinesByYearOfStudyDetailed = `-- name: GetFinesByYearOfStudyDetailed :many
+SELECT
+    s.year_of_study,
+    COUNT(*)::int as fine_count,
+    COUNT(DISTINCT s.id)::int as students_affected,
+    COALESCE(SUM(t.fine_amount), 0)::text as total_fines,
+    COALESCE(SUM(CASE WHEN t.fine_paid = true THEN t.fine_amount ELSE 0 END), 0)::text as paid_amount,
+    COALESCE(SUM(CASE WHEN t.fine_paid = false THEN t.fine_amount ELSE 0 END), 0)::text as outstanding_amount
+FROM transactions t
+INNER JOIN students s ON t.student_id = s.id
+WHERE t.fine_amount > 0
+    AND s.deleted_at IS NULL
+    AND ($1::timestamp IS NULL OR t.transaction_date >= $1::timestamp)
+    AND ($2::timestamp IS NULL OR t.transaction_date <= $2::timestamp)
+GROUP BY s.year_of_study
+ORDER BY s.year_of_study
+`
+
+type GetFinesByYearOfStudyDetailedParams struct {
+	Column1 pgtype.Timestamp `db:"column_1" json:"column_1"`
+	Column2 pgtype.Timestamp `db:"column_2" json:"column_2"`
+}
+
+type GetFinesByYearOfStudyDetailedRow struct {
+	YearOfStudy       int32  `db:"year_of_study" json:"year_of_study"`
+	FineCount         int32  `db:"fine_count" json:"fine_count"`
+	StudentsAffected  int32  `db:"students_affected" json:"students_affected"`
+	TotalFines        string `db:"total_fines" json:"total_fines"`
+	PaidAmount        string `db:"paid_amount" json:"paid_amount"`
+	OutstandingAmount string `db:"outstanding_amount" json:"outstanding_amount"`
+}
+
+func (q *Queries) GetFinesByYearOfStudyDetailed(ctx context.Context, arg GetFinesByYearOfStudyDetailedParams) ([]GetFinesByYearOfStudyDetailedRow, error) {
+	rows, err := q.db.Query(ctx, getFinesByYearOfStudyDetailed, arg.Column1, arg.Column2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetFinesByYearOfStudyDetailedRow{}
+	for rows.Next() {
+		var i GetFinesByYearOfStudyDetailedRow
 		if err := rows.Scan(
 			&i.YearOfStudy,
 			&i.FineCount,
@@ -959,7 +959,6 @@ SELECT
     s.email,
     s.phone,
     s.year_of_study,
-    s.department,
     s.max_books,
     s.is_active,
     s.created_at as member_since,
@@ -980,7 +979,6 @@ type GetIndividualStudentProfileRow struct {
 	Email              pgtype.Text      `db:"email" json:"email"`
 	Phone              pgtype.Text      `db:"phone" json:"phone"`
 	YearOfStudy        int32            `db:"year_of_study" json:"year_of_study"`
-	Department         pgtype.Text      `db:"department" json:"department"`
 	MaxBooks           int32            `db:"max_books" json:"max_books"`
 	IsActive           pgtype.Bool      `db:"is_active" json:"is_active"`
 	MemberSince        pgtype.Timestamp `db:"member_since" json:"member_since"`
@@ -1005,7 +1003,6 @@ func (q *Queries) GetIndividualStudentProfile(ctx context.Context, id int32) (Ge
 		&i.Email,
 		&i.Phone,
 		&i.YearOfStudy,
-		&i.Department,
 		&i.MaxBooks,
 		&i.IsActive,
 		&i.MemberSince,
@@ -1171,9 +1168,9 @@ func (q *Queries) GetLostBooksByCategory(ctx context.Context, arg GetLostBooksBy
 	return items, nil
 }
 
-const getLostBooksByDepartment = `-- name: GetLostBooksByDepartment :many
+const getLostBooksByYearOfStudy = `-- name: GetLostBooksByYearOfStudy :many
 SELECT
-    COALESCE(s.department, 'Unknown') as department,
+    s.year_of_study,
     COUNT(*)::int as lost_count,
     COALESCE(SUM(t.fine_amount), 0)::text as total_value,
     COUNT(DISTINCT s.id)::int as students_affected
@@ -1183,33 +1180,33 @@ WHERE t.transaction_type = 'lost'
     AND s.deleted_at IS NULL
     AND ($1::timestamp IS NULL OR t.transaction_date >= $1::timestamp)
     AND ($2::timestamp IS NULL OR t.transaction_date <= $2::timestamp)
-GROUP BY s.department
-ORDER BY lost_count DESC
+GROUP BY s.year_of_study
+ORDER BY s.year_of_study
 `
 
-type GetLostBooksByDepartmentParams struct {
+type GetLostBooksByYearOfStudyParams struct {
 	Column1 pgtype.Timestamp `db:"column_1" json:"column_1"`
 	Column2 pgtype.Timestamp `db:"column_2" json:"column_2"`
 }
 
-type GetLostBooksByDepartmentRow struct {
-	Department       string `db:"department" json:"department"`
+type GetLostBooksByYearOfStudyRow struct {
+	YearOfStudy      int32  `db:"year_of_study" json:"year_of_study"`
 	LostCount        int32  `db:"lost_count" json:"lost_count"`
 	TotalValue       string `db:"total_value" json:"total_value"`
 	StudentsAffected int32  `db:"students_affected" json:"students_affected"`
 }
 
-func (q *Queries) GetLostBooksByDepartment(ctx context.Context, arg GetLostBooksByDepartmentParams) ([]GetLostBooksByDepartmentRow, error) {
-	rows, err := q.db.Query(ctx, getLostBooksByDepartment, arg.Column1, arg.Column2)
+func (q *Queries) GetLostBooksByYearOfStudy(ctx context.Context, arg GetLostBooksByYearOfStudyParams) ([]GetLostBooksByYearOfStudyRow, error) {
+	rows, err := q.db.Query(ctx, getLostBooksByYearOfStudy, arg.Column1, arg.Column2)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []GetLostBooksByDepartmentRow{}
+	items := []GetLostBooksByYearOfStudyRow{}
 	for rows.Next() {
-		var i GetLostBooksByDepartmentRow
+		var i GetLostBooksByYearOfStudyRow
 		if err := rows.Scan(
-			&i.Department,
+			&i.YearOfStudy,
 			&i.LostCount,
 			&i.TotalValue,
 			&i.StudentsAffected,
@@ -1235,7 +1232,6 @@ SELECT
     s.student_id as student_code,
     CONCAT(s.first_name, ' ', s.last_name) as student_name,
     s.year_of_study,
-    s.department,
     b.book_id as book_code,
     b.title as book_title,
     b.author as book_author,
@@ -1250,8 +1246,7 @@ WHERE t.transaction_type = 'lost'
     AND b.deleted_at IS NULL
     AND ($1::timestamp IS NULL OR t.transaction_date >= $1::timestamp)
     AND ($2::timestamp IS NULL OR t.transaction_date <= $2::timestamp)
-    AND ($3::text IS NULL OR $3 = '' OR s.department = $3::text)
-    AND ($4::text IS NULL OR $4 = '' OR b.genre = $4::text)
+    AND ($3::text IS NULL OR $3 = '' OR b.genre = $3::text)
 ORDER BY t.transaction_date DESC
 `
 
@@ -1259,7 +1254,6 @@ type GetLostBooksReportParams struct {
 	Column1 pgtype.Timestamp `db:"column_1" json:"column_1"`
 	Column2 pgtype.Timestamp `db:"column_2" json:"column_2"`
 	Column3 string           `db:"column_3" json:"column_3"`
-	Column4 string           `db:"column_4" json:"column_4"`
 }
 
 type GetLostBooksReportRow struct {
@@ -1271,7 +1265,6 @@ type GetLostBooksReportRow struct {
 	StudentCode     string           `db:"student_code" json:"student_code"`
 	StudentName     interface{}      `db:"student_name" json:"student_name"`
 	YearOfStudy     int32            `db:"year_of_study" json:"year_of_study"`
-	Department      pgtype.Text      `db:"department" json:"department"`
 	BookCode        string           `db:"book_code" json:"book_code"`
 	BookTitle       string           `db:"book_title" json:"book_title"`
 	BookAuthor      string           `db:"book_author" json:"book_author"`
@@ -1284,12 +1277,7 @@ type GetLostBooksReportRow struct {
 // Lost Books Report Queries
 // ============================================
 func (q *Queries) GetLostBooksReport(ctx context.Context, arg GetLostBooksReportParams) ([]GetLostBooksReportRow, error) {
-	rows, err := q.db.Query(ctx, getLostBooksReport,
-		arg.Column1,
-		arg.Column2,
-		arg.Column3,
-		arg.Column4,
-	)
+	rows, err := q.db.Query(ctx, getLostBooksReport, arg.Column1, arg.Column2, arg.Column3)
 	if err != nil {
 		return nil, err
 	}
@@ -1306,7 +1294,6 @@ func (q *Queries) GetLostBooksReport(ctx context.Context, arg GetLostBooksReport
 			&i.StudentCode,
 			&i.StudentName,
 			&i.YearOfStudy,
-			&i.Department,
 			&i.BookCode,
 			&i.BookTitle,
 			&i.BookAuthor,
@@ -1479,11 +1466,10 @@ func (q *Queries) GetMonthlyTrends(ctx context.Context, arg GetMonthlyTrendsPara
 }
 
 const getOverdueBooksByYear = `-- name: GetOverdueBooksByYear :many
-SELECT 
+SELECT
     s.student_id,
     CONCAT(s.first_name, ' ', s.last_name) as student_name,
     s.year_of_study,
-    s.department,
     b.title as book_title,
     b.author as book_author,
     t.due_date,
@@ -1496,22 +1482,15 @@ INNER JOIN books b ON t.book_id = b.id
 WHERE t.due_date < NOW()
     AND t.returned_date IS NULL
     AND ($1::int IS NULL OR s.year_of_study = $1::int)
-    AND ($2::text IS NULL OR s.department = $2::text)
     AND s.deleted_at IS NULL
     AND b.deleted_at IS NULL
 ORDER BY t.due_date ASC
 `
 
-type GetOverdueBooksByYearParams struct {
-	Column1 int32  `db:"column_1" json:"column_1"`
-	Column2 string `db:"column_2" json:"column_2"`
-}
-
 type GetOverdueBooksByYearRow struct {
 	StudentID     string           `db:"student_id" json:"student_id"`
 	StudentName   interface{}      `db:"student_name" json:"student_name"`
 	YearOfStudy   int32            `db:"year_of_study" json:"year_of_study"`
-	Department    pgtype.Text      `db:"department" json:"department"`
 	BookTitle     string           `db:"book_title" json:"book_title"`
 	BookAuthor    string           `db:"book_author" json:"book_author"`
 	DueDate       pgtype.Timestamp `db:"due_date" json:"due_date"`
@@ -1520,8 +1499,8 @@ type GetOverdueBooksByYearRow struct {
 	TransactionID int32            `db:"transaction_id" json:"transaction_id"`
 }
 
-func (q *Queries) GetOverdueBooksByYear(ctx context.Context, arg GetOverdueBooksByYearParams) ([]GetOverdueBooksByYearRow, error) {
-	rows, err := q.db.Query(ctx, getOverdueBooksByYear, arg.Column1, arg.Column2)
+func (q *Queries) GetOverdueBooksByYear(ctx context.Context, dollar_1 int32) ([]GetOverdueBooksByYearRow, error) {
+	rows, err := q.db.Query(ctx, getOverdueBooksByYear, dollar_1)
 	if err != nil {
 		return nil, err
 	}
@@ -1533,7 +1512,6 @@ func (q *Queries) GetOverdueBooksByYear(ctx context.Context, arg GetOverdueBooks
 			&i.StudentID,
 			&i.StudentName,
 			&i.YearOfStudy,
-			&i.Department,
 			&i.BookTitle,
 			&i.BookAuthor,
 			&i.DueDate,
@@ -1812,11 +1790,10 @@ func (q *Queries) GetSeasonalTrends(ctx context.Context, arg GetSeasonalTrendsPa
 }
 
 const getStudentActivity = `-- name: GetStudentActivity :many
-SELECT 
+SELECT
     s.student_id,
     CONCAT(s.first_name, ' ', s.last_name) as student_name,
     s.year_of_study,
-    s.department,
     COUNT(CASE WHEN t.transaction_type = 'borrow' THEN 1 END)::int as total_borrows,
     COUNT(CASE WHEN t.transaction_type = 'return' THEN 1 END)::int as total_returns,
     COUNT(CASE WHEN t.transaction_type = 'borrow' AND t.returned_date IS NULL THEN 1 END)::int as current_books,
@@ -1824,30 +1801,27 @@ SELECT
     COALESCE(SUM(t.fine_amount)::text, '0.00') as total_fines,
     COALESCE(MAX(t.transaction_date), s.created_at) as last_activity
 FROM students s
-LEFT JOIN transactions t ON s.id = t.student_id 
-    AND t.transaction_date >= $3::timestamp
-    AND t.transaction_date <= $4::timestamp
+LEFT JOIN transactions t ON s.id = t.student_id
+    AND t.transaction_date >= $2::timestamp
+    AND t.transaction_date <= $3::timestamp
 WHERE ($1::int IS NULL OR s.year_of_study = $1::int)
-    AND ($2::text IS NULL OR s.department = $2::text)
     AND s.deleted_at IS NULL
     AND s.is_active = true
-GROUP BY s.id, s.student_id, s.first_name, s.last_name, s.year_of_study, s.department, s.created_at
+GROUP BY s.id, s.student_id, s.first_name, s.last_name, s.year_of_study, s.created_at
 HAVING COUNT(CASE WHEN t.transaction_type = 'borrow' THEN 1 END) > 0  -- Only include students with activity
 ORDER BY total_borrows DESC, last_activity DESC
 `
 
 type GetStudentActivityParams struct {
 	Column1 int32            `db:"column_1" json:"column_1"`
-	Column2 string           `db:"column_2" json:"column_2"`
+	Column2 pgtype.Timestamp `db:"column_2" json:"column_2"`
 	Column3 pgtype.Timestamp `db:"column_3" json:"column_3"`
-	Column4 pgtype.Timestamp `db:"column_4" json:"column_4"`
 }
 
 type GetStudentActivityRow struct {
 	StudentID    string           `db:"student_id" json:"student_id"`
 	StudentName  interface{}      `db:"student_name" json:"student_name"`
 	YearOfStudy  int32            `db:"year_of_study" json:"year_of_study"`
-	Department   pgtype.Text      `db:"department" json:"department"`
 	TotalBorrows int32            `db:"total_borrows" json:"total_borrows"`
 	TotalReturns int32            `db:"total_returns" json:"total_returns"`
 	CurrentBooks int32            `db:"current_books" json:"current_books"`
@@ -1857,12 +1831,7 @@ type GetStudentActivityRow struct {
 }
 
 func (q *Queries) GetStudentActivity(ctx context.Context, arg GetStudentActivityParams) ([]GetStudentActivityRow, error) {
-	rows, err := q.db.Query(ctx, getStudentActivity,
-		arg.Column1,
-		arg.Column2,
-		arg.Column3,
-		arg.Column4,
-	)
+	rows, err := q.db.Query(ctx, getStudentActivity, arg.Column1, arg.Column2, arg.Column3)
 	if err != nil {
 		return nil, err
 	}
@@ -1874,7 +1843,6 @@ func (q *Queries) GetStudentActivity(ctx context.Context, arg GetStudentActivity
 			&i.StudentID,
 			&i.StudentName,
 			&i.YearOfStudy,
-			&i.Department,
 			&i.TotalBorrows,
 			&i.TotalReturns,
 			&i.CurrentBooks,
@@ -1893,9 +1861,8 @@ func (q *Queries) GetStudentActivity(ctx context.Context, arg GetStudentActivity
 }
 
 const getStudentBehaviorAnalysis = `-- name: GetStudentBehaviorAnalysis :many
-SELECT 
+SELECT
     s.year_of_study,
-    s.department,
     COUNT(DISTINCT s.id)::int as total_students,
     ROUND(AVG(student_stats.total_borrows), 2)::text as avg_borrows_per_student,
     ROUND(AVG(student_stats.avg_loan_duration), 2)::text as avg_loan_duration_days,
@@ -1905,29 +1872,28 @@ SELECT
     STRING_AGG(DISTINCT student_stats.favorite_genre, ', ') as popular_genres
 FROM students s
 INNER JOIN (
-    SELECT 
+    SELECT
         s.id,
         s.year_of_study,
-        s.department,
         COUNT(CASE WHEN t.transaction_type = 'borrow' THEN 1 END)::int as total_borrows,
         COALESCE(AVG(EXTRACT(DAY FROM (t.returned_date - t.transaction_date))), 14) as avg_loan_duration,
-        CASE 
+        CASE
             WHEN COUNT(CASE WHEN t.transaction_type = 'borrow' THEN 1 END) > 0 THEN
-                COUNT(CASE WHEN t.due_date < COALESCE(t.returned_date, NOW()) THEN 1 END)::numeric / 
+                COUNT(CASE WHEN t.due_date < COALESCE(t.returned_date, NOW()) THEN 1 END)::numeric /
                 COUNT(CASE WHEN t.transaction_type = 'borrow' THEN 1 END)::numeric
             ELSE 0
         END as overdue_rate,
         (
-            SELECT b.genre 
-            FROM transactions t2 
-            INNER JOIN books b ON t2.book_id = b.id 
-            WHERE t2.student_id = s.id 
+            SELECT b.genre
+            FROM transactions t2
+            INNER JOIN books b ON t2.book_id = b.id
+            WHERE t2.student_id = s.id
             AND t2.transaction_type = 'borrow'
             AND t2.transaction_date >= $1::timestamp
             AND t2.transaction_date <= $2::timestamp
             AND b.genre IS NOT NULL
-            GROUP BY b.genre 
-            ORDER BY COUNT(*) DESC 
+            GROUP BY b.genre
+            ORDER BY COUNT(*) DESC
             LIMIT 1
         ) as favorite_genre
     FROM students s
@@ -1937,39 +1903,31 @@ INNER JOIN (
     WHERE s.deleted_at IS NULL
     AND s.is_active = true
     AND ($3::int IS NULL OR s.year_of_study = $3::int)
-    AND ($4::text IS NULL OR s.department = $4::text)
-    GROUP BY s.id, s.year_of_study, s.department
+    GROUP BY s.id, s.year_of_study
 ) student_stats ON s.id = student_stats.id
-GROUP BY s.year_of_study, s.department
-ORDER BY s.year_of_study, s.department
+GROUP BY s.year_of_study
+ORDER BY s.year_of_study
 `
 
 type GetStudentBehaviorAnalysisParams struct {
 	Column1 pgtype.Timestamp `db:"column_1" json:"column_1"`
 	Column2 pgtype.Timestamp `db:"column_2" json:"column_2"`
 	Column3 int32            `db:"column_3" json:"column_3"`
-	Column4 string           `db:"column_4" json:"column_4"`
 }
 
 type GetStudentBehaviorAnalysisRow struct {
-	YearOfStudy           int32       `db:"year_of_study" json:"year_of_study"`
-	Department            pgtype.Text `db:"department" json:"department"`
-	TotalStudents         int32       `db:"total_students" json:"total_students"`
-	AvgBorrowsPerStudent  string      `db:"avg_borrows_per_student" json:"avg_borrows_per_student"`
-	AvgLoanDurationDays   string      `db:"avg_loan_duration_days" json:"avg_loan_duration_days"`
-	AvgOverdueRatePercent string      `db:"avg_overdue_rate_percent" json:"avg_overdue_rate_percent"`
-	HeavyUsers            int32       `db:"heavy_users" json:"heavy_users"`
-	LightUsers            int32       `db:"light_users" json:"light_users"`
-	PopularGenres         []byte      `db:"popular_genres" json:"popular_genres"`
+	YearOfStudy           int32  `db:"year_of_study" json:"year_of_study"`
+	TotalStudents         int32  `db:"total_students" json:"total_students"`
+	AvgBorrowsPerStudent  string `db:"avg_borrows_per_student" json:"avg_borrows_per_student"`
+	AvgLoanDurationDays   string `db:"avg_loan_duration_days" json:"avg_loan_duration_days"`
+	AvgOverdueRatePercent string `db:"avg_overdue_rate_percent" json:"avg_overdue_rate_percent"`
+	HeavyUsers            int32  `db:"heavy_users" json:"heavy_users"`
+	LightUsers            int32  `db:"light_users" json:"light_users"`
+	PopularGenres         []byte `db:"popular_genres" json:"popular_genres"`
 }
 
 func (q *Queries) GetStudentBehaviorAnalysis(ctx context.Context, arg GetStudentBehaviorAnalysisParams) ([]GetStudentBehaviorAnalysisRow, error) {
-	rows, err := q.db.Query(ctx, getStudentBehaviorAnalysis,
-		arg.Column1,
-		arg.Column2,
-		arg.Column3,
-		arg.Column4,
-	)
+	rows, err := q.db.Query(ctx, getStudentBehaviorAnalysis, arg.Column1, arg.Column2, arg.Column3)
 	if err != nil {
 		return nil, err
 	}
@@ -1979,7 +1937,6 @@ func (q *Queries) GetStudentBehaviorAnalysis(ctx context.Context, arg GetStudent
 		var i GetStudentBehaviorAnalysisRow
 		if err := rows.Scan(
 			&i.YearOfStudy,
-			&i.Department,
 			&i.TotalStudents,
 			&i.AvgBorrowsPerStudent,
 			&i.AvgLoanDurationDays,
@@ -2182,11 +2139,10 @@ func (q *Queries) GetStudentTransactionHistory(ctx context.Context, arg GetStude
 }
 
 const getTopBorrowingStudents = `-- name: GetTopBorrowingStudents :many
-SELECT 
+SELECT
     s.student_id,
     CONCAT(s.first_name, ' ', s.last_name) as student_name,
     s.year_of_study,
-    s.department,
     COUNT(t.id)::int as total_borrows,
     COUNT(CASE WHEN t.returned_date IS NULL THEN 1 END)::int as current_books,
     COUNT(CASE WHEN t.due_date < NOW() AND t.returned_date IS NULL THEN 1 END)::int as overdue_books
@@ -2197,7 +2153,7 @@ WHERE t.transaction_type = 'borrow'
     AND t.transaction_date <= $2::timestamp
     AND s.deleted_at IS NULL
     AND ($3::int IS NULL OR s.year_of_study = $3::int)
-GROUP BY s.id, s.student_id, s.first_name, s.last_name, s.year_of_study, s.department
+GROUP BY s.id, s.student_id, s.first_name, s.last_name, s.year_of_study
 ORDER BY total_borrows DESC
 LIMIT $4::int
 `
@@ -2213,7 +2169,6 @@ type GetTopBorrowingStudentsRow struct {
 	StudentID    string      `db:"student_id" json:"student_id"`
 	StudentName  interface{} `db:"student_name" json:"student_name"`
 	YearOfStudy  int32       `db:"year_of_study" json:"year_of_study"`
-	Department   pgtype.Text `db:"department" json:"department"`
 	TotalBorrows int32       `db:"total_borrows" json:"total_borrows"`
 	CurrentBooks int32       `db:"current_books" json:"current_books"`
 	OverdueBooks int32       `db:"overdue_books" json:"overdue_books"`
@@ -2237,7 +2192,6 @@ func (q *Queries) GetTopBorrowingStudents(ctx context.Context, arg GetTopBorrowi
 			&i.StudentID,
 			&i.StudentName,
 			&i.YearOfStudy,
-			&i.Department,
 			&i.TotalBorrows,
 			&i.CurrentBooks,
 			&i.OverdueBooks,
@@ -2258,7 +2212,6 @@ SELECT
     s.student_id as student_code,
     CONCAT(s.first_name, ' ', s.last_name) as student_name,
     s.year_of_study,
-    s.department,
     s.email,
     COUNT(t.id)::int as fine_count,
     COALESCE(SUM(t.fine_amount), 0)::text as total_fines,
@@ -2269,7 +2222,7 @@ WHERE t.fine_amount > 0
     AND t.fine_paid = false
     AND COALESCE(t.fine_waived, false) = false
     AND s.deleted_at IS NULL
-GROUP BY s.id, s.student_id, s.first_name, s.last_name, s.year_of_study, s.department, s.email
+GROUP BY s.id, s.student_id, s.first_name, s.last_name, s.year_of_study, s.email
 ORDER BY outstanding_fines DESC
 LIMIT $1
 `
@@ -2279,7 +2232,6 @@ type GetTopFineDefaultersRow struct {
 	StudentCode      string      `db:"student_code" json:"student_code"`
 	StudentName      interface{} `db:"student_name" json:"student_name"`
 	YearOfStudy      int32       `db:"year_of_study" json:"year_of_study"`
-	Department       pgtype.Text `db:"department" json:"department"`
 	Email            pgtype.Text `db:"email" json:"email"`
 	FineCount        int32       `db:"fine_count" json:"fine_count"`
 	TotalFines       string      `db:"total_fines" json:"total_fines"`
@@ -2300,7 +2252,6 @@ func (q *Queries) GetTopFineDefaulters(ctx context.Context, limit int32) ([]GetT
 			&i.StudentCode,
 			&i.StudentName,
 			&i.YearOfStudy,
-			&i.Department,
 			&i.Email,
 			&i.FineCount,
 			&i.TotalFines,

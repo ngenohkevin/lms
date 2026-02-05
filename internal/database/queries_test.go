@@ -135,7 +135,6 @@ func TestQueries_StudentOperations(t *testing.T) {
 		Email:       pgtype.Text{String: "john.doe@student.edu", Valid: true},
 		Phone:       pgtype.Text{String: "+1234567890", Valid: true},
 		YearOfStudy: 2,
-		Department:  pgtype.Text{String: "Computer Science", Valid: true},
 		MaxBooks:    5,
 	})
 	require.NoError(t, err)
@@ -163,7 +162,6 @@ func TestQueries_StudentOperations(t *testing.T) {
 		Email:       pgtype.Text{String: "jane.smith@student.edu", Valid: true},
 		Phone:       pgtype.Text{String: "+1987654321", Valid: true},
 		YearOfStudy: 3,
-		Department:  pgtype.Text{String: "Mathematics", Valid: true},
 		MaxBooks:    5,
 	})
 	require.NoError(t, err)

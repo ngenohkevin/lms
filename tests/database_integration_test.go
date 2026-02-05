@@ -177,7 +177,6 @@ func (suite *DatabaseIntegrationTestSuite) TestCompleteStudentWorkflow() {
 		Phone:       pgtype.Text{String: "+1234567890", Valid: true},
 		YearOfStudy: 2,
 		MaxBooks:    5,
-		Department:  pgtype.Text{String: "Computer Science", Valid: true},
 	})
 	require.NoError(suite.T(), err)
 
@@ -204,7 +203,6 @@ func (suite *DatabaseIntegrationTestSuite) TestCompleteStudentWorkflow() {
 		Phone:       pgtype.Text{String: "+1987654321", Valid: true},
 		YearOfStudy: 3,
 		MaxBooks:    5,
-		Department:  pgtype.Text{String: "Mathematics", Valid: true},
 	})
 	require.NoError(suite.T(), err)
 	assert.Equal(suite.T(), "Updated", updatedStudent.FirstName)

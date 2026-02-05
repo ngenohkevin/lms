@@ -33,6 +33,8 @@ type BookQuerier interface {
 	// Deletion validation queries
 	CountActiveTransactionsByBook(ctx context.Context, bookID int32) (int64, error)
 	CountActiveReservationsByBook(ctx context.Context, bookID int32) (int64, error)
+	// Book ID sequence generation
+	GetNextBookSequence(ctx context.Context, bookType interface{}) (int32, error)
 }
 
 // BookServiceInterface defines the interface for book service operations
@@ -65,6 +67,15 @@ func NewBookService(querier BookQuerier, cacheService CacheServiceInterface) *Bo
 	}
 }
 
+// GenerateBookID generates a unique book ID based on book type
+func (s *BookService) GenerateBookID(ctx context.Context, bookType models.BookType) (string, error) {
+	seq, err := s.querier.GetNextBookSequence(ctx, string(bookType))
+	if err != nil {
+		return "", fmt.Errorf("failed to get sequence for book type %s: %w", bookType, err)
+	}
+	return fmt.Sprintf("%s%06d", bookType.Prefix(), seq), nil
+}
+
 // CreateBook creates a new book
 func (s *BookService) CreateBook(ctx context.Context, req models.CreateBookRequest) (*models.BookResponse, error) {
 	// Validate the request
@@ -72,10 +83,10 @@ func (s *BookService) CreateBook(ctx context.Context, req models.CreateBookReque
 		return nil, fmt.Errorf("validation error: %w", err)
 	}
 
-	// Check if book with same BookID already exists
-	existingBook, err := s.querier.GetBookByBookID(ctx, req.BookID)
-	if err == nil && existingBook.ID != 0 {
-		return nil, fmt.Errorf("book with ID %s already exists", req.BookID)
+	// Generate book ID based on book type
+	bookID, err := s.GenerateBookID(ctx, req.BookType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate book ID: %w", err)
 	}
 
 	// Check if book with same ISBN already exists (if ISBN is provided)
@@ -89,9 +100,10 @@ func (s *BookService) CreateBook(ctx context.Context, req models.CreateBookReque
 
 	// Prepare create parameters
 	params := queries.CreateBookParams{
-		BookID: req.BookID,
-		Title:  req.Title,
-		Author: req.Author,
+		BookID:   bookID,
+		BookType: pgtype.Text{String: string(req.BookType), Valid: true},
+		Title:    req.Title,
+		Author:   req.Author,
 	}
 
 	// Set optional fields
@@ -249,6 +261,7 @@ func (s *BookService) UpdateBook(ctx context.Context, id int32, req models.Updat
 	params := queries.UpdateBookParams{
 		ID:              id,
 		BookID:          existingBook.BookID,
+		BookType:        existingBook.BookType,
 		Title:           existingBook.Title,
 		Author:          existingBook.Author,
 		Isbn:            existingBook.Isbn,

@@ -1,6 +1,6 @@
 -- name: CreateStudent :one
-INSERT INTO students (student_id, first_name, last_name, email, phone, year_of_study, department, password_hash, max_books)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+INSERT INTO students (student_id, first_name, last_name, email, phone, year_of_study, password_hash, max_books)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 RETURNING *;
 
 -- name: GetStudentByID :one
@@ -17,7 +17,7 @@ WHERE email = $1 AND deleted_at IS NULL;
 
 -- name: UpdateStudent :one
 UPDATE students
-SET first_name = $2, last_name = $3, email = $4, phone = $5, year_of_study = $6, department = $7, max_books = $8, updated_at = NOW()
+SET first_name = $2, last_name = $3, email = $4, phone = $5, year_of_study = $6, max_books = $7, updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;
 
@@ -87,12 +87,12 @@ UPDATE students
 SET is_active = $2, updated_at = NOW() 
 WHERE id = ANY($1::int[]) AND deleted_at IS NULL;
 
--- name: GetStudentCountByYearAndDepartment :many
-SELECT year_of_study, department, COUNT(*) as count
-FROM students 
+-- name: GetStudentCountByYear :many
+SELECT year_of_study, COUNT(*) as count
+FROM students
 WHERE deleted_at IS NULL AND is_active = true
-GROUP BY year_of_study, department
-ORDER BY year_of_study, department;
+GROUP BY year_of_study
+ORDER BY year_of_study;
 
 -- name: GetStudentEnrollmentTrends :many
 SELECT DATE_TRUNC('month', enrollment_date) as month,
@@ -167,19 +167,7 @@ SET admin_notes = $2, updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL
 RETURNING *;
 
--- name: GetStudentWithDepartment :one
-SELECT s.*, d.name as department_name
-FROM students s
-LEFT JOIN departments d ON s.department_id = d.id
-WHERE s.id = $1 AND s.deleted_at IS NULL;
-
--- name: ListStudentsWithDepartment :many
-SELECT s.*, d.name as department_name
-FROM students s
-LEFT JOIN departments d ON s.department_id = d.id
-WHERE s.deleted_at IS NULL
-ORDER BY s.created_at DESC
-LIMIT $1 OFFSET $2;
+-- Note: Department queries removed as department is no longer on students table
 
 -- name: GetStudentsByStatusType :many
 SELECT * FROM students
@@ -191,13 +179,4 @@ LIMIT $2 OFFSET $3;
 SELECT COUNT(*) FROM students
 WHERE status = $1 AND deleted_at IS NULL;
 
--- name: UpdateStudentDepartmentID :one
-UPDATE students
-SET department_id = $2, updated_at = NOW()
-WHERE id = $1 AND deleted_at IS NULL
-RETURNING *;
-
--- name: BulkUpdateStudentDepartment :execrows
-UPDATE students
-SET department_id = $2, updated_at = NOW()
-WHERE id = ANY($1::int[]) AND deleted_at IS NULL;
+-- Note: Department update queries removed as department is no longer on students table

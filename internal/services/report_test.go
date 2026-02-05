@@ -22,8 +22,8 @@ func (m *MockReportQuerier) GetBorrowingStatistics(ctx context.Context, arg quer
 	return args.Get(0).([]queries.GetBorrowingStatisticsRow), args.Error(1)
 }
 
-func (m *MockReportQuerier) GetOverdueBooksByYear(ctx context.Context, arg queries.GetOverdueBooksByYearParams) ([]queries.GetOverdueBooksByYearRow, error) {
-	args := m.Called(ctx, arg)
+func (m *MockReportQuerier) GetOverdueBooksByYear(ctx context.Context, yearOfStudy int32) ([]queries.GetOverdueBooksByYearRow, error) {
+	args := m.Called(ctx, yearOfStudy)
 	return args.Get(0).([]queries.GetOverdueBooksByYearRow), args.Error(1)
 }
 
@@ -161,9 +161,9 @@ func (m *MockReportQuerier) GetLostBooksByCategory(ctx context.Context, arg quer
 	return args.Get(0).([]queries.GetLostBooksByCategoryRow), args.Error(1)
 }
 
-func (m *MockReportQuerier) GetLostBooksByDepartment(ctx context.Context, arg queries.GetLostBooksByDepartmentParams) ([]queries.GetLostBooksByDepartmentRow, error) {
+func (m *MockReportQuerier) GetLostBooksByYearOfStudy(ctx context.Context, arg queries.GetLostBooksByYearOfStudyParams) ([]queries.GetLostBooksByYearOfStudyRow, error) {
 	args := m.Called(ctx, arg)
-	return args.Get(0).([]queries.GetLostBooksByDepartmentRow), args.Error(1)
+	return args.Get(0).([]queries.GetLostBooksByYearOfStudyRow), args.Error(1)
 }
 
 // Fines Collection Report Mock Methods
@@ -177,9 +177,9 @@ func (m *MockReportQuerier) GetFinesByYearOfStudy(ctx context.Context, arg queri
 	return args.Get(0).([]queries.GetFinesByYearOfStudyRow), args.Error(1)
 }
 
-func (m *MockReportQuerier) GetFinesByDepartment(ctx context.Context, arg queries.GetFinesByDepartmentParams) ([]queries.GetFinesByDepartmentRow, error) {
+func (m *MockReportQuerier) GetFinesByYearOfStudyDetailed(ctx context.Context, arg queries.GetFinesByYearOfStudyDetailedParams) ([]queries.GetFinesByYearOfStudyDetailedRow, error) {
 	args := m.Called(ctx, arg)
-	return args.Get(0).([]queries.GetFinesByDepartmentRow), args.Error(1)
+	return args.Get(0).([]queries.GetFinesByYearOfStudyDetailedRow), args.Error(1)
 }
 
 func (m *MockReportQuerier) GetFinesCollectionTrend(ctx context.Context, arg queries.GetFinesCollectionTrendParams) ([]queries.GetFinesCollectionTrendRow, error) {
@@ -298,19 +298,12 @@ func (suite *ReportServiceTestSuite) TestGetBorrowingStatistics_NoYear() {
 func (suite *ReportServiceTestSuite) TestGetOverdueBooks_Success() {
 	// Given
 	yearOfStudy := int32(2)
-	department := "Computer Science"
-
-	expectedParams := queries.GetOverdueBooksByYearParams{
-		Column1: yearOfStudy,
-		Column2: department,
-	}
 
 	expectedRows := []queries.GetOverdueBooksByYearRow{
 		{
 			StudentID:     "STU2024001",
 			StudentName:   "John Doe",
 			YearOfStudy:   2,
-			Department:    pgtype.Text{String: "Computer Science", Valid: true},
 			BookTitle:     "Data Structures",
 			BookAuthor:    "Thomas Cormen",
 			DueDate:       pgtype.Timestamp{Time: time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC), Valid: true},
@@ -320,10 +313,10 @@ func (suite *ReportServiceTestSuite) TestGetOverdueBooks_Success() {
 		},
 	}
 
-	suite.mockDB.On("GetOverdueBooksByYear", suite.ctx, expectedParams).Return(expectedRows, nil)
+	suite.mockDB.On("GetOverdueBooksByYear", suite.ctx, yearOfStudy).Return(expectedRows, nil)
 
 	// When
-	result, err := suite.service.GetOverdueBooks(suite.ctx, &yearOfStudy, &department)
+	result, err := suite.service.GetOverdueBooks(suite.ctx, &yearOfStudy)
 
 	// Then
 	assert.NoError(suite.T(), err)
@@ -388,15 +381,13 @@ func (suite *ReportServiceTestSuite) TestGetPopularBooks_Success() {
 func (suite *ReportServiceTestSuite) TestGetStudentActivity_Success() {
 	// Given
 	yearOfStudy := int32(3)
-	department := "Engineering"
 	startDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	endDate := time.Date(2024, 12, 31, 23, 59, 59, 0, time.UTC)
 
 	expectedParams := queries.GetStudentActivityParams{
 		Column1: yearOfStudy,
-		Column2: department,
-		Column3: pgtype.Timestamp{Time: startDate, Valid: true},
-		Column4: pgtype.Timestamp{Time: endDate, Valid: true},
+		Column2: pgtype.Timestamp{Time: startDate, Valid: true},
+		Column3: pgtype.Timestamp{Time: endDate, Valid: true},
 	}
 
 	expectedRows := []queries.GetStudentActivityRow{
@@ -404,7 +395,6 @@ func (suite *ReportServiceTestSuite) TestGetStudentActivity_Success() {
 			StudentID:    "STU2024001",
 			StudentName:  "Alice Johnson",
 			YearOfStudy:  3,
-			Department:   pgtype.Text{String: "Engineering", Valid: true},
 			TotalBorrows: 15,
 			TotalReturns: 13,
 			CurrentBooks: 2,
@@ -417,7 +407,7 @@ func (suite *ReportServiceTestSuite) TestGetStudentActivity_Success() {
 	suite.mockDB.On("GetStudentActivity", suite.ctx, expectedParams).Return(expectedRows, nil)
 
 	// When
-	result, err := suite.service.GetStudentActivity(suite.ctx, &yearOfStudy, &department, startDate, endDate)
+	result, err := suite.service.GetStudentActivity(suite.ctx, &yearOfStudy, startDate, endDate)
 
 	// Then
 	assert.NoError(suite.T(), err)

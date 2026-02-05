@@ -325,8 +325,8 @@ func (s *TransactionService) BorrowBookWithCopy(ctx context.Context, req BorrowB
 		}
 	}
 
-	// Calculate due date based on student year and borrowing rules (or custom due_days if provided)
-	dueDate := s.calculateDueDate(student, req.DueDays)
+	// Calculate due date based on book type, student year and borrowing rules (or custom due_days if provided)
+	dueDate := s.calculateDueDate(book, student, req.DueDays)
 
 	var transaction queries.Transaction
 
@@ -680,12 +680,16 @@ func (s *TransactionService) RenewBook(ctx context.Context, transactionID, libra
 	if extensionDays != nil && *extensionDays > 0 {
 		extensionPeriod = int(*extensionDays)
 	} else {
-		// Default extension period based on student year
+		// Default extension period based on book type and student year
 		student, err := s.queries.GetStudentByID(ctx, transactionRow.StudentID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get student: %w", err)
 		}
-		extensionPeriod = s.validateBorrowingPeriod(student)
+		book, err := s.queries.GetBookByID(ctx, transactionRow.BookID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get book: %w", err)
+		}
+		extensionPeriod = s.calculateBorrowingPeriodByBookType(book, student)
 	}
 
 	// Start from current due date or today, whichever is later
@@ -1081,9 +1085,9 @@ func (s *TransactionService) hasUnpaidFines(ctx context.Context, studentID int32
 	return totalFloat > 0, totalFloat, nil
 }
 
-// validateBorrowingPeriod validates the borrowing period based on student year
-func (s *TransactionService) validateBorrowingPeriod(student queries.Student) int {
-	// Different loan periods based on student year
+// validateBorrowingPeriodByStudentYear returns loan period based on student year (for storybooks)
+func (s *TransactionService) validateBorrowingPeriodByStudentYear(student queries.Student) int {
+	// Different loan periods based on student year (for storybooks)
 	switch student.YearOfStudy {
 	case 1, 2:
 		return 14 // 2 weeks for junior students
@@ -1094,14 +1098,28 @@ func (s *TransactionService) validateBorrowingPeriod(student queries.Student) in
 	}
 }
 
-// calculateDueDate calculates the due date based on student type and borrowing rules
-// If customDueDays is provided and non-nil, it overrides the year-based default
-func (s *TransactionService) calculateDueDate(student queries.Student, customDueDays *int32) time.Time {
+// calculateBorrowingPeriodByBookType returns the loan period based on book type
+// - Textbooks: 365 days (1 year)
+// - Storybooks: Variable based on student year (14/21/28 days)
+func (s *TransactionService) calculateBorrowingPeriodByBookType(book queries.Book, student queries.Student) int {
+	// Check if book is a textbook (365-day automatic loan)
+	// BookType is an interface{} due to sqlc enum handling
+	if bookType, ok := book.BookType.(string); ok && bookType == "textbook" {
+		return 365 // 1 year for textbooks
+	}
+	// Storybook - use year-based system
+	return s.validateBorrowingPeriodByStudentYear(student)
+}
+
+// calculateDueDate calculates the due date based on book type and borrowing rules
+// If customDueDays is provided and non-nil, it overrides the book-type-based default
+func (s *TransactionService) calculateDueDate(book queries.Book, student queries.Student, customDueDays *int32) time.Time {
 	var loanPeriod int
 	if customDueDays != nil && *customDueDays > 0 {
+		// Librarian/admin can always override with custom days
 		loanPeriod = int(*customDueDays)
 	} else {
-		loanPeriod = s.validateBorrowingPeriod(student)
+		loanPeriod = s.calculateBorrowingPeriodByBookType(book, student)
 	}
 	return time.Now().AddDate(0, 0, loanPeriod)
 }

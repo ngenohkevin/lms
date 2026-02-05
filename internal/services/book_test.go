@@ -202,6 +202,11 @@ func (m *MockBookQuerier) CountBooksByCategory(ctx context.Context, categoryID p
 	return args.Get(0).(int64), args.Error(1)
 }
 
+func (m *MockBookQuerier) GetNextBookSequence(ctx context.Context, bookType interface{}) (int32, error) {
+	args := m.Called(ctx, bookType)
+	return args.Get(0).(int32), args.Error(1)
+}
+
 func TestBookService_CreateBook(t *testing.T) {
 	mockQuerier := new(MockBookQuerier)
 	mockCache := new(MockCacheService)
@@ -217,7 +222,7 @@ func TestBookService_CreateBook(t *testing.T) {
 		{
 			name: "successful book creation",
 			request: models.CreateBookRequest{
-				BookID:          "BK001",
+				BookType:        models.BookTypeTextbook,
 				Title:           "Test Book",
 				Author:          "Test Author",
 				ISBN:            stringPtr("1234567890"),
@@ -230,20 +235,21 @@ func TestBookService_CreateBook(t *testing.T) {
 				ShelfLocation:   stringPtr("A1"),
 			},
 			setup: func() {
-				// Mock the duplicate check for BookID (should return error for "no book found")
-				mockQuerier.On("GetBookByBookID", mock.Anything, "BK001").Return(queries.Book{}, assert.AnError)
+				// Mock the sequence generation for auto-generated book ID
+				mockQuerier.On("GetNextBookSequence", mock.Anything, mock.Anything).Return(int32(1), nil)
 				// Mock the duplicate check for ISBN (should return error for "no book found")
 				mockQuerier.On("GetBookByISBN", mock.Anything, mock.MatchedBy(func(isbn pgtype.Text) bool {
 					return isbn.String == "1234567890" && isbn.Valid
 				})).Return(queries.Book{}, assert.AnError)
 				// Mock the actual book creation
 				mockQuerier.On("CreateBook", mock.Anything, mock.MatchedBy(func(arg queries.CreateBookParams) bool {
-					return arg.BookID == "BK001" && arg.Title == "Test Book" && arg.Author == "Test Author"
+					return arg.Title == "Test Book" && arg.Author == "Test Author"
 				})).Return(queries.Book{
 					ID:              1,
-					BookID:          "BK001",
+					BookID:          "HGL-T000001",
 					Title:           "Test Book",
 					Author:          "Test Author",
+					BookType:        "textbook",
 					Isbn:            pgtype.Text{String: "1234567890", Valid: true},
 					Publisher:       pgtype.Text{String: "Test Publisher", Valid: true},
 					PublishedYear:   pgtype.Int4{Int32: 2023, Valid: true},
@@ -266,9 +272,9 @@ func TestBookService_CreateBook(t *testing.T) {
 		{
 			name: "validation error - empty title",
 			request: models.CreateBookRequest{
-				BookID: "BK001",
-				Title:  "",
-				Author: "Test Author",
+				BookType: models.BookTypeTextbook,
+				Title:    "",
+				Author:   "Test Author",
 			},
 			setup:   func() {},
 			wantErr: true,
@@ -277,29 +283,18 @@ func TestBookService_CreateBook(t *testing.T) {
 		{
 			name: "validation error - empty author",
 			request: models.CreateBookRequest{
-				BookID: "BK001",
-				Title:  "Test Book",
-				Author: "",
+				BookType: models.BookTypeTextbook,
+				Title:    "Test Book",
+				Author:   "",
 			},
 			setup:   func() {},
 			wantErr: true,
 			errMsg:  "author is required",
 		},
 		{
-			name: "validation error - empty book_id",
-			request: models.CreateBookRequest{
-				BookID: "",
-				Title:  "Test Book",
-				Author: "Test Author",
-			},
-			setup:   func() {},
-			wantErr: true,
-			errMsg:  "book_id is required",
-		},
-		{
 			name: "validation error - invalid published year",
 			request: models.CreateBookRequest{
-				BookID:        "BK001",
+				BookType:      models.BookTypeTextbook,
 				Title:         "Test Book",
 				Author:        "Test Author",
 				PublishedYear: int32Ptr(999),
@@ -311,7 +306,7 @@ func TestBookService_CreateBook(t *testing.T) {
 		{
 			name: "validation error - negative total copies",
 			request: models.CreateBookRequest{
-				BookID:      "BK001",
+				BookType:    models.BookTypeTextbook,
 				Title:       "Test Book",
 				Author:      "Test Author",
 				TotalCopies: int32Ptr(-1),
@@ -323,7 +318,7 @@ func TestBookService_CreateBook(t *testing.T) {
 		{
 			name: "validation error - available copies exceed total copies",
 			request: models.CreateBookRequest{
-				BookID:          "BK001",
+				BookType:        models.BookTypeTextbook,
 				Title:           "Test Book",
 				Author:          "Test Author",
 				TotalCopies:     int32Ptr(3),
@@ -349,7 +344,7 @@ func TestBookService_CreateBook(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, book)
-				assert.Equal(t, tt.request.BookID, book.BookID)
+				assert.NotEmpty(t, book.BookID) // Auto-generated
 				assert.Equal(t, tt.request.Title, book.Title)
 				assert.Equal(t, tt.request.Author, book.Author)
 			}

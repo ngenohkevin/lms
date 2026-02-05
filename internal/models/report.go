@@ -52,7 +52,6 @@ type OverdueBookDetail struct {
 	StudentID     string    `json:"student_id"`
 	StudentName   string    `json:"student_name"`
 	YearOfStudy   int32     `json:"year_of_study"`
-	Department    string    `json:"department"`
 	BookTitle     string    `json:"book_title"`
 	BookAuthor    string    `json:"book_author"`
 	DueDate       time.Time `json:"due_date"`
@@ -103,7 +102,6 @@ type StudentActivityDetail struct {
 	StudentID    string    `json:"student_id"`
 	StudentName  string    `json:"student_name"`
 	YearOfStudy  int32     `json:"year_of_study"`
-	Department   string    `json:"department"`
 	TotalBorrows int32     `json:"total_borrows"`
 	TotalReturns int32     `json:"total_returns"`
 	CurrentBooks int32     `json:"current_books"`
@@ -216,8 +214,7 @@ type BorrowingStatisticsRequest struct {
 
 // OverdueBooksRequest represents request for overdue books report
 type OverdueBooksRequest struct {
-	YearOfStudy *int32  `json:"year_of_study,omitempty"`
-	Department  *string `json:"department,omitempty"`
+	YearOfStudy *int32 `json:"year_of_study,omitempty"`
 }
 
 // PopularBooksRequest represents request for popular books report
@@ -231,7 +228,6 @@ type PopularBooksRequest struct {
 // StudentActivityRequest represents request for student activity report
 type StudentActivityRequest struct {
 	YearOfStudy *int32    `json:"year_of_study,omitempty"`
-	Department  *string   `json:"department,omitempty"`
 	StartDate   time.Time `json:"start_date" binding:"required"`
 	EndDate     time.Time `json:"end_date" binding:"required"`
 }
@@ -530,10 +526,9 @@ type StudentBehaviorAnalysisReport struct {
 	GeneratedAt  time.Time              `json:"generated_at"`
 }
 
-// StudentBehaviorData represents behavior data by year/department
+// StudentBehaviorData represents behavior data by year of study
 type StudentBehaviorData struct {
 	YearOfStudy           int32  `json:"year_of_study"`
-	Department            string `json:"department"`
 	TotalStudents         int32  `json:"total_students"`
 	AvgBorrowsPerStudent  string `json:"avg_borrows_per_student"`
 	AvgLoanDurationDays   string `json:"avg_loan_duration_days"`
@@ -547,7 +542,6 @@ type StudentBehaviorData struct {
 type StudentBehaviorSummary struct {
 	TotalAnalyzedStudents int32  `json:"total_analyzed_students"`
 	MostActiveYear        int32  `json:"most_active_year"`
-	MostActiveDepartment  string `json:"most_active_department"`
 	OverallEngagementRate string `json:"overall_engagement_rate"`
 }
 
@@ -690,7 +684,6 @@ type StudentProfile struct {
 	Email       string    `json:"email"`
 	Phone       string    `json:"phone"`
 	YearOfStudy int32     `json:"year_of_study"`
-	Department  string    `json:"department"`
 	MaxBooks    int32     `json:"max_books"`
 	IsActive    bool      `json:"is_active"`
 	MemberSince time.Time `json:"member_since"`
@@ -755,12 +748,12 @@ type IndividualStudentReportRequest struct {
 
 // LostBooksReport represents a comprehensive lost books report
 type LostBooksReport struct {
-	LostBooks    []LostBookDetail        `json:"lost_books"`
-	Summary      LostBooksSummary        `json:"summary"`
-	Trends       []LostBooksTrendItem    `json:"trends"`
-	ByCategory   []LostBooksByCategory   `json:"by_category"`
-	ByDepartment []LostBooksByDepartment `json:"by_department"`
-	GeneratedAt  time.Time               `json:"generated_at"`
+	LostBooks      []LostBookDetail          `json:"lost_books"`
+	Summary        LostBooksSummary          `json:"summary"`
+	Trends         []LostBooksTrendItem      `json:"trends"`
+	ByCategory     []LostBooksByCategory     `json:"by_category"`
+	ByYearOfStudy  []LostBooksByYearOfStudy  `json:"by_year_of_study"`
+	GeneratedAt    time.Time                 `json:"generated_at"`
 }
 
 // LostBookDetail represents details of a lost book
@@ -773,7 +766,6 @@ type LostBookDetail struct {
 	StudentCode     string    `json:"student_code"`
 	StudentName     string    `json:"student_name"`
 	YearOfStudy     int32     `json:"year_of_study"`
-	Department      string    `json:"department"`
 	BookCode        string    `json:"book_code"`
 	BookTitle       string    `json:"book_title"`
 	BookAuthor      string    `json:"book_author"`
@@ -808,9 +800,9 @@ type LostBooksByCategory struct {
 	AvgReplacementCost string `json:"avg_replacement_cost"`
 }
 
-// LostBooksByDepartment represents lost books grouped by department
-type LostBooksByDepartment struct {
-	Department       string `json:"department"`
+// LostBooksByYearOfStudy represents lost books grouped by year of study
+type LostBooksByYearOfStudy struct {
+	YearOfStudy      int32  `json:"year_of_study"`
 	LostCount        int32  `json:"lost_count"`
 	ReplacementValue string `json:"replacement_value"`
 	StudentsAffected int32  `json:"students_affected"`
@@ -818,11 +810,11 @@ type LostBooksByDepartment struct {
 
 // LostBooksReportRequest represents request for lost books report
 type LostBooksReportRequest struct {
-	StartDate  time.Time `json:"start_date,omitempty"`
-	EndDate    time.Time `json:"end_date,omitempty"`
-	Department *string   `json:"department,omitempty"`
-	Genre      *string   `json:"genre,omitempty"`
-	Interval   string    `json:"interval,omitempty"` // day, week, month, year
+	StartDate    time.Time `json:"start_date,omitempty"`
+	EndDate      time.Time `json:"end_date,omitempty"`
+	YearOfStudy  *int32    `json:"year_of_study,omitempty"`
+	Genre        *string   `json:"genre,omitempty"`
+	Interval     string    `json:"interval,omitempty"` // day, week, month, year
 }
 
 // ============================================
@@ -833,7 +825,6 @@ type LostBooksReportRequest struct {
 type FinesCollectionReport struct {
 	Summary       FinesCollectionSummary   `json:"summary"`
 	ByYearOfStudy []FinesByYearItem        `json:"by_year_of_study"`
-	ByDepartment  []FinesByDepartmentItem  `json:"by_department"`
 	Trends        []FinesCollectionTrend   `json:"trends"`
 	TopDefaulters []FineDefaulterItem      `json:"top_defaulters"`
 	RecentFines   []FinePaymentHistoryItem `json:"recent_fines"`
@@ -862,15 +853,6 @@ type FinesByYearItem struct {
 	OutstandingAmount string `json:"outstanding_amount"`
 }
 
-// FinesByDepartmentItem represents fines grouped by department
-type FinesByDepartmentItem struct {
-	Department        string `json:"department"`
-	FineCount         int32  `json:"fine_count"`
-	StudentsAffected  int32  `json:"students_affected"`
-	TotalFines        string `json:"total_fines"`
-	PaidAmount        string `json:"paid_amount"`
-	OutstandingAmount string `json:"outstanding_amount"`
-}
 
 // FinesCollectionTrend represents fines trend over time
 type FinesCollectionTrend struct {
@@ -887,7 +869,6 @@ type FineDefaulterItem struct {
 	StudentCode      string `json:"student_code"`
 	StudentName      string `json:"student_name"`
 	YearOfStudy      int32  `json:"year_of_study"`
-	Department       string `json:"department"`
 	Email            string `json:"email"`
 	FineCount        int32  `json:"fine_count"`
 	TotalFines       string `json:"total_fines"`
@@ -908,7 +889,7 @@ type FinePaymentHistoryItem struct {
 	DaysOverdue      int32      `json:"days_overdue"`
 	StudentCode      string     `json:"student_code"`
 	StudentName      string     `json:"student_name"`
-	Department       string     `json:"department"`
+	YearOfStudy      int32      `json:"year_of_study"`
 	BookCode         string     `json:"book_code"`
 	BookTitle        string     `json:"book_title"`
 }

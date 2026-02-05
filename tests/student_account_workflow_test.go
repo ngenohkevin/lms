@@ -212,7 +212,6 @@ func TestStudentAccountWorkflow(t *testing.T) {
 			Email:       fmt.Sprintf("john.doe.%s@university.edu", studentID),
 			Phone:       "+1234567890",
 			YearOfStudy: 2,
-			Department:  "Computer Science",
 		}
 
 		student, err := studentService.CreateStudent(ctx, createReq)
@@ -226,7 +225,6 @@ func TestStudentAccountWorkflow(t *testing.T) {
 		assert.Equal(t, createReq.Email, student.Email.String)
 		assert.Equal(t, "+1234567890", student.Phone.String)
 		assert.Equal(t, int32(2), student.YearOfStudy)
-		assert.Equal(t, "Computer Science", student.Department.String)
 
 		// Verify password was set automatically
 		assert.True(t, student.PasswordHash.Valid)
@@ -253,7 +251,6 @@ func TestStudentAccountWorkflow(t *testing.T) {
 				LastName:    "Johnson",
 				Email:       "alice.johnson@university.edu",
 				YearOfStudy: 1,
-				Department:  "Mathematics",
 			},
 			{
 				StudentID:   "STU2023101",
@@ -261,7 +258,6 @@ func TestStudentAccountWorkflow(t *testing.T) {
 				LastName:    "Smith",
 				Email:       "bob.smith@university.edu",
 				YearOfStudy: 1,
-				Department:  "Physics",
 			},
 			{
 				StudentID:   "STU2023102",
@@ -269,7 +265,6 @@ func TestStudentAccountWorkflow(t *testing.T) {
 				LastName:    "Wilson",
 				Email:       "carol.wilson@university.edu",
 				YearOfStudy: 2,
-				Department:  "Chemistry",
 			},
 		}
 
@@ -399,13 +394,11 @@ func TestStudentAccountWorkflow(t *testing.T) {
 			Email:       fmt.Sprintf("updated.%s@university.edu", studentID),
 			Phone:       "+9876543210",
 			YearOfStudy: 2,
-			Department:  "Updated Department",
 		}
 
 		updatedStudent, err := studentService.UpdateStudent(ctx, student.ID, updateReq)
 		require.NoError(t, err)
 		assert.Equal(t, "Updated", updatedStudent.FirstName)
-		assert.Equal(t, "Updated Department", updatedStudent.Department.String)
 
 		// Step 4: Librarian can reset student password
 		newPassword := "librarian_reset_password"

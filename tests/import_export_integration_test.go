@@ -317,7 +317,7 @@ TEST002,Test Book 2,Test Author 2,978-0-123456-79-6,Test Publisher,2023,Non-Fict
 func createTestBooks(t *testing.T, bookService services.BookServiceInterface) {
 	testBooks := []models.CreateBookRequest{
 		{
-			BookID:          "EXPORT001",
+			BookType:        models.BookTypeTextbook,
 			Title:           "Export Test Book 1",
 			Author:          "Export Author 1",
 			ISBN:            stringPtr("978-0-123456-80-2"),
@@ -330,7 +330,7 @@ func createTestBooks(t *testing.T, bookService services.BookServiceInterface) {
 			ShelfLocation:   stringPtr("E1-001"),
 		},
 		{
-			BookID:          "EXPORT002",
+			BookType:        models.BookTypeStorybook,
 			Title:           "Export Test Book 2",
 			Author:          "Export Author 2",
 			ISBN:            stringPtr("978-0-123456-81-9"),
@@ -348,7 +348,7 @@ func createTestBooks(t *testing.T, bookService services.BookServiceInterface) {
 		_, err := bookService.CreateBook(context.Background(), book)
 		if err != nil {
 			// Book might already exist, which is fine for testing
-			t.Logf("Book %s might already exist: %v", book.BookID, err)
+			t.Logf("Book with ISBN %s might already exist: %v", *book.ISBN, err)
 		}
 	}
 }

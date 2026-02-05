@@ -33,8 +33,8 @@ func (m *MockReportService) GetBorrowingStatistics(ctx context.Context, startDat
 	return args.Get(0).(*models.BorrowingStatisticsReport), args.Error(1)
 }
 
-func (m *MockReportService) GetOverdueBooks(ctx context.Context, yearOfStudy *int32, department *string) (*models.OverdueBooksReport, error) {
-	args := m.Called(ctx, yearOfStudy, department)
+func (m *MockReportService) GetOverdueBooks(ctx context.Context, yearOfStudy *int32) (*models.OverdueBooksReport, error) {
+	args := m.Called(ctx, yearOfStudy)
 	return args.Get(0).(*models.OverdueBooksReport), args.Error(1)
 }
 
@@ -43,8 +43,8 @@ func (m *MockReportService) GetPopularBooks(ctx context.Context, startDate, endD
 	return args.Get(0).(*models.PopularBooksReport), args.Error(1)
 }
 
-func (m *MockReportService) GetStudentActivity(ctx context.Context, yearOfStudy *int32, department *string, startDate, endDate time.Time) (*models.StudentActivityReport, error) {
-	args := m.Called(ctx, yearOfStudy, department, startDate, endDate)
+func (m *MockReportService) GetStudentActivity(ctx context.Context, yearOfStudy *int32, startDate, endDate time.Time) (*models.StudentActivityReport, error) {
+	args := m.Called(ctx, yearOfStudy, startDate, endDate)
 	return args.Get(0).(*models.StudentActivityReport), args.Error(1)
 }
 
@@ -118,8 +118,8 @@ func (m *MockReportService) GetBookDemandPrediction(ctx context.Context, startDa
 	return args.Get(0).(*models.BookDemandPredictionReport), args.Error(1)
 }
 
-func (m *MockReportService) GetStudentBehaviorAnalysis(ctx context.Context, startDate, endDate time.Time, yearOfStudy *int32, department *string) (*models.StudentBehaviorAnalysisReport, error) {
-	args := m.Called(ctx, startDate, endDate, yearOfStudy, department)
+func (m *MockReportService) GetStudentBehaviorAnalysis(ctx context.Context, startDate, endDate time.Time, yearOfStudy *int32) (*models.StudentBehaviorAnalysisReport, error) {
+	args := m.Called(ctx, startDate, endDate, yearOfStudy)
 	return args.Get(0).(*models.StudentBehaviorAnalysisReport), args.Error(1)
 }
 
@@ -147,8 +147,8 @@ func (m *MockReportService) GetIndividualStudentReport(ctx context.Context, stud
 	return args.Get(0).(*models.IndividualStudentReport), args.Error(1)
 }
 
-func (m *MockReportService) GetLostBooksReport(ctx context.Context, startDate, endDate time.Time, department, genre *string, interval string) (*models.LostBooksReport, error) {
-	args := m.Called(ctx, startDate, endDate, department, genre, interval)
+func (m *MockReportService) GetLostBooksReport(ctx context.Context, startDate, endDate time.Time, yearOfStudy *int32, genre *string, interval string) (*models.LostBooksReport, error) {
+	args := m.Called(ctx, startDate, endDate, yearOfStudy, genre, interval)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -304,7 +304,6 @@ func (suite *ReportHandlerTestSuite) TestGetBorrowingStatistics_ServiceError() {
 func (suite *ReportHandlerTestSuite) TestGetOverdueBooks_Success() {
 	// Given
 	yearOfStudy := int32(2)
-	department := "Computer Science"
 
 	expectedReport := &models.OverdueBooksReport{
 		Books: []models.OverdueBookDetail{
@@ -312,7 +311,6 @@ func (suite *ReportHandlerTestSuite) TestGetOverdueBooks_Success() {
 				StudentID:     "STU2024001",
 				StudentName:   "John Doe",
 				YearOfStudy:   2,
-				Department:    "Computer Science",
 				BookTitle:     "Data Structures",
 				BookAuthor:    "Thomas Cormen",
 				DueDate:       time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
@@ -328,11 +326,10 @@ func (suite *ReportHandlerTestSuite) TestGetOverdueBooks_Success() {
 		GeneratedAt: time.Now(),
 	}
 
-	suite.mockService.On("GetOverdueBooks", mock.Anything, &yearOfStudy, &department).Return(expectedReport, nil)
+	suite.mockService.On("GetOverdueBooks", mock.Anything, &yearOfStudy).Return(expectedReport, nil)
 
 	requestBody := models.OverdueBooksRequest{
 		YearOfStudy: &yearOfStudy,
-		Department:  &department,
 	}
 
 	jsonBody, _ := json.Marshal(requestBody)
@@ -411,7 +408,6 @@ func (suite *ReportHandlerTestSuite) TestGetPopularBooks_Success() {
 func (suite *ReportHandlerTestSuite) TestGetStudentActivity_Success() {
 	// Given
 	yearOfStudy := int32(3)
-	department := "Engineering"
 	startDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	endDate := time.Date(2024, 12, 31, 23, 59, 59, 0, time.UTC)
 
@@ -421,7 +417,6 @@ func (suite *ReportHandlerTestSuite) TestGetStudentActivity_Success() {
 				StudentID:    "STU2024001",
 				StudentName:  "Alice Johnson",
 				YearOfStudy:  3,
-				Department:   "Engineering",
 				TotalBorrows: 15,
 				TotalReturns: 13,
 				CurrentBooks: 2,
@@ -439,11 +434,10 @@ func (suite *ReportHandlerTestSuite) TestGetStudentActivity_Success() {
 		GeneratedAt: time.Now(),
 	}
 
-	suite.mockService.On("GetStudentActivity", mock.Anything, &yearOfStudy, &department, startDate, endDate).Return(expectedReport, nil)
+	suite.mockService.On("GetStudentActivity", mock.Anything, &yearOfStudy, startDate, endDate).Return(expectedReport, nil)
 
 	requestBody := models.StudentActivityRequest{
 		YearOfStudy: &yearOfStudy,
-		Department:  &department,
 		StartDate:   startDate,
 		EndDate:     endDate,
 	}

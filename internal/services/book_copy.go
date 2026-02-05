@@ -36,6 +36,11 @@ type BookCopyCountSyncer interface {
 	DecrementTotalCopies(ctx context.Context, id int32) error
 }
 
+// BookInfoQuerier defines the interface for getting book info (for copy service)
+type BookInfoQuerier interface {
+	GetBookByID(ctx context.Context, id int32) (queries.Book, error)
+}
+
 // BookCopyServiceInterface defines the interface for book copy service operations
 type BookCopyServiceInterface interface {
 	CreateBookCopy(ctx context.Context, req models.CreateBookCopyRequest) (*models.BookCopyResponse, error)
@@ -56,8 +61,9 @@ type BookCopyServiceInterface interface {
 
 // BookCopyService handles book copy-related business logic
 type BookCopyService struct {
-	querier    BookCopyQuerier
-	copySyncer BookCopyCountSyncer
+	querier     BookCopyQuerier
+	copySyncer  BookCopyCountSyncer
+	bookQuerier BookInfoQuerier
 }
 
 // NewBookCopyService creates a new book copy service
@@ -66,6 +72,12 @@ func NewBookCopyService(querier BookCopyQuerier, copySyncer BookCopyCountSyncer)
 		querier:    querier,
 		copySyncer: copySyncer,
 	}
+}
+
+// WithBookQuerier sets the book querier for fetching book info
+func (s *BookCopyService) WithBookQuerier(bookQuerier BookInfoQuerier) *BookCopyService {
+	s.bookQuerier = bookQuerier
+	return s
 }
 
 // CreateBookCopy creates a new book copy
@@ -293,6 +305,7 @@ func (s *BookCopyService) SearchBookCopies(ctx context.Context, bookID int32, qu
 
 // GenerateCopies creates multiple copies for a book based on total_copies count
 // This is used when initially setting up copies for a book
+// Barcodes are auto-generated in the format: {book_id}-COPY-{6-digit-sequence}
 func (s *BookCopyService) GenerateCopies(ctx context.Context, bookID int32, count int32, bookCode string) ([]models.BookCopyResponse, error) {
 	if count <= 0 {
 		return nil, nil
@@ -308,11 +321,15 @@ func (s *BookCopyService) GenerateCopies(ctx context.Context, bookID int32, coun
 	copies := make([]models.BookCopyResponse, 0, count)
 
 	for i := int32(0); i < count; i++ {
-		copyNumber := fmt.Sprintf("%s-COPY-%03d", bookCode, startNum+int(i))
+		// Generate copy number with 6-digit sequence for consistency with book ID format
+		copyNumber := fmt.Sprintf("%s-COPY-%06d", bookCode, startNum+int(i))
+		// Barcode is the same as copy number
+		barcode := copyNumber
 
 		params := queries.CreateBookCopyParams{
 			BookID:     bookID,
 			CopyNumber: copyNumber,
+			Barcode:    pgtype.Text{String: barcode, Valid: true},
 			Condition:  pgtype.Text{String: "good", Valid: true},
 			Status:     pgtype.Text{String: "available", Valid: true},
 		}

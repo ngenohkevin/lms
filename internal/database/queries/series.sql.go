@@ -142,7 +142,7 @@ func (q *Queries) ListSeries(ctx context.Context, arg ListSeriesParams) ([]BookS
 }
 
 const listSeriesBooks = `-- name: ListSeriesBooks :many
-SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition, category_id, series_id, series_number, language, page_count, edition, format FROM books
+SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition, category_id, series_id, series_number, language, page_count, edition, format, book_type FROM books
 WHERE series_id = $1 AND deleted_at IS NULL
 ORDER BY series_number, title
 `
@@ -182,6 +182,7 @@ func (q *Queries) ListSeriesBooks(ctx context.Context, seriesID pgtype.Int4) ([]
 			&i.PageCount,
 			&i.Edition,
 			&i.Format,
+			&i.BookType,
 		); err != nil {
 			return nil, err
 		}

@@ -20,9 +20,9 @@ import (
 // ReportService interface defines the methods for report operations
 type ReportService interface {
 	GetBorrowingStatistics(ctx context.Context, startDate, endDate time.Time, yearOfStudy *int32) (*models.BorrowingStatisticsReport, error)
-	GetOverdueBooks(ctx context.Context, yearOfStudy *int32, department *string) (*models.OverdueBooksReport, error)
+	GetOverdueBooks(ctx context.Context, yearOfStudy *int32) (*models.OverdueBooksReport, error)
 	GetPopularBooks(ctx context.Context, startDate, endDate time.Time, limit int32, yearOfStudy *int32) (*models.PopularBooksReport, error)
-	GetStudentActivity(ctx context.Context, yearOfStudy *int32, department *string, startDate, endDate time.Time) (*models.StudentActivityReport, error)
+	GetStudentActivity(ctx context.Context, yearOfStudy *int32, startDate, endDate time.Time) (*models.StudentActivityReport, error)
 	GetInventoryStatus(ctx context.Context) (*models.InventoryStatusReport, error)
 	GetLibraryOverview(ctx context.Context) (*models.LibraryOverviewReport, error)
 	GetDashboardMetrics(ctx context.Context) (*models.DashboardMetrics, error)
@@ -40,14 +40,14 @@ type ReportService interface {
 	GetUsagePatternAnalysis(ctx context.Context, startDate, endDate time.Time, yearOfStudy *int32) (*models.UsagePatternAnalysisReport, error)
 	GetSeasonalTrends(ctx context.Context, startDate, endDate time.Time) (*models.SeasonalTrendsReport, error)
 	GetBookDemandPrediction(ctx context.Context, startDate, endDate time.Time, genre *string) (*models.BookDemandPredictionReport, error)
-	GetStudentBehaviorAnalysis(ctx context.Context, startDate, endDate time.Time, yearOfStudy *int32, department *string) (*models.StudentBehaviorAnalysisReport, error)
+	GetStudentBehaviorAnalysis(ctx context.Context, startDate, endDate time.Time, yearOfStudy *int32) (*models.StudentBehaviorAnalysisReport, error)
 	GetCapacityPlanningAnalysis(ctx context.Context) (*models.CapacityPlanningReport, error)
 	GetRiskAnalysis(ctx context.Context) (*models.RiskAnalysisReport, error)
 	GetDataVisualization(ctx context.Context, reportType, chartType string, parameters map[string]interface{}, title string, colors []string) (*models.DataVisualizationReport, error)
 
 	// New Report Methods - Individual Student, Lost Books, Fines Collection
 	GetIndividualStudentReport(ctx context.Context, studentID int32, limit int32, startDate, endDate time.Time) (*models.IndividualStudentReport, error)
-	GetLostBooksReport(ctx context.Context, startDate, endDate time.Time, department, genre *string, interval string) (*models.LostBooksReport, error)
+	GetLostBooksReport(ctx context.Context, startDate, endDate time.Time, yearOfStudy *int32, genre *string, interval string) (*models.LostBooksReport, error)
 	GetFinesCollectionReport(ctx context.Context, startDate, endDate time.Time, interval string, paidOnly *bool, limit int32) (*models.FinesCollectionReport, error)
 }
 
@@ -175,7 +175,7 @@ func (rh *ReportHandler) GetOverdueBooks(c *gin.Context) {
 		return
 	}
 
-	report, err := rh.reportService.GetOverdueBooks(c.Request.Context(), req.YearOfStudy, req.Department)
+	report, err := rh.reportService.GetOverdueBooks(c.Request.Context(), req.YearOfStudy)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Success: false,
@@ -276,7 +276,7 @@ func (rh *ReportHandler) GetStudentActivity(c *gin.Context) {
 		return
 	}
 
-	report, err := rh.reportService.GetStudentActivity(c.Request.Context(), req.YearOfStudy, req.Department, req.StartDate, req.EndDate)
+	report, err := rh.reportService.GetStudentActivity(c.Request.Context(), req.YearOfStudy, req.StartDate, req.EndDate)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Success: false,
@@ -545,15 +545,17 @@ func (rh *ReportHandler) ExportReport(c *gin.Context) {
 		reportData, err = rh.reportService.GetPopularBooks(ctx, startDate, endDate, limit, yearOfStudy)
 	case "overdue_books":
 		yearOfStudy := extractOverdueBooksParams(req.Parameters)
-		reportData, err = rh.reportService.GetOverdueBooks(ctx, yearOfStudy, nil)
+		reportData, err = rh.reportService.GetOverdueBooks(ctx, yearOfStudy)
 	case "student_activity":
 		limit, startDate, endDate, yearOfStudy := extractStudentActivityParams(req.Parameters)
-		var department *string
+		// Use yearOfStudy as filter if provided, otherwise nil
+		var yearFilter *int32
 		if yearOfStudy != nil {
-			dept := "Computer Science" // default department, should be extracted from parameters
-			department = &dept
+			yearFilter = yearOfStudy
+		} else {
+			yearFilter = &limit // Fallback to limit as year filter if provided
 		}
-		reportData, err = rh.reportService.GetStudentActivity(ctx, &limit, department, startDate, endDate)
+		reportData, err = rh.reportService.GetStudentActivity(ctx, yearFilter, startDate, endDate)
 	case "inventory_status":
 		extractInventoryParams(req.Parameters)
 		reportData, err = rh.reportService.GetInventoryStatus(ctx)
@@ -998,7 +1000,7 @@ func (rh *ReportHandler) GetStudentBehaviorAnalysis(c *gin.Context) {
 		return
 	}
 
-	report, err := rh.reportService.GetStudentBehaviorAnalysis(c.Request.Context(), req.StartDate, req.EndDate, req.YearOfStudy, req.Department)
+	report, err := rh.reportService.GetStudentBehaviorAnalysis(c.Request.Context(), req.StartDate, req.EndDate, req.YearOfStudy)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Success: false,
@@ -1171,7 +1173,7 @@ func (rh *ReportHandler) exportToCSV(baseFileName string, data interface{}) (str
 
 	case *models.OverdueBooksReport:
 		// Write header
-		header := []string{"Student ID", "Student Name", "Year of Study", "Department", "Book Title", "Book Author", "Due Date", "Days Overdue"}
+		header := []string{"Student ID", "Student Name", "Year of Study", "Book Title", "Book Author", "Due Date", "Days Overdue"}
 		if err := writer.Write(header); err != nil {
 			return "", nil, "", fmt.Errorf("failed to write CSV header: %w", err)
 		}
@@ -1182,7 +1184,6 @@ func (rh *ReportHandler) exportToCSV(baseFileName string, data interface{}) (str
 				book.StudentID,
 				book.StudentName,
 				fmt.Sprintf("%d", book.YearOfStudy),
-				book.Department,
 				book.BookTitle,
 				book.BookAuthor,
 				book.DueDate.Format("2006-01-02"),
@@ -1440,7 +1441,7 @@ func (rh *ReportHandler) writePopularBooksToExcel(f *excelize.File, sheetName st
 // writeOverdueBooksToExcel writes overdue books to Excel
 func (rh *ReportHandler) writeOverdueBooksToExcel(f *excelize.File, sheetName string, data *models.OverdueBooksReport) error {
 	// Write header
-	headers := []string{"Student ID", "Student Name", "Year", "Department", "Book Title", "Author", "Due Date", "Days Overdue", "Fine Amount"}
+	headers := []string{"Student ID", "Student Name", "Year", "Book Title", "Author", "Due Date", "Days Overdue", "Fine Amount"}
 	for i, header := range headers {
 		cell := fmt.Sprintf("%s1", string(rune('A'+i)))
 		if err := f.SetCellValue(sheetName, cell, header); err != nil {
@@ -1460,22 +1461,19 @@ func (rh *ReportHandler) writeOverdueBooksToExcel(f *excelize.File, sheetName st
 		if err := f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), book.YearOfStudy); err != nil {
 			return fmt.Errorf("failed to set cell value: %w", err)
 		}
-		if err := f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), book.Department); err != nil {
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("D%d", row), book.BookTitle); err != nil {
 			return fmt.Errorf("failed to set cell value: %w", err)
 		}
-		if err := f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), book.BookTitle); err != nil {
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), book.BookAuthor); err != nil {
 			return fmt.Errorf("failed to set cell value: %w", err)
 		}
-		if err := f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), book.BookAuthor); err != nil {
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), book.DueDate.Format("2006-01-02")); err != nil {
 			return fmt.Errorf("failed to set cell value: %w", err)
 		}
-		if err := f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), book.DueDate.Format("2006-01-02")); err != nil {
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), book.DaysOverdue); err != nil {
 			return fmt.Errorf("failed to set cell value: %w", err)
 		}
-		if err := f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), book.DaysOverdue); err != nil {
-			return fmt.Errorf("failed to set cell value: %w", err)
-		}
-		if err := f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), book.FineAmount); err != nil {
+		if err := f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), book.FineAmount); err != nil {
 			return fmt.Errorf("failed to set cell value: %w", err)
 		}
 	}
@@ -1769,7 +1767,7 @@ func (rh *ReportHandler) GetLostBooksReport(c *gin.Context) {
 		interval = "month"
 	}
 
-	report, err := rh.reportService.GetLostBooksReport(c.Request.Context(), startDate, endDate, req.Department, req.Genre, interval)
+	report, err := rh.reportService.GetLostBooksReport(c.Request.Context(), startDate, endDate, req.YearOfStudy, req.Genre, interval)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Success: false,

@@ -461,9 +461,6 @@ func (h *StudentHandler) BulkImportStudents(c *gin.Context) {
 		if pos, exists := headerMap["phone"]; exists && pos < len(record) {
 			req.Phone = strings.TrimSpace(record[pos])
 		}
-		if pos, exists := headerMap["department"]; exists && pos < len(record) {
-			req.Department = strings.TrimSpace(record[pos])
-		}
 
 		// Year of study (required)
 		if pos, exists := headerMap["year_of_study"]; exists && pos < len(record) {
@@ -1097,63 +1094,6 @@ func (h *StudentHandler) BulkUpdateStatus(c *gin.Context) {
 		Success: true,
 		Data:    map[string]interface{}{"updated": len(req.StudentIDs)},
 		Message: "Student statuses updated successfully",
-	})
-}
-
-// BulkDepartmentUpdateRequest represents the request body for bulk department update
-type BulkDepartmentUpdateRequest struct {
-	StudentIDs   []int32 `json:"student_ids" binding:"required,min=1"`
-	DepartmentID int32   `json:"department_id" binding:"required"`
-}
-
-// BulkUpdateDepartment handles PUT /api/v1/students/department/bulk
-// @Summary Bulk update student department
-// @Description Update the department for multiple students in a single operation
-// @Tags students
-// @Accept json
-// @Produce json
-// @Param body body BulkDepartmentUpdateRequest true "Student IDs and department ID"
-// @Success 200 {object} SuccessResponse
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Security BearerAuth
-// @Router /students/department/bulk [put]
-func (h *StudentHandler) BulkUpdateDepartment(c *gin.Context) {
-	var req BulkDepartmentUpdateRequest
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Success: false,
-			Error: ErrorDetail{
-				Code:    "VALIDATION_ERROR",
-				Message: "Invalid request data",
-				Details: err.Error(),
-			},
-		})
-		return
-	}
-
-	count, err := h.studentService.BulkUpdateDepartment(c.Request.Context(), req.StudentIDs, req.DepartmentID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Success: false,
-			Error: ErrorDetail{
-				Code:    "INTERNAL_ERROR",
-				Message: "Failed to bulk update student department",
-				Details: err.Error(),
-			},
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, SuccessResponse{
-		Success: true,
-		Data: map[string]interface{}{
-			"updated":       count,
-			"requested":     len(req.StudentIDs),
-			"department_id": req.DepartmentID,
-		},
-		Message: "Student departments updated successfully",
 	})
 }
 

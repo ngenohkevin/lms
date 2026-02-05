@@ -15,11 +15,10 @@ GROUP BY DATE_TRUNC('month', t.transaction_date)
 ORDER BY month;
 
 -- name: GetOverdueBooksByYear :many
-SELECT 
+SELECT
     s.student_id,
     CONCAT(s.first_name, ' ', s.last_name) as student_name,
     s.year_of_study,
-    s.department,
     b.title as book_title,
     b.author as book_author,
     t.due_date,
@@ -32,7 +31,6 @@ INNER JOIN books b ON t.book_id = b.id
 WHERE t.due_date < NOW()
     AND t.returned_date IS NULL
     AND ($1::int IS NULL OR s.year_of_study = $1::int)
-    AND ($2::text IS NULL OR s.department = $2::text)
     AND s.deleted_at IS NULL
     AND b.deleted_at IS NULL
 ORDER BY t.due_date ASC;
@@ -60,11 +58,10 @@ ORDER BY borrow_count DESC, unique_users DESC
 LIMIT $3::int;
 
 -- name: GetStudentActivity :many
-SELECT 
+SELECT
     s.student_id,
     CONCAT(s.first_name, ' ', s.last_name) as student_name,
     s.year_of_study,
-    s.department,
     COUNT(CASE WHEN t.transaction_type = 'borrow' THEN 1 END)::int as total_borrows,
     COUNT(CASE WHEN t.transaction_type = 'return' THEN 1 END)::int as total_returns,
     COUNT(CASE WHEN t.transaction_type = 'borrow' AND t.returned_date IS NULL THEN 1 END)::int as current_books,
@@ -72,14 +69,13 @@ SELECT
     COALESCE(SUM(t.fine_amount)::text, '0.00') as total_fines,
     COALESCE(MAX(t.transaction_date), s.created_at) as last_activity
 FROM students s
-LEFT JOIN transactions t ON s.id = t.student_id 
-    AND t.transaction_date >= $3::timestamp
-    AND t.transaction_date <= $4::timestamp
+LEFT JOIN transactions t ON s.id = t.student_id
+    AND t.transaction_date >= $2::timestamp
+    AND t.transaction_date <= $3::timestamp
 WHERE ($1::int IS NULL OR s.year_of_study = $1::int)
-    AND ($2::text IS NULL OR s.department = $2::text)
     AND s.deleted_at IS NULL
     AND s.is_active = true
-GROUP BY s.id, s.student_id, s.first_name, s.last_name, s.year_of_study, s.department, s.created_at
+GROUP BY s.id, s.student_id, s.first_name, s.last_name, s.year_of_study, s.created_at
 HAVING COUNT(CASE WHEN t.transaction_type = 'borrow' THEN 1 END) > 0  -- Only include students with activity
 ORDER BY total_borrows DESC, last_activity DESC;
 
@@ -179,9 +175,9 @@ SELECT
     0::int as system_alerts,  -- Placeholder for future alerts system
     NOW() as last_updated;
 
--- name: GetBorrowingStatisticsByDepartment :many
-SELECT 
-    s.department,
+-- name: GetBorrowingStatisticsByYearOfStudy :many
+SELECT
+    s.year_of_study,
     TO_CHAR(DATE_TRUNC('month', t.transaction_date), 'YYYY-MM') as month,
     COUNT(CASE WHEN t.transaction_type = 'borrow' THEN 1 END)::int as total_borrows,
     COUNT(CASE WHEN t.transaction_type = 'return' THEN 1 END)::int as total_returns,
@@ -191,16 +187,15 @@ INNER JOIN students s ON t.student_id = s.id
 WHERE t.transaction_date >= $1::timestamp
     AND t.transaction_date <= $2::timestamp
     AND s.deleted_at IS NULL
-    AND ($3::text IS NULL OR s.department = $3::text)
-GROUP BY s.department, DATE_TRUNC('month', t.transaction_date)
-ORDER BY s.department, month;
+    AND ($3::int IS NULL OR s.year_of_study = $3::int)
+GROUP BY s.year_of_study, DATE_TRUNC('month', t.transaction_date)
+ORDER BY s.year_of_study, month;
 
 -- name: GetTopBorrowingStudents :many
-SELECT 
+SELECT
     s.student_id,
     CONCAT(s.first_name, ' ', s.last_name) as student_name,
     s.year_of_study,
-    s.department,
     COUNT(t.id)::int as total_borrows,
     COUNT(CASE WHEN t.returned_date IS NULL THEN 1 END)::int as current_books,
     COUNT(CASE WHEN t.due_date < NOW() AND t.returned_date IS NULL THEN 1 END)::int as overdue_books
@@ -211,7 +206,7 @@ WHERE t.transaction_type = 'borrow'
     AND t.transaction_date <= $2::timestamp
     AND s.deleted_at IS NULL
     AND ($3::int IS NULL OR s.year_of_study = $3::int)
-GROUP BY s.id, s.student_id, s.first_name, s.last_name, s.year_of_study, s.department
+GROUP BY s.id, s.student_id, s.first_name, s.last_name, s.year_of_study
 ORDER BY total_borrows DESC
 LIMIT $4::int;
 
@@ -487,9 +482,8 @@ GROUP BY b.id, b.book_id, b.title, b.author, b.genre, b.available_copies, b.tota
 ORDER BY historical_borrows DESC, current_reservations DESC;
 
 -- name: GetStudentBehaviorAnalysis :many
-SELECT 
+SELECT
     s.year_of_study,
-    s.department,
     COUNT(DISTINCT s.id)::int as total_students,
     ROUND(AVG(student_stats.total_borrows), 2)::text as avg_borrows_per_student,
     ROUND(AVG(student_stats.avg_loan_duration), 2)::text as avg_loan_duration_days,
@@ -499,29 +493,28 @@ SELECT
     STRING_AGG(DISTINCT student_stats.favorite_genre, ', ') as popular_genres
 FROM students s
 INNER JOIN (
-    SELECT 
+    SELECT
         s.id,
         s.year_of_study,
-        s.department,
         COUNT(CASE WHEN t.transaction_type = 'borrow' THEN 1 END)::int as total_borrows,
         COALESCE(AVG(EXTRACT(DAY FROM (t.returned_date - t.transaction_date))), 14) as avg_loan_duration,
-        CASE 
+        CASE
             WHEN COUNT(CASE WHEN t.transaction_type = 'borrow' THEN 1 END) > 0 THEN
-                COUNT(CASE WHEN t.due_date < COALESCE(t.returned_date, NOW()) THEN 1 END)::numeric / 
+                COUNT(CASE WHEN t.due_date < COALESCE(t.returned_date, NOW()) THEN 1 END)::numeric /
                 COUNT(CASE WHEN t.transaction_type = 'borrow' THEN 1 END)::numeric
             ELSE 0
         END as overdue_rate,
         (
-            SELECT b.genre 
-            FROM transactions t2 
-            INNER JOIN books b ON t2.book_id = b.id 
-            WHERE t2.student_id = s.id 
+            SELECT b.genre
+            FROM transactions t2
+            INNER JOIN books b ON t2.book_id = b.id
+            WHERE t2.student_id = s.id
             AND t2.transaction_type = 'borrow'
             AND t2.transaction_date >= $1::timestamp
             AND t2.transaction_date <= $2::timestamp
             AND b.genre IS NOT NULL
-            GROUP BY b.genre 
-            ORDER BY COUNT(*) DESC 
+            GROUP BY b.genre
+            ORDER BY COUNT(*) DESC
             LIMIT 1
         ) as favorite_genre
     FROM students s
@@ -531,11 +524,10 @@ INNER JOIN (
     WHERE s.deleted_at IS NULL
     AND s.is_active = true
     AND ($3::int IS NULL OR s.year_of_study = $3::int)
-    AND ($4::text IS NULL OR s.department = $4::text)
-    GROUP BY s.id, s.year_of_study, s.department
+    GROUP BY s.id, s.year_of_study
 ) student_stats ON s.id = student_stats.id
-GROUP BY s.year_of_study, s.department
-ORDER BY s.year_of_study, s.department;
+GROUP BY s.year_of_study
+ORDER BY s.year_of_study;
 
 -- name: GetCapacityPlanningAnalysis :one
 SELECT 
@@ -652,7 +644,6 @@ SELECT
     s.email,
     s.phone,
     s.year_of_study,
-    s.department,
     s.max_books,
     s.is_active,
     s.created_at as member_since,
@@ -736,7 +727,6 @@ SELECT
     s.student_id as student_code,
     CONCAT(s.first_name, ' ', s.last_name) as student_name,
     s.year_of_study,
-    s.department,
     b.book_id as book_code,
     b.title as book_title,
     b.author as book_author,
@@ -751,8 +741,7 @@ WHERE t.transaction_type = 'lost'
     AND b.deleted_at IS NULL
     AND ($1::timestamp IS NULL OR t.transaction_date >= $1::timestamp)
     AND ($2::timestamp IS NULL OR t.transaction_date <= $2::timestamp)
-    AND ($3::text IS NULL OR $3 = '' OR s.department = $3::text)
-    AND ($4::text IS NULL OR $4 = '' OR b.genre = $4::text)
+    AND ($3::text IS NULL OR $3 = '' OR b.genre = $3::text)
 ORDER BY t.transaction_date DESC;
 
 -- name: GetLostBooksSummary :one
@@ -809,9 +798,9 @@ WHERE t.transaction_type = 'lost'
 GROUP BY b.genre
 ORDER BY lost_count DESC;
 
--- name: GetLostBooksByDepartment :many
+-- name: GetLostBooksByYearOfStudy :many
 SELECT
-    COALESCE(s.department, 'Unknown') as department,
+    s.year_of_study,
     COUNT(*)::int as lost_count,
     COALESCE(SUM(t.fine_amount), 0)::text as total_value,
     COUNT(DISTINCT s.id)::int as students_affected
@@ -821,8 +810,8 @@ WHERE t.transaction_type = 'lost'
     AND s.deleted_at IS NULL
     AND ($1::timestamp IS NULL OR t.transaction_date >= $1::timestamp)
     AND ($2::timestamp IS NULL OR t.transaction_date <= $2::timestamp)
-GROUP BY s.department
-ORDER BY lost_count DESC;
+GROUP BY s.year_of_study
+ORDER BY s.year_of_study;
 
 -- ============================================
 -- Fines Collection Report Queries
@@ -860,9 +849,9 @@ WHERE t.fine_amount > 0
 GROUP BY s.year_of_study
 ORDER BY s.year_of_study;
 
--- name: GetFinesByDepartment :many
+-- name: GetFinesByYearOfStudyDetailed :many
 SELECT
-    COALESCE(s.department, 'Unknown') as department,
+    s.year_of_study,
     COUNT(*)::int as fine_count,
     COUNT(DISTINCT s.id)::int as students_affected,
     COALESCE(SUM(t.fine_amount), 0)::text as total_fines,
@@ -874,8 +863,8 @@ WHERE t.fine_amount > 0
     AND s.deleted_at IS NULL
     AND ($1::timestamp IS NULL OR t.transaction_date >= $1::timestamp)
     AND ($2::timestamp IS NULL OR t.transaction_date <= $2::timestamp)
-GROUP BY s.department
-ORDER BY total_fines DESC;
+GROUP BY s.year_of_study
+ORDER BY s.year_of_study;
 
 -- name: GetFinesCollectionTrend :many
 SELECT
@@ -915,7 +904,7 @@ SELECT
     GREATEST(EXTRACT(DAY FROM (COALESCE(t.returned_date, NOW()) - t.due_date))::int, 0) as days_overdue,
     s.student_id as student_code,
     CONCAT(s.first_name, ' ', s.last_name) as student_name,
-    s.department,
+    s.year_of_study,
     b.book_id as book_code,
     b.title as book_title
 FROM transactions t
@@ -938,7 +927,6 @@ SELECT
     s.student_id as student_code,
     CONCAT(s.first_name, ' ', s.last_name) as student_name,
     s.year_of_study,
-    s.department,
     s.email,
     COUNT(t.id)::int as fine_count,
     COALESCE(SUM(t.fine_amount), 0)::text as total_fines,
@@ -949,6 +937,6 @@ WHERE t.fine_amount > 0
     AND t.fine_paid = false
     AND COALESCE(t.fine_waived, false) = false
     AND s.deleted_at IS NULL
-GROUP BY s.id, s.student_id, s.first_name, s.last_name, s.year_of_study, s.department, s.email
+GROUP BY s.id, s.student_id, s.first_name, s.last_name, s.year_of_study, s.email
 ORDER BY outstanding_fines DESC
 LIMIT $1;
