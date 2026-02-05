@@ -369,6 +369,7 @@ func createTestBook(t *testing.T, querier *queries.Queries, title, author, bookI
 func createTestBookWithStatus(t *testing.T, querier *queries.Queries, title, author, bookID string, copies int32, isActive bool) queries.Book {
 	book, err := querier.CreateBook(context.Background(), queries.CreateBookParams{
 		BookID:          bookID,
+		BookType:        "textbook",
 		Title:           title,
 		Author:          author,
 		TotalCopies:     pgtype.Int4{Int32: copies, Valid: true},

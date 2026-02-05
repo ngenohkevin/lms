@@ -35,6 +35,7 @@ func (suite *ReportIntegrationTestSuite) createTestDataForReports() {
 	// Create test books
 	_, err := suite.queries.CreateBook(ctx, queries.CreateBookParams{
 		BookID:          "BK001",
+		BookType:        "textbook",
 		Title:           "Test Book 1",
 		Author:          "Test Author 1",
 		Genre:           pgtype.Text{String: "Fiction", Valid: true},
@@ -45,6 +46,7 @@ func (suite *ReportIntegrationTestSuite) createTestDataForReports() {
 
 	_, err = suite.queries.CreateBook(ctx, queries.CreateBookParams{
 		BookID:          "BK002",
+		BookType:        "textbook",
 		Title:           "Test Book 2",
 		Author:          "Test Author 2",
 		Genre:           pgtype.Text{String: "Science", Valid: true},

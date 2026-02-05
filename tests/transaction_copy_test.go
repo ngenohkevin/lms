@@ -127,6 +127,7 @@ func (suite *TransactionCopyTestSuite) SetupTest() {
 	// Create test book with copies
 	testBook, err := suite.queries.CreateBook(suite.ctx, queries.CreateBookParams{
 		BookID:          fmt.Sprintf("CBK%d", time.Now().UnixNano()%100000),
+		BookType:        "textbook",
 		Title:           "Copy Test Book",
 		Author:          "Test Author",
 		Publisher:       pgtype.Text{String: "Test Publisher", Valid: true},

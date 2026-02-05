@@ -145,6 +145,7 @@ func (suite *SQLInjectionSecurityTestSuite) createTestData() {
 		// Book doesn't exist, create it
 		_, err = suite.db.CreateBook(ctx, queries.CreateBookParams{
 			BookID:          "TEST001",
+		BookType:        "textbook",
 			Title:           "Test Book",
 			Author:          "Test Author",
 			Isbn:            pgtype.Text{String: "978-0123456789", Valid: true},
@@ -367,7 +368,6 @@ func (suite *SQLInjectionSecurityTestSuite) TestSQLInjection_StudentOperations()
 				"last_name":     payload,
 				"email":         "injected@example.com",
 				"year_of_study": 1,
-				"department":    payload,
 			}
 
 			body, _ := json.Marshal(studentData)

@@ -209,6 +209,7 @@ func TestQueries_BookOperations(t *testing.T) {
 	// Test CreateBook
 	book, err := q.CreateBook(ctx, queries.CreateBookParams{
 		BookID:          "BOOK001",
+		BookType:        "textbook",
 		Isbn:            pgtype.Text{String: "978-1234567890", Valid: true},
 		Title:           "Test Book",
 		Author:          "Test Author",
@@ -240,6 +241,7 @@ func TestQueries_BookOperations(t *testing.T) {
 	updatedBook, err := q.UpdateBook(ctx, queries.UpdateBookParams{
 		ID:              book.ID,
 		BookID:          "BOOK001",
+		BookType:        "textbook",
 		Isbn:            pgtype.Text{String: "978-1234567890", Valid: true},
 		Title:           "Updated Test Book",
 		Author:          "Updated Test Author",

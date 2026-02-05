@@ -61,6 +61,7 @@ func BenchmarkDatabaseOperations(b *testing.B) {
 		for i := 0; i < 10; i++ { // Reduce number for faster benchmark setup
 			_, err := q.CreateBook(ctx, queries.CreateBookParams{
 				BookID:          fmt.Sprintf("PERF_BOOK_%s_%d", benchID, i),
+		BookType:        "textbook",
 				Title:           fmt.Sprintf("Performance Test Book %d", i),
 				Author:          "Performance Author",
 				Publisher:       pgtype.Text{String: "Performance Press", Valid: true},
@@ -172,6 +173,7 @@ func TestConcurrentUsers(t *testing.T) {
 		// Create a test book with limited copies
 		book, err := q.CreateBook(ctx, queries.CreateBookParams{
 			BookID:          fmt.Sprintf("CONC_BOOK_%s", testID),
+		BookType:        "textbook",
 			Title:           "Concurrent Test Book",
 			Author:          "Test Author",
 			TotalCopies:     pgtype.Int4{Int32: 3, Valid: true},
@@ -304,6 +306,7 @@ func TestLoadScenarios(t *testing.T) {
 		for i := 0; i < 100; i++ {
 			_, err := q.CreateBook(ctx, queries.CreateBookParams{
 				BookID:          fmt.Sprintf("LOAD_BOOK_%s_%d", testID, i),
+		BookType:        "textbook",
 				Title:           fmt.Sprintf("Load Test Book %d", i),
 				Author:          "Load Test Author",
 				Genre:           pgtype.Text{String: "Science", Valid: true},

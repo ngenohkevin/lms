@@ -122,6 +122,7 @@ func (suite *TransactionIntegrationTestSuite) SetupTest() {
 	// Create test book
 	testBook, err := suite.queries.CreateBook(suite.ctx, queries.CreateBookParams{
 		BookID:          fmt.Sprintf("BK%d", time.Now().UnixNano()%100000),
+		BookType:        "textbook",
 		Title:           "Test Book for Transactions",
 		Author:          "Test Author",
 		Publisher:       pgtype.Text{String: "Test Publisher", Valid: true},

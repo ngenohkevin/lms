@@ -227,6 +227,7 @@ func (suite *DatabaseIntegrationTestSuite) TestCompleteBookWorkflow() {
 	// Create book
 	book, err := suite.queries.CreateBook(suite.ctx, queries.CreateBookParams{
 		BookID:          "TEST_BOOK_001",
+		BookType:        "textbook",
 		Isbn:            pgtype.Text{String: "978-1234567890", Valid: true},
 		Title:           "Integration Test Book",
 		Author:          "Test Author",
@@ -289,6 +290,7 @@ func (suite *DatabaseIntegrationTestSuite) TestTransactionOperations() {
 
 	book, err := suite.queries.CreateBook(suite.ctx, queries.CreateBookParams{
 		BookID:          fmt.Sprintf("TEST_BOOK_%d", timestamp),
+		BookType:        "textbook",
 		Title:           "Transaction Test Book",
 		Author:          "Test Author",
 		TotalCopies:     pgtype.Int4{Int32: 1, Valid: true},
@@ -364,6 +366,7 @@ func (suite *DatabaseIntegrationTestSuite) TestReservationOperations() {
 
 	book, err := suite.queries.CreateBook(suite.ctx, queries.CreateBookParams{
 		BookID:          "TEST_RES_BOOK_001",
+		BookType:        "textbook",
 		Title:           "Reservation Test Book",
 		Author:          "Test Author",
 		TotalCopies:     pgtype.Int4{Int32: 1, Valid: true},

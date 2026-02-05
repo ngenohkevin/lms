@@ -116,6 +116,7 @@ func (suite *NotificationIntegrationTestSuite) createTestData() {
 	// Create test book
 	suite.testBook, err = suite.queries.CreateBook(suite.ctx, queries.CreateBookParams{
 		BookID:          "INT_TEST_BOOK_001",
+		BookType:        "textbook",
 		Title:           "Integration Test Book",
 		Author:          "Test Author",
 		Publisher:       pgtype.Text{String: "Test Publisher", Valid: true},
@@ -198,6 +199,7 @@ func (suite *NotificationIntegrationTestSuite) TestPhase7_2_DueSoonReminders() {
 	_, err = suite.queries.UpdateBook(suite.ctx, queries.UpdateBookParams{
 		ID:              suite.testBook.ID,
 		BookID:          suite.testBook.BookID,
+		BookType:        suite.testBook.BookType,
 		Title:           suite.testBook.Title,
 		Author:          suite.testBook.Author,
 		Publisher:       suite.testBook.Publisher,
@@ -255,6 +257,7 @@ func (suite *NotificationIntegrationTestSuite) TestPhase7_2_OverdueReminders() {
 	_, err = suite.queries.UpdateBook(suite.ctx, queries.UpdateBookParams{
 		ID:              suite.testBook.ID,
 		BookID:          suite.testBook.BookID,
+		BookType:        suite.testBook.BookType,
 		Title:           suite.testBook.Title,
 		Author:          suite.testBook.Author,
 		Publisher:       suite.testBook.Publisher,
@@ -300,6 +303,7 @@ func (suite *NotificationIntegrationTestSuite) TestPhase7_2_BookAvailableNotific
 	_, err := suite.queries.UpdateBook(suite.ctx, queries.UpdateBookParams{
 		ID:              suite.testBook.ID,
 		BookID:          suite.testBook.BookID,
+		BookType:        suite.testBook.BookType,
 		Title:           suite.testBook.Title,
 		Author:          suite.testBook.Author,
 		Publisher:       suite.testBook.Publisher,
