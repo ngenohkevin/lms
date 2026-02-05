@@ -1294,7 +1294,8 @@ func (s *TransactionService) CanBookBeRenewed(ctx context.Context, transactionID
 	// Get transaction
 	transactionRow, err := s.queries.GetTransactionByID(ctx, transactionID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		// Check for both pgx and sql ErrNoRows (pgx v5 uses its own error type)
+		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, sql.ErrNoRows) {
 			return false, "Transaction not found", nil
 		}
 		return false, "", fmt.Errorf("failed to get transaction: %w", err)
