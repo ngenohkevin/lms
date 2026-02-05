@@ -570,7 +570,9 @@ func TestImportExportPersistence(t *testing.T) {
 		assert.Equal(t, 0, result.FailureCount)
 
 		// Verify the book was actually saved to database
-		savedBook, err := bookService.GetBookByBookID(context.Background(), uniqueID)
+		// BookID is now auto-generated, so use the imported book's ID from result
+		require.Len(t, result.ImportedBooks, 1)
+		savedBook, err := bookService.GetBookByBookID(context.Background(), result.ImportedBooks[0].BookID)
 		require.NoError(t, err)
 		assert.Equal(t, "Persistent Book 1", savedBook.Title)
 		assert.Equal(t, "Persistent Author 1", savedBook.Author)

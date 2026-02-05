@@ -34,7 +34,6 @@ type Student struct {
 	Email          *string    `json:"email" db:"email"`
 	Phone          *string    `json:"phone" db:"phone"`
 	YearOfStudy    int        `json:"year_of_study" db:"year_of_study"`
-	Department     *string    `json:"department" db:"department"`
 	EnrollmentDate time.Time  `json:"enrollment_date" db:"enrollment_date"`
 	PasswordHash   *string    `json:"-" db:"password_hash"`
 	IsActive       bool       `json:"is_active" db:"is_active"`

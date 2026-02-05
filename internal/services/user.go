@@ -164,15 +164,15 @@ func (s *UserService) GetUserByID(id int) (*models.User, error) {
 func (s *UserService) GetStudentByStudentID(studentID string) (*models.Student, error) {
 	ctx := context.Background()
 	query := `
-		SELECT id, student_id, first_name, last_name, email, phone, year_of_study, 
-		       department, enrollment_date, password_hash, is_active, deleted_at, 
+		SELECT id, student_id, first_name, last_name, email, phone, year_of_study,
+		       enrollment_date, password_hash, is_active, deleted_at,
 		       created_at, updated_at
-		FROM students 
+		FROM students
 		WHERE student_id = $1 AND is_active = true AND deleted_at IS NULL
 	`
 
 	var student models.Student
-	var email, phone, department, passwordHash sql.NullString
+	var email, phone, passwordHash sql.NullString
 	var deletedAt sql.NullTime
 
 	err := s.db.QueryRow(ctx, query, studentID).Scan(
@@ -183,7 +183,6 @@ func (s *UserService) GetStudentByStudentID(studentID string) (*models.Student, 
 		&email,
 		&phone,
 		&student.YearOfStudy,
-		&department,
 		&student.EnrollmentDate,
 		&passwordHash,
 		&student.IsActive,
@@ -204,9 +203,6 @@ func (s *UserService) GetStudentByStudentID(studentID string) (*models.Student, 
 	if phone.Valid {
 		student.Phone = &phone.String
 	}
-	if department.Valid {
-		student.Department = &department.String
-	}
 	if passwordHash.Valid {
 		student.PasswordHash = &passwordHash.String
 	}
@@ -220,15 +216,15 @@ func (s *UserService) GetStudentByStudentID(studentID string) (*models.Student, 
 func (s *UserService) GetStudentByID(id int) (*models.Student, error) {
 	ctx := context.Background()
 	query := `
-		SELECT id, student_id, first_name, last_name, email, phone, year_of_study, 
-		       department, enrollment_date, password_hash, is_active, deleted_at, 
+		SELECT id, student_id, first_name, last_name, email, phone, year_of_study,
+		       enrollment_date, password_hash, is_active, deleted_at,
 		       created_at, updated_at
-		FROM students 
+		FROM students
 		WHERE id = $1 AND deleted_at IS NULL
 	`
 
 	var student models.Student
-	var email, phone, department, passwordHash sql.NullString
+	var email, phone, passwordHash sql.NullString
 	var deletedAt sql.NullTime
 
 	err := s.db.QueryRow(ctx, query, id).Scan(
@@ -239,7 +235,6 @@ func (s *UserService) GetStudentByID(id int) (*models.Student, error) {
 		&email,
 		&phone,
 		&student.YearOfStudy,
-		&department,
 		&student.EnrollmentDate,
 		&passwordHash,
 		&student.IsActive,
@@ -259,9 +254,6 @@ func (s *UserService) GetStudentByID(id int) (*models.Student, error) {
 	}
 	if phone.Valid {
 		student.Phone = &phone.String
-	}
-	if department.Valid {
-		student.Department = &department.String
 	}
 	if passwordHash.Valid {
 		student.PasswordHash = &passwordHash.String
@@ -352,8 +344,8 @@ func (s *UserService) CreateStudent(student *models.Student) error {
 	ctx := context.Background()
 	query := `
 		INSERT INTO students (student_id, first_name, last_name, email, phone, year_of_study,
-		                     department, enrollment_date, password_hash, is_active, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+		                     enrollment_date, password_hash, is_active, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
 		RETURNING id, created_at, updated_at
 	`
 
@@ -364,7 +356,6 @@ func (s *UserService) CreateStudent(student *models.Student) error {
 		student.Email,
 		student.Phone,
 		student.YearOfStudy,
-		student.Department,
 		student.EnrollmentDate,
 		student.PasswordHash,
 		student.IsActive,
