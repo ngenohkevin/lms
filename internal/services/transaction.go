@@ -1527,6 +1527,10 @@ type TransactionSearchResult struct {
 	CopyNumber      *string         `json:"copy_number,omitempty"`
 	CopyBarcode     *string         `json:"copy_barcode,omitempty"`
 	CopyCondition   *string         `json:"copy_condition,omitempty"`
+	// Renewal tracking fields
+	RenewalCount  int32      `json:"renewal_count"`
+	LastRenewedAt *time.Time `json:"last_renewed_at,omitempty"`
+	LastRenewedBy *int32     `json:"last_renewed_by,omitempty"`
 }
 
 // TransactionSearchResponse represents the search response
@@ -1655,6 +1659,17 @@ func (s *TransactionService) SearchTransactions(ctx context.Context, params Tran
 		}
 		if row.CopyCondition.Valid {
 			result.CopyCondition = &row.CopyCondition.String
+		}
+
+		// Renewal tracking fields
+		if row.RenewalCount.Valid {
+			result.RenewalCount = row.RenewalCount.Int32
+		}
+		if row.LastRenewedAt.Valid {
+			result.LastRenewedAt = &row.LastRenewedAt.Time
+		}
+		if row.LastRenewedBy.Valid {
+			result.LastRenewedBy = &row.LastRenewedBy.Int32
 		}
 
 		// Compute status
