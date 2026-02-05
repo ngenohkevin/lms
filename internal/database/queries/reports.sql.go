@@ -1241,7 +1241,7 @@ SELECT
     b.author as book_author,
     b.genre,
     b.isbn,
-    COALESCE(b.price, 0)::text as original_price
+    '0.00'::text as original_price  -- price column doesn't exist in books table
 FROM transactions t
 INNER JOIN students s ON t.student_id = s.id
 INNER JOIN books b ON t.book_id = b.id
