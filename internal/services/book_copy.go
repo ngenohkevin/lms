@@ -51,7 +51,7 @@ type BookCopyServiceInterface interface {
 	UpdateBookCopy(ctx context.Context, id int32, req models.UpdateBookCopyRequest) (*models.BookCopyResponse, error)
 	UpdateBookCopyStatus(ctx context.Context, id int32, status string) (*models.BookCopyResponse, error)
 	DeleteBookCopy(ctx context.Context, id int32) error
-	GenerateCopies(ctx context.Context, bookID int32, count int32, bookCode string) ([]models.BookCopyResponse, error)
+	GenerateCopies(ctx context.Context, bookID int32, count int32, bookCode string, condition ...string) ([]models.BookCopyResponse, error)
 	// Copy status management for transactions
 	MarkCopyBorrowed(ctx context.Context, copyID int32) (*models.BookCopyResponse, error)
 	MarkCopyReturned(ctx context.Context, copyID int32, condition string) (*models.BookCopyResponse, error)
@@ -61,16 +61,27 @@ type BookCopyServiceInterface interface {
 
 // BookCopyService handles book copy-related business logic
 type BookCopyService struct {
-	querier     BookCopyQuerier
-	copySyncer  BookCopyCountSyncer
-	bookQuerier BookInfoQuerier
+	querier      BookCopyQuerier
+	copySyncer   BookCopyCountSyncer
+	bookQuerier  BookInfoQuerier
+	cacheService CacheServiceInterface
 }
 
 // NewBookCopyService creates a new book copy service
-func NewBookCopyService(querier BookCopyQuerier, copySyncer BookCopyCountSyncer) *BookCopyService {
+func NewBookCopyService(querier BookCopyQuerier, copySyncer BookCopyCountSyncer, cacheService CacheServiceInterface) *BookCopyService {
 	return &BookCopyService{
-		querier:    querier,
-		copySyncer: copySyncer,
+		querier:      querier,
+		copySyncer:   copySyncer,
+		cacheService: cacheService,
+	}
+}
+
+// invalidateBookCache clears cached book lists/search results so copy count changes are visible immediately
+func (s *BookCopyService) invalidateBookCache(ctx context.Context) {
+	if s.cacheService != nil {
+		_ = s.cacheService.InvalidateByPattern(ctx, "cache:search:books:list:*")
+		_ = s.cacheService.InvalidateByPattern(ctx, "cache:search:*")
+		_ = s.cacheService.InvalidateBookCatalog(ctx)
 	}
 }
 
@@ -84,6 +95,24 @@ func (s *BookCopyService) WithBookQuerier(bookQuerier BookInfoQuerier) *BookCopy
 func (s *BookCopyService) CreateBookCopy(ctx context.Context, req models.CreateBookCopyRequest) (*models.BookCopyResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("validation error: %w", err)
+	}
+
+	// Auto-generate barcode if not provided
+	if req.Barcode == "" {
+		existingCopies, err := s.querier.ListBookCopies(ctx, req.BookID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check existing copies: %w", err)
+		}
+
+		// Get book code from the book record
+		bookCode := fmt.Sprintf("BOOK-%d", req.BookID)
+		if s.bookQuerier != nil {
+			if book, err := s.bookQuerier.GetBookByID(ctx, req.BookID); err == nil {
+				bookCode = book.BookID
+			}
+		}
+
+		req.Barcode = fmt.Sprintf("%s-COPY-%06d", bookCode, len(existingCopies)+1)
 	}
 
 	params := queries.CreateBookCopyParams{
@@ -128,6 +157,7 @@ func (s *BookCopyService) CreateBookCopy(ctx context.Context, req models.CreateB
 	if s.copySyncer != nil {
 		_ = s.copySyncer.SyncBookCopyCounts(ctx, req.BookID)
 	}
+	s.invalidateBookCache(ctx)
 
 	return bookCopyToResponse(&copy), nil
 }
@@ -224,6 +254,7 @@ func (s *BookCopyService) UpdateBookCopy(ctx context.Context, id int32, req mode
 	// Auto-sync book's available_copies if status changed
 	if req.Status != nil && s.copySyncer != nil {
 		_ = s.copySyncer.SyncBookCopyCounts(ctx, existing.BookID)
+		s.invalidateBookCache(ctx)
 	}
 
 	return bookCopyToResponse(&copy), nil
@@ -249,6 +280,7 @@ func (s *BookCopyService) UpdateBookCopyStatus(ctx context.Context, id int32, st
 	if s.copySyncer != nil {
 		_ = s.copySyncer.SyncBookCopyCounts(ctx, existing.BookID)
 	}
+	s.invalidateBookCache(ctx)
 
 	return bookCopyToResponse(&copy), nil
 }
@@ -270,6 +302,7 @@ func (s *BookCopyService) DeleteBookCopy(ctx context.Context, id int32) error {
 	if s.copySyncer != nil {
 		_ = s.copySyncer.SyncBookCopyCounts(ctx, existing.BookID)
 	}
+	s.invalidateBookCache(ctx)
 
 	return nil
 }
@@ -294,7 +327,7 @@ func (s *BookCopyService) SearchBookCopies(ctx context.Context, bookID int32, qu
 // GenerateCopies creates multiple copies for a book based on total_copies count
 // This is used when initially setting up copies for a book
 // Barcodes are auto-generated in the format: {book_id}-COPY-{6-digit-sequence}
-func (s *BookCopyService) GenerateCopies(ctx context.Context, bookID int32, count int32, bookCode string) ([]models.BookCopyResponse, error) {
+func (s *BookCopyService) GenerateCopies(ctx context.Context, bookID int32, count int32, bookCode string, condition ...string) ([]models.BookCopyResponse, error) {
 	if count <= 0 {
 		return nil, nil
 	}
@@ -308,6 +341,11 @@ func (s *BookCopyService) GenerateCopies(ctx context.Context, bookID int32, coun
 	startNum := len(existingCopies) + 1
 	copies := make([]models.BookCopyResponse, 0, count)
 
+	copyCondition := "good"
+	if len(condition) > 0 && condition[0] != "" {
+		copyCondition = condition[0]
+	}
+
 	for i := int32(0); i < count; i++ {
 		// Generate barcode with 6-digit sequence for consistency with book ID format
 		barcode := fmt.Sprintf("%s-COPY-%06d", bookCode, startNum+int(i))
@@ -315,7 +353,7 @@ func (s *BookCopyService) GenerateCopies(ctx context.Context, bookID int32, coun
 		params := queries.CreateBookCopyParams{
 			BookID:    bookID,
 			Barcode:   barcode,
-			Condition: pgtype.Text{String: "good", Valid: true},
+			Condition: pgtype.Text{String: copyCondition, Valid: true},
 			Status:    pgtype.Text{String: "available", Valid: true},
 		}
 
@@ -331,6 +369,7 @@ func (s *BookCopyService) GenerateCopies(ctx context.Context, bookID int32, coun
 	if s.copySyncer != nil {
 		_ = s.copySyncer.SyncBookCopyCounts(ctx, bookID)
 	}
+	s.invalidateBookCache(ctx)
 
 	return copies, nil
 }
@@ -360,6 +399,7 @@ func (s *BookCopyService) MarkCopyBorrowed(ctx context.Context, copyID int32) (*
 	if s.copySyncer != nil {
 		_ = s.copySyncer.SyncBookCopyCounts(ctx, existing.BookID)
 	}
+	s.invalidateBookCache(ctx)
 
 	return bookCopyToResponse(&copy), nil
 }
@@ -403,6 +443,7 @@ func (s *BookCopyService) MarkCopyReturned(ctx context.Context, copyID int32, co
 	if s.copySyncer != nil {
 		_ = s.copySyncer.SyncBookCopyCounts(ctx, existing.BookID)
 	}
+	s.invalidateBookCache(ctx)
 
 	return bookCopyToResponse(&copy), nil
 }

@@ -364,8 +364,9 @@ func (h *BookCopyHandler) GenerateCopies(c *gin.Context) {
 	}
 
 	var req struct {
-		Count    int32  `json:"count" binding:"required,min=1,max=100"`
-		BookCode string `json:"book_code" binding:"required"`
+		Count     int32  `json:"count" binding:"required,min=1,max=100"`
+		BookCode  string `json:"book_code" binding:"required"`
+		Condition string `json:"condition"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
@@ -379,7 +380,7 @@ func (h *BookCopyHandler) GenerateCopies(c *gin.Context) {
 		return
 	}
 
-	copies, err := h.bookCopyService.GenerateCopies(c.Request.Context(), int32(bookID), req.Count, req.BookCode)
+	copies, err := h.bookCopyService.GenerateCopies(c.Request.Context(), int32(bookID), req.Count, req.BookCode, req.Condition)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Success: false,

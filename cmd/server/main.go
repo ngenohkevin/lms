@@ -123,7 +123,7 @@ func main() {
 	settingsService := services.NewSettingsService(db.Queries)
 	inviteService := services.NewInviteService(db.Pool, logger)
 	setupService := services.NewSetupService(db.Pool, logger)
-	bookCopyService := services.NewBookCopyService(db.Queries, db.Queries)
+	bookCopyService := services.NewBookCopyService(db.Queries, db.Queries, cacheService).WithBookQuerier(db.Queries)
 	authorService := services.NewAuthorService(db.Queries)
 	seriesService := services.NewSeriesService(db.Queries)
 	languageService := services.NewLanguageService(db.Queries)

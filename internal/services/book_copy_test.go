@@ -108,7 +108,7 @@ func createTestBookCopy(id, bookID int32, barcode string) queries.BookCopy {
 
 func TestBookCopyService_CreateBookCopy_Success(t *testing.T) {
 	mockQuerier := new(MockBookCopyQuerier)
-	service := NewBookCopyService(mockQuerier, nil)
+	service := NewBookCopyService(mockQuerier, nil, nil)
 	ctx := context.Background()
 
 	condition := "good"
@@ -132,13 +132,13 @@ func TestBookCopyService_CreateBookCopy_Success(t *testing.T) {
 
 func TestBookCopyService_CreateBookCopy_ValidationError(t *testing.T) {
 	mockQuerier := new(MockBookCopyQuerier)
-	service := NewBookCopyService(mockQuerier, nil)
+	service := NewBookCopyService(mockQuerier, nil, nil)
 	ctx := context.Background()
 
-	// Empty barcode should fail validation
+	// Barcode exceeding max length should fail validation
 	req := models.CreateBookCopyRequest{
 		BookID:  1,
-		Barcode: "",
+		Barcode: string(make([]byte, 101)),
 	}
 
 	result, err := service.CreateBookCopy(ctx, req)
@@ -150,7 +150,7 @@ func TestBookCopyService_CreateBookCopy_ValidationError(t *testing.T) {
 
 func TestBookCopyService_CreateBookCopy_DatabaseError(t *testing.T) {
 	mockQuerier := new(MockBookCopyQuerier)
-	service := NewBookCopyService(mockQuerier, nil)
+	service := NewBookCopyService(mockQuerier, nil, nil)
 	ctx := context.Background()
 
 	req := models.CreateBookCopyRequest{
@@ -171,7 +171,7 @@ func TestBookCopyService_CreateBookCopy_DatabaseError(t *testing.T) {
 
 func TestBookCopyService_GetBookCopyByID_Success(t *testing.T) {
 	mockQuerier := new(MockBookCopyQuerier)
-	service := NewBookCopyService(mockQuerier, nil)
+	service := NewBookCopyService(mockQuerier, nil, nil)
 	ctx := context.Background()
 
 	expectedCopy := createTestBookCopy(1, 1, "BC001")
@@ -187,7 +187,7 @@ func TestBookCopyService_GetBookCopyByID_Success(t *testing.T) {
 
 func TestBookCopyService_GetBookCopyByID_NotFound(t *testing.T) {
 	mockQuerier := new(MockBookCopyQuerier)
-	service := NewBookCopyService(mockQuerier, nil)
+	service := NewBookCopyService(mockQuerier, nil, nil)
 	ctx := context.Background()
 
 	mockQuerier.On("GetBookCopyByID", ctx, int32(999)).
@@ -202,7 +202,7 @@ func TestBookCopyService_GetBookCopyByID_NotFound(t *testing.T) {
 
 func TestBookCopyService_GetBookCopyByBarcode_Success(t *testing.T) {
 	mockQuerier := new(MockBookCopyQuerier)
-	service := NewBookCopyService(mockQuerier, nil)
+	service := NewBookCopyService(mockQuerier, nil, nil)
 	ctx := context.Background()
 
 	expectedCopy := createTestBookCopy(1, 1, "BC001")
@@ -218,7 +218,7 @@ func TestBookCopyService_GetBookCopyByBarcode_Success(t *testing.T) {
 
 func TestBookCopyService_ListBookCopies_Success(t *testing.T) {
 	mockQuerier := new(MockBookCopyQuerier)
-	service := NewBookCopyService(mockQuerier, nil)
+	service := NewBookCopyService(mockQuerier, nil, nil)
 	ctx := context.Background()
 
 	copies := []queries.BookCopy{
@@ -238,7 +238,7 @@ func TestBookCopyService_ListBookCopies_Success(t *testing.T) {
 
 func TestBookCopyService_ListBookCopies_Empty(t *testing.T) {
 	mockQuerier := new(MockBookCopyQuerier)
-	service := NewBookCopyService(mockQuerier, nil)
+	service := NewBookCopyService(mockQuerier, nil, nil)
 	ctx := context.Background()
 
 	mockQuerier.On("ListBookCopies", ctx, int32(1)).Return([]queries.BookCopy{}, nil)
@@ -252,7 +252,7 @@ func TestBookCopyService_ListBookCopies_Empty(t *testing.T) {
 
 func TestBookCopyService_UpdateBookCopy_Success(t *testing.T) {
 	mockQuerier := new(MockBookCopyQuerier)
-	service := NewBookCopyService(mockQuerier, nil)
+	service := NewBookCopyService(mockQuerier, nil, nil)
 	ctx := context.Background()
 
 	existingCopy := createTestBookCopy(1, 1, "BC001")
@@ -277,7 +277,7 @@ func TestBookCopyService_UpdateBookCopy_Success(t *testing.T) {
 
 func TestBookCopyService_UpdateBookCopy_NotFound(t *testing.T) {
 	mockQuerier := new(MockBookCopyQuerier)
-	service := NewBookCopyService(mockQuerier, nil)
+	service := NewBookCopyService(mockQuerier, nil, nil)
 	ctx := context.Background()
 
 	newBarcode := "BC001-UPDATED"
@@ -298,7 +298,7 @@ func TestBookCopyService_UpdateBookCopy_NotFound(t *testing.T) {
 
 func TestBookCopyService_UpdateBookCopyStatus_Success(t *testing.T) {
 	mockQuerier := new(MockBookCopyQuerier)
-	service := NewBookCopyService(mockQuerier, nil)
+	service := NewBookCopyService(mockQuerier, nil, nil)
 	ctx := context.Background()
 
 	existingCopy := createTestBookCopy(1, 1, "BC001")
@@ -321,7 +321,7 @@ func TestBookCopyService_UpdateBookCopyStatus_Success(t *testing.T) {
 
 func TestBookCopyService_DeleteBookCopy_Success(t *testing.T) {
 	mockQuerier := new(MockBookCopyQuerier)
-	service := NewBookCopyService(mockQuerier, nil)
+	service := NewBookCopyService(mockQuerier, nil, nil)
 	ctx := context.Background()
 
 	existingCopy := createTestBookCopy(1, 1, "BC001")
@@ -336,7 +336,7 @@ func TestBookCopyService_DeleteBookCopy_Success(t *testing.T) {
 
 func TestBookCopyService_DeleteBookCopy_Error(t *testing.T) {
 	mockQuerier := new(MockBookCopyQuerier)
-	service := NewBookCopyService(mockQuerier, nil)
+	service := NewBookCopyService(mockQuerier, nil, nil)
 	ctx := context.Background()
 
 	existingCopy := createTestBookCopy(1, 1, "BC001")
@@ -352,7 +352,7 @@ func TestBookCopyService_DeleteBookCopy_Error(t *testing.T) {
 
 func TestBookCopyService_CreateBookCopy_WithAcquisitionDate(t *testing.T) {
 	mockQuerier := new(MockBookCopyQuerier)
-	service := NewBookCopyService(mockQuerier, nil)
+	service := NewBookCopyService(mockQuerier, nil, nil)
 	ctx := context.Background()
 
 	acqDate := "2024-01-15"
@@ -377,7 +377,7 @@ func TestBookCopyService_CreateBookCopy_WithAcquisitionDate(t *testing.T) {
 
 func TestBookCopyService_CreateBookCopy_InvalidAcquisitionDate(t *testing.T) {
 	mockQuerier := new(MockBookCopyQuerier)
-	service := NewBookCopyService(mockQuerier, nil)
+	service := NewBookCopyService(mockQuerier, nil, nil)
 	ctx := context.Background()
 
 	invalidDate := "not-a-date"
@@ -398,7 +398,7 @@ func TestBookCopyService_CreateBookCopy_InvalidAcquisitionDate(t *testing.T) {
 
 func TestBookCopyService_MarkCopyBorrowed_Success(t *testing.T) {
 	mockQuerier := new(MockBookCopyQuerier)
-	service := NewBookCopyService(mockQuerier, nil)
+	service := NewBookCopyService(mockQuerier, nil, nil)
 	ctx := context.Background()
 
 	// Create an available copy
@@ -425,7 +425,7 @@ func TestBookCopyService_MarkCopyBorrowed_Success(t *testing.T) {
 
 func TestBookCopyService_MarkCopyBorrowed_NotAvailable(t *testing.T) {
 	mockQuerier := new(MockBookCopyQuerier)
-	service := NewBookCopyService(mockQuerier, nil)
+	service := NewBookCopyService(mockQuerier, nil, nil)
 	ctx := context.Background()
 
 	// Create a borrowed copy (not available)
@@ -444,7 +444,7 @@ func TestBookCopyService_MarkCopyBorrowed_NotAvailable(t *testing.T) {
 
 func TestBookCopyService_MarkCopyBorrowed_CopyNotFound(t *testing.T) {
 	mockQuerier := new(MockBookCopyQuerier)
-	service := NewBookCopyService(mockQuerier, nil)
+	service := NewBookCopyService(mockQuerier, nil, nil)
 	ctx := context.Background()
 
 	mockQuerier.On("GetBookCopyByID", ctx, int32(999)).
@@ -460,7 +460,7 @@ func TestBookCopyService_MarkCopyBorrowed_CopyNotFound(t *testing.T) {
 
 func TestBookCopyService_MarkCopyReturned_Success(t *testing.T) {
 	mockQuerier := new(MockBookCopyQuerier)
-	service := NewBookCopyService(mockQuerier, nil)
+	service := NewBookCopyService(mockQuerier, nil, nil)
 	ctx := context.Background()
 
 	// Create a borrowed copy
@@ -490,7 +490,7 @@ func TestBookCopyService_MarkCopyReturned_Success(t *testing.T) {
 
 func TestBookCopyService_MarkCopyReturned_WithDamagedCondition(t *testing.T) {
 	mockQuerier := new(MockBookCopyQuerier)
-	service := NewBookCopyService(mockQuerier, nil)
+	service := NewBookCopyService(mockQuerier, nil, nil)
 	ctx := context.Background()
 
 	// Create a borrowed copy
@@ -520,7 +520,7 @@ func TestBookCopyService_MarkCopyReturned_WithDamagedCondition(t *testing.T) {
 
 func TestBookCopyService_MarkCopyReturned_KeepExistingCondition(t *testing.T) {
 	mockQuerier := new(MockBookCopyQuerier)
-	service := NewBookCopyService(mockQuerier, nil)
+	service := NewBookCopyService(mockQuerier, nil, nil)
 	ctx := context.Background()
 
 	// Create a borrowed copy with fair condition
@@ -551,7 +551,7 @@ func TestBookCopyService_MarkCopyReturned_KeepExistingCondition(t *testing.T) {
 
 func TestBookCopyService_GetCopyBorrowingHistory_Success(t *testing.T) {
 	mockQuerier := new(MockBookCopyQuerier)
-	service := NewBookCopyService(mockQuerier, nil)
+	service := NewBookCopyService(mockQuerier, nil, nil)
 	ctx := context.Background()
 
 	historyRows := []queries.GetCopyBorrowingHistoryRow{
@@ -594,7 +594,7 @@ func TestBookCopyService_GetCopyBorrowingHistory_Success(t *testing.T) {
 
 func TestBookCopyService_GetCopyBorrowingHistory_EmptyHistory(t *testing.T) {
 	mockQuerier := new(MockBookCopyQuerier)
-	service := NewBookCopyService(mockQuerier, nil)
+	service := NewBookCopyService(mockQuerier, nil, nil)
 	ctx := context.Background()
 
 	mockQuerier.On("GetCopyBorrowingHistory", ctx, queries.GetCopyBorrowingHistoryParams{
@@ -612,7 +612,7 @@ func TestBookCopyService_GetCopyBorrowingHistory_EmptyHistory(t *testing.T) {
 
 func TestBookCopyService_GetCopyBorrowingHistory_LimitEnforcement(t *testing.T) {
 	mockQuerier := new(MockBookCopyQuerier)
-	service := NewBookCopyService(mockQuerier, nil)
+	service := NewBookCopyService(mockQuerier, nil, nil)
 	ctx := context.Background()
 
 	// Request with limit > 100 should be capped to 100
@@ -631,7 +631,7 @@ func TestBookCopyService_GetCopyBorrowingHistory_LimitEnforcement(t *testing.T) 
 
 func TestBookCopyService_GetCopyBorrowingHistory_DefaultLimit(t *testing.T) {
 	mockQuerier := new(MockBookCopyQuerier)
-	service := NewBookCopyService(mockQuerier, nil)
+	service := NewBookCopyService(mockQuerier, nil, nil)
 	ctx := context.Background()
 
 	// Request with limit <= 0 should use default (20)
