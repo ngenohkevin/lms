@@ -50,12 +50,12 @@ type BookCopyListResponse struct {
 
 // CreateBookCopyRequest represents the request to create a book copy
 type CreateBookCopyRequest struct {
-	BookID          int32   `json:"book_id"`                                                                  // Set from URL path parameter
-	Barcode         string  `json:"barcode" binding:"omitempty,max=100"`                                      // Optional - auto-generated if empty
-	Condition       *string `json:"condition" binding:"omitempty,oneof=excellent good fair poor damaged"`      // Defaults to "good"
-	AcquisitionDate *string `json:"acquisition_date" binding:"omitempty"`                                     // Optional
+	BookID          int32   `json:"book_id"`                                                                               // Set from URL path parameter
+	Barcode         string  `json:"barcode" binding:"omitempty,max=100"`                                                   // Optional - auto-generated if empty
+	Condition       *string `json:"condition" binding:"omitempty,oneof=excellent good fair poor damaged"`                  // Defaults to "good"
+	AcquisitionDate *string `json:"acquisition_date" binding:"omitempty"`                                                  // Optional
 	Status          *string `json:"status" binding:"omitempty,oneof=available borrowed reserved maintenance lost damaged"` // Defaults to "available"
-	Notes           *string `json:"notes" binding:"omitempty"`                                                // Optional
+	Notes           *string `json:"notes" binding:"omitempty"`                                                             // Optional
 }
 
 // UpdateBookCopyRequest represents the request to update a book copy
