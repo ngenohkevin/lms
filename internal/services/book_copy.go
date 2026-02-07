@@ -27,6 +27,9 @@ type BookCopyQuerier interface {
 	SearchBookCopies(ctx context.Context, arg queries.SearchBookCopiesParams) ([]queries.BookCopy, error)
 	GetCopyBorrowingHistory(ctx context.Context, arg queries.GetCopyBorrowingHistoryParams) ([]queries.GetCopyBorrowingHistoryRow, error)
 	CountCopyBorrowings(ctx context.Context, copyID pgtype.Int4) (int64, error)
+	MarkCopiesBarcodePrinted(ctx context.Context, dollar1 []int32) ([]queries.BookCopy, error)
+	ListUnprintedBookCopies(ctx context.Context, bookID int32) ([]queries.BookCopy, error)
+	CountUnprintedBookCopies(ctx context.Context, bookID int32) (int64, error)
 }
 
 // BookCopyCountSyncer defines the interface for syncing book copy counts
@@ -57,6 +60,9 @@ type BookCopyServiceInterface interface {
 	MarkCopyReturned(ctx context.Context, copyID int32, condition string) (*models.BookCopyResponse, error)
 	// Copy history
 	GetCopyBorrowingHistory(ctx context.Context, copyID int32, limit, offset int32) ([]models.CopyBorrowingHistoryEntry, error)
+	// Barcode print tracking
+	MarkCopiesBarcodePrinted(ctx context.Context, copyIDs []int32) ([]models.BookCopyResponse, error)
+	ListUnprintedBookCopies(ctx context.Context, bookID int32) ([]models.BookCopyResponse, error)
 }
 
 // BookCopyService handles book copy-related business logic
@@ -509,6 +515,9 @@ func bookCopyToResponse(c *queries.BookCopy) *models.BookCopyResponse {
 	if c.Notes.Valid {
 		resp.Notes = &c.Notes.String
 	}
+	if c.BarcodePrintedAt.Valid {
+		resp.BarcodePrintedAt = &c.BarcodePrintedAt.Time
+	}
 	if c.CreatedAt.Valid {
 		resp.CreatedAt = c.CreatedAt.Time
 	}
@@ -517,4 +526,39 @@ func bookCopyToResponse(c *queries.BookCopy) *models.BookCopyResponse {
 	}
 
 	return resp
+}
+
+// MarkCopiesBarcodePrinted marks the given copy IDs as having their barcodes printed
+func (s *BookCopyService) MarkCopiesBarcodePrinted(ctx context.Context, copyIDs []int32) ([]models.BookCopyResponse, error) {
+	if len(copyIDs) == 0 {
+		return nil, fmt.Errorf("validation error: no copy IDs provided")
+	}
+	if len(copyIDs) > 500 {
+		return nil, fmt.Errorf("validation error: cannot mark more than 500 copies at once")
+	}
+
+	copies, err := s.querier.MarkCopiesBarcodePrinted(ctx, copyIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to mark copies as printed: %w", err)
+	}
+
+	responses := make([]models.BookCopyResponse, len(copies))
+	for i, c := range copies {
+		responses[i] = *bookCopyToResponse(&c)
+	}
+	return responses, nil
+}
+
+// ListUnprintedBookCopies lists all copies of a book that haven't had their barcodes printed
+func (s *BookCopyService) ListUnprintedBookCopies(ctx context.Context, bookID int32) ([]models.BookCopyResponse, error) {
+	copies, err := s.querier.ListUnprintedBookCopies(ctx, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list unprinted book copies: %w", err)
+	}
+
+	responses := make([]models.BookCopyResponse, len(copies))
+	for i, c := range copies {
+		responses[i] = *bookCopyToResponse(&c)
+	}
+	return responses, nil
 }

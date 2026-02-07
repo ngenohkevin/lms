@@ -31,15 +31,21 @@ const (
 
 // BookCopyResponse represents the response for book copy operations
 type BookCopyResponse struct {
-	ID              int32         `json:"id"`
-	BookID          int32         `json:"book_id"`
-	Barcode         string        `json:"barcode"`
-	Condition       CopyCondition `json:"condition"`
-	AcquisitionDate *time.Time    `json:"acquisition_date"`
-	Status          CopyStatus    `json:"status"`
-	Notes           *string       `json:"notes"`
-	CreatedAt       time.Time     `json:"created_at"`
-	UpdatedAt       time.Time     `json:"updated_at"`
+	ID               int32         `json:"id"`
+	BookID           int32         `json:"book_id"`
+	Barcode          string        `json:"barcode"`
+	Condition        CopyCondition `json:"condition"`
+	AcquisitionDate  *time.Time    `json:"acquisition_date"`
+	Status           CopyStatus    `json:"status"`
+	Notes            *string       `json:"notes"`
+	BarcodePrintedAt *time.Time    `json:"barcode_printed_at"`
+	CreatedAt        time.Time     `json:"created_at"`
+	UpdatedAt        time.Time     `json:"updated_at"`
+}
+
+// MarkBarcodePrintedRequest represents the request to mark copies as barcode-printed
+type MarkBarcodePrintedRequest struct {
+	CopyIDs []int32 `json:"copy_ids" binding:"required"`
 }
 
 // BookCopyListResponse represents a paginated list of book copies

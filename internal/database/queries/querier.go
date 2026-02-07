@@ -90,6 +90,7 @@ type Querier interface {
 	CountStudentsWithUnpaidFines(ctx context.Context) (int32, error)
 	CountTodayBorrowings(ctx context.Context) (int64, error)
 	CountTransactions(ctx context.Context) (int64, error)
+	CountUnprintedBookCopies(ctx context.Context, bookID int32) (int64, error)
 	CountUnreadNotificationsByRecipient(ctx context.Context, arg CountUnreadNotificationsByRecipientParams) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
 	CreateAcademicYear(ctx context.Context, arg CreateAcademicYearParams) (AcademicYear, error)
@@ -367,6 +368,7 @@ type Querier interface {
 	ListTransactionsOverdue(ctx context.Context) ([]ListTransactionsOverdueRow, error)
 	ListTransactionsWithCopies(ctx context.Context, arg ListTransactionsWithCopiesParams) ([]ListTransactionsWithCopiesRow, error)
 	ListTransactionsWithUnpaidFines(ctx context.Context) ([]ListTransactionsWithUnpaidFinesRow, error)
+	ListUnprintedBookCopies(ctx context.Context, bookID int32) ([]BookCopy, error)
 	ListUnreadNotificationsByRecipient(ctx context.Context, arg ListUnreadNotificationsByRecipientParams) ([]Notification, error)
 	ListUnsentNotifications(ctx context.Context, limit int32) ([]Notification, error)
 	// =====================================================
@@ -374,6 +376,7 @@ type Querier interface {
 	// =====================================================
 	ListUserOverrides(ctx context.Context, userID int32) ([]ListUserOverridesRow, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
+	MarkCopiesBarcodePrinted(ctx context.Context, dollar_1 []int32) ([]BookCopy, error)
 	MarkInviteAccepted(ctx context.Context, arg MarkInviteAcceptedParams) (UserInvite, error)
 	MarkNotificationAsRead(ctx context.Context, id int32) error
 	MarkNotificationAsSent(ctx context.Context, id int32) error

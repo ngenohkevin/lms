@@ -394,6 +394,7 @@ func setupRoutes(
 				books.GET("/:id/copies", requirePerm("books.view"), bookCopyHandler.ListBookCopies)
 				books.POST("/:id/copies", requirePerm("books.create"), bookCopyHandler.CreateBookCopy)
 				books.POST("/:id/copies/generate", requirePerm("books.create"), bookCopyHandler.GenerateCopies)
+				books.GET("/:id/copies/unprinted", requirePerm("books.view"), bookCopyHandler.ListUnprintedCopies)
 				books.GET("/:id/copies/:copy_id", requirePerm("books.view"), bookCopyHandler.GetBookCopy)
 				books.GET("/:id/copies/:copy_id/history", requirePerm("books.view"), bookCopyHandler.GetCopyHistory)
 				books.PUT("/:id/copies/:copy_id", requirePerm("books.update"), bookCopyHandler.UpdateBookCopy)
@@ -410,6 +411,7 @@ func setupRoutes(
 
 			// Book copies scan route (separate group to avoid path conflicts)
 			protected.GET("/books/copies/scan", requirePerm("books.view"), bookCopyHandler.ScanBarcode)
+			protected.POST("/books/copies/mark-printed", requirePerm("books.update"), bookCopyHandler.MarkBarcodePrinted)
 			protected.GET("/books/copies/:copy_id/qr", requirePerm("books.view"), qrCodeHandler.GetCopyQR)
 
 			// Author routes

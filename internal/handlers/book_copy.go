@@ -400,6 +400,94 @@ func (h *BookCopyHandler) GenerateCopies(c *gin.Context) {
 	})
 }
 
+// MarkBarcodePrinted marks copies as having their barcodes printed
+func (h *BookCopyHandler) MarkBarcodePrinted(c *gin.Context) {
+	var req models.MarkBarcodePrintedRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid request data",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	if len(req.CopyIDs) == 0 {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "At least one copy ID is required",
+			},
+		})
+		return
+	}
+
+	copies, err := h.bookCopyService.MarkCopiesBarcodePrinted(c.Request.Context(), req.CopyIDs)
+	if err != nil {
+		if isValidationError(err) {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Success: false,
+				Error: ErrorDetail{
+					Code:    "VALIDATION_ERROR",
+					Message: err.Error(),
+				},
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to mark copies as printed",
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    copies,
+		Message: fmt.Sprintf("Marked %d copies as printed", len(copies)),
+	})
+}
+
+// ListUnprintedCopies lists all copies of a book that haven't had their barcodes printed
+func (h *BookCopyHandler) ListUnprintedCopies(c *gin.Context) {
+	idStr := c.Param("id")
+	bookID, err := strconv.ParseInt(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid book ID",
+			},
+		})
+		return
+	}
+
+	copies, err := h.bookCopyService.ListUnprintedBookCopies(c.Request.Context(), int32(bookID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to list unprinted copies",
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    copies,
+	})
+}
+
 // ScanBarcode looks up a book copy by barcode
 // @Summary Scan barcode to find copy
 // @Description Look up a book copy by its barcode

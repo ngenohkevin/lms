@@ -93,6 +93,21 @@ func (m *MockBookCopyQuerier) CountCopyBorrowings(ctx context.Context, copyID pg
 	return args.Get(0).(int64), args.Error(1)
 }
 
+func (m *MockBookCopyQuerier) MarkCopiesBarcodePrinted(ctx context.Context, dollar1 []int32) ([]queries.BookCopy, error) {
+	args := m.Called(ctx, dollar1)
+	return args.Get(0).([]queries.BookCopy), args.Error(1)
+}
+
+func (m *MockBookCopyQuerier) ListUnprintedBookCopies(ctx context.Context, bookID int32) ([]queries.BookCopy, error) {
+	args := m.Called(ctx, bookID)
+	return args.Get(0).([]queries.BookCopy), args.Error(1)
+}
+
+func (m *MockBookCopyQuerier) CountUnprintedBookCopies(ctx context.Context, bookID int32) (int64, error) {
+	args := m.Called(ctx, bookID)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 // Helper to create test book copy
 func createTestBookCopy(id, bookID int32, barcode string) queries.BookCopy {
 	return queries.BookCopy{
@@ -646,4 +661,154 @@ func TestBookCopyService_GetCopyBorrowingHistory_DefaultLimit(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, result, 0)
 	mockQuerier.AssertExpectations(t)
+}
+
+// ==================== Barcode Print Tracking Tests ====================
+
+func TestBookCopyService_MarkCopiesBarcodePrinted_Success(t *testing.T) {
+	mockQuerier := new(MockBookCopyQuerier)
+	service := NewBookCopyService(mockQuerier, nil, nil)
+	ctx := context.Background()
+
+	now := time.Now()
+	printedCopies := []queries.BookCopy{
+		{
+			ID:               1,
+			BookID:           1,
+			Barcode:          "BC001",
+			Condition:        pgtype.Text{String: "good", Valid: true},
+			Status:           pgtype.Text{String: "available", Valid: true},
+			BarcodePrintedAt: pgtype.Timestamp{Time: now, Valid: true},
+			CreatedAt:        pgtype.Timestamp{Time: now, Valid: true},
+			UpdatedAt:        pgtype.Timestamp{Time: now, Valid: true},
+		},
+		{
+			ID:               2,
+			BookID:           1,
+			Barcode:          "BC002",
+			Condition:        pgtype.Text{String: "good", Valid: true},
+			Status:           pgtype.Text{String: "available", Valid: true},
+			BarcodePrintedAt: pgtype.Timestamp{Time: now, Valid: true},
+			CreatedAt:        pgtype.Timestamp{Time: now, Valid: true},
+			UpdatedAt:        pgtype.Timestamp{Time: now, Valid: true},
+		},
+	}
+
+	copyIDs := []int32{1, 2}
+	mockQuerier.On("MarkCopiesBarcodePrinted", ctx, copyIDs).Return(printedCopies, nil)
+
+	result, err := service.MarkCopiesBarcodePrinted(ctx, copyIDs)
+
+	assert.NoError(t, err)
+	assert.Len(t, result, 2)
+	assert.NotNil(t, result[0].BarcodePrintedAt)
+	assert.NotNil(t, result[1].BarcodePrintedAt)
+	mockQuerier.AssertExpectations(t)
+}
+
+func TestBookCopyService_MarkCopiesBarcodePrinted_EmptyIDs(t *testing.T) {
+	mockQuerier := new(MockBookCopyQuerier)
+	service := NewBookCopyService(mockQuerier, nil, nil)
+	ctx := context.Background()
+
+	result, err := service.MarkCopiesBarcodePrinted(ctx, []int32{})
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "validation error")
+}
+
+func TestBookCopyService_MarkCopiesBarcodePrinted_TooMany(t *testing.T) {
+	mockQuerier := new(MockBookCopyQuerier)
+	service := NewBookCopyService(mockQuerier, nil, nil)
+	ctx := context.Background()
+
+	ids := make([]int32, 501)
+	for i := range ids {
+		ids[i] = int32(i + 1)
+	}
+
+	result, err := service.MarkCopiesBarcodePrinted(ctx, ids)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "cannot mark more than 500")
+}
+
+func TestBookCopyService_MarkCopiesBarcodePrinted_DatabaseError(t *testing.T) {
+	mockQuerier := new(MockBookCopyQuerier)
+	service := NewBookCopyService(mockQuerier, nil, nil)
+	ctx := context.Background()
+
+	copyIDs := []int32{1, 2}
+	mockQuerier.On("MarkCopiesBarcodePrinted", ctx, copyIDs).
+		Return([]queries.BookCopy{}, errors.New("database error"))
+
+	result, err := service.MarkCopiesBarcodePrinted(ctx, copyIDs)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "failed to mark copies as printed")
+	mockQuerier.AssertExpectations(t)
+}
+
+func TestBookCopyService_ListUnprintedBookCopies_Success(t *testing.T) {
+	mockQuerier := new(MockBookCopyQuerier)
+	service := NewBookCopyService(mockQuerier, nil, nil)
+	ctx := context.Background()
+
+	copies := []queries.BookCopy{
+		createTestBookCopy(1, 1, "BC001"),
+		createTestBookCopy(2, 1, "BC002"),
+	}
+	mockQuerier.On("ListUnprintedBookCopies", ctx, int32(1)).Return(copies, nil)
+
+	result, err := service.ListUnprintedBookCopies(ctx, 1)
+
+	assert.NoError(t, err)
+	assert.Len(t, result, 2)
+	assert.Nil(t, result[0].BarcodePrintedAt)
+	assert.Nil(t, result[1].BarcodePrintedAt)
+	mockQuerier.AssertExpectations(t)
+}
+
+func TestBookCopyService_ListUnprintedBookCopies_Empty(t *testing.T) {
+	mockQuerier := new(MockBookCopyQuerier)
+	service := NewBookCopyService(mockQuerier, nil, nil)
+	ctx := context.Background()
+
+	mockQuerier.On("ListUnprintedBookCopies", ctx, int32(1)).Return([]queries.BookCopy{}, nil)
+
+	result, err := service.ListUnprintedBookCopies(ctx, 1)
+
+	assert.NoError(t, err)
+	assert.Len(t, result, 0)
+	mockQuerier.AssertExpectations(t)
+}
+
+func TestBookCopyToResponse_WithBarcodePrintedAt(t *testing.T) {
+	now := time.Now()
+	copy := &queries.BookCopy{
+		ID:               1,
+		BookID:           1,
+		Barcode:          "BC001",
+		Condition:        pgtype.Text{String: "good", Valid: true},
+		Status:           pgtype.Text{String: "available", Valid: true},
+		BarcodePrintedAt: pgtype.Timestamp{Time: now, Valid: true},
+		CreatedAt:        pgtype.Timestamp{Time: now, Valid: true},
+		UpdatedAt:        pgtype.Timestamp{Time: now, Valid: true},
+	}
+
+	result := bookCopyToResponse(copy)
+
+	assert.NotNil(t, result.BarcodePrintedAt)
+	assert.Equal(t, now, *result.BarcodePrintedAt)
+}
+
+func TestBookCopyToResponse_WithoutBarcodePrintedAt(t *testing.T) {
+	copy := createTestBookCopy(1, 1, "BC001")
+
+	result := bookCopyToResponse(&copy)
+
+	assert.Nil(t, result.BarcodePrintedAt)
 }

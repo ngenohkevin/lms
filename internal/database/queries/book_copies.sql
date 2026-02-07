@@ -100,3 +100,13 @@ UPDATE book_copies
 SET status = $2, condition = $3, updated_at = NOW()
 WHERE id = $1
 RETURNING *;
+
+-- name: MarkCopiesBarcodePrinted :many
+UPDATE book_copies SET barcode_printed_at = NOW(), updated_at = NOW()
+WHERE id = ANY($1::int[]) RETURNING *;
+
+-- name: ListUnprintedBookCopies :many
+SELECT * FROM book_copies WHERE book_id = $1 AND barcode_printed_at IS NULL ORDER BY barcode;
+
+-- name: CountUnprintedBookCopies :one
+SELECT COUNT(*) FROM book_copies WHERE book_id = $1 AND barcode_printed_at IS NULL;

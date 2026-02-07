@@ -78,15 +78,16 @@ type BookAuthor struct {
 }
 
 type BookCopy struct {
-	ID              int32            `db:"id" json:"id"`
-	BookID          int32            `db:"book_id" json:"book_id"`
-	Barcode         string           `db:"barcode" json:"barcode"`
-	Condition       pgtype.Text      `db:"condition" json:"condition"`
-	AcquisitionDate pgtype.Date      `db:"acquisition_date" json:"acquisition_date"`
-	Status          pgtype.Text      `db:"status" json:"status"`
-	Notes           pgtype.Text      `db:"notes" json:"notes"`
-	CreatedAt       pgtype.Timestamp `db:"created_at" json:"created_at"`
-	UpdatedAt       pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	ID               int32            `db:"id" json:"id"`
+	BookID           int32            `db:"book_id" json:"book_id"`
+	Barcode          string           `db:"barcode" json:"barcode"`
+	Condition        pgtype.Text      `db:"condition" json:"condition"`
+	AcquisitionDate  pgtype.Date      `db:"acquisition_date" json:"acquisition_date"`
+	Status           pgtype.Text      `db:"status" json:"status"`
+	Notes            pgtype.Text      `db:"notes" json:"notes"`
+	CreatedAt        pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt        pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	BarcodePrintedAt pgtype.Timestamp `db:"barcode_printed_at" json:"barcode_printed_at"`
 }
 
 type BookIDSequence struct {
