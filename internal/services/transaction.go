@@ -28,7 +28,7 @@ type TransactionQuerier interface {
 	ListOverdueTransactions(ctx context.Context) ([]queries.ListOverdueTransactionsRow, error)
 	ReturnBook(ctx context.Context, arg queries.ReturnBookParams) (queries.Transaction, error)
 	UpdateTransactionFine(ctx context.Context, arg queries.UpdateTransactionFineParams) error
-	PayTransactionFine(ctx context.Context, id int32) error
+	PayTransactionFine(ctx context.Context, id int32) (queries.Transaction, error)
 	CountOverdueTransactions(ctx context.Context) (int64, error)
 	GetBookByID(ctx context.Context, id int32) (queries.Book, error)
 	GetStudentByID(ctx context.Context, id int32) (queries.Student, error)
@@ -51,6 +51,7 @@ type TransactionQuerier interface {
 	CountTodayBorrowings(ctx context.Context) (int64, error)
 	// Fine queries
 	GetTotalUnpaidFinesByStudent(ctx context.Context, studentID int32) (pgtype.Numeric, error)
+	GetFineOverviewStats(ctx context.Context) (queries.GetFineOverviewStatsRow, error)
 	// Copy-level transaction queries
 	GetFirstAvailableCopy(ctx context.Context, bookID int32) (queries.BookCopy, error)
 	GetCopyByBarcodeWithBookInfo(ctx context.Context, barcode string) (queries.GetCopyByBarcodeWithBookInfoRow, error)
@@ -756,14 +757,13 @@ func (s *TransactionService) GetOverdueTransactions(ctx context.Context) ([]quer
 
 // PayFine marks a transaction fine as paid
 func (s *TransactionService) PayFine(ctx context.Context, transactionID int32) error {
-	// Get the transaction to get the student ID for cache invalidation
-	tx, err := s.queries.GetTransactionByID(ctx, transactionID)
+	// PayTransactionFine now includes safety guards (fine_amount > 0, fine_paid = false)
+	// and returns the updated transaction. No rows = already paid or no fine.
+	tx, err := s.queries.PayTransactionFine(ctx, transactionID)
 	if err != nil {
-		return fmt.Errorf("failed to get transaction: %w", err)
-	}
-
-	err = s.queries.PayTransactionFine(ctx, transactionID)
-	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("fine already paid or no fine exists for this transaction")
+		}
 		return fmt.Errorf("failed to pay fine: %w", err)
 	}
 
@@ -1319,16 +1319,13 @@ func (s *TransactionService) CanBookBeRenewed(ctx context.Context, transactionID
 		return false, "Book is overdue and must be returned first", nil
 	}
 
-	// Check maximum renewals limit
-	renewalCount, err := s.queries.CountRenewalsByStudentAndBook(ctx, queries.CountRenewalsByStudentAndBookParams{
-		StudentID: transactionRow.StudentID,
-		BookID:    transactionRow.BookID,
-	})
+	// Check maximum renewals limit using the transaction's renewal_count field
+	renewalCount, err := s.queries.GetTransactionRenewalCount(ctx, transactionID)
 	if err != nil {
 		return false, "", fmt.Errorf("failed to check renewal count: %w", err)
 	}
 
-	if renewalCount >= int64(s.maxRenewals) {
+	if int(renewalCount) >= s.maxRenewals {
 		return false, fmt.Sprintf("Maximum number of renewals (%d) reached", s.maxRenewals), nil
 	}
 
@@ -1463,20 +1460,16 @@ func (s *TransactionService) GetTransactionStats(ctx context.Context) (*Transact
 		return nil, fmt.Errorf("failed to get active borrowings: %w", err)
 	}
 
-	// Calculate unpaid fines from overdue transactions
-	overdueTransactions, err := s.queries.ListOverdueTransactions(ctx)
+	// Get total unpaid fines from all transactions (not just overdue)
+	// This includes returned books with unpaid fines and waived fines are excluded
+	fineStats, err := s.queries.GetFineOverviewStats(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get overdue transactions: %w", err)
+		return nil, fmt.Errorf("failed to get fine stats: %w", err)
 	}
 
 	totalUnpaidFines := decimal.Zero
-	for _, tx := range overdueTransactions {
-		if tx.FineAmount.Valid && (!tx.FinePaid.Valid || !tx.FinePaid.Bool) {
-			// Properly reconstruct decimal from pgtype.Numeric using Int and Exp
-			// This preserves precision (e.g., 0.50 instead of just 50)
-			fineAmount := decimal.NewFromBigInt(tx.FineAmount.Int, tx.FineAmount.Exp)
-			totalUnpaidFines = totalUnpaidFines.Add(fineAmount)
-		}
+	if fineStats.TotalUnpaid.Valid {
+		totalUnpaidFines = decimal.NewFromBigInt(fineStats.TotalUnpaid.Int, fineStats.TotalUnpaid.Exp)
 	}
 
 	// Count today's borrowings

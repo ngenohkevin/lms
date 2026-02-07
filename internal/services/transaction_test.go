@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
@@ -61,9 +62,9 @@ func (m *MockTransactionQueries) UpdateTransactionFine(ctx context.Context, arg 
 	return args.Error(0)
 }
 
-func (m *MockTransactionQueries) PayTransactionFine(ctx context.Context, id int32) error {
+func (m *MockTransactionQueries) PayTransactionFine(ctx context.Context, id int32) (queries.Transaction, error) {
 	args := m.Called(ctx, id)
-	return args.Error(0)
+	return args.Get(0).(queries.Transaction), args.Error(1)
 }
 
 func (m *MockTransactionQueries) CountOverdueTransactions(ctx context.Context) (int64, error) {
@@ -129,6 +130,11 @@ func (m *MockTransactionQueries) CountTodayBorrowings(ctx context.Context) (int6
 func (m *MockTransactionQueries) GetTotalUnpaidFinesByStudent(ctx context.Context, studentID int32) (pgtype.Numeric, error) {
 	args := m.Called(ctx, studentID)
 	return args.Get(0).(pgtype.Numeric), args.Error(1)
+}
+
+func (m *MockTransactionQueries) GetFineOverviewStats(ctx context.Context) (queries.GetFineOverviewStatsRow, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(queries.GetFineOverviewStatsRow), args.Error(1)
 }
 
 func (m *MockTransactionQueries) DecrementBookAvailability(ctx context.Context, id int32) (pgtype.Int4, error) {
@@ -695,19 +701,38 @@ func TestTransactionService_PayFine_Success(t *testing.T) {
 	transactionID := int32(1)
 	studentID := int32(1)
 
-	// Setup mock - first GetTransactionByID to get student for cache invalidation
-	transaction := queries.GetTransactionByIDRow{
+	// PayTransactionFine now returns the updated transaction directly
+	paidTransaction := queries.Transaction{
 		ID:        transactionID,
 		StudentID: studentID,
+		FinePaid:  pgtype.Bool{Bool: true, Valid: true},
 	}
-	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
-	mockQueries.On("PayTransactionFine", ctx, transactionID).Return(nil)
+	mockQueries.On("PayTransactionFine", ctx, transactionID).Return(paidTransaction, nil)
 
 	// Execute
 	err := service.PayFine(ctx, transactionID)
 
 	// Assert
 	require.NoError(t, err)
+	mockQueries.AssertExpectations(t)
+}
+
+func TestTransactionService_PayFine_AlreadyPaid(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries)
+
+	ctx := context.Background()
+	transactionID := int32(1)
+
+	// PayTransactionFine returns no rows when fine is already paid
+	mockQueries.On("PayTransactionFine", ctx, transactionID).Return(queries.Transaction{}, pgx.ErrNoRows)
+
+	// Execute
+	err := service.PayFine(ctx, transactionID)
+
+	// Assert
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "fine already paid or no fine exists")
 	mockQueries.AssertExpectations(t)
 }
 
@@ -730,13 +755,13 @@ func TestTransactionService_PayFine_InvalidatesStudentCache(t *testing.T) {
 	transactionID := int32(1)
 	studentID := int32(42)
 
-	// Setup mocks
-	transaction := queries.GetTransactionByIDRow{
+	// PayTransactionFine returns the updated transaction with student ID
+	paidTransaction := queries.Transaction{
 		ID:        transactionID,
 		StudentID: studentID,
+		FinePaid:  pgtype.Bool{Bool: true, Valid: true},
 	}
-	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
-	mockQueries.On("PayTransactionFine", ctx, transactionID).Return(nil)
+	mockQueries.On("PayTransactionFine", ctx, transactionID).Return(paidTransaction, nil)
 	mockCache.On("InvalidateStudentProfile", ctx, int(studentID)).Return(nil)
 
 	// Execute
@@ -1863,7 +1888,7 @@ func TestTransactionService_CanBookBeRenewed_Success(t *testing.T) {
 
 	// Setup mocks
 	mockQueries.On("GetTransactionByID", ctx, transactionID).Return(transaction, nil)
-	mockQueries.On("CountRenewalsByStudentAndBook", ctx, mock.AnythingOfType("queries.CountRenewalsByStudentAndBookParams")).Return(int64(0), nil)
+	mockQueries.On("GetTransactionRenewalCount", ctx, transactionID).Return(int32(0), nil)
 	mockQueries.On("HasActiveReservationsByOtherStudents", ctx, mock.AnythingOfType("queries.HasActiveReservationsByOtherStudentsParams")).Return(false, nil)
 
 	// Execute

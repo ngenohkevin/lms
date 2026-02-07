@@ -26,10 +26,13 @@ UPDATE transactions
 SET fine_amount = $2, updated_at = NOW()
 WHERE id = $1;
 
--- name: PayTransactionFine :exec
+-- name: PayTransactionFine :one
 UPDATE transactions
-SET fine_paid = true, updated_at = NOW()
-WHERE id = $1;
+SET fine_paid = true, fine_paid_at = NOW(), updated_at = NOW()
+WHERE id = $1
+    AND fine_amount > 0
+    AND fine_paid = false
+RETURNING *;
 
 -- name: ListTransactions :many
 SELECT t.*, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
@@ -149,6 +152,7 @@ FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
 WHERE t.fine_amount > 0 AND t.fine_paid = false
+  AND (COALESCE(t.fine_waived, false) = false)
   AND s.is_active = true
   AND s.deleted_at IS NULL
 ORDER BY t.fine_amount DESC;
@@ -174,7 +178,7 @@ WHERE student_id = $1 AND transaction_type = 'borrow';
 -- name: GetStudentFineStats :one
 SELECT
     COALESCE(SUM(fine_amount), 0)::numeric as total_fines,
-    COALESCE(SUM(CASE WHEN fine_paid = false THEN fine_amount ELSE 0 END), 0)::numeric as unpaid_fines
+    COALESCE(SUM(CASE WHEN fine_paid = false AND (COALESCE(fine_waived, false) = false) THEN fine_amount ELSE 0 END), 0)::numeric as unpaid_fines
 FROM transactions
 WHERE student_id = $1;
 

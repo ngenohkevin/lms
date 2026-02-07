@@ -237,6 +237,7 @@ INNER JOIN students s ON t.student_id = s.id
 WHERE t.due_date < NOW()
     AND t.returned_date IS NULL
     AND t.transaction_type = 'borrow'
+    AND t.fine_paid = false
     AND s.deleted_at IS NULL
     AND s.is_active = true
 `

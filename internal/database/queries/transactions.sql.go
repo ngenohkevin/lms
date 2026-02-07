@@ -465,7 +465,7 @@ func (q *Queries) GetStudentBorrowingStats(ctx context.Context) ([]GetStudentBor
 const getStudentFineStats = `-- name: GetStudentFineStats :one
 SELECT
     COALESCE(SUM(fine_amount), 0)::numeric as total_fines,
-    COALESCE(SUM(CASE WHEN fine_paid = false THEN fine_amount ELSE 0 END), 0)::numeric as unpaid_fines
+    COALESCE(SUM(CASE WHEN fine_paid = false AND (COALESCE(fine_waived, false) = false) THEN fine_amount ELSE 0 END), 0)::numeric as unpaid_fines
 FROM transactions
 WHERE student_id = $1
 `
@@ -1695,6 +1695,7 @@ FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
 WHERE t.fine_amount > 0 AND t.fine_paid = false
+  AND (COALESCE(t.fine_waived, false) = false)
   AND s.is_active = true
   AND s.deleted_at IS NULL
 ORDER BY t.fine_amount DESC
@@ -1846,15 +1847,46 @@ func (q *Queries) MarkTransactionAsLost(ctx context.Context, arg MarkTransaction
 	return i, err
 }
 
-const payTransactionFine = `-- name: PayTransactionFine :exec
+const payTransactionFine = `-- name: PayTransactionFine :one
 UPDATE transactions
-SET fine_paid = true, updated_at = NOW()
+SET fine_paid = true, fine_paid_at = NOW(), updated_at = NOW()
 WHERE id = $1
+    AND fine_amount > 0
+    AND fine_paid = false
+RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by
 `
 
-func (q *Queries) PayTransactionFine(ctx context.Context, id int32) error {
-	_, err := q.db.Exec(ctx, payTransactionFine, id)
-	return err
+func (q *Queries) PayTransactionFine(ctx context.Context, id int32) (Transaction, error) {
+	row := q.db.QueryRow(ctx, payTransactionFine, id)
+	var i Transaction
+	err := row.Scan(
+		&i.ID,
+		&i.StudentID,
+		&i.BookID,
+		&i.TransactionType,
+		&i.TransactionDate,
+		&i.DueDate,
+		&i.ReturnedDate,
+		&i.LibrarianID,
+		&i.FineAmount,
+		&i.FinePaid,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ReturnCondition,
+		&i.ConditionNotes,
+		&i.FineWaived,
+		&i.FineWaivedAt,
+		&i.FineWaivedBy,
+		&i.FineWaivedReason,
+		&i.FinePaidAt,
+		&i.CopyID,
+		&i.Status,
+		&i.RenewalCount,
+		&i.LastRenewedAt,
+		&i.LastRenewedBy,
+	)
+	return i, err
 }
 
 const renewTransaction = `-- name: RenewTransaction :one

@@ -386,7 +386,7 @@ type Querier interface {
 	// Mark a transaction as lost: sets transaction_type to 'lost', returned_date, applies replacement fine, and adds lost note
 	MarkTransactionAsLost(ctx context.Context, arg MarkTransactionAsLostParams) (Transaction, error)
 	PayFineByTransactionID(ctx context.Context, id int32) (Transaction, error)
-	PayTransactionFine(ctx context.Context, id int32) error
+	PayTransactionFine(ctx context.Context, id int32) (Transaction, error)
 	RemoveBookAuthor(ctx context.Context, arg RemoveBookAuthorParams) error
 	RemoveRolePermission(ctx context.Context, arg RemoveRolePermissionParams) error
 	// Renew a transaction by updating its due date and incrementing renewal count

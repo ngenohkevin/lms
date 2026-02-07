@@ -492,6 +492,7 @@ func (suite *TransactionIntegrationTestSuite) TestPayFine() {
 	updatedTransaction, err := suite.queries.GetTransactionByID(suite.ctx, transaction.ID)
 	require.NoError(suite.T(), err)
 	assert.True(suite.T(), updatedTransaction.FinePaid.Bool)
+	assert.True(suite.T(), updatedTransaction.FinePaidAt.Valid, "fine_paid_at should be set after payment")
 }
 
 // Test validation errors
