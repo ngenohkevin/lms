@@ -108,6 +108,11 @@ func (m *MockNotificationQuerier) ListActiveReservationsForAvailableBook(ctx con
 	return args.Get(0).([]queries.ListActiveReservationsForAvailableBookRow), args.Error(1)
 }
 
+func (m *MockNotificationQuerier) GetReservationByID(ctx context.Context, id int32) (queries.GetReservationByIDRow, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(queries.GetReservationByIDRow), args.Error(1)
+}
+
 // MockEmailService is a mock implementation of EmailServiceInterface
 type MockEmailService struct {
 	mock.Mock

@@ -18,6 +18,8 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/shopspring/decimal"
+
 	"github.com/ngenohkevin/lms/internal/config"
 	"github.com/ngenohkevin/lms/internal/database"
 	"github.com/ngenohkevin/lms/internal/handlers"
@@ -112,14 +114,26 @@ func main() {
 
 	studentService := services.NewStudentService(db.Queries, authService, cacheService)
 	bookService := services.NewBookService(db.Queries, cacheService)
-	transactionService := services.NewTransactionService(db.Queries).WithPool(db.Pool).WithCacheService(cacheService)
-	reservationService := services.NewReservationService(db.Queries)
+	transactionService := services.NewTransactionService(db.Queries).
+		WithPool(db.Pool).
+		WithCacheService(cacheService).
+		WithBorrowingPeriod(cfg.Borrowing.BorrowingPeriodDays).
+		WithMaxBooksPerUser(cfg.Borrowing.MaxBooksPerStudent).
+		WithFinePerDay(decimal.NewFromFloat(cfg.Borrowing.FinePerDay)).
+		WithMaxRenewals(cfg.Borrowing.MaxRenewals).
+		WithMaxFineAmount(decimal.NewFromFloat(cfg.Borrowing.MaxFineAmount)).
+		WithFineGracePeriodDays(cfg.Borrowing.FineGracePeriodDays)
+	reservationService := services.NewReservationService(db.Queries).
+		WithDefaultReservationDays(cfg.Borrowing.ReservationExpiryDays)
 	reportService := services.NewReportService(db.Queries, cacheService)
 	isbnService := services.NewISBNService()
 	recommendationService := services.NewRecommendationService(bookService, db.Queries)
 	ratingService := services.NewRatingService(cacheService, bookService, studentService)
 	importExportService := services.NewImportExportService(bookService, db.Queries, "./uploads")
-	fineService := services.NewFineService(db.Queries, cfg.Borrowing.FinePerDay)
+	fineService := services.NewFineService(db.Queries, cfg.Borrowing.FinePerDay).
+		WithCacheService(cacheService).
+		WithMaxFineAmount(cfg.Borrowing.MaxFineAmount).
+		WithFineGracePeriodDays(cfg.Borrowing.FineGracePeriodDays)
 	settingsService := services.NewSettingsService(db.Queries)
 	inviteService := services.NewInviteService(db.Pool, logger)
 	setupService := services.NewSetupService(db.Pool, logger)
@@ -182,7 +196,8 @@ func main() {
 	healthHandler := handlers.NewHealthHandler(db, redisClient, emailService, cacheService)
 	bookHandler := handlers.NewBookHandler(bookService, isbnService, recommendationService)
 	studentHandler := handlers.NewStudentHandler(studentService)
-	transactionHandler := handlers.NewTransactionHandler(transactionService)
+	enhancedTransactionService := services.NewEnhancedTransactionService(transactionService, reservationService, notificationService)
+	transactionHandler := handlers.NewTransactionHandler(enhancedTransactionService)
 	reservationHandler := handlers.NewReservationHandler(reservationService)
 	notificationHandler := handlers.NewNotificationHandler(notificationService)
 	reportHandler := handlers.NewReportHandler(reportService)
@@ -508,8 +523,8 @@ func setupRoutes(
 				transactions.POST("/borrow-by-barcode", requirePerm("transactions.borrow"), transactionHandler.BorrowByBarcode)
 				transactions.POST("/return-by-barcode", requirePerm("transactions.return"), transactionHandler.ReturnByBarcode)
 				transactions.POST("/:id/return", requirePerm("transactions.return"), transactionHandler.ReturnBook)
-				transactions.POST("/:id/renew", requirePerm("transactions.view"), transactionHandler.RenewBook)
-				transactions.POST("/:id/cancel-renewal", requirePerm("transactions.view"), transactionHandler.CancelRenewal)
+				transactions.POST("/:id/renew", requirePerm("transactions.borrow"), transactionHandler.RenewBook)
+				transactions.POST("/:id/cancel-renewal", requirePerm("transactions.borrow"), transactionHandler.CancelRenewal)
 				transactions.POST("/:id/pay-fine", requirePerm("fines.manage"), transactionHandler.PayFine)
 				transactions.POST("/:id/cancel", requirePerm("transactions.borrow"), transactionHandler.CancelTransaction)
 				transactions.POST("/:id/lost", requirePerm("transactions.return"), transactionHandler.MarkAsLost)

@@ -72,6 +72,7 @@ SET
     returned_date = NOW(),
     fine_amount = 0,
     fine_paid = true,
+    status = 'cancelled',
     notes = CASE
         WHEN notes IS NULL OR notes = '' THEN '[CANCELLED] ' || $1::text
         ELSE notes || E'\n\n[CANCELLED] ' || $1::text
@@ -89,7 +90,6 @@ type CancelTransactionParams struct {
 }
 
 // Cancel a transaction by marking it as returned with zero fine
-// This effectively cancels the transaction without needing a separate status column
 // The notes field documents the cancellation reason
 func (q *Queries) CancelTransaction(ctx context.Context, arg CancelTransactionParams) (Transaction, error) {
 	row := q.db.QueryRow(ctx, cancelTransaction, arg.CancelReason, arg.ID)
@@ -126,7 +126,7 @@ func (q *Queries) CancelTransaction(ctx context.Context, arg CancelTransactionPa
 
 const countActiveBorrowingsByStudent = `-- name: CountActiveBorrowingsByStudent :one
 SELECT COUNT(*) FROM transactions
-WHERE student_id = $1 AND returned_date IS NULL
+WHERE student_id = $1 AND returned_date IS NULL AND transaction_type = 'borrow'
 `
 
 func (q *Queries) CountActiveBorrowingsByStudent(ctx context.Context, studentID int32) (int64, error) {
@@ -150,7 +150,7 @@ func (q *Queries) CountActiveTransactionsByBook(ctx context.Context, bookID int3
 
 const countOverdueTransactions = `-- name: CountOverdueTransactions :one
 SELECT COUNT(*) FROM transactions
-WHERE due_date < NOW() AND returned_date IS NULL
+WHERE due_date < NOW() AND returned_date IS NULL AND transaction_type = 'borrow'
 `
 
 func (q *Queries) CountOverdueTransactions(ctx context.Context) (int64, error) {
@@ -697,7 +697,7 @@ func (q *Queries) GetTransactionRenewalCount(ctx context.Context, id int32) (int
 const hasActiveReservationsByOtherStudents = `-- name: HasActiveReservationsByOtherStudents :one
 SELECT EXISTS(
     SELECT 1 FROM reservations
-    WHERE book_id = $1 AND student_id != $2 AND status = 'active'
+    WHERE book_id = $1 AND student_id != $2 AND status IN ('active', 'ready')
 )
 `
 
@@ -718,7 +718,7 @@ SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
-WHERE t.returned_date IS NULL
+WHERE t.returned_date IS NULL AND t.transaction_type = 'borrow'
 ORDER BY t.due_date ASC
 LIMIT $1 OFFSET $2
 `
@@ -907,7 +907,7 @@ SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
-WHERE t.due_date < NOW() AND t.returned_date IS NULL
+WHERE t.due_date < NOW() AND t.returned_date IS NULL AND t.transaction_type = 'borrow'
 ORDER BY t.due_date ASC
 `
 
@@ -1796,9 +1796,10 @@ SET
     returned_date = NOW(),
     fine_amount = $1::numeric,
     fine_paid = false,
+    status = 'lost',
     notes = CASE
-        WHEN notes IS NULL OR notes = '' THEN '[LOST] ' || $2::text || ' | Replacement fine: $' || $1::text
-        ELSE notes || E'\n\n[LOST] ' || $2::text || ' | Replacement fine: $' || $1::text
+        WHEN notes IS NULL OR notes = '' THEN '[LOST] ' || $2::text || ' | Replacement fine: KSH ' || $1::text
+        ELSE notes || E'\n\n[LOST] ' || $2::text || ' | Replacement fine: KSH ' || $1::text
     END,
     updated_at = NOW()
 WHERE id = $3
@@ -1950,8 +1951,8 @@ func (q *Queries) RenewTransaction(ctx context.Context, arg RenewTransactionPara
 
 const returnBook = `-- name: ReturnBook :one
 UPDATE transactions
-SET returned_date = NOW(), fine_amount = $2, return_condition = $3, condition_notes = $4, updated_at = NOW()
-WHERE id = $1
+SET returned_date = NOW(), fine_amount = $2, return_condition = $3, condition_notes = $4, status = 'completed', updated_at = NOW()
+WHERE id = $1 AND returned_date IS NULL
 RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by
 `
 

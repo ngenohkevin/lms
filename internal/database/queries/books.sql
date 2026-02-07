@@ -30,17 +30,17 @@ RETURNING *;
 -- name: UpdateBookAvailability :exec
 UPDATE books
 SET available_copies = $2, updated_at = NOW()
-WHERE id = $1;
+WHERE id = $1 AND deleted_at IS NULL;
 
 -- name: UpdateBookCondition :exec
 UPDATE books
 SET condition = $2, updated_at = NOW()
-WHERE id = $1;
+WHERE id = $1 AND deleted_at IS NULL;
 
 -- name: SoftDeleteBook :exec
 UPDATE books
 SET deleted_at = NOW(), updated_at = NOW()
-WHERE id = $1;
+WHERE id = $1 AND deleted_at IS NULL;
 
 -- name: ListBooks :many
 SELECT * FROM books

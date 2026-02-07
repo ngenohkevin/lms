@@ -532,7 +532,7 @@ SELECT
     t.fine_waived_reason,
     t.due_date,
     t.returned_date,
-    GREATEST(EXTRACT(DAY FROM (COALESCE(t.returned_date, NOW()) - t.due_date))::int, 0) as days_overdue,
+    GREATEST(EXTRACT(EPOCH FROM (COALESCE(t.returned_date, NOW()) - t.due_date))::int / 86400, 0) as days_overdue,
     s.student_id as student_code,
     CONCAT(s.first_name, ' ', s.last_name) as student_name,
     s.year_of_study,
@@ -622,14 +622,15 @@ func (q *Queries) GetFinePaymentHistory(ctx context.Context, arg GetFinePaymentH
 }
 
 const getFineStatistics = `-- name: GetFineStatistics :one
-SELECT 
+SELECT
     COUNT(DISTINCT t.student_id)::int as students_with_fines,
     COALESCE(SUM(t.fine_amount), 0)::text as total_fines_generated,
     COALESCE(SUM(CASE WHEN t.fine_paid = true THEN t.fine_amount ELSE 0 END), 0)::text as total_fines_paid,
-    COALESCE(SUM(CASE WHEN t.fine_paid = false THEN t.fine_amount ELSE 0 END), 0)::text as total_outstanding_fines,
+    COALESCE(SUM(CASE WHEN t.fine_paid = false AND COALESCE(t.fine_waived, false) = false THEN t.fine_amount ELSE 0 END), 0)::text as total_outstanding_fines,
     COALESCE(AVG(t.fine_amount), 0)::text as avg_fine_amount
 FROM transactions t
 WHERE t.fine_amount > 0
+    AND COALESCE(t.fine_waived, false) = false
     AND ($1::timestamp IS NULL OR t.transaction_date >= $1::timestamp)
     AND ($2::timestamp IS NULL OR t.transaction_date <= $2::timestamp)
 `
@@ -667,10 +668,11 @@ SELECT
     COUNT(DISTINCT s.id)::int as students_affected,
     COALESCE(SUM(t.fine_amount), 0)::text as total_fines,
     COALESCE(SUM(CASE WHEN t.fine_paid = true THEN t.fine_amount ELSE 0 END), 0)::text as paid_amount,
-    COALESCE(SUM(CASE WHEN t.fine_paid = false THEN t.fine_amount ELSE 0 END), 0)::text as outstanding_amount
+    COALESCE(SUM(CASE WHEN t.fine_paid = false AND COALESCE(t.fine_waived, false) = false THEN t.fine_amount ELSE 0 END), 0)::text as outstanding_amount
 FROM transactions t
 INNER JOIN students s ON t.student_id = s.id
 WHERE t.fine_amount > 0
+    AND COALESCE(t.fine_waived, false) = false
     AND s.deleted_at IS NULL
     AND ($1::timestamp IS NULL OR t.transaction_date >= $1::timestamp)
     AND ($2::timestamp IS NULL OR t.transaction_date <= $2::timestamp)
@@ -726,10 +728,11 @@ SELECT
     COUNT(DISTINCT s.id)::int as students_affected,
     COALESCE(SUM(t.fine_amount), 0)::text as total_fines,
     COALESCE(SUM(CASE WHEN t.fine_paid = true THEN t.fine_amount ELSE 0 END), 0)::text as paid_amount,
-    COALESCE(SUM(CASE WHEN t.fine_paid = false THEN t.fine_amount ELSE 0 END), 0)::text as outstanding_amount
+    COALESCE(SUM(CASE WHEN t.fine_paid = false AND COALESCE(t.fine_waived, false) = false THEN t.fine_amount ELSE 0 END), 0)::text as outstanding_amount
 FROM transactions t
 INNER JOIN students s ON t.student_id = s.id
 WHERE t.fine_amount > 0
+    AND COALESCE(t.fine_waived, false) = false
     AND s.deleted_at IS NULL
     AND ($1::timestamp IS NULL OR t.transaction_date >= $1::timestamp)
     AND ($2::timestamp IS NULL OR t.transaction_date <= $2::timestamp)
@@ -842,10 +845,11 @@ SELECT
     COUNT(*)::int as fine_count,
     COALESCE(SUM(t.fine_amount), 0)::text as generated,
     COALESCE(SUM(CASE WHEN t.fine_paid = true THEN t.fine_amount ELSE 0 END), 0)::text as collected,
-    COALESCE(SUM(CASE WHEN t.fine_paid = false THEN t.fine_amount ELSE 0 END), 0)::text as outstanding
+    COALESCE(SUM(CASE WHEN t.fine_paid = false AND COALESCE(t.fine_waived, false) = false THEN t.fine_amount ELSE 0 END), 0)::text as outstanding
 FROM transactions t
 INNER JOIN students s ON t.student_id = s.id
 WHERE t.fine_amount > 0
+    AND COALESCE(t.fine_waived, false) = false
     AND s.deleted_at IS NULL
     AND t.transaction_date >= $1::timestamp
     AND t.transaction_date <= $2::timestamp
@@ -1085,7 +1089,7 @@ SELECT
     (SELECT COUNT(*) FROM transactions WHERE due_date < NOW() AND returned_date IS NULL)::int as overdue_books,
     (SELECT COUNT(*) FROM reservations WHERE status = 'active' AND expires_at > NOW())::int as total_reservations,
     COALESCE((SELECT SUM(available_copies) FROM books WHERE deleted_at IS NULL AND is_active = true), 0)::int as available_books,
-    COALESCE((SELECT SUM(fine_amount) FROM transactions WHERE fine_paid = false), 0)::text as total_fines
+    COALESCE((SELECT SUM(fine_amount) FROM transactions WHERE fine_paid = false AND COALESCE(fine_waived, false) = false), 0)::text as total_fines
 `
 
 type GetLibraryOverviewRow struct {
@@ -1671,7 +1675,7 @@ SELECT
     COALESCE(SUM(fine_amount), 0)::text as financial_impact,
     'Outstanding unpaid fines' as description
 FROM transactions
-WHERE fine_amount > 0 AND fine_paid = false
+WHERE fine_amount > 0 AND fine_paid = false AND COALESCE(fine_waived, false) = false
 
 ORDER BY
     CASE risk_level

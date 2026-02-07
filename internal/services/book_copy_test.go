@@ -365,6 +365,23 @@ func TestBookCopyService_DeleteBookCopy_Error(t *testing.T) {
 	mockQuerier.AssertExpectations(t)
 }
 
+func TestBookCopyService_DeleteBookCopy_RejectsBorrowedCopy(t *testing.T) {
+	mockQuerier := new(MockBookCopyQuerier)
+	service := NewBookCopyService(mockQuerier, nil, nil)
+	ctx := context.Background()
+
+	borrowedCopy := createTestBookCopy(1, 1, "BC001")
+	borrowedCopy.Status = pgtype.Text{String: "borrowed", Valid: true}
+	mockQuerier.On("GetBookCopyByID", ctx, int32(1)).Return(borrowedCopy, nil)
+
+	err := service.DeleteBookCopy(ctx, 1)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot delete book copy")
+	assert.Contains(t, err.Error(), "currently borrowed")
+	mockQuerier.AssertExpectations(t)
+}
+
 func TestBookCopyService_CreateBookCopy_WithAcquisitionDate(t *testing.T) {
 	mockQuerier := new(MockBookCopyQuerier)
 	service := NewBookCopyService(mockQuerier, nil, nil)

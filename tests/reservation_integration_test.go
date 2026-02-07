@@ -22,8 +22,8 @@ func TestReservationIntegration_CompleteWorkflow(t *testing.T) {
 
 	// Create services
 	reservationService := services.NewReservationService(querier)
-	transactionService := services.NewTransactionService(querier)
-	enhancedTransactionService := services.NewEnhancedTransactionService(querier, reservationService)
+	transactionService := services.NewTransactionService(querier).WithPool(db)
+	enhancedTransactionService := services.NewEnhancedTransactionService(transactionService, reservationService, nil)
 
 	ctx := context.Background()
 
@@ -328,9 +328,136 @@ func TestReservationIntegration_CancellationWorkflow(t *testing.T) {
 		_, err := reservationService.CancelReservation(ctx, reservation1.ID)
 		assert.Error(t, err)
 		if err != nil {
-			assert.Contains(t, err.Error(), "failed to cancel reservation")
+			// SQL WHERE clause filters by status IN ('active', 'ready'), so cancelled reservation
+			// returns no rows, which the service converts to "reservation not found"
+			assert.Contains(t, err.Error(), "reservation not found")
 		}
 	})
+}
+
+func TestReservationIntegration_CancelReadyReservation(t *testing.T) {
+	// Set up test database
+	db := setupTestDB(t)
+	defer db.Close()
+
+	querier := queries.New(db)
+	reservationService := services.NewReservationService(querier)
+
+	ctx := context.Background()
+
+	// Create test data
+	student := createTestStudent(t, querier, "Ready", "Cancel", "STU_RDYCAN_001")
+	book := createTestBook(t, querier, "Ready Cancel Book", "Author", "BK_RDYCAN_001", 0)
+
+	// Create a reservation
+	reservation, err := reservationService.ReserveBook(ctx, student.ID, book.ID)
+	require.NoError(t, err)
+	require.Equal(t, "pending", reservation.Status) // "active" in DB
+
+	// Mark it as "ready" (simulating book return)
+	readyReservation, err := reservationService.MarkReservationReady(ctx, reservation.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "ready", readyReservation.Status)
+
+	// Cancel the "ready" reservation — this should now work with the SQL fix
+	cancelledReservation, err := reservationService.CancelReservation(ctx, reservation.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "cancelled", cancelledReservation.Status)
+}
+
+func TestReservationIntegration_ExpiredReadyReservations(t *testing.T) {
+	// Set up test database
+	db := setupTestDB(t)
+	defer db.Close()
+
+	querier := queries.New(db)
+	reservationService := services.NewReservationService(querier)
+
+	ctx := context.Background()
+
+	// Create test data
+	student := createTestStudent(t, querier, "Expired", "Ready", "STU_EXPRD_001")
+	book := createTestBook(t, querier, "Expired Ready Book", "Author", "BK_EXPRD_001", 0)
+
+	// Create a reservation that is already expired
+	expiredReservation, err := querier.CreateReservation(ctx, queries.CreateReservationParams{
+		StudentID: student.ID,
+		BookID:    book.ID,
+		ExpiresAt: pgtype.Timestamp{Time: time.Now().UTC().Add(-1 * time.Hour), Valid: true},
+	})
+	require.NoError(t, err)
+
+	// Manually set its status to "ready" (simulating a book return that happened before expiry)
+	_, err = querier.UpdateReservationStatus(ctx, queries.UpdateReservationStatusParams{
+		ID:          expiredReservation.ID,
+		Status:      pgtype.Text{String: "ready", Valid: true},
+		FulfilledAt: pgtype.Timestamp{Valid: false},
+	})
+	require.NoError(t, err)
+
+	// Verify ListExpiredReservations includes "ready" reservations
+	expiredList, err := querier.ListExpiredReservations(ctx)
+	require.NoError(t, err)
+
+	found := false
+	for _, r := range expiredList {
+		if r.ID == expiredReservation.ID {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "Expired reservation with 'ready' status should be included in ListExpiredReservations")
+
+	// Now expire them via the service
+	expiredCount, err := reservationService.ExpireReservations(ctx)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, expiredCount, 1)
+
+	// Verify it was expired
+	updatedReservation, err := reservationService.GetReservationByID(ctx, expiredReservation.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "expired", updatedReservation.Status)
+}
+
+func TestReservationIntegration_ReturnSetsStatusCompleted(t *testing.T) {
+	// Set up test database
+	db := setupTestDB(t)
+	defer db.Close()
+
+	querier := queries.New(db)
+
+	// Create services with pool for proper DB transaction support
+	transactionService := services.NewTransactionService(querier).WithPool(db)
+
+	ctx := context.Background()
+
+	// Create test data
+	student := createTestStudent(t, querier, "Return", "Status", "STU_RETST_001")
+	librarian := createTestLibrarian(t, querier, "test_librarian_retst", "retst.librarian@example.com")
+	book := createTestBook(t, querier, "Return Status Book", "Author", "BK_RETST_001", 1)
+
+	// Set availability
+	err := querier.UpdateBookAvailability(ctx, queries.UpdateBookAvailabilityParams{
+		ID:              book.ID,
+		AvailableCopies: pgtype.Int4{Int32: 1, Valid: true},
+	})
+	require.NoError(t, err)
+
+	// Borrow the book
+	transaction, err := transactionService.BorrowBook(ctx, student.ID, book.ID, librarian.ID, "Test borrow for status check")
+	require.NoError(t, err)
+	require.NotNil(t, transaction)
+
+	// Return the book with condition
+	returnedTx, err := transactionService.ReturnBookWithCondition(ctx, transaction.ID, "good", "Returned in good condition")
+	require.NoError(t, err)
+	require.NotNil(t, returnedTx)
+
+	// Verify the transaction status column is 'completed' in the database
+	dbTransaction, err := querier.GetTransactionByID(ctx, transaction.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "completed", dbTransaction.Status.String, "Transaction status should be 'completed' after return")
+	assert.True(t, dbTransaction.ReturnedDate.Valid, "Returned date should be set")
 }
 
 // Helper functions for creating test data

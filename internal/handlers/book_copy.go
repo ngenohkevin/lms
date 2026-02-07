@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/ngenohkevin/lms/internal/models"
@@ -108,6 +109,19 @@ func (h *BookCopyHandler) CreateBookCopy(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Router /api/v1/books/{id}/copies/{copy_id} [get]
 func (h *BookCopyHandler) GetBookCopy(c *gin.Context) {
+	bookIDStr := c.Param("id")
+	bookID, err := strconv.ParseInt(bookIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid book ID",
+			},
+		})
+		return
+	}
+
 	copyIDStr := c.Param("copy_id")
 	copyID, err := strconv.ParseInt(copyIDStr, 10, 32)
 	if err != nil {
@@ -138,6 +152,18 @@ func (h *BookCopyHandler) GetBookCopy(c *gin.Context) {
 			Error: ErrorDetail{
 				Code:    "INTERNAL_ERROR",
 				Message: "Failed to get book copy",
+			},
+		})
+		return
+	}
+
+	// Verify copy belongs to the book in the URL path
+	if copy.BookID != int32(bookID) {
+		c.JSON(http.StatusNotFound, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "NOT_FOUND",
+				Message: "Book copy not found for this book",
 			},
 		})
 		return
@@ -217,6 +243,19 @@ func (h *BookCopyHandler) ListBookCopies(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Router /api/v1/books/{id}/copies/{copy_id} [put]
 func (h *BookCopyHandler) UpdateBookCopy(c *gin.Context) {
+	bookIDStr := c.Param("id")
+	bookID, err := strconv.ParseInt(bookIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid book ID",
+			},
+		})
+		return
+	}
+
 	copyIDStr := c.Param("copy_id")
 	copyID, err := strconv.ParseInt(copyIDStr, 10, 32)
 	if err != nil {
@@ -226,6 +265,30 @@ func (h *BookCopyHandler) UpdateBookCopy(c *gin.Context) {
 				Code:    "VALIDATION_ERROR",
 				Message: "Invalid copy ID",
 			},
+		})
+		return
+	}
+
+	// Verify copy belongs to the book
+	existing, lookupErr := h.bookCopyService.GetBookCopyByID(c.Request.Context(), int32(copyID))
+	if lookupErr != nil {
+		if isNotFoundError(lookupErr) {
+			c.JSON(http.StatusNotFound, ErrorResponse{
+				Success: false,
+				Error:   ErrorDetail{Code: "NOT_FOUND", Message: "Book copy not found"},
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error:   ErrorDetail{Code: "INTERNAL_ERROR", Message: "Failed to get book copy"},
+		})
+		return
+	}
+	if existing.BookID != int32(bookID) {
+		c.JSON(http.StatusNotFound, ErrorResponse{
+			Success: false,
+			Error:   ErrorDetail{Code: "NOT_FOUND", Message: "Book copy not found for this book"},
 		})
 		return
 	}
@@ -296,6 +359,19 @@ func (h *BookCopyHandler) UpdateBookCopy(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Router /api/v1/books/{id}/copies/{copy_id} [delete]
 func (h *BookCopyHandler) DeleteBookCopy(c *gin.Context) {
+	bookIDStr := c.Param("id")
+	bookID, err := strconv.ParseInt(bookIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid book ID",
+			},
+		})
+		return
+	}
+
 	copyIDStr := c.Param("copy_id")
 	copyID, err := strconv.ParseInt(copyIDStr, 10, 32)
 	if err != nil {
@@ -305,6 +381,30 @@ func (h *BookCopyHandler) DeleteBookCopy(c *gin.Context) {
 				Code:    "VALIDATION_ERROR",
 				Message: "Invalid copy ID",
 			},
+		})
+		return
+	}
+
+	// Verify copy belongs to the book
+	existing, lookupErr := h.bookCopyService.GetBookCopyByID(c.Request.Context(), int32(copyID))
+	if lookupErr != nil {
+		if isNotFoundError(lookupErr) {
+			c.JSON(http.StatusNotFound, ErrorResponse{
+				Success: false,
+				Error:   ErrorDetail{Code: "NOT_FOUND", Message: "Book copy not found"},
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error:   ErrorDetail{Code: "INTERNAL_ERROR", Message: "Failed to get book copy"},
+		})
+		return
+	}
+	if existing.BookID != int32(bookID) {
+		c.JSON(http.StatusNotFound, ErrorResponse{
+			Success: false,
+			Error:   ErrorDetail{Code: "NOT_FOUND", Message: "Book copy not found for this book"},
 		})
 		return
 	}
@@ -321,11 +421,17 @@ func (h *BookCopyHandler) DeleteBookCopy(c *gin.Context) {
 			})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
+		statusCode := http.StatusInternalServerError
+		errCode := "INTERNAL_ERROR"
+		if strings.Contains(err.Error(), "cannot delete") {
+			statusCode = http.StatusConflict
+			errCode = "CONFLICT"
+		}
+		c.JSON(statusCode, ErrorResponse{
 			Success: false,
 			Error: ErrorDetail{
-				Code:    "INTERNAL_ERROR",
-				Message: "Failed to delete book copy",
+				Code:    errCode,
+				Message: err.Error(),
 			},
 		})
 		return
@@ -557,6 +663,19 @@ func (h *BookCopyHandler) ScanBarcode(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Router /api/v1/books/{id}/copies/{copy_id}/history [get]
 func (h *BookCopyHandler) GetCopyHistory(c *gin.Context) {
+	bookIDStr := c.Param("id")
+	bookID, err := strconv.ParseInt(bookIDStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid book ID",
+			},
+		})
+		return
+	}
+
 	copyIDStr := c.Param("copy_id")
 	copyID, err := strconv.ParseInt(copyIDStr, 10, 32)
 	if err != nil {
@@ -566,6 +685,30 @@ func (h *BookCopyHandler) GetCopyHistory(c *gin.Context) {
 				Code:    "VALIDATION_ERROR",
 				Message: "Invalid copy ID",
 			},
+		})
+		return
+	}
+
+	// Verify copy belongs to the book
+	existing, lookupErr := h.bookCopyService.GetBookCopyByID(c.Request.Context(), int32(copyID))
+	if lookupErr != nil {
+		if isNotFoundError(lookupErr) {
+			c.JSON(http.StatusNotFound, ErrorResponse{
+				Success: false,
+				Error:   ErrorDetail{Code: "NOT_FOUND", Message: "Book copy not found"},
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error:   ErrorDetail{Code: "INTERNAL_ERROR", Message: "Failed to get book copy"},
+		})
+		return
+	}
+	if existing.BookID != int32(bookID) {
+		c.JSON(http.StatusNotFound, ErrorResponse{
+			Success: false,
+			Error:   ErrorDetail{Code: "NOT_FOUND", Message: "Book copy not found for this book"},
 		})
 		return
 	}

@@ -73,6 +73,14 @@ func (m *MockTransactionService) ReturnBook(ctx context.Context, transactionID i
 	return args.Get(0).(*services.TransactionResponse), args.Error(1)
 }
 
+func (m *MockTransactionService) ReturnBookWithCondition(ctx context.Context, transactionID int32, returnCondition, conditionNotes string) (*services.TransactionResponse, error) {
+	args := m.Called(ctx, transactionID, returnCondition, conditionNotes)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*services.TransactionResponse), args.Error(1)
+}
+
 func (m *MockTransactionService) RenewBook(ctx context.Context, transactionID, librarianID int32, extensionDays *int32) (*services.TransactionResponse, error) {
 	args := m.Called(ctx, transactionID, librarianID, extensionDays)
 	if args.Get(0) == nil {

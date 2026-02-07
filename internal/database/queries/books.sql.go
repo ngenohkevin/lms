@@ -790,7 +790,7 @@ func (q *Queries) SearchBooksByGenre(ctx context.Context, arg SearchBooksByGenre
 const softDeleteBook = `-- name: SoftDeleteBook :exec
 UPDATE books
 SET deleted_at = NOW(), updated_at = NOW()
-WHERE id = $1
+WHERE id = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) SoftDeleteBook(ctx context.Context, id int32) error {
@@ -903,7 +903,7 @@ func (q *Queries) UpdateBook(ctx context.Context, arg UpdateBookParams) (Book, e
 const updateBookAvailability = `-- name: UpdateBookAvailability :exec
 UPDATE books
 SET available_copies = $2, updated_at = NOW()
-WHERE id = $1
+WHERE id = $1 AND deleted_at IS NULL
 `
 
 type UpdateBookAvailabilityParams struct {
@@ -934,7 +934,7 @@ func (q *Queries) UpdateBookCategory(ctx context.Context, arg UpdateBookCategory
 const updateBookCondition = `-- name: UpdateBookCondition :exec
 UPDATE books
 SET condition = $2, updated_at = NOW()
-WHERE id = $1
+WHERE id = $1 AND deleted_at IS NULL
 `
 
 type UpdateBookConditionParams struct {

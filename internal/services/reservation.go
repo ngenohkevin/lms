@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"time"
 
@@ -99,7 +98,7 @@ func (s *ReservationService) ReserveBook(ctx context.Context, studentID, bookID 
 	// Validate student exists and is active
 	student, err := s.queries.GetStudentByID(ctx, studentID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if isNoRows(err) {
 			return nil, fmt.Errorf("student not found")
 		}
 		return nil, fmt.Errorf("failed to get student: %w", err)
@@ -108,7 +107,7 @@ func (s *ReservationService) ReserveBook(ctx context.Context, studentID, bookID 
 	// Validate book exists and is active
 	book, err := s.queries.GetBookByID(ctx, bookID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if isNoRows(err) {
 			return nil, fmt.Errorf("book not found")
 		}
 		return nil, fmt.Errorf("failed to get book: %w", err)
@@ -145,7 +144,7 @@ func (s *ReservationService) ReserveBook(ctx context.Context, studentID, bookID 
 func (s *ReservationService) GetReservationByID(ctx context.Context, id int32) (*ReservationResponse, error) {
 	reservationRow, err := s.queries.GetReservationByID(ctx, id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if isNoRows(err) {
 			return nil, fmt.Errorf("reservation not found")
 		}
 		return nil, fmt.Errorf("failed to get reservation: %w", err)
@@ -169,7 +168,7 @@ func (s *ReservationService) GetReservationByID(ctx context.Context, id int32) (
 func (s *ReservationService) CancelReservation(ctx context.Context, id int32) (*ReservationResponse, error) {
 	reservation, err := s.queries.CancelReservation(ctx, id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if isNoRows(err) {
 			return nil, fmt.Errorf("reservation not found")
 		}
 		return nil, fmt.Errorf("failed to cancel reservation: %w", err)
@@ -183,7 +182,7 @@ func (s *ReservationService) DeleteReservation(ctx context.Context, id int32) er
 	// Verify the reservation exists first
 	_, err := s.queries.GetReservationByID(ctx, id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if isNoRows(err) {
 			return fmt.Errorf("reservation not found")
 		}
 		return fmt.Errorf("failed to get reservation: %w", err)
@@ -199,6 +198,20 @@ func (s *ReservationService) DeleteReservation(ctx context.Context, id int32) er
 
 // FulfillReservation fulfills a reservation when a book becomes available
 func (s *ReservationService) FulfillReservation(ctx context.Context, reservationID int32) (*ReservationResponse, error) {
+	// Verify reservation exists and is in a valid state for fulfillment
+	existing, err := s.queries.GetReservationByID(ctx, reservationID)
+	if err != nil {
+		if isNoRows(err) {
+			return nil, fmt.Errorf("reservation not found")
+		}
+		return nil, fmt.Errorf("failed to get reservation: %w", err)
+	}
+
+	status := existing.Status.String
+	if status != "active" && status != "ready" {
+		return nil, fmt.Errorf("cannot fulfill reservation with status %q: must be active or ready", status)
+	}
+
 	now := time.Now().UTC()
 	reservation, err := s.queries.UpdateReservationStatus(ctx, queries.UpdateReservationStatusParams{
 		ID:          reservationID,
@@ -206,9 +219,6 @@ func (s *ReservationService) FulfillReservation(ctx context.Context, reservation
 		FulfilledAt: pgtype.Timestamp{Time: now, Valid: true},
 	})
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("reservation not found")
-		}
 		return nil, fmt.Errorf("failed to fulfill reservation: %w", err)
 	}
 
@@ -255,7 +265,7 @@ func (s *ReservationService) GetBookReservations(ctx context.Context, bookID int
 func (s *ReservationService) GetNextReservationForBook(ctx context.Context, bookID int32) (*ReservationResponse, error) {
 	reservationRow, err := s.queries.GetNextReservationForBook(ctx, bookID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if isNoRows(err) {
 			return nil, nil // No reservations for this book
 		}
 		return nil, fmt.Errorf("failed to get next reservation: %w", err)
@@ -342,7 +352,7 @@ func (s *ReservationService) HasStudentFulfilledReservation(ctx context.Context,
 		Status:    pgtype.Text{String: "fulfilled", Valid: true},
 	})
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if isNoRows(err) {
 			return nil, nil // No fulfilled reservation found
 		}
 		return nil, fmt.Errorf("failed to get student reservation: %w", err)
@@ -377,7 +387,7 @@ func (s *ReservationService) HasStudentReadyReservation(ctx context.Context, stu
 		Status:    pgtype.Text{String: "ready", Valid: true},
 	})
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if isNoRows(err) {
 			return nil, nil // No ready reservation found
 		}
 		return nil, fmt.Errorf("failed to get student reservation: %w", err)
@@ -606,6 +616,9 @@ func (s *ReservationService) convertToNextReservationResponse(reservation querie
 		StudentIDCode: reservation.StudentCode,
 	}
 
+	if reservation.NotifiedAt.Valid {
+		response.NotifiedAt = &reservation.NotifiedAt.Time
+	}
 	if reservation.FulfilledAt.Valid {
 		response.FulfilledAt = &reservation.FulfilledAt.Time
 	}
@@ -631,6 +644,9 @@ func (s *ReservationService) convertToListReservationResponse(reservation querie
 		BookIDCode:    reservation.BookCode,
 	}
 
+	if reservation.NotifiedAt.Valid {
+		response.NotifiedAt = &reservation.NotifiedAt.Time
+	}
 	if reservation.FulfilledAt.Valid {
 		response.FulfilledAt = &reservation.FulfilledAt.Time
 	}
@@ -676,7 +692,7 @@ func (s *ReservationService) MarkReservationReady(ctx context.Context, reservati
 	// Get the reservation to verify it exists and is in the correct state
 	reservationRow, err := s.queries.GetReservationByID(ctx, reservationID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if isNoRows(err) {
 			return nil, fmt.Errorf("reservation not found")
 		}
 		return nil, fmt.Errorf("failed to get reservation: %w", err)

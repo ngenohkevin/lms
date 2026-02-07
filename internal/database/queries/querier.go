@@ -26,7 +26,6 @@ type Querier interface {
 	CancelRenewal(ctx context.Context, arg CancelRenewalParams) (Transaction, error)
 	CancelReservation(ctx context.Context, id int32) (Reservation, error)
 	// Cancel a transaction by marking it as returned with zero fine
-	// This effectively cancels the transaction without needing a separate status column
 	// The notes field documents the cancellation reason
 	CancelTransaction(ctx context.Context, arg CancelTransactionParams) (Transaction, error)
 	CheckEmailExists(ctx context.Context, arg CheckEmailExistsParams) (bool, error)

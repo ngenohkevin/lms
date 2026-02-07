@@ -87,6 +87,8 @@ type BorrowingConfig struct {
 	MaxBooksPerStudent    int     `mapstructure:"max_books_per_student"`
 	FinePerDay            float64 `mapstructure:"fine_per_day"`
 	LostBookFine          float64 `mapstructure:"lost_book_fine"`
+	MaxFineAmount         float64 `mapstructure:"max_fine_amount"`
+	FineGracePeriodDays   int     `mapstructure:"fine_grace_period_days"`
 	MaxRenewals           int     `mapstructure:"max_renewals"`
 	ReservationExpiryDays int     `mapstructure:"reservation_expiry_days"`
 }

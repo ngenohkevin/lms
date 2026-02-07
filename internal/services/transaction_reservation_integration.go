@@ -18,6 +18,7 @@ type ReservationServiceInterface interface {
 // NotificationSenderInterface defines the interface for sending book availability notifications
 type NotificationSenderInterface interface {
 	SendBookAvailableNotifications(ctx context.Context, bookID int32) error
+	SendReservationReadyNotification(ctx context.Context, reservationID int32, studentID int32, bookID int32) error
 }
 
 // EnhancedTransactionService extends the basic transaction service with reservation integration
@@ -27,18 +28,29 @@ type EnhancedTransactionService struct {
 	notificationService NotificationSenderInterface
 }
 
-// NewEnhancedTransactionService creates a new enhanced transaction service with reservation integration
-func NewEnhancedTransactionService(queries TransactionQuerier, reservationService ReservationServiceInterface) *EnhancedTransactionService {
+// NewEnhancedTransactionService creates a new enhanced transaction service with reservation integration.
+// It accepts an existing *TransactionService so that config (borrowing period, fine settings, etc.) is preserved.
+func NewEnhancedTransactionService(txService *TransactionService, reservationService ReservationServiceInterface, notificationService NotificationSenderInterface) *EnhancedTransactionService {
 	return &EnhancedTransactionService{
-		TransactionService:  NewTransactionService(queries),
+		TransactionService:  txService,
 		reservationService:  reservationService,
-		notificationService: nil, // Optional, can be set via SetNotificationService
+		notificationService: notificationService,
 	}
 }
 
-// SetNotificationService sets the notification service for sending book availability notifications
-func (s *EnhancedTransactionService) SetNotificationService(notificationService NotificationSenderInterface) {
-	s.notificationService = notificationService
+// ReturnBook overrides the base TransactionService.ReturnBook to add reservation handling after return
+func (s *EnhancedTransactionService) ReturnBook(ctx context.Context, transactionID int32) (*TransactionResponse, error) {
+	return s.ReturnBookWithReservationHandling(ctx, transactionID, "good", "")
+}
+
+// ReturnBookWithCondition overrides the base TransactionService.ReturnBookWithCondition to add reservation handling
+func (s *EnhancedTransactionService) ReturnBookWithCondition(ctx context.Context, transactionID int32, returnCondition, conditionNotes string) (*TransactionResponse, error) {
+	return s.ReturnBookWithReservationHandling(ctx, transactionID, returnCondition, conditionNotes)
+}
+
+// BorrowBook overrides the base TransactionService.BorrowBook to add reservation check
+func (s *EnhancedTransactionService) BorrowBook(ctx context.Context, studentID, bookID, librarianID int32, notes string) (*TransactionResponse, error) {
+	return s.BorrowBookWithReservationCheck(ctx, studentID, bookID, librarianID, notes)
 }
 
 // ReturnBookWithReservationHandling processes a book return with automatic reservation fulfillment
@@ -85,13 +97,13 @@ func (s *EnhancedTransactionService) handleReservationFulfillment(ctx context.Co
 	log.Printf("Successfully marked reservation %d as ready for book %d (student: %s)",
 		nextReservation.ID, bookID, nextReservation.StudentName)
 
-	// Send book available notifications to the student with the ready reservation
+	// Send notification only to the specific student whose reservation was marked "ready"
 	if s.notificationService != nil {
-		if err := s.notificationService.SendBookAvailableNotifications(ctx, bookID); err != nil {
-			log.Printf("Error sending book available notifications for book %d: %v", bookID, err)
+		if err := s.notificationService.SendReservationReadyNotification(ctx, nextReservation.ID, nextReservation.StudentID, bookID); err != nil {
+			log.Printf("Error sending reservation ready notification for reservation %d: %v", nextReservation.ID, err)
 			// Don't fail the reservation marking if notification fails
 		} else {
-			log.Printf("Successfully sent book available notifications for book %d", bookID)
+			log.Printf("Successfully sent reservation ready notification for reservation %d (student: %s)", nextReservation.ID, nextReservation.StudentName)
 		}
 	}
 }

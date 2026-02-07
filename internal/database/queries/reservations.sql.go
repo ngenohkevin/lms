@@ -14,7 +14,7 @@ import (
 const cancelReservation = `-- name: CancelReservation :one
 UPDATE reservations
 SET status = 'cancelled', updated_at = NOW()
-WHERE id = $1 AND status IN ('active', 'fulfilled')
+WHERE id = $1 AND status IN ('active', 'ready')
 RETURNING id, student_id, book_id, reserved_at, expires_at, status, fulfilled_at, created_at, updated_at, notified_at
 `
 
@@ -401,7 +401,7 @@ SELECT r.id, r.student_id, r.book_id, r.reserved_at, r.expires_at, r.status, r.f
 FROM reservations r
 JOIN students s ON r.student_id = s.id
 JOIN books b ON r.book_id = b.id
-WHERE r.expires_at < NOW() AND r.status = 'active'
+WHERE r.expires_at < NOW() AND r.status IN ('active', 'ready')
 ORDER BY r.expires_at ASC
 `
 

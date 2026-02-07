@@ -127,7 +127,7 @@ SELECT
     t.fine_waived_reason,
     t.due_date,
     t.returned_date,
-    GREATEST(EXTRACT(DAY FROM (COALESCE(t.returned_date, NOW()) - t.due_date))::int, 0) as days_overdue,
+    GREATEST(EXTRACT(EPOCH FROM (COALESCE(t.returned_date, NOW()) - t.due_date))::int / 86400, 0) as days_overdue,
     t.created_at
 FROM transactions t
 INNER JOIN students s ON t.student_id = s.id
@@ -231,7 +231,7 @@ SELECT
     t.book_id,
     t.due_date,
     t.fine_amount,
-    GREATEST(EXTRACT(DAY FROM (NOW() - t.due_date))::int, 0) as days_overdue
+    GREATEST(EXTRACT(EPOCH FROM (NOW() - t.due_date))::int / 86400, 0) as days_overdue
 FROM transactions t
 INNER JOIN students s ON t.student_id = s.id
 WHERE t.due_date < NOW()
@@ -358,7 +358,7 @@ SELECT
     t.fine_amount,
     t.due_date,
     t.returned_date,
-    GREATEST(EXTRACT(DAY FROM (COALESCE(t.returned_date, NOW()) - t.due_date))::int, 0) as days_overdue,
+    GREATEST(EXTRACT(EPOCH FROM (COALESCE(t.returned_date, NOW()) - t.due_date))::int / 86400, 0) as days_overdue,
     t.created_at
 FROM transactions t
 INNER JOIN books b ON t.book_id = b.id
@@ -431,7 +431,7 @@ SELECT
     t.fine_waived_reason,
     t.due_date,
     t.returned_date,
-    GREATEST(EXTRACT(DAY FROM (COALESCE(t.returned_date, NOW()) - t.due_date))::int, 0) as days_overdue,
+    GREATEST(EXTRACT(EPOCH FROM (COALESCE(t.returned_date, NOW()) - t.due_date))::int / 86400, 0) as days_overdue,
     t.created_at
 FROM transactions t
 INNER JOIN students s ON t.student_id = s.id
@@ -568,7 +568,7 @@ const updateFineAmount = `-- name: UpdateFineAmount :exec
 UPDATE transactions
 SET fine_amount = $2,
     updated_at = NOW()
-WHERE id = $1
+WHERE id = $1 AND fine_paid = false AND COALESCE(fine_waived, false) = false
 `
 
 type UpdateFineAmountParams struct {

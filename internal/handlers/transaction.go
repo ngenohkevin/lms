@@ -21,6 +21,7 @@ type TransactionServiceInterface interface {
 	BorrowBookWithCopy(ctx context.Context, req services.BorrowBookWithCopyRequest) (*services.TransactionResponse, error)
 	BorrowByBarcode(ctx context.Context, req services.BorrowByBarcodeRequest) (*services.TransactionResponse, error)
 	ReturnBook(ctx context.Context, transactionID int32) (*services.TransactionResponse, error)
+	ReturnBookWithCondition(ctx context.Context, transactionID int32, returnCondition, conditionNotes string) (*services.TransactionResponse, error)
 	ReturnByBarcode(ctx context.Context, req services.ReturnByBarcodeRequest) (*services.TransactionResponse, error)
 	RenewBook(ctx context.Context, transactionID, librarianID int32, extensionDays *int32) (*services.TransactionResponse, error)
 	CancelRenewal(ctx context.Context, transactionID int32, newDueDate time.Time) (*services.TransactionResponse, error)
@@ -140,7 +141,20 @@ func (h *TransactionHandler) ReturnBook(c *gin.Context) {
 		return
 	}
 
-	transaction, err := h.transactionService.ReturnBook(c.Request.Context(), int32(transactionID))
+	// Accept optional condition from request body
+	var req struct {
+		ReturnCondition string `json:"return_condition"`
+		ConditionNotes  string `json:"condition_notes"`
+	}
+	// Bind but don't fail if body is empty (backward compatible)
+	_ = c.ShouldBindJSON(&req)
+
+	var transaction *services.TransactionResponse
+	if req.ReturnCondition != "" {
+		transaction, err = h.transactionService.ReturnBookWithCondition(c.Request.Context(), int32(transactionID), req.ReturnCondition, req.ConditionNotes)
+	} else {
+		transaction, err = h.transactionService.ReturnBook(c.Request.Context(), int32(transactionID))
+	}
 	if err != nil {
 		statusCode := http.StatusBadRequest
 		if err.Error() == "transaction not found" {
@@ -715,7 +729,7 @@ func convertToOverdueTransactionResponse(tx queries.ListOverdueTransactionsRow) 
 	studentName := tx.FirstName + " " + tx.LastName
 	fineAmount := decimal.Zero
 	if tx.FineAmount.Valid && tx.FineAmount.Int != nil {
-		fineAmount = decimal.NewFromBigInt(tx.FineAmount.Int, 0)
+		fineAmount = decimal.NewFromBigInt(tx.FineAmount.Int, tx.FineAmount.Exp)
 	}
 
 	daysOverdue := 0
@@ -745,7 +759,7 @@ func convertToOverdueTransactionResponse(tx queries.ListOverdueTransactionsRow) 
 func convertToTransactionHistoryResponse(tx queries.ListTransactionsByStudentRow) models.TransactionHistoryResponse {
 	fineAmount := decimal.Zero
 	if tx.FineAmount.Valid && tx.FineAmount.Int != nil {
-		fineAmount = decimal.NewFromBigInt(tx.FineAmount.Int, 0)
+		fineAmount = decimal.NewFromBigInt(tx.FineAmount.Int, tx.FineAmount.Exp)
 	}
 
 	response := models.TransactionHistoryResponse{

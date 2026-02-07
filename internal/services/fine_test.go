@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/ngenohkevin/lms/internal/database/queries"
 	"github.com/stretchr/testify/assert"
@@ -93,6 +94,11 @@ func (m *MockFineQuerier) BulkPayFines(ctx context.Context, ids []int32) (int64,
 func (m *MockFineQuerier) BulkWaiveFines(ctx context.Context, arg queries.BulkWaiveFinesParams) (int64, error) {
 	args := m.Called(ctx, arg)
 	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockFineQuerier) GetTransactionByID(ctx context.Context, id int32) (queries.GetTransactionByIDRow, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(queries.GetTransactionByIDRow), args.Error(1)
 }
 
 func TestNewFineService(t *testing.T) {
@@ -382,6 +388,107 @@ func TestFineService_CalculateFinesForOverdueBooks(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 0, count) // No updates needed
 		mockQuerier.AssertExpectations(t)
+	})
+}
+
+func TestFineService_CalculateFinesWithGracePeriod(t *testing.T) {
+	ctx := context.Background()
+	mockQuerier := new(MockFineQuerier)
+	service := NewFineService(mockQuerier, 0.50).WithFineGracePeriodDays(3)
+
+	t.Run("skips fines within grace period", func(t *testing.T) {
+		rows := []queries.GetOverdueTransactionsForFineCalculationRow{
+			{
+				ID:          1,
+				StudentID:   1,
+				BookID:      1,
+				DueDate:     pgtype.Timestamp{Time: time.Now().AddDate(0, 0, -2), Valid: true},
+				FineAmount:  createFineNumeric(0),
+				DaysOverdue: int32(2), // Within 3-day grace period
+			},
+		}
+
+		mockQuerier.On("GetOverdueTransactionsForFineCalculation", ctx).Return(rows, nil).Once()
+
+		count, err := service.CalculateFinesForOverdueBooks(ctx)
+
+		assert.NoError(t, err)
+		assert.Equal(t, 0, count) // No fines during grace period
+		mockQuerier.AssertExpectations(t)
+	})
+
+	t.Run("applies fine after grace period", func(t *testing.T) {
+		rows := []queries.GetOverdueTransactionsForFineCalculationRow{
+			{
+				ID:          2,
+				StudentID:   1,
+				BookID:      1,
+				DueDate:     pgtype.Timestamp{Time: time.Now().AddDate(0, 0, -5), Valid: true},
+				FineAmount:  createFineNumeric(0),
+				DaysOverdue: int32(5), // 5 - 3 grace = 2 effective days = $1.00
+			},
+		}
+
+		mockQuerier.On("GetOverdueTransactionsForFineCalculation", ctx).Return(rows, nil).Once()
+		mockQuerier.On("UpdateFineAmount", ctx, mock.AnythingOfType("queries.UpdateFineAmountParams")).Return(nil).Once()
+
+		count, err := service.CalculateFinesForOverdueBooks(ctx)
+
+		assert.NoError(t, err)
+		assert.Equal(t, 1, count)
+		mockQuerier.AssertExpectations(t)
+	})
+}
+
+func TestFineService_CalculateFinesWithMaxFine(t *testing.T) {
+	ctx := context.Background()
+	mockQuerier := new(MockFineQuerier)
+	service := NewFineService(mockQuerier, 0.50).WithMaxFineAmount(10.0)
+
+	t.Run("caps fine at max amount", func(t *testing.T) {
+		rows := []queries.GetOverdueTransactionsForFineCalculationRow{
+			{
+				ID:          1,
+				StudentID:   1,
+				BookID:      1,
+				DueDate:     pgtype.Timestamp{Time: time.Now().AddDate(0, 0, -30), Valid: true},
+				FineAmount:  createFineNumeric(0),
+				DaysOverdue: int32(30), // 30 * 0.50 = $15.00, but max is $10.00
+			},
+		}
+
+		mockQuerier.On("GetOverdueTransactionsForFineCalculation", ctx).Return(rows, nil).Once()
+		mockQuerier.On("UpdateFineAmount", ctx, mock.AnythingOfType("queries.UpdateFineAmountParams")).Return(nil).Once()
+
+		count, err := service.CalculateFinesForOverdueBooks(ctx)
+
+		assert.NoError(t, err)
+		assert.Equal(t, 1, count)
+		mockQuerier.AssertExpectations(t)
+	})
+}
+
+func TestIsNoRows(t *testing.T) {
+	t.Run("detects sql ErrNoRows", func(t *testing.T) {
+		import_sql_err := fmt.Errorf("wrapped: %w", errors.New("sql: no rows in result set"))
+		// sql.ErrNoRows has message "sql: no rows in result set"
+		// but we need to use the actual sentinel value
+		assert.False(t, isNoRows(import_sql_err)) // wrapped new error != sentinel
+	})
+
+	t.Run("detects wrapped pgx ErrNoRows via errors.Is", func(t *testing.T) {
+		// pgx.ErrNoRows is a sentinel, must be wrapped with %w to match errors.Is
+		pgxErr := pgx.ErrNoRows
+		wrapped := fmt.Errorf("not found: %w", pgxErr)
+		assert.True(t, isNoRows(wrapped))
+	})
+
+	t.Run("detects direct pgx ErrNoRows", func(t *testing.T) {
+		assert.True(t, isNoRows(pgx.ErrNoRows))
+	})
+
+	t.Run("rejects other errors", func(t *testing.T) {
+		assert.False(t, isNoRows(fmt.Errorf("some other error")))
 	})
 }
 

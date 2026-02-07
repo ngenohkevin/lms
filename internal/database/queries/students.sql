@@ -109,7 +109,7 @@ ORDER BY month, year_of_study;
 SELECT DISTINCT s.* FROM students s
 INNER JOIN transactions t ON s.id = t.student_id
 WHERE s.deleted_at IS NULL
-  AND t.fine_amount > 0 AND t.fine_paid = false
+  AND t.fine_amount > 0 AND t.fine_paid = false AND COALESCE(t.fine_waived, false) = false
 ORDER BY s.created_at DESC
 LIMIT $1 OFFSET $2;
 
@@ -117,7 +117,7 @@ LIMIT $1 OFFSET $2;
 SELECT COUNT(DISTINCT s.id) FROM students s
 INNER JOIN transactions t ON s.id = t.student_id
 WHERE s.deleted_at IS NULL
-  AND t.fine_amount > 0 AND t.fine_paid = false;
+  AND t.fine_amount > 0 AND t.fine_paid = false AND COALESCE(t.fine_waived, false) = false;
 
 -- name: ListStudentsWithOverdue :many
 SELECT DISTINCT s.* FROM students s
@@ -137,7 +137,7 @@ WHERE s.deleted_at IS NULL
 SELECT DISTINCT s.* FROM students s
 INNER JOIN transactions t ON s.id = t.student_id
 WHERE s.deleted_at IS NULL
-  AND ((t.fine_amount > 0 AND t.fine_paid = false) OR (t.due_date < NOW() AND t.returned_date IS NULL))
+  AND ((t.fine_amount > 0 AND t.fine_paid = false AND COALESCE(t.fine_waived, false) = false) OR (t.due_date < NOW() AND t.returned_date IS NULL))
 ORDER BY s.created_at DESC
 LIMIT $1 OFFSET $2;
 

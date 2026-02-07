@@ -112,7 +112,7 @@ const countStudentsWithFines = `-- name: CountStudentsWithFines :one
 SELECT COUNT(DISTINCT s.id) FROM students s
 INNER JOIN transactions t ON s.id = t.student_id
 WHERE s.deleted_at IS NULL
-  AND t.fine_amount > 0 AND t.fine_paid = false
+  AND t.fine_amount > 0 AND t.fine_paid = false AND COALESCE(t.fine_waived, false) = false
 `
 
 func (q *Queries) CountStudentsWithFines(ctx context.Context) (int64, error) {
@@ -607,7 +607,7 @@ const listStudentsWithFines = `-- name: ListStudentsWithFines :many
 SELECT DISTINCT s.id, s.student_id, s.first_name, s.last_name, s.email, s.phone, s.year_of_study, s.enrollment_date, s.password_hash, s.is_active, s.deleted_at, s.created_at, s.updated_at, s.max_books, s.status, s.suspension_reason, s.graduated_at, s.admin_notes FROM students s
 INNER JOIN transactions t ON s.id = t.student_id
 WHERE s.deleted_at IS NULL
-  AND t.fine_amount > 0 AND t.fine_paid = false
+  AND t.fine_amount > 0 AND t.fine_paid = false AND COALESCE(t.fine_waived, false) = false
 ORDER BY s.created_at DESC
 LIMIT $1 OFFSET $2
 `
@@ -661,7 +661,7 @@ const listStudentsWithFinesAndOverdue = `-- name: ListStudentsWithFinesAndOverdu
 SELECT DISTINCT s.id, s.student_id, s.first_name, s.last_name, s.email, s.phone, s.year_of_study, s.enrollment_date, s.password_hash, s.is_active, s.deleted_at, s.created_at, s.updated_at, s.max_books, s.status, s.suspension_reason, s.graduated_at, s.admin_notes FROM students s
 INNER JOIN transactions t ON s.id = t.student_id
 WHERE s.deleted_at IS NULL
-  AND ((t.fine_amount > 0 AND t.fine_paid = false) OR (t.due_date < NOW() AND t.returned_date IS NULL))
+  AND ((t.fine_amount > 0 AND t.fine_paid = false AND COALESCE(t.fine_waived, false) = false) OR (t.due_date < NOW() AND t.returned_date IS NULL))
 ORDER BY s.created_at DESC
 LIMIT $1 OFFSET $2
 `

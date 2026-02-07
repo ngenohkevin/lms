@@ -33,6 +33,7 @@ type NotificationQuerier interface {
 	ListTransactionsOverdue(ctx context.Context) ([]queries.ListTransactionsOverdueRow, error)
 	ListTransactionsWithUnpaidFines(ctx context.Context) ([]queries.ListTransactionsWithUnpaidFinesRow, error)
 	ListActiveReservationsForAvailableBook(ctx context.Context, bookID int32) ([]queries.ListActiveReservationsForAvailableBookRow, error)
+	GetReservationByID(ctx context.Context, id int32) (queries.GetReservationByIDRow, error)
 }
 
 // NotificationServiceInterface defines the interface for notification service operations
@@ -52,6 +53,7 @@ type NotificationServiceInterface interface {
 	SendDueSoonReminders(ctx context.Context) error
 	SendOverdueReminders(ctx context.Context) error
 	SendBookAvailableNotifications(ctx context.Context, bookID int32) error
+	SendReservationReadyNotification(ctx context.Context, reservationID int32, studentID int32, bookID int32) error
 	SendFineNotices(ctx context.Context) error
 }
 
@@ -760,6 +762,62 @@ func (s *NotificationService) SendBookAvailableNotifications(ctx context.Context
 		"total_reservations", len(reservations),
 		"successful_notifications", successCount,
 		"failed_notifications", failureCount)
+
+	return nil
+}
+
+// SendReservationReadyNotification sends a notification to a specific student whose reservation was marked "ready"
+func (s *NotificationService) SendReservationReadyNotification(ctx context.Context, reservationID int32, studentID int32, bookID int32) error {
+	s.logger.Info("Sending reservation ready notification", "reservation_id", reservationID, "student_id", studentID, "book_id", bookID)
+
+	reservation, err := s.querier.GetReservationByID(ctx, reservationID)
+	if err != nil {
+		return fmt.Errorf("failed to get reservation: %w", err)
+	}
+
+	daysReserved := int(time.Since(reservation.ReservedAt.Time).Hours() / 24)
+
+	title := fmt.Sprintf("Reserved Book Available: %s", reservation.Title)
+	message := fmt.Sprintf("Dear %s %s,\n\n"+
+		"Great news! The book \"%s\" by %s that you reserved is now available.\n\n"+
+		"Reserved on: %s\n"+
+		"Days waited: %d\n\n"+
+		"Please visit the library to collect your book within 24 hours, "+
+		"or your reservation will expire.\n\n"+
+		"Book ID: %s\n"+
+		"Student ID: %s\n\n"+
+		"Thank you,\nLibrary Management System",
+		reservation.FirstName, reservation.LastName,
+		reservation.Title, reservation.Author,
+		reservation.ReservedAt.Time.Format("January 2, 2006"),
+		daysReserved,
+		reservation.BookCode, reservation.StudentCode)
+
+	req := &models.NotificationRequest{
+		RecipientID:   studentID,
+		RecipientType: models.RecipientTypeStudent,
+		Type:          models.NotificationTypeBookAvailable,
+		Title:         title,
+		Message:       message,
+		Priority:      models.NotificationPriorityHigh,
+		Metadata: map[string]interface{}{
+			"reservation_id": reservationID,
+			"book_id":        bookID,
+			"reserved_date":  reservation.ReservedAt.Time.Format("2006-01-02"),
+			"days_waited":    daysReserved,
+		},
+	}
+
+	notification, err := s.CreateNotification(ctx, req)
+	if err != nil {
+		return fmt.Errorf("failed to create reservation ready notification: %w", err)
+	}
+
+	s.logger.Info("Reservation ready notification created",
+		"notification_id", notification.ID,
+		"reservation_id", reservationID,
+		"student_id", studentID,
+		"book_title", reservation.Title)
 
 	return nil
 }

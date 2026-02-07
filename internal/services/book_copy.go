@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -161,7 +162,9 @@ func (s *BookCopyService) CreateBookCopy(ctx context.Context, req models.CreateB
 
 	// Auto-sync book's total_copies and available_copies
 	if s.copySyncer != nil {
-		_ = s.copySyncer.SyncBookCopyCounts(ctx, req.BookID)
+		if err := s.copySyncer.SyncBookCopyCounts(ctx, req.BookID); err != nil {
+			slog.Warn("Failed to sync book copy counts", "book_id", req.BookID, "error", err)
+		}
 	}
 	s.invalidateBookCache(ctx)
 
@@ -259,7 +262,9 @@ func (s *BookCopyService) UpdateBookCopy(ctx context.Context, id int32, req mode
 
 	// Auto-sync book's available_copies if status changed
 	if req.Status != nil && s.copySyncer != nil {
-		_ = s.copySyncer.SyncBookCopyCounts(ctx, existing.BookID)
+		if err := s.copySyncer.SyncBookCopyCounts(ctx, existing.BookID); err != nil {
+			slog.Warn("Failed to sync book copy counts", "book_id", existing.BookID, "error", err)
+		}
 		s.invalidateBookCache(ctx)
 	}
 
@@ -284,7 +289,9 @@ func (s *BookCopyService) UpdateBookCopyStatus(ctx context.Context, id int32, st
 
 	// Auto-sync book's available_copies
 	if s.copySyncer != nil {
-		_ = s.copySyncer.SyncBookCopyCounts(ctx, existing.BookID)
+		if err := s.copySyncer.SyncBookCopyCounts(ctx, existing.BookID); err != nil {
+			slog.Warn("Failed to sync book copy counts", "book_id", existing.BookID, "error", err)
+		}
 	}
 	s.invalidateBookCache(ctx)
 
@@ -299,6 +306,11 @@ func (s *BookCopyService) DeleteBookCopy(ctx context.Context, id int32) error {
 		return fmt.Errorf("failed to get book copy: %w", err)
 	}
 
+	// Prevent deleting a copy that is currently borrowed
+	if existing.Status.String == "borrowed" {
+		return fmt.Errorf("cannot delete book copy: copy is currently borrowed")
+	}
+
 	err = s.querier.DeleteBookCopy(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete book copy: %w", err)
@@ -306,7 +318,9 @@ func (s *BookCopyService) DeleteBookCopy(ctx context.Context, id int32) error {
 
 	// Auto-sync book's total_copies and available_copies
 	if s.copySyncer != nil {
-		_ = s.copySyncer.SyncBookCopyCounts(ctx, existing.BookID)
+		if err := s.copySyncer.SyncBookCopyCounts(ctx, existing.BookID); err != nil {
+			slog.Warn("Failed to sync book copy counts", "book_id", existing.BookID, "error", err)
+		}
 	}
 	s.invalidateBookCache(ctx)
 
@@ -373,7 +387,9 @@ func (s *BookCopyService) GenerateCopies(ctx context.Context, bookID int32, coun
 
 	// Auto-sync book's total_copies and available_copies
 	if s.copySyncer != nil {
-		_ = s.copySyncer.SyncBookCopyCounts(ctx, bookID)
+		if err := s.copySyncer.SyncBookCopyCounts(ctx, bookID); err != nil {
+			slog.Warn("Failed to sync book copy counts", "book_id", bookID, "error", err)
+		}
 	}
 	s.invalidateBookCache(ctx)
 
@@ -403,7 +419,9 @@ func (s *BookCopyService) MarkCopyBorrowed(ctx context.Context, copyID int32) (*
 
 	// Auto-sync book's available_copies
 	if s.copySyncer != nil {
-		_ = s.copySyncer.SyncBookCopyCounts(ctx, existing.BookID)
+		if err := s.copySyncer.SyncBookCopyCounts(ctx, existing.BookID); err != nil {
+			slog.Warn("Failed to sync book copy counts", "book_id", existing.BookID, "error", err)
+		}
 	}
 	s.invalidateBookCache(ctx)
 
@@ -447,7 +465,9 @@ func (s *BookCopyService) MarkCopyReturned(ctx context.Context, copyID int32, co
 
 	// Auto-sync book's available_copies
 	if s.copySyncer != nil {
-		_ = s.copySyncer.SyncBookCopyCounts(ctx, existing.BookID)
+		if err := s.copySyncer.SyncBookCopyCounts(ctx, existing.BookID); err != nil {
+			slog.Warn("Failed to sync book copy counts", "book_id", existing.BookID, "error", err)
+		}
 	}
 	s.invalidateBookCache(ctx)
 

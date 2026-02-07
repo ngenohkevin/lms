@@ -2,13 +2,10 @@ package services
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/shopspring/decimal"
@@ -80,14 +77,16 @@ type CacheInvalidator interface {
 
 // TransactionService handles all business logic related to book transactions
 type TransactionService struct {
-	queries         TransactionQuerier
-	pool            *pgxpool.Pool // Database pool for transaction support
-	cacheService    CacheInvalidator
-	defaultLoanDays int
-	finePerDay      decimal.Decimal
-	lostBookFine    decimal.Decimal // Default fine for lost books
-	maxBooksPerUser int
-	maxRenewals     int // Maximum number of renewals per book per student
+	queries             TransactionQuerier
+	pool                *pgxpool.Pool // Database pool for transaction support
+	cacheService        CacheInvalidator
+	defaultLoanDays     int
+	finePerDay          decimal.Decimal
+	lostBookFine        decimal.Decimal // Default fine for lost books
+	maxBooksPerUser     int
+	maxRenewals         int             // Maximum number of renewals per book per student
+	maxFineAmount       decimal.Decimal // Maximum fine amount (0 = no cap)
+	fineGracePeriodDays int             // Grace period days before fines start accruing
 }
 
 // NewTransactionService creates a new transaction service with default settings
@@ -129,6 +128,18 @@ func (s *TransactionService) WithFinePerDay(fine decimal.Decimal) *TransactionSe
 // WithMaxRenewals allows customizing the maximum renewals per book per student
 func (s *TransactionService) WithMaxRenewals(maxRenewals int) *TransactionService {
 	s.maxRenewals = maxRenewals
+	return s
+}
+
+// WithMaxFineAmount sets the maximum fine cap
+func (s *TransactionService) WithMaxFineAmount(maxFine decimal.Decimal) *TransactionService {
+	s.maxFineAmount = maxFine
+	return s
+}
+
+// WithFineGracePeriodDays sets the grace period before fines start accruing
+func (s *TransactionService) WithFineGracePeriodDays(days int) *TransactionService {
+	s.fineGracePeriodDays = days
 	return s
 }
 
@@ -258,7 +269,7 @@ func (s *TransactionService) BorrowBookWithCopy(ctx context.Context, req BorrowB
 	if req.Barcode != nil && *req.Barcode != "" {
 		copyInfo, err := s.queries.GetCopyByBarcodeWithBookInfo(ctx, *req.Barcode)
 		if err != nil {
-			if err == sql.ErrNoRows {
+			if isNoRows(err) {
 				return nil, fmt.Errorf("no copy found with barcode: %s", *req.Barcode)
 			}
 			return nil, fmt.Errorf("failed to look up barcode: %w", err)
@@ -270,7 +281,7 @@ func (s *TransactionService) BorrowBookWithCopy(ctx context.Context, req BorrowB
 	// Validate book exists
 	book, err := s.queries.GetBookByID(ctx, bookID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if isNoRows(err) {
 			return nil, fmt.Errorf("book not found")
 		}
 		return nil, fmt.Errorf("failed to get book: %w", err)
@@ -279,7 +290,7 @@ func (s *TransactionService) BorrowBookWithCopy(ctx context.Context, req BorrowB
 	// Validate student exists and is active
 	student, err := s.queries.GetStudentByID(ctx, req.StudentID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if isNoRows(err) {
 			return nil, fmt.Errorf("student not found")
 		}
 		return nil, fmt.Errorf("failed to get student: %w", err)
@@ -296,7 +307,7 @@ func (s *TransactionService) BorrowBookWithCopy(ctx context.Context, req BorrowB
 		// Validate the specified copy
 		copy, err := s.queries.GetBookCopyByID(ctx, *copyID)
 		if err != nil {
-			if err == sql.ErrNoRows {
+			if isNoRows(err) {
 				return nil, fmt.Errorf("copy not found")
 			}
 			return nil, fmt.Errorf("failed to get copy: %w", err)
@@ -309,108 +320,129 @@ func (s *TransactionService) BorrowBookWithCopy(ctx context.Context, req BorrowB
 		}
 		selectedCopy = &copy
 	} else {
-		// Auto-select first available copy
-		copy, err := s.queries.GetFirstAvailableCopy(ctx, bookID)
-		if err != nil {
-			// Check for both pgx and sql ErrNoRows (pgx may wrap or return its own)
-			if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, sql.ErrNoRows) {
-				// No book copies exist - fall back to legacy mode
-				selectedCopy = nil
-			} else {
-				return nil, fmt.Errorf("failed to get available copy: %w", err)
-			}
-		} else {
-			selectedCopy = &copy
-		}
+		// Auto-select will happen inside DB transaction (for FOR UPDATE SKIP LOCKED)
+		selectedCopy = nil
 	}
 
 	// Calculate due date based on book type, student year and borrowing rules (or custom due_days if provided)
 	dueDate := s.calculateDueDate(book, student, req.DueDays)
 
 	var transaction queries.Transaction
+	autoSelect := copyID == nil // Need to auto-select a copy inside the DB transaction
 
-	if selectedCopy != nil {
+	if selectedCopy != nil || autoSelect {
 		// Copy-level tracking mode - use database transaction to prevent race conditions
 		if s.pool != nil {
-			// Use database transaction for atomicity
 			tx, err := s.pool.Begin(ctx)
 			if err != nil {
 				return nil, fmt.Errorf("failed to start database transaction: %w", err)
 			}
-			defer func() { _ = tx.Rollback(ctx) }() // Will be no-op if committed
+			defer func() { _ = tx.Rollback(ctx) }()
 
-			// Create transactional querier
 			qtx := queries.New(tx)
 
-			// Update copy status to "borrowed"
-			_, err = qtx.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
-				ID:     selectedCopy.ID,
-				Status: pgtype.Text{String: "borrowed", Valid: true},
-			})
-			if err != nil {
-				return nil, fmt.Errorf("failed to update copy status: %w", err)
+			// Auto-select copy inside the transaction so FOR UPDATE SKIP LOCKED works
+			if autoSelect {
+				copy, err := qtx.GetFirstAvailableCopy(ctx, bookID)
+				if err != nil {
+					if isNoRows(err) {
+						// No copies exist — fall back to legacy mode below
+						selectedCopy = nil
+					} else {
+						return nil, fmt.Errorf("failed to get available copy: %w", err)
+					}
+				} else {
+					selectedCopy = &copy
+				}
 			}
 
-			// Create transaction with copy_id
-			transaction, err = qtx.CreateTransactionWithCopy(ctx, queries.CreateTransactionWithCopyParams{
-				StudentID:       req.StudentID,
-				BookID:          bookID,
-				CopyID:          pgtype.Int4{Int32: selectedCopy.ID, Valid: true},
-				TransactionType: "borrow",
-				DueDate:         pgtype.Timestamp{Time: dueDate, Valid: true},
-				LibrarianID:     pgtype.Int4{Int32: req.LibrarianID, Valid: true},
-				Notes:           pgtype.Text{String: req.Notes, Valid: req.Notes != ""},
-			})
-			if err != nil {
-				return nil, fmt.Errorf("failed to create transaction: %w", err)
-			}
+			if selectedCopy != nil {
+				_, err = qtx.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
+					ID:     selectedCopy.ID,
+					Status: pgtype.Text{String: "borrowed", Valid: true},
+				})
+				if err != nil {
+					return nil, fmt.Errorf("failed to update copy status: %w", err)
+				}
 
-			// Sync book's available_copies count
-			_ = qtx.SyncBookCopyCounts(ctx, bookID)
+				transaction, err = qtx.CreateTransactionWithCopy(ctx, queries.CreateTransactionWithCopyParams{
+					StudentID:       req.StudentID,
+					BookID:          bookID,
+					CopyID:          pgtype.Int4{Int32: selectedCopy.ID, Valid: true},
+					TransactionType: "borrow",
+					DueDate:         pgtype.Timestamp{Time: dueDate, Valid: true},
+					LibrarianID:     pgtype.Int4{Int32: req.LibrarianID, Valid: true},
+					Notes:           pgtype.Text{String: req.Notes, Valid: req.Notes != ""},
+				})
+				if err != nil {
+					return nil, fmt.Errorf("failed to create transaction: %w", err)
+				}
 
-			// Commit the transaction
-			if err := tx.Commit(ctx); err != nil {
-				return nil, fmt.Errorf("failed to commit transaction: %w", err)
+				if err := qtx.SyncBookCopyCounts(ctx, bookID); err != nil {
+					slog.Warn("Failed to sync book copy counts", "book_id", bookID, "error", err)
+				}
+
+				if err := tx.Commit(ctx); err != nil {
+					return nil, fmt.Errorf("failed to commit transaction: %w", err)
+				}
+			} else {
+				// No copies found — rollback the DB transaction and fall through to legacy mode
+				_ = tx.Rollback(ctx)
 			}
 		} else {
-			// Fallback: no pool available, use manual rollback (legacy behavior)
-			_, err = s.queries.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
-				ID:     selectedCopy.ID,
-				Status: pgtype.Text{String: "borrowed", Valid: true},
-			})
-			if err != nil {
-				return nil, fmt.Errorf("failed to update copy status: %w", err)
+			// No pool available — auto-select copy outside transaction (no FOR UPDATE SKIP LOCKED)
+			if autoSelect {
+				copy, err := s.queries.GetFirstAvailableCopy(ctx, bookID)
+				if err != nil {
+					if !isNoRows(err) {
+						return nil, fmt.Errorf("failed to get available copy: %w", err)
+					}
+					// No copies — fall through to legacy mode
+				} else {
+					selectedCopy = &copy
+				}
 			}
 
-			transaction, err = s.queries.CreateTransactionWithCopy(ctx, queries.CreateTransactionWithCopyParams{
-				StudentID:       req.StudentID,
-				BookID:          bookID,
-				CopyID:          pgtype.Int4{Int32: selectedCopy.ID, Valid: true},
-				TransactionType: "borrow",
-				DueDate:         pgtype.Timestamp{Time: dueDate, Valid: true},
-				LibrarianID:     pgtype.Int4{Int32: req.LibrarianID, Valid: true},
-				Notes:           pgtype.Text{String: req.Notes, Valid: req.Notes != ""},
-			})
-			if err != nil {
-				// Rollback: revert copy status
-				_, _ = s.queries.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
+			if selectedCopy != nil {
+				_, err = s.queries.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
 					ID:     selectedCopy.ID,
-					Status: pgtype.Text{String: "available", Valid: true},
+					Status: pgtype.Text{String: "borrowed", Valid: true},
 				})
-				return nil, fmt.Errorf("failed to create transaction: %w", err)
-			}
+				if err != nil {
+					return nil, fmt.Errorf("failed to update copy status: %w", err)
+				}
 
-			// Sync book's available_copies count
-			_ = s.queries.SyncBookCopyCounts(ctx, bookID)
+				transaction, err = s.queries.CreateTransactionWithCopy(ctx, queries.CreateTransactionWithCopyParams{
+					StudentID:       req.StudentID,
+					BookID:          bookID,
+					CopyID:          pgtype.Int4{Int32: selectedCopy.ID, Valid: true},
+					TransactionType: "borrow",
+					DueDate:         pgtype.Timestamp{Time: dueDate, Valid: true},
+					LibrarianID:     pgtype.Int4{Int32: req.LibrarianID, Valid: true},
+					Notes:           pgtype.Text{String: req.Notes, Valid: req.Notes != ""},
+				})
+				if err != nil {
+					_, _ = s.queries.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
+						ID:     selectedCopy.ID,
+						Status: pgtype.Text{String: "available", Valid: true},
+					})
+					return nil, fmt.Errorf("failed to create transaction: %w", err)
+				}
+
+				if err := s.queries.SyncBookCopyCounts(ctx, bookID); err != nil {
+					slog.Warn("Failed to sync book copy counts", "book_id", bookID, "error", err)
+				}
+			}
 		}
-	} else {
+	}
+
+	if selectedCopy == nil {
 		// Legacy mode - no book copies exist, use old availability tracking
 		_, err = s.queries.DecrementBookAvailability(ctx, bookID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to update book availability: %w", err)
 		}
 
-		// Create transaction without copy_id
 		transaction, err = s.queries.CreateTransaction(ctx, queries.CreateTransactionParams{
 			StudentID:       req.StudentID,
 			BookID:          bookID,
@@ -420,7 +452,6 @@ func (s *TransactionService) BorrowBookWithCopy(ctx context.Context, req BorrowB
 			Notes:           pgtype.Text{String: req.Notes, Valid: req.Notes != ""},
 		})
 		if err != nil {
-			// Rollback: increment availability back
 			_, _ = s.queries.IncrementBookAvailability(ctx, bookID)
 			return nil, fmt.Errorf("failed to create transaction: %w", err)
 		}
@@ -466,7 +497,7 @@ func (s *TransactionService) ReturnBookWithCondition(ctx context.Context, transa
 	// Get transaction with copy info
 	transactionRow, err := s.queries.GetTransactionByIDWithCopy(ctx, transactionID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if isNoRows(err) {
 			return nil, fmt.Errorf("transaction not found")
 		}
 		return nil, fmt.Errorf("failed to get transaction: %w", err)
@@ -498,21 +529,29 @@ func (s *TransactionService) ReturnBookWithCondition(ctx context.Context, transa
 		fineNumeric.Valid = true
 	}
 
-	// Return book with condition assessment
-	transaction, err := s.queries.ReturnBook(ctx, queries.ReturnBookParams{
-		ID:              transactionID,
-		FineAmount:      fineNumeric,
-		ReturnCondition: pgtype.Text{String: returnCondition, Valid: true},
-		ConditionNotes:  pgtype.Text{String: conditionNotes, Valid: conditionNotes != ""},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to return book: %w", err)
-	}
+	var transaction queries.Transaction
 
-	// If transaction has a copy_id, update copy status and condition
-	if transactionRow.CopyID.Valid {
-		// Update copy status to "available" and condition if deteriorated
-		_, err = s.queries.UpdateBookCopyStatusAndCondition(ctx, queries.UpdateBookCopyStatusAndConditionParams{
+	if s.pool != nil && transactionRow.CopyID.Valid {
+		// Use DB transaction for atomicity: ReturnBook + UpdateCopyStatus + SyncCopyCounts
+		dbTx, err := s.pool.Begin(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to start database transaction: %w", err)
+		}
+		defer func() { _ = dbTx.Rollback(ctx) }()
+
+		qtx := queries.New(dbTx)
+
+		transaction, err = qtx.ReturnBook(ctx, queries.ReturnBookParams{
+			ID:              transactionID,
+			FineAmount:      fineNumeric,
+			ReturnCondition: pgtype.Text{String: returnCondition, Valid: true},
+			ConditionNotes:  pgtype.Text{String: conditionNotes, Valid: conditionNotes != ""},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to return book: %w", err)
+		}
+
+		_, err = qtx.UpdateBookCopyStatusAndCondition(ctx, queries.UpdateBookCopyStatusAndConditionParams{
 			ID:        transactionRow.CopyID.Int32,
 			Status:    pgtype.Text{String: "available", Valid: true},
 			Condition: pgtype.Text{String: returnCondition, Valid: true},
@@ -521,25 +560,62 @@ func (s *TransactionService) ReturnBookWithCondition(ctx context.Context, transa
 			return nil, fmt.Errorf("failed to update copy status: %w", err)
 		}
 
-		// Sync book's available_copies count
-		_ = s.queries.SyncBookCopyCounts(ctx, transactionRow.BookID)
-	} else {
-		// Legacy: no copy_id, use the old availability increment
-		_, err = s.queries.IncrementBookAvailability(ctx, transactionRow.BookID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to update book availability: %w", err)
+		if err := qtx.SyncBookCopyCounts(ctx, transactionRow.BookID); err != nil {
+			slog.Warn("Failed to sync book copy counts", "book_id", transactionRow.BookID, "error", err)
 		}
-	}
 
-	// Get book for condition update
-	book, err := s.queries.GetBookByID(ctx, transactionRow.BookID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get book for condition update: %w", err)
-	}
+		// Get book for condition update (inside transaction)
+		book, err := qtx.GetBookByID(ctx, transactionRow.BookID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get book for condition update: %w", err)
+		}
 
-	// Update book condition if it's deteriorated
-	if err := s.updateBookConditionIfNeeded(ctx, transactionRow.BookID, book, returnCondition); err != nil {
-		return nil, fmt.Errorf("failed to update book condition: %w", err)
+		if err := s.updateBookConditionIfNeededWithQuerier(ctx, qtx, transactionRow.BookID, book, returnCondition); err != nil {
+			return nil, fmt.Errorf("failed to update book condition: %w", err)
+		}
+
+		if err := dbTx.Commit(ctx); err != nil {
+			return nil, fmt.Errorf("failed to commit return transaction: %w", err)
+		}
+	} else {
+		// No pool or legacy mode (no copy_id)
+		transaction, err = s.queries.ReturnBook(ctx, queries.ReturnBookParams{
+			ID:              transactionID,
+			FineAmount:      fineNumeric,
+			ReturnCondition: pgtype.Text{String: returnCondition, Valid: true},
+			ConditionNotes:  pgtype.Text{String: conditionNotes, Valid: conditionNotes != ""},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to return book: %w", err)
+		}
+
+		if transactionRow.CopyID.Valid {
+			_, err = s.queries.UpdateBookCopyStatusAndCondition(ctx, queries.UpdateBookCopyStatusAndConditionParams{
+				ID:        transactionRow.CopyID.Int32,
+				Status:    pgtype.Text{String: "available", Valid: true},
+				Condition: pgtype.Text{String: returnCondition, Valid: true},
+			})
+			if err != nil {
+				return nil, fmt.Errorf("failed to update copy status: %w", err)
+			}
+			if err := s.queries.SyncBookCopyCounts(ctx, transactionRow.BookID); err != nil {
+				slog.Warn("Failed to sync book copy counts", "book_id", transactionRow.BookID, "error", err)
+			}
+		} else {
+			_, err = s.queries.IncrementBookAvailability(ctx, transactionRow.BookID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to update book availability: %w", err)
+			}
+		}
+
+		// Get book for condition update
+		book, err := s.queries.GetBookByID(ctx, transactionRow.BookID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get book for condition update: %w", err)
+		}
+		if err := s.updateBookConditionIfNeeded(ctx, transactionRow.BookID, book, returnCondition); err != nil {
+			return nil, fmt.Errorf("failed to update book condition: %w", err)
+		}
 	}
 
 	// Invalidate student cache so borrowing stats are refreshed
@@ -566,7 +642,7 @@ func (s *TransactionService) ReturnByBarcode(ctx context.Context, req ReturnByBa
 	// Look up the copy by barcode
 	copyInfo, err := s.queries.GetCopyByBarcodeWithBookInfo(ctx, req.Barcode)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if isNoRows(err) {
 			return nil, fmt.Errorf("no copy found with barcode: %s", req.Barcode)
 		}
 		return nil, fmt.Errorf("failed to look up barcode: %w", err)
@@ -580,7 +656,7 @@ func (s *TransactionService) ReturnByBarcode(ctx context.Context, req ReturnByBa
 	// Find the active transaction for this copy
 	transaction, err := s.queries.GetActiveTransactionByCopy(ctx, pgtype.Int4{Int32: copyInfo.ID, Valid: true})
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if isNoRows(err) {
 			return nil, fmt.Errorf("no active transaction found for this copy")
 		}
 		return nil, fmt.Errorf("failed to find transaction: %w", err)
@@ -600,7 +676,7 @@ func (s *TransactionService) ScanBarcode(ctx context.Context, barcode string) (*
 	// Look up the copy by barcode
 	copyInfo, err := s.queries.GetCopyByBarcodeWithBookInfo(ctx, barcode)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if isNoRows(err) {
 			return nil, fmt.Errorf("no copy found with barcode: %s", barcode)
 		}
 		return nil, fmt.Errorf("failed to look up barcode: %w", err)
@@ -655,7 +731,7 @@ func (s *TransactionService) RenewBook(ctx context.Context, transactionID, libra
 	// Get original transaction
 	transactionRow, err := s.queries.GetTransactionByID(ctx, transactionID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if isNoRows(err) {
 			return nil, fmt.Errorf("transaction not found")
 		}
 		return nil, fmt.Errorf("failed to get transaction: %w", err)
@@ -711,7 +787,7 @@ func (s *TransactionService) CancelRenewal(ctx context.Context, transactionID in
 	// Get original transaction to verify it exists and has renewals
 	transactionRow, err := s.queries.GetTransactionByID(ctx, transactionID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if isNoRows(err) {
 			return nil, fmt.Errorf("transaction not found")
 		}
 		return nil, fmt.Errorf("failed to get transaction: %w", err)
@@ -729,6 +805,11 @@ func (s *TransactionService) CancelRenewal(ctx context.Context, transactionID in
 	// Verify the transaction is still active (not returned)
 	if transactionRow.ReturnedDate.Valid {
 		return nil, fmt.Errorf("cannot cancel renewal for returned book")
+	}
+
+	// Validate that the new due date is in the future
+	if newDueDate.Before(time.Now()) {
+		return nil, fmt.Errorf("new due date must be in the future")
 	}
 
 	// Cancel the renewal
@@ -761,7 +842,7 @@ func (s *TransactionService) PayFine(ctx context.Context, transactionID int32) e
 	// and returns the updated transaction. No rows = already paid or no fine.
 	tx, err := s.queries.PayTransactionFine(ctx, transactionID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, sql.ErrNoRows) {
+		if isNoRows(err) {
 			return fmt.Errorf("fine already paid or no fine exists for this transaction")
 		}
 		return fmt.Errorf("failed to pay fine: %w", err)
@@ -786,7 +867,7 @@ func (s *TransactionService) CancelTransaction(ctx context.Context, transactionI
 	// Get the transaction to verify it exists and get copy info
 	tx, err := s.queries.GetTransactionByIDWithCopy(ctx, transactionID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if isNoRows(err) {
 			return nil, fmt.Errorf("transaction not found")
 		}
 		return nil, fmt.Errorf("failed to get transaction: %w", err)
@@ -825,13 +906,18 @@ func (s *TransactionService) CancelTransaction(ctx context.Context, transactionI
 			ID:     tx.CopyID.Int32,
 			Status: pgtype.Text{String: "available", Valid: true},
 		})
-		_ = copyErr // Log but don't fail - the cancel already happened
-		// Sync book's available_copies count
-		_ = s.queries.SyncBookCopyCounts(ctx, tx.BookID)
+		if copyErr != nil {
+			slog.Error("Failed to restore copy status after cancel", "copy_id", tx.CopyID.Int32, "transaction_id", transactionID, "error", copyErr)
+		}
+		if err := s.queries.SyncBookCopyCounts(ctx, tx.BookID); err != nil {
+			slog.Warn("Failed to sync book copy counts after cancel", "book_id", tx.BookID, "error", err)
+		}
 	} else {
 		// Legacy mode - increment book availability
 		_, incErr := s.queries.IncrementBookAvailability(ctx, tx.BookID)
-		_ = incErr // Log but don't fail
+		if incErr != nil {
+			slog.Error("Failed to restore book availability after cancel", "book_id", tx.BookID, "transaction_id", transactionID, "error", incErr)
+		}
 	}
 
 	// Invalidate student cache so borrowing stats are refreshed
@@ -850,7 +936,7 @@ func (s *TransactionService) MarkAsLost(ctx context.Context, transactionID int32
 	// Get the transaction to verify it exists and get copy info
 	tx, err := s.queries.GetTransactionByIDWithCopy(ctx, transactionID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if isNoRows(err) {
 			return nil, fmt.Errorf("transaction not found")
 		}
 		return nil, fmt.Errorf("failed to get transaction: %w", err)
@@ -879,13 +965,16 @@ func (s *TransactionService) MarkAsLost(ctx context.Context, transactionID int32
 
 	// Update copy status to "lost" if copy tracking is enabled
 	if tx.CopyID.Valid {
-		_, err = s.queries.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
+		_, copyErr := s.queries.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
 			ID:     tx.CopyID.Int32,
 			Status: pgtype.Text{String: "lost", Valid: true},
 		})
-		_ = err // Log but don't fail - the lost marking already happened
-		// Sync book's available_copies count
-		_ = s.queries.SyncBookCopyCounts(ctx, tx.BookID)
+		if copyErr != nil {
+			slog.Error("Failed to update copy status to lost", "copy_id", tx.CopyID.Int32, "transaction_id", transactionID, "error", copyErr)
+		}
+		if syncErr := s.queries.SyncBookCopyCounts(ctx, tx.BookID); syncErr != nil {
+			slog.Warn("Failed to sync book copy counts after marking lost", "book_id", tx.BookID, "error", syncErr)
+		}
 	}
 	// Note: In legacy mode (no copy tracking), we don't need to do anything here
 	// The availability was already decremented when the book was borrowed
@@ -963,20 +1052,31 @@ func (s *TransactionService) calculateFine(dueDate, returnDate time.Time) decima
 	}
 
 	// Calculate calendar days difference for overdue period
-	// Fine calculation: count each day the book is overdue, starting from the day after due date
-	// Truncate to midnight for consistent calculation, using UTC to avoid timezone issues
 	dueDateMidnight := time.Date(dueDate.Year(), dueDate.Month(), dueDate.Day(), 0, 0, 0, 0, time.UTC)
 	returnDateMidnight := time.Date(returnDate.Year(), returnDate.Month(), returnDate.Day(), 0, 0, 0, 0, time.UTC)
 
-	// Calculate the exact number of overdue days
-	// Use a more precise approach: calculate the number of full days between dates
 	daysDiff := int(returnDateMidnight.Sub(dueDateMidnight) / (24 * time.Hour))
 
 	if daysDiff <= 0 {
 		return decimal.Zero
 	}
 
-	return s.finePerDay.Mul(decimal.NewFromInt(int64(daysDiff)))
+	// Subtract grace period
+	if s.fineGracePeriodDays > 0 {
+		daysDiff -= s.fineGracePeriodDays
+		if daysDiff <= 0 {
+			return decimal.Zero
+		}
+	}
+
+	fine := s.finePerDay.Mul(decimal.NewFromInt(int64(daysDiff)))
+
+	// Cap at max fine amount if configured
+	if s.maxFineAmount.IsPositive() && fine.GreaterThan(s.maxFineAmount) {
+		fine = s.maxFineAmount
+	}
+
+	return fine
 }
 
 // validateBorrowingEligibility performs comprehensive validation for borrowing eligibility
@@ -1002,8 +1102,12 @@ func (s *TransactionService) validateBorrowingEligibility(ctx context.Context, s
 		return fmt.Errorf("failed to check active transactions: %w", err)
 	}
 
-	if len(activeTransactions) >= s.maxBooksPerUser {
-		return fmt.Errorf("student has reached the maximum number of books (%d)", s.maxBooksPerUser)
+	maxBooks := s.maxBooksPerUser
+	if student.MaxBooks > 0 {
+		maxBooks = int(student.MaxBooks)
+	}
+	if len(activeTransactions) >= maxBooks {
+		return fmt.Errorf("student has reached the maximum number of books (%d)", maxBooks)
 	}
 
 	// Check if student already has this book
@@ -1030,7 +1134,7 @@ func (s *TransactionService) validateBorrowingEligibility(ctx context.Context, s
 	}
 
 	if hasUnpaidFines {
-		return fmt.Errorf("student has unpaid fines ($%.2f) and cannot borrow until fines are paid", totalFines)
+		return fmt.Errorf("student has unpaid fines (KSH %.2f) and cannot borrow until fines are paid", totalFines)
 	}
 
 	return nil
@@ -1196,6 +1300,37 @@ func (s *TransactionService) updateBookConditionIfNeeded(ctx context.Context, bo
 	return nil
 }
 
+// updateBookConditionIfNeededWithQuerier is the same as updateBookConditionIfNeeded but uses a provided querier (for DB transactions)
+func (s *TransactionService) updateBookConditionIfNeededWithQuerier(ctx context.Context, q TransactionQuerier, bookID int32, book queries.Book, returnCondition string) error {
+	currentCondition := "good"
+	if book.Condition.Valid {
+		currentCondition = book.Condition.String
+	}
+
+	conditionRank := map[string]int{
+		"excellent": 5,
+		"good":      4,
+		"fair":      3,
+		"poor":      2,
+		"damaged":   1,
+	}
+
+	currentRank := conditionRank[currentCondition]
+	returnRank := conditionRank[returnCondition]
+
+	if returnRank < currentRank {
+		err := q.UpdateBookCondition(ctx, queries.UpdateBookConditionParams{
+			ID:        bookID,
+			Condition: pgtype.Text{String: returnCondition, Valid: true},
+		})
+		if err != nil {
+			return fmt.Errorf("failed to update book condition from %s to %s: %w", currentCondition, returnCondition, err)
+		}
+	}
+
+	return nil
+}
+
 // convertToTransactionResponse converts a queries.Transaction to TransactionResponse
 func (s *TransactionService) convertToTransactionResponse(tx queries.Transaction) *TransactionResponse {
 	response := &TransactionResponse{
@@ -1303,7 +1438,7 @@ func (s *TransactionService) CanBookBeRenewed(ctx context.Context, transactionID
 	transactionRow, err := s.queries.GetTransactionByID(ctx, transactionID)
 	if err != nil {
 		// Check for both pgx and sql ErrNoRows (pgx v5 uses its own error type)
-		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, sql.ErrNoRows) {
+		if isNoRows(err) {
 			return false, "Transaction not found", nil
 		}
 		return false, "", fmt.Errorf("failed to get transaction: %w", err)
@@ -1361,7 +1496,7 @@ func (s *TransactionService) GetRenewalHistory(ctx context.Context, studentID, b
 func (s *TransactionService) GetRenewalStatistics(ctx context.Context, studentID int32) (*queries.GetRenewalStatisticsByStudentRow, error) {
 	stats, err := s.queries.GetRenewalStatisticsByStudent(ctx, studentID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if isNoRows(err) {
 			// Return zero stats if no renewals found
 			return &queries.GetRenewalStatisticsByStudentRow{
 				StudentID:     studentID,
@@ -1552,9 +1687,18 @@ func (s *TransactionService) SearchTransactions(ctx context.Context, params Tran
 	offset := (params.Page - 1) * params.Limit
 
 	// Build query parameters
+	// When status filter is active, we need to fetch all rows and filter in Go
+	// because status is partially computed (e.g., "overdue" is dynamic)
+	queryLimit := params.Limit
+	queryOffset := offset
+	if params.Status != "" {
+		queryLimit = 10000 // Fetch all matching rows for Go-side filtering
+		queryOffset = 0
+	}
+
 	searchParams := queries.SearchTransactionsParams{
-		Limit:  params.Limit,
-		Offset: offset,
+		Limit:  queryLimit,
+		Offset: queryOffset,
 	}
 
 	// Set optional parameters
@@ -1690,11 +1834,21 @@ func (s *TransactionService) SearchTransactions(ctx context.Context, params Tran
 		results = append(results, result)
 	}
 
-	// Recalculate total if status filter was applied
+	// When status filter was applied, paginate the Go-filtered results
 	actualTotal := total
 	if params.Status != "" {
-		// When filtering by status, the count may differ since status is computed
 		actualTotal = int64(len(results))
+		// Apply pagination to the filtered results
+		start := int(offset)
+		end := start + int(params.Limit)
+		if start > len(results) {
+			results = nil
+		} else {
+			if end > len(results) {
+				end = len(results)
+			}
+			results = results[start:end]
+		}
 	}
 
 	totalPages := int(actualTotal) / int(params.Limit)

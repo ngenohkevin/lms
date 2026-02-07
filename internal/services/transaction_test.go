@@ -459,6 +459,41 @@ func TestTransactionService_BorrowBook_MaxBooksReached(t *testing.T) {
 	mockQueries.AssertExpectations(t)
 }
 
+func TestTransactionService_BorrowBook_PerStudentMaxBooksOverride(t *testing.T) {
+	mockQueries := &MockTransactionQueries{}
+	service := NewTransactionService(mockQueries) // default maxBooks = 5
+
+	ctx := context.Background()
+	studentID := int32(1)
+	bookID := int32(1)
+	librarianID := int32(1)
+
+	book := createTestBook()
+	student := createTestStudent()
+	student.MaxBooks = 3 // Student has a lower per-student limit
+
+	// Create 3 active transactions (at per-student max)
+	activeTransactions := make([]queries.ListActiveTransactionsByStudentRow, 3)
+	for i := 0; i < 3; i++ {
+		activeTransactions[i] = queries.ListActiveTransactionsByStudentRow{
+			ID:              int32(i + 1),
+			StudentID:       studentID,
+			BookID:          int32(i + 2),
+			TransactionType: "borrow",
+		}
+	}
+
+	mockQueries.On("GetBookByID", ctx, bookID).Return(book, nil)
+	mockQueries.On("GetStudentByID", ctx, studentID).Return(student, nil)
+	mockQueries.On("ListActiveTransactionsByStudent", ctx, studentID).Return(activeTransactions, nil)
+
+	_, err := service.BorrowBook(ctx, studentID, bookID, librarianID, "")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "maximum number of books (3)")
+	mockQueries.AssertExpectations(t)
+}
+
 func TestTransactionService_BorrowBook_StudentInactive(t *testing.T) {
 	mockQueries := &MockTransactionQueries{}
 	service := NewTransactionService(mockQueries)

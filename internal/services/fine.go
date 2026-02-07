@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -24,6 +25,7 @@ type FineQuerier interface {
 	GetStudentsWithHighFines(ctx context.Context, fineAmount pgtype.Numeric) ([]queries.GetStudentsWithHighFinesRow, error)
 	BulkPayFines(ctx context.Context, ids []int32) (int64, error)
 	BulkWaiveFines(ctx context.Context, arg queries.BulkWaiveFinesParams) (int64, error)
+	GetTransactionByID(ctx context.Context, id int32) (queries.GetTransactionByIDRow, error)
 }
 
 // Fine represents a fine record
@@ -94,8 +96,11 @@ type StudentWithHighFines struct {
 
 // FineService handles fine-related business logic
 type FineService struct {
-	queries    FineQuerier
-	finePerDay float64
+	queries             FineQuerier
+	finePerDay          float64
+	maxFineAmount       float64
+	fineGracePeriodDays int
+	cacheService        CacheInvalidator
 }
 
 // NewFineService creates a new fine service
@@ -107,6 +112,24 @@ func NewFineService(queries FineQuerier, finePerDay float64) *FineService {
 		queries:    queries,
 		finePerDay: finePerDay,
 	}
+}
+
+// WithCacheService sets the cache service for invalidation after fine operations
+func (s *FineService) WithCacheService(cacheService CacheInvalidator) *FineService {
+	s.cacheService = cacheService
+	return s
+}
+
+// WithMaxFineAmount sets the maximum fine cap
+func (s *FineService) WithMaxFineAmount(maxFine float64) *FineService {
+	s.maxFineAmount = maxFine
+	return s
+}
+
+// WithFineGracePeriodDays sets the grace period before fines start accruing
+func (s *FineService) WithFineGracePeriodDays(days int) *FineService {
+	s.fineGracePeriodDays = days
+	return s
 }
 
 // ListFines retrieves a paginated list of fines
@@ -288,8 +311,20 @@ func (s *FineService) CalculateFinesForOverdueBooks(ctx context.Context) (int, e
 			daysOverdue = int32(days)
 		}
 
+		// Apply grace period
+		effectiveDays := int(daysOverdue) - s.fineGracePeriodDays
+		if effectiveDays <= 0 {
+			continue
+		}
+
 		// Calculate expected fine
-		expectedFine := float64(daysOverdue) * s.finePerDay
+		expectedFine := float64(effectiveDays) * s.finePerDay
+
+		// Cap at max fine amount
+		if s.maxFineAmount > 0 && expectedFine > s.maxFineAmount {
+			expectedFine = s.maxFineAmount
+		}
+
 		currentFine := numericToFloat64(row.FineAmount)
 
 		// Only update if fine has changed
@@ -299,7 +334,7 @@ func (s *FineService) CalculateFinesForOverdueBooks(ctx context.Context) (int, e
 				FineAmount: float64ToNumeric(expectedFine),
 			})
 			if err != nil {
-				// Log error but continue with other transactions
+				slog.Error("Failed to update fine", "transaction_id", row.ID, "error", err)
 				continue
 			}
 			updated++
@@ -355,6 +390,9 @@ func (s *FineService) BulkPayFines(ctx context.Context, transactionIDs []int32) 
 		return 0, fmt.Errorf("failed to bulk pay fines: %w", err)
 	}
 
+	// Invalidate cache for affected students
+	s.invalidateStudentCachesForTransactions(ctx, transactionIDs)
+
 	return count, nil
 }
 
@@ -378,7 +416,30 @@ func (s *FineService) BulkWaiveFines(ctx context.Context, transactionIDs []int32
 		return 0, fmt.Errorf("failed to bulk waive fines: %w", err)
 	}
 
+	// Invalidate cache for affected students
+	s.invalidateStudentCachesForTransactions(ctx, transactionIDs)
+
 	return count, nil
+}
+
+// invalidateStudentCachesForTransactions looks up student IDs from transaction IDs and invalidates their caches
+func (s *FineService) invalidateStudentCachesForTransactions(ctx context.Context, transactionIDs []int32) {
+	if s.cacheService == nil {
+		return
+	}
+	seen := make(map[int32]bool)
+	for _, txID := range transactionIDs {
+		tx, err := s.queries.GetTransactionByID(ctx, txID)
+		if err != nil {
+			continue
+		}
+		if !seen[tx.StudentID] {
+			seen[tx.StudentID] = true
+			if err := s.cacheService.InvalidateStudentProfile(ctx, int(tx.StudentID)); err != nil {
+				slog.Warn("Failed to invalidate student cache after bulk fine operation", "student_id", tx.StudentID, "error", err)
+			}
+		}
+	}
 }
 
 // Helper functions

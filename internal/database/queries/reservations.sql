@@ -58,7 +58,7 @@ SELECT r.*, s.first_name, s.last_name, s.student_id as student_code, b.title, b.
 FROM reservations r
 JOIN students s ON r.student_id = s.id
 JOIN books b ON r.book_id = b.id
-WHERE r.expires_at < NOW() AND r.status = 'active'
+WHERE r.expires_at < NOW() AND r.status IN ('active', 'ready')
 ORDER BY r.expires_at ASC;
 
 -- name: CountActiveReservationsByStudent :one
@@ -91,7 +91,7 @@ LIMIT 1;
 -- name: CancelReservation :one
 UPDATE reservations
 SET status = 'cancelled', updated_at = NOW()
-WHERE id = $1 AND status IN ('active', 'fulfilled')
+WHERE id = $1 AND status IN ('active', 'ready')
 RETURNING *;
 
 -- Notification-related queries for Phase 7.2

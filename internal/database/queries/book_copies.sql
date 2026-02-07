@@ -68,13 +68,14 @@ WHERE book_id = $1 AND id = $2;
 SELECT * FROM book_copies
 WHERE book_id = $1 AND status = 'available'
 ORDER BY barcode
-LIMIT 1;
+LIMIT 1
+FOR UPDATE SKIP LOCKED;
 
 -- name: GetCopyByBarcodeWithBookInfo :one
 SELECT bc.*, b.id as book_db_id, b.title, b.author, b.book_id as book_code, b.isbn
 FROM book_copies bc
 JOIN books b ON bc.book_id = b.id
-WHERE bc.barcode = $1;
+WHERE bc.barcode = $1 AND b.deleted_at IS NULL;
 
 -- name: GetActiveBorrowingByCopy :one
 SELECT t.*, s.first_name, s.last_name, s.student_id as student_code

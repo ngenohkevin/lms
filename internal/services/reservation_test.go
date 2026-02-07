@@ -519,6 +519,17 @@ func TestReservationService_FulfillReservation_Success(t *testing.T) {
 	reservationID := int32(1)
 	ctx := context.Background()
 
+	existingReservation := queries.GetReservationByIDRow{
+		ID:         reservationID,
+		StudentID:  1,
+		BookID:     2,
+		ReservedAt: pgtype.Timestamp{Time: time.Now(), Valid: true},
+		ExpiresAt:  pgtype.Timestamp{Time: time.Now().AddDate(0, 0, 7), Valid: true},
+		Status:     pgtype.Text{String: "active", Valid: true},
+		CreatedAt:  pgtype.Timestamp{Time: time.Now(), Valid: true},
+		UpdatedAt:  pgtype.Timestamp{Time: time.Now(), Valid: true},
+	}
+
 	reservation := queries.Reservation{
 		ID:          reservationID,
 		StudentID:   1,
@@ -531,6 +542,7 @@ func TestReservationService_FulfillReservation_Success(t *testing.T) {
 		UpdatedAt:   pgtype.Timestamp{Time: time.Now(), Valid: true},
 	}
 
+	mockQuerier.On("GetReservationByID", ctx, reservationID).Return(existingReservation, nil)
 	mockQuerier.On("UpdateReservationStatus", ctx, mock.AnythingOfType("queries.UpdateReservationStatusParams")).Return(reservation, nil)
 
 	result, err := service.FulfillReservation(ctx, reservationID)
@@ -540,6 +552,72 @@ func TestReservationService_FulfillReservation_Success(t *testing.T) {
 	assert.Equal(t, reservationID, result.ID)
 	assert.Equal(t, "fulfilled", result.Status)
 	assert.NotNil(t, result.FulfilledAt)
+	mockQuerier.AssertExpectations(t)
+}
+
+func TestReservationService_FulfillReservation_RejectsAlreadyFulfilled(t *testing.T) {
+	mockQuerier := &MockReservationQuerier{}
+	service := NewReservationService(mockQuerier)
+
+	reservationID := int32(1)
+	ctx := context.Background()
+
+	existingReservation := queries.GetReservationByIDRow{
+		ID:        reservationID,
+		StudentID: 1,
+		BookID:    2,
+		Status:    pgtype.Text{String: "fulfilled", Valid: true},
+	}
+
+	mockQuerier.On("GetReservationByID", ctx, reservationID).Return(existingReservation, nil)
+
+	result, err := service.FulfillReservation(ctx, reservationID)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "cannot fulfill reservation")
+	assert.Contains(t, err.Error(), "fulfilled")
+	mockQuerier.AssertExpectations(t)
+}
+
+func TestReservationService_FulfillReservation_AcceptsReadyStatus(t *testing.T) {
+	mockQuerier := &MockReservationQuerier{}
+	service := NewReservationService(mockQuerier)
+
+	reservationID := int32(1)
+	ctx := context.Background()
+
+	existingReservation := queries.GetReservationByIDRow{
+		ID:         reservationID,
+		StudentID:  1,
+		BookID:     2,
+		ReservedAt: pgtype.Timestamp{Time: time.Now(), Valid: true},
+		ExpiresAt:  pgtype.Timestamp{Time: time.Now().AddDate(0, 0, 7), Valid: true},
+		Status:     pgtype.Text{String: "ready", Valid: true},
+		CreatedAt:  pgtype.Timestamp{Time: time.Now(), Valid: true},
+		UpdatedAt:  pgtype.Timestamp{Time: time.Now(), Valid: true},
+	}
+
+	reservation := queries.Reservation{
+		ID:          reservationID,
+		StudentID:   1,
+		BookID:      2,
+		ReservedAt:  pgtype.Timestamp{Time: time.Now(), Valid: true},
+		ExpiresAt:   pgtype.Timestamp{Time: time.Now().AddDate(0, 0, 7), Valid: true},
+		Status:      pgtype.Text{String: "fulfilled", Valid: true},
+		FulfilledAt: pgtype.Timestamp{Time: time.Now(), Valid: true},
+		CreatedAt:   pgtype.Timestamp{Time: time.Now(), Valid: true},
+		UpdatedAt:   pgtype.Timestamp{Time: time.Now(), Valid: true},
+	}
+
+	mockQuerier.On("GetReservationByID", ctx, reservationID).Return(existingReservation, nil)
+	mockQuerier.On("UpdateReservationStatus", ctx, mock.AnythingOfType("queries.UpdateReservationStatusParams")).Return(reservation, nil)
+
+	result, err := service.FulfillReservation(ctx, reservationID)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, "fulfilled", result.Status)
 	mockQuerier.AssertExpectations(t)
 }
 

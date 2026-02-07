@@ -63,7 +63,7 @@ SELECT t.*, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_i
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
-WHERE t.due_date < NOW() AND t.returned_date IS NULL
+WHERE t.due_date < NOW() AND t.returned_date IS NULL AND t.transaction_type = 'borrow'
 ORDER BY t.due_date ASC;
 
 -- name: ListActiveTransactionsByStudent :many
@@ -78,21 +78,21 @@ SELECT COUNT(*) FROM transactions;
 
 -- name: CountOverdueTransactions :one
 SELECT COUNT(*) FROM transactions
-WHERE due_date < NOW() AND returned_date IS NULL;
+WHERE due_date < NOW() AND returned_date IS NULL AND transaction_type = 'borrow';
 
 -- name: ListActiveBorrowings :many
 SELECT t.*, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
-WHERE t.returned_date IS NULL
+WHERE t.returned_date IS NULL AND t.transaction_type = 'borrow'
 ORDER BY t.due_date ASC
 LIMIT $1 OFFSET $2;
 
 -- name: ReturnBook :one
 UPDATE transactions
-SET returned_date = NOW(), fine_amount = $2, return_condition = $3, condition_notes = $4, updated_at = NOW()
-WHERE id = $1
+SET returned_date = NOW(), fine_amount = $2, return_condition = $3, condition_notes = $4, status = 'completed', updated_at = NOW()
+WHERE id = $1 AND returned_date IS NULL
 RETURNING *;
 
 -- Renewal-related queries for Phase 6.7
@@ -104,7 +104,7 @@ WHERE student_id = $1 AND book_id = $2 AND transaction_type = 'renew';
 -- name: HasActiveReservationsByOtherStudents :one
 SELECT EXISTS(
     SELECT 1 FROM reservations
-    WHERE book_id = $1 AND student_id != $2 AND status = 'active'
+    WHERE book_id = $1 AND student_id != $2 AND status IN ('active', 'ready')
 );
 
 -- name: ListRenewalsByStudentAndBook :many
@@ -159,7 +159,7 @@ ORDER BY t.fine_amount DESC;
 
 -- name: CountActiveBorrowingsByStudent :one
 SELECT COUNT(*) FROM transactions
-WHERE student_id = $1 AND returned_date IS NULL;
+WHERE student_id = $1 AND returned_date IS NULL AND transaction_type = 'borrow';
 
 -- name: CountTodayBorrowings :one
 SELECT COUNT(*) FROM transactions
@@ -188,13 +188,13 @@ WHERE book_id = $1 AND returned_date IS NULL;
 
 -- name: CancelTransaction :one
 -- Cancel a transaction by marking it as returned with zero fine
--- This effectively cancels the transaction without needing a separate status column
 -- The notes field documents the cancellation reason
 UPDATE transactions
 SET
     returned_date = NOW(),
     fine_amount = 0,
     fine_paid = true,
+    status = 'cancelled',
     notes = CASE
         WHEN notes IS NULL OR notes = '' THEN '[CANCELLED] ' || sqlc.arg(cancel_reason)::text
         ELSE notes || E'\n\n[CANCELLED] ' || sqlc.arg(cancel_reason)::text
@@ -299,9 +299,10 @@ SET
     returned_date = NOW(),
     fine_amount = sqlc.arg(replacement_fine)::numeric,
     fine_paid = false,
+    status = 'lost',
     notes = CASE
-        WHEN notes IS NULL OR notes = '' THEN '[LOST] ' || sqlc.arg(lost_reason)::text || ' | Replacement fine: $' || sqlc.arg(replacement_fine)::text
-        ELSE notes || E'\n\n[LOST] ' || sqlc.arg(lost_reason)::text || ' | Replacement fine: $' || sqlc.arg(replacement_fine)::text
+        WHEN notes IS NULL OR notes = '' THEN '[LOST] ' || sqlc.arg(lost_reason)::text || ' | Replacement fine: KSH ' || sqlc.arg(replacement_fine)::text
+        ELSE notes || E'\n\n[LOST] ' || sqlc.arg(lost_reason)::text || ' | Replacement fine: KSH ' || sqlc.arg(replacement_fine)::text
     END,
     updated_at = NOW()
 WHERE id = sqlc.arg(id)

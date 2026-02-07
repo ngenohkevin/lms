@@ -334,6 +334,16 @@ func (h *BookHandler) DeleteBook(c *gin.Context) {
 			})
 			return
 		}
+		if strings.Contains(err.Error(), "cannot delete") || strings.Contains(err.Error(), "active borrowing") {
+			c.JSON(http.StatusConflict, ErrorResponse{
+				Success: false,
+				Error: ErrorDetail{
+					Code:    "CONFLICT",
+					Message: err.Error(),
+				},
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Success: false,
 			Error: ErrorDetail{

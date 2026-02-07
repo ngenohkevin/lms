@@ -356,7 +356,7 @@ const getCopyByBarcodeWithBookInfo = `-- name: GetCopyByBarcodeWithBookInfo :one
 SELECT bc.id, bc.book_id, bc.barcode, bc.condition, bc.acquisition_date, bc.status, bc.notes, bc.created_at, bc.updated_at, bc.barcode_printed_at, b.id as book_db_id, b.title, b.author, b.book_id as book_code, b.isbn
 FROM book_copies bc
 JOIN books b ON bc.book_id = b.id
-WHERE bc.barcode = $1
+WHERE bc.barcode = $1 AND b.deleted_at IS NULL
 `
 
 type GetCopyByBarcodeWithBookInfoRow struct {
@@ -405,6 +405,7 @@ SELECT id, book_id, barcode, condition, acquisition_date, status, notes, created
 WHERE book_id = $1 AND status = 'available'
 ORDER BY barcode
 LIMIT 1
+FOR UPDATE SKIP LOCKED
 `
 
 func (q *Queries) GetFirstAvailableCopy(ctx context.Context, bookID int32) (BookCopy, error) {
