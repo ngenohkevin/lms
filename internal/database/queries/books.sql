@@ -136,3 +136,47 @@ WHERE id = $1 AND deleted_at IS NULL;
 UPDATE books
 SET total_copies = GREATEST(total_copies - 1, 0), updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL;
+
+-- name: SearchBooksAdvanced :many
+-- Flexible search with all optional filters
+SELECT * FROM books
+WHERE deleted_at IS NULL
+  AND (sqlc.narg('query')::text IS NULL OR (
+    title ILIKE '%' || sqlc.narg('query')::text || '%'
+    OR author ILIKE '%' || sqlc.narg('query')::text || '%'
+    OR book_id ILIKE '%' || sqlc.narg('query')::text || '%'
+    OR isbn ILIKE '%' || sqlc.narg('query')::text || '%'
+  ))
+  AND (sqlc.narg('genre')::text IS NULL OR genre = sqlc.narg('genre'))
+  AND (sqlc.arg('available_only')::boolean = false OR available_copies > 0)
+  AND (sqlc.narg('format')::text IS NULL OR format = sqlc.narg('format'))
+  AND (sqlc.narg('language')::text IS NULL OR language = sqlc.narg('language'))
+  AND (sqlc.narg('series_id')::int IS NULL OR series_id = sqlc.narg('series_id'))
+  AND (sqlc.narg('category_id')::int IS NULL OR category_id = sqlc.narg('category_id'))
+ORDER BY
+  CASE WHEN sqlc.arg('sort_by')::text = 'title' THEN title END ASC NULLS LAST,
+  CASE WHEN sqlc.arg('sort_by')::text = '-title' THEN title END DESC NULLS LAST,
+  CASE WHEN sqlc.arg('sort_by')::text = 'author' THEN author END ASC NULLS LAST,
+  CASE WHEN sqlc.arg('sort_by')::text = '-created_at' THEN created_at END DESC NULLS LAST,
+  CASE WHEN sqlc.arg('sort_by')::text = 'created_at' THEN created_at END ASC NULLS LAST,
+  CASE WHEN sqlc.arg('sort_by')::text = '-publication_year' THEN published_year END DESC NULLS LAST,
+  CASE WHEN sqlc.arg('sort_by')::text = 'publication_year' THEN published_year END ASC NULLS LAST,
+  title ASC
+LIMIT sqlc.arg('limit_val') OFFSET sqlc.arg('offset_val');
+
+-- name: CountSearchBooksAdvanced :one
+-- Count for flexible search with all optional filters
+SELECT COUNT(*) FROM books
+WHERE deleted_at IS NULL
+  AND (sqlc.narg('query')::text IS NULL OR (
+    title ILIKE '%' || sqlc.narg('query')::text || '%'
+    OR author ILIKE '%' || sqlc.narg('query')::text || '%'
+    OR book_id ILIKE '%' || sqlc.narg('query')::text || '%'
+    OR isbn ILIKE '%' || sqlc.narg('query')::text || '%'
+  ))
+  AND (sqlc.narg('genre')::text IS NULL OR genre = sqlc.narg('genre'))
+  AND (sqlc.arg('available_only')::boolean = false OR available_copies > 0)
+  AND (sqlc.narg('format')::text IS NULL OR format = sqlc.narg('format'))
+  AND (sqlc.narg('language')::text IS NULL OR language = sqlc.narg('language'))
+  AND (sqlc.narg('series_id')::int IS NULL OR series_id = sqlc.narg('series_id'))
+  AND (sqlc.narg('category_id')::int IS NULL OR category_id = sqlc.narg('category_id'));

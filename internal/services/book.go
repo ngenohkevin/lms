@@ -30,6 +30,8 @@ type BookQuerier interface {
 	CountBooksByGenre(ctx context.Context, genre pgtype.Text) (int64, error)
 	CountSearchBooks(ctx context.Context, title string) (int64, error)
 	CountBooksByCategory(ctx context.Context, categoryID pgtype.Int4) (int64, error)
+	SearchBooksAdvanced(ctx context.Context, arg queries.SearchBooksAdvancedParams) ([]queries.Book, error)
+	CountSearchBooksAdvanced(ctx context.Context, arg queries.CountSearchBooksAdvancedParams) (int64, error)
 	// Deletion validation queries
 	CountActiveTransactionsByBook(ctx context.Context, bookID int32) (int64, error)
 	CountActiveReservationsByBook(ctx context.Context, bookID int32) (int64, error)
@@ -521,18 +523,25 @@ func (s *BookService) SearchBooks(ctx context.Context, req models.BookSearchRequ
 		req.Limit = 100
 	}
 
-	// Create cache key based on search parameters
-	cacheKey := fmt.Sprintf("search:query_%s:genre_%s:available_%t:page_%d:limit_%d",
+	// Validate and default sort_by
+	validSortFields := map[string]bool{
+		"title": true, "-title": true,
+		"author":      true,
+		"-created_at": true, "created_at": true,
+		"-publication_year": true, "publication_year": true,
+	}
+	sortBy := "title"
+	if req.SortBy != "" && validSortFields[req.SortBy] {
+		sortBy = req.SortBy
+	}
+
+	// Build cache key from all filter parameters
+	cacheKey := fmt.Sprintf("search:q_%s:g_%s:a_%t:f_%s:l_%s:s_%d:c_%d:sort_%s:p_%d:lim_%d",
 		req.Query,
-		func() string {
-			if req.Genre != nil {
-				return *req.Genre
-			}
-			return ""
-		}(),
-		req.AvailableOnly,
-		req.Page,
-		req.Limit)
+		ptrStr(req.Genre), req.AvailableOnly,
+		ptrStr(req.Format), ptrStr(req.Language),
+		ptrInt32(req.SeriesID), ptrInt32(req.CategoryID),
+		sortBy, req.Page, req.Limit)
 
 	// Try to get from cache first
 	if s.cacheService != nil {
@@ -546,72 +555,57 @@ func (s *BookService) SearchBooks(ctx context.Context, req models.BookSearchRequ
 
 	offset := (req.Page - 1) * req.Limit
 
-	var books []queries.Book
-	var total int64
-	var err error
+	// Build params for the flexible query
+	searchParams := queries.SearchBooksAdvancedParams{
+		AvailableOnly: req.AvailableOnly,
+		SortBy:        sortBy,
+		LimitVal:      int32(req.Limit),
+		OffsetVal:     int32(offset),
+	}
+	countParams := queries.CountSearchBooksAdvancedParams{
+		AvailableOnly: req.AvailableOnly,
+	}
 
-	switch {
-	case req.AvailableOnly:
-		// Search only available books
-		books, err = s.querier.ListAvailableBooks(ctx, queries.ListAvailableBooksParams{
-			Limit:  int32(req.Limit),
-			Offset: int32(offset),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to search available books: %w", err)
-		}
-		total, err = s.querier.CountAvailableBooks(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to count available books: %w", err)
-		}
+	// Set optional text filters
+	if req.Query != "" {
+		q := pgtype.Text{String: req.Query, Valid: true}
+		searchParams.Query = q
+		countParams.Query = q
+	}
+	if req.Genre != nil && *req.Genre != "" {
+		g := pgtype.Text{String: *req.Genre, Valid: true}
+		searchParams.Genre = g
+		countParams.Genre = g
+	}
+	if req.Format != nil && *req.Format != "" {
+		f := pgtype.Text{String: *req.Format, Valid: true}
+		searchParams.Format = f
+		countParams.Format = f
+	}
+	if req.Language != nil && *req.Language != "" {
+		l := pgtype.Text{String: *req.Language, Valid: true}
+		searchParams.Language = l
+		countParams.Language = l
+	}
+	if req.SeriesID != nil && *req.SeriesID > 0 {
+		sid := pgtype.Int4{Int32: *req.SeriesID, Valid: true}
+		searchParams.SeriesID = sid
+		countParams.SeriesID = sid
+	}
+	if req.CategoryID != nil && *req.CategoryID > 0 {
+		cid := pgtype.Int4{Int32: *req.CategoryID, Valid: true}
+		searchParams.CategoryID = cid
+		countParams.CategoryID = cid
+	}
 
-	case req.Genre != nil && *req.Genre != "":
-		// Search by genre
-		genre := pgtype.Text{String: *req.Genre, Valid: true}
-		books, err = s.querier.SearchBooksByGenre(ctx, queries.SearchBooksByGenreParams{
-			Genre:  genre,
-			Limit:  int32(req.Limit),
-			Offset: int32(offset),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to search books by genre: %w", err)
-		}
-		// Use filtered count for accurate pagination
-		total, err = s.querier.CountBooksByGenre(ctx, genre)
-		if err != nil {
-			return nil, fmt.Errorf("failed to count books by genre: %w", err)
-		}
+	books, err := s.querier.SearchBooksAdvanced(ctx, searchParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search books: %w", err)
+	}
 
-	case req.Query != "":
-		// Search by query (title, author, ISBN, book_id)
-		searchPattern := "%" + strings.ToLower(req.Query) + "%"
-		books, err = s.querier.SearchBooks(ctx, queries.SearchBooksParams{
-			Title:  searchPattern,
-			Limit:  int32(req.Limit),
-			Offset: int32(offset),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to search books: %w", err)
-		}
-		// Use filtered count for accurate pagination
-		total, err = s.querier.CountSearchBooks(ctx, searchPattern)
-		if err != nil {
-			return nil, fmt.Errorf("failed to count search results: %w", err)
-		}
-
-	default:
-		// List all books
-		books, err = s.querier.ListBooks(ctx, queries.ListBooksParams{
-			Limit:  int32(req.Limit),
-			Offset: int32(offset),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to list books: %w", err)
-		}
-		total, err = s.querier.CountBooks(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to count books: %w", err)
-		}
+	total, err := s.querier.CountSearchBooksAdvanced(ctx, countParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count search results: %w", err)
 	}
 
 	// Convert to response models
@@ -727,4 +721,19 @@ func (s *BookService) ProcessRichTextDescription(ctx context.Context, req models
 	}
 
 	return processedContent, nil
+}
+
+// Helper functions for cache key building
+func ptrStr(s *string) string {
+	if s != nil {
+		return *s
+	}
+	return ""
+}
+
+func ptrInt32(i *int32) int32 {
+	if i != nil {
+		return *i
+	}
+	return 0
 }

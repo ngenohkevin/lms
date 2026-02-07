@@ -138,6 +138,7 @@ type BookSearchRequest struct {
 	SeriesID   *int32  `json:"series_id" form:"series_id"`
 	Language   *string `json:"language" form:"language"`
 	Format     *string `json:"format" form:"format"`
+	SortBy     string  `json:"sort_by" form:"sort_by"`
 }
 
 // BookResponse represents the response for book operations

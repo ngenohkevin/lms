@@ -74,6 +74,8 @@ type Querier interface {
 	// Renewal-related queries for Phase 6.7
 	CountRenewalsByStudentAndBook(ctx context.Context, arg CountRenewalsByStudentAndBookParams) (int64, error)
 	CountSearchBooks(ctx context.Context, title string) (int64, error)
+	// Count for flexible search with all optional filters
+	CountSearchBooksAdvanced(ctx context.Context, arg CountSearchBooksAdvancedParams) (int64, error)
 	CountSearchLanguages(ctx context.Context, arg CountSearchLanguagesParams) (int64, error)
 	CountSearchTransactions(ctx context.Context, arg CountSearchTransactionsParams) (int64, error)
 	CountSearchUsers(ctx context.Context, arg CountSearchUsersParams) (int64, error)
@@ -395,6 +397,8 @@ type Querier interface {
 	SearchAuthors(ctx context.Context, arg SearchAuthorsParams) ([]Author, error)
 	SearchBookCopies(ctx context.Context, arg SearchBookCopiesParams) ([]BookCopy, error)
 	SearchBooks(ctx context.Context, arg SearchBooksParams) ([]Book, error)
+	// Flexible search with all optional filters
+	SearchBooksAdvanced(ctx context.Context, arg SearchBooksAdvancedParams) ([]Book, error)
 	SearchBooksByGenre(ctx context.Context, arg SearchBooksByGenreParams) ([]Book, error)
 	SearchLanguages(ctx context.Context, arg SearchLanguagesParams) ([]Language, error)
 	SearchSeries(ctx context.Context, arg SearchSeriesParams) ([]BookSeries, error)

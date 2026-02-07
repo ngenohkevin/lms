@@ -72,6 +72,49 @@ func (q *Queries) CountSearchBooks(ctx context.Context, title string) (int64, er
 	return count, err
 }
 
+const countSearchBooksAdvanced = `-- name: CountSearchBooksAdvanced :one
+SELECT COUNT(*) FROM books
+WHERE deleted_at IS NULL
+  AND ($1::text IS NULL OR (
+    title ILIKE '%' || $1::text || '%'
+    OR author ILIKE '%' || $1::text || '%'
+    OR book_id ILIKE '%' || $1::text || '%'
+    OR isbn ILIKE '%' || $1::text || '%'
+  ))
+  AND ($2::text IS NULL OR genre = $2)
+  AND ($3::boolean = false OR available_copies > 0)
+  AND ($4::text IS NULL OR format = $4)
+  AND ($5::text IS NULL OR language = $5)
+  AND ($6::int IS NULL OR series_id = $6)
+  AND ($7::int IS NULL OR category_id = $7)
+`
+
+type CountSearchBooksAdvancedParams struct {
+	Query         pgtype.Text `db:"query" json:"query"`
+	Genre         pgtype.Text `db:"genre" json:"genre"`
+	AvailableOnly bool        `db:"available_only" json:"available_only"`
+	Format        pgtype.Text `db:"format" json:"format"`
+	Language      pgtype.Text `db:"language" json:"language"`
+	SeriesID      pgtype.Int4 `db:"series_id" json:"series_id"`
+	CategoryID    pgtype.Int4 `db:"category_id" json:"category_id"`
+}
+
+// Count for flexible search with all optional filters
+func (q *Queries) CountSearchBooksAdvanced(ctx context.Context, arg CountSearchBooksAdvancedParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchBooksAdvanced,
+		arg.Query,
+		arg.Genre,
+		arg.AvailableOnly,
+		arg.Format,
+		arg.Language,
+		arg.SeriesID,
+		arg.CategoryID,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createBook = `-- name: CreateBook :one
 INSERT INTO books (book_id, book_type, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, category_id, series_id, series_number, language, page_count, edition, format)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
@@ -540,6 +583,105 @@ type SearchBooksParams struct {
 
 func (q *Queries) SearchBooks(ctx context.Context, arg SearchBooksParams) ([]Book, error) {
 	rows, err := q.db.Query(ctx, searchBooks, arg.Title, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Book{}
+	for rows.Next() {
+		var i Book
+		if err := rows.Scan(
+			&i.ID,
+			&i.BookID,
+			&i.Isbn,
+			&i.Title,
+			&i.Author,
+			&i.Publisher,
+			&i.PublishedYear,
+			&i.Genre,
+			&i.Description,
+			&i.CoverImageUrl,
+			&i.TotalCopies,
+			&i.AvailableCopies,
+			&i.ShelfLocation,
+			&i.IsActive,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Condition,
+			&i.CategoryID,
+			&i.SeriesID,
+			&i.SeriesNumber,
+			&i.Language,
+			&i.PageCount,
+			&i.Edition,
+			&i.Format,
+			&i.BookType,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchBooksAdvanced = `-- name: SearchBooksAdvanced :many
+SELECT id, book_id, isbn, title, author, publisher, published_year, genre, description, cover_image_url, total_copies, available_copies, shelf_location, is_active, deleted_at, created_at, updated_at, condition, category_id, series_id, series_number, language, page_count, edition, format, book_type FROM books
+WHERE deleted_at IS NULL
+  AND ($1::text IS NULL OR (
+    title ILIKE '%' || $1::text || '%'
+    OR author ILIKE '%' || $1::text || '%'
+    OR book_id ILIKE '%' || $1::text || '%'
+    OR isbn ILIKE '%' || $1::text || '%'
+  ))
+  AND ($2::text IS NULL OR genre = $2)
+  AND ($3::boolean = false OR available_copies > 0)
+  AND ($4::text IS NULL OR format = $4)
+  AND ($5::text IS NULL OR language = $5)
+  AND ($6::int IS NULL OR series_id = $6)
+  AND ($7::int IS NULL OR category_id = $7)
+ORDER BY
+  CASE WHEN $8::text = 'title' THEN title END ASC NULLS LAST,
+  CASE WHEN $8::text = '-title' THEN title END DESC NULLS LAST,
+  CASE WHEN $8::text = 'author' THEN author END ASC NULLS LAST,
+  CASE WHEN $8::text = '-created_at' THEN created_at END DESC NULLS LAST,
+  CASE WHEN $8::text = 'created_at' THEN created_at END ASC NULLS LAST,
+  CASE WHEN $8::text = '-publication_year' THEN published_year END DESC NULLS LAST,
+  CASE WHEN $8::text = 'publication_year' THEN published_year END ASC NULLS LAST,
+  title ASC
+LIMIT $10 OFFSET $9
+`
+
+type SearchBooksAdvancedParams struct {
+	Query         pgtype.Text `db:"query" json:"query"`
+	Genre         pgtype.Text `db:"genre" json:"genre"`
+	AvailableOnly bool        `db:"available_only" json:"available_only"`
+	Format        pgtype.Text `db:"format" json:"format"`
+	Language      pgtype.Text `db:"language" json:"language"`
+	SeriesID      pgtype.Int4 `db:"series_id" json:"series_id"`
+	CategoryID    pgtype.Int4 `db:"category_id" json:"category_id"`
+	SortBy        string      `db:"sort_by" json:"sort_by"`
+	OffsetVal     int32       `db:"offset_val" json:"offset_val"`
+	LimitVal      int32       `db:"limit_val" json:"limit_val"`
+}
+
+// Flexible search with all optional filters
+func (q *Queries) SearchBooksAdvanced(ctx context.Context, arg SearchBooksAdvancedParams) ([]Book, error) {
+	rows, err := q.db.Query(ctx, searchBooksAdvanced,
+		arg.Query,
+		arg.Genre,
+		arg.AvailableOnly,
+		arg.Format,
+		arg.Language,
+		arg.SeriesID,
+		arg.CategoryID,
+		arg.SortBy,
+		arg.OffsetVal,
+		arg.LimitVal,
+	)
 	if err != nil {
 		return nil, err
 	}

@@ -202,6 +202,16 @@ func (m *MockBookQuerier) CountBooksByCategory(ctx context.Context, categoryID p
 	return args.Get(0).(int64), args.Error(1)
 }
 
+func (m *MockBookQuerier) SearchBooksAdvanced(ctx context.Context, arg queries.SearchBooksAdvancedParams) ([]queries.Book, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).([]queries.Book), args.Error(1)
+}
+
+func (m *MockBookQuerier) CountSearchBooksAdvanced(ctx context.Context, arg queries.CountSearchBooksAdvancedParams) (int64, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 func (m *MockBookQuerier) GetNextBookSequence(ctx context.Context, bookType interface{}) (int32, error) {
 	args := m.Called(ctx, bookType)
 	return args.Get(0).(int32), args.Error(1)
@@ -421,6 +431,18 @@ func TestBookService_SearchBooks(t *testing.T) {
 	mockCache := new(MockCacheService)
 	service := NewBookService(mockQuerier, mockCache)
 
+	testBook := queries.Book{
+		ID:              1,
+		BookID:          "BK001",
+		Title:           "Test Book",
+		Author:          "Test Author",
+		TotalCopies:     pgtype.Int4{Int32: 5, Valid: true},
+		AvailableCopies: pgtype.Int4{Int32: 3, Valid: true},
+		IsActive:        pgtype.Bool{Bool: true, Valid: true},
+		CreatedAt:       pgtype.Timestamp{Time: time.Now(), Valid: true},
+		UpdatedAt:       pgtype.Timestamp{Time: time.Now(), Valid: true},
+	}
+
 	tests := []struct {
 		name    string
 		request models.BookSearchRequest
@@ -428,29 +450,17 @@ func TestBookService_SearchBooks(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "successful book search",
+			name: "successful book search by query",
 			request: models.BookSearchRequest{
 				Query: "test",
 				Page:  1,
 				Limit: 10,
 			},
 			setup: func() {
-				mockQuerier.On("SearchBooks", mock.Anything, mock.MatchedBy(func(arg queries.SearchBooksParams) bool {
-					return arg.Title == "%test%" && arg.Limit == 10 && arg.Offset == 0
-				})).Return([]queries.Book{
-					{
-						ID:              1,
-						BookID:          "BK001",
-						Title:           "Test Book",
-						Author:          "Test Author",
-						TotalCopies:     pgtype.Int4{Int32: 5, Valid: true},
-						AvailableCopies: pgtype.Int4{Int32: 3, Valid: true},
-						IsActive:        pgtype.Bool{Bool: true, Valid: true},
-						CreatedAt:       pgtype.Timestamp{Time: time.Now(), Valid: true},
-						UpdatedAt:       pgtype.Timestamp{Time: time.Now(), Valid: true},
-					},
-				}, nil)
-				mockQuerier.On("CountSearchBooks", mock.Anything, "%test%").Return(int64(1), nil)
+				mockQuerier.On("SearchBooksAdvanced", mock.Anything, mock.MatchedBy(func(arg queries.SearchBooksAdvancedParams) bool {
+					return arg.Query.String == "test" && arg.Query.Valid && arg.LimitVal == 10 && arg.OffsetVal == 0
+				})).Return([]queries.Book{testBook}, nil)
+				mockQuerier.On("CountSearchBooksAdvanced", mock.Anything, mock.Anything).Return(int64(1), nil)
 			},
 			wantErr: false,
 		},
@@ -462,25 +472,10 @@ func TestBookService_SearchBooks(t *testing.T) {
 				Limit: 10,
 			},
 			setup: func() {
-				mockQuerier.On("SearchBooksByGenre", mock.Anything, mock.MatchedBy(func(arg queries.SearchBooksByGenreParams) bool {
-					return arg.Genre.String == "Fiction" && arg.Genre.Valid && arg.Limit == 10 && arg.Offset == 0
-				})).Return([]queries.Book{
-					{
-						ID:              1,
-						BookID:          "BK001",
-						Title:           "Test Book",
-						Author:          "Test Author",
-						Genre:           pgtype.Text{String: "Fiction", Valid: true},
-						TotalCopies:     pgtype.Int4{Int32: 5, Valid: true},
-						AvailableCopies: pgtype.Int4{Int32: 3, Valid: true},
-						IsActive:        pgtype.Bool{Bool: true, Valid: true},
-						CreatedAt:       pgtype.Timestamp{Time: time.Now(), Valid: true},
-						UpdatedAt:       pgtype.Timestamp{Time: time.Now(), Valid: true},
-					},
-				}, nil)
-				mockQuerier.On("CountBooksByGenre", mock.Anything, mock.MatchedBy(func(arg pgtype.Text) bool {
-					return arg.String == "Fiction" && arg.Valid
-				})).Return(int64(1), nil)
+				mockQuerier.On("SearchBooksAdvanced", mock.Anything, mock.MatchedBy(func(arg queries.SearchBooksAdvancedParams) bool {
+					return arg.Genre.String == "Fiction" && arg.Genre.Valid && arg.LimitVal == 10
+				})).Return([]queries.Book{testBook}, nil)
+				mockQuerier.On("CountSearchBooksAdvanced", mock.Anything, mock.Anything).Return(int64(1), nil)
 			},
 			wantErr: false,
 		},
@@ -492,22 +487,59 @@ func TestBookService_SearchBooks(t *testing.T) {
 				Limit:         10,
 			},
 			setup: func() {
-				mockQuerier.On("ListAvailableBooks", mock.Anything, mock.MatchedBy(func(arg queries.ListAvailableBooksParams) bool {
-					return arg.Limit == 10 && arg.Offset == 0
-				})).Return([]queries.Book{
-					{
-						ID:              1,
-						BookID:          "BK001",
-						Title:           "Test Book",
-						Author:          "Test Author",
-						TotalCopies:     pgtype.Int4{Int32: 5, Valid: true},
-						AvailableCopies: pgtype.Int4{Int32: 3, Valid: true},
-						IsActive:        pgtype.Bool{Bool: true, Valid: true},
-						CreatedAt:       pgtype.Timestamp{Time: time.Now(), Valid: true},
-						UpdatedAt:       pgtype.Timestamp{Time: time.Now(), Valid: true},
-					},
-				}, nil)
-				mockQuerier.On("CountAvailableBooks", mock.Anything).Return(int64(1), nil)
+				mockQuerier.On("SearchBooksAdvanced", mock.Anything, mock.MatchedBy(func(arg queries.SearchBooksAdvancedParams) bool {
+					return arg.AvailableOnly == true && arg.LimitVal == 10
+				})).Return([]queries.Book{testBook}, nil)
+				mockQuerier.On("CountSearchBooksAdvanced", mock.Anything, mock.Anything).Return(int64(1), nil)
+			},
+			wantErr: false,
+		},
+		{
+			name: "search by format",
+			request: models.BookSearchRequest{
+				Format: stringPtr("audiobook"),
+				Page:   1,
+				Limit:  10,
+			},
+			setup: func() {
+				mockQuerier.On("SearchBooksAdvanced", mock.Anything, mock.MatchedBy(func(arg queries.SearchBooksAdvancedParams) bool {
+					return arg.Format.String == "audiobook" && arg.Format.Valid
+				})).Return([]queries.Book{testBook}, nil)
+				mockQuerier.On("CountSearchBooksAdvanced", mock.Anything, mock.Anything).Return(int64(1), nil)
+			},
+			wantErr: false,
+		},
+		{
+			name: "search with combined filters",
+			request: models.BookSearchRequest{
+				Query:         "test",
+				Genre:         stringPtr("Fiction"),
+				AvailableOnly: true,
+				Format:        stringPtr("ebook"),
+				Language:      stringPtr("en"),
+				Page:          1,
+				Limit:         10,
+			},
+			setup: func() {
+				mockQuerier.On("SearchBooksAdvanced", mock.Anything, mock.MatchedBy(func(arg queries.SearchBooksAdvancedParams) bool {
+					return arg.Query.Valid && arg.Genre.Valid && arg.AvailableOnly && arg.Format.Valid && arg.Language.Valid
+				})).Return([]queries.Book{testBook}, nil)
+				mockQuerier.On("CountSearchBooksAdvanced", mock.Anything, mock.Anything).Return(int64(1), nil)
+			},
+			wantErr: false,
+		},
+		{
+			name: "search with sort_by",
+			request: models.BookSearchRequest{
+				SortBy: "-created_at",
+				Page:   1,
+				Limit:  10,
+			},
+			setup: func() {
+				mockQuerier.On("SearchBooksAdvanced", mock.Anything, mock.MatchedBy(func(arg queries.SearchBooksAdvancedParams) bool {
+					return arg.SortBy == "-created_at"
+				})).Return([]queries.Book{testBook}, nil)
+				mockQuerier.On("CountSearchBooksAdvanced", mock.Anything, mock.Anything).Return(int64(1), nil)
 			},
 			wantErr: false,
 		},
