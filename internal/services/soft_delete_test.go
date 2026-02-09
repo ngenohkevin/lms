@@ -130,9 +130,10 @@ func TestSoftDeleteService_SoftDeleteBook(t *testing.T) {
 
 	// Create a test book
 	book, err := q.CreateBook(ctx, queries.CreateBookParams{
-		BookID: "SOFT_DELETE_BOOK_001",
-		Title:  "Test Soft Delete Book",
-		Author: "Test Author",
+		BookID:   "SOFT_DELETE_BOOK_001",
+		BookType: "storybook",
+		Title:    "Test Soft Delete Book",
+		Author:   "Test Author",
 	})
 	require.NoError(t, err)
 
@@ -230,9 +231,10 @@ func TestSoftDeleteService_RestoreBook(t *testing.T) {
 
 	// Create and soft delete a test book
 	book, err := q.CreateBook(ctx, queries.CreateBookParams{
-		BookID: "RESTORE_BOOK_001",
-		Title:  "Test Restore Book",
-		Author: "Test Author",
+		BookID:   "RESTORE_BOOK_001",
+		BookType: "storybook",
+		Title:    "Test Restore Book",
+		Author:   "Test Author",
 	})
 	require.NoError(t, err)
 
@@ -402,9 +404,10 @@ func TestSoftDeleteService_ListDeletedBooks(t *testing.T) {
 	var bookIDs []int32
 	for i := 0; i < 3; i++ {
 		book, err := q.CreateBook(ctx, queries.CreateBookParams{
-			BookID: "DELETED_BOOK_" + string(rune(i+'1')),
-			Title:  "Deleted Book " + string(rune(i+'1')),
-			Author: "Deleted Author",
+			BookID:   "DELETED_BOOK_" + string(rune(i+'1')),
+			BookType: "storybook",
+			Title:    "Deleted Book " + string(rune(i+'1')),
+			Author:   "Deleted Author",
 		})
 		require.NoError(t, err)
 		bookIDs = append(bookIDs, book.ID)

@@ -66,6 +66,14 @@ func TestImportExportIntegration(t *testing.T) {
 	testUserID := int(user.ID)
 	t.Logf("Created test user with ID: %d", testUserID)
 
+	// Create test categories for book imports
+	_, _ = db.Queries.CreateCategory(context.Background(), queries.CreateCategoryParams{
+		Name: "Fiction",
+	})
+	_, _ = db.Queries.CreateCategory(context.Background(), queries.CreateCategoryParams{
+		Name: "Non-Fiction",
+	})
+
 	// Initialize services
 	mockCache := &MockCacheService{}
 	bookService := services.NewBookService(db.Queries, mockCache)
@@ -118,14 +126,14 @@ func TestImportExportIntegration(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Contains(t, w.Header().Get("Content-Type"), "text/csv")
 		assert.Contains(t, w.Header().Get("Content-Disposition"), "attachment")
-		assert.Contains(t, w.Body.String(), "book_id,title,author")
+		assert.Contains(t, w.Body.String(), "isbn,book_type,category")
 	})
 
 	t.Run("ImportBooks_CSV", func(t *testing.T) {
 		// Create a sample CSV file
-		csvContent := `book_id,title,author,isbn,publisher,published_year,genre,description,total_copies,available_copies,shelf_location
-TEST001,Test Book 1,Test Author 1,978-0-123456-78-9,Test Publisher,2023,Fiction,Test Description,2,2,T1-001
-TEST002,Test Book 2,Test Author 2,978-0-123456-79-6,Test Publisher,2023,Non-Fiction,Test Description 2,3,3,T1-002`
+		csvContent := `isbn,book_type,category,title,author,publisher,published_year,genre,description,shelf_location
+978-0-123456-78-9,storybook,Fiction,Test Book 1,Test Author 1,Test Publisher,2023,Fiction,Test Description,T1-001
+978-0-123456-79-6,storybook,Non-Fiction,Test Book 2,Test Author 2,Test Publisher,2023,Non-Fiction,Test Description 2,T1-002`
 
 		// Create multipart form data
 		body := &bytes.Buffer{}
@@ -165,9 +173,9 @@ TEST002,Test Book 2,Test Author 2,978-0-123456-79-6,Test Publisher,2023,Non-Fict
 	})
 
 	t.Run("ImportBooks_InvalidCSV", func(t *testing.T) {
-		// Create an invalid CSV file
-		csvContent := `book_id,title,author
-,Invalid Book,` // Missing required fields
+		// Create an invalid CSV file (missing required isbn, book_type, category)
+		csvContent := `isbn,book_type,category
+,,` // Missing required fields
 
 		// Create multipart form data
 		body := &bytes.Buffer{}
@@ -533,14 +541,18 @@ func TestImportExportPersistence(t *testing.T) {
 		bookService := services.NewBookService(db.Queries, mockCache)
 		importExportService := services.NewImportExportService(bookService, nil, nil, db.Queries, "./testdata")
 
-		// Use a unique book ID and ISBN for each test run to avoid conflicts
+		// Create test category
+		_, _ = db.Queries.CreateCategory(context.Background(), queries.CreateCategoryParams{
+			Name: "Fiction",
+		})
+
+		// Use a unique ISBN for each test run to avoid conflicts
 		timestamp := time.Now().Unix()
-		uniqueID := fmt.Sprintf("PERSIST%d", timestamp)
 		uniqueISBN := fmt.Sprintf("978-0-123456-%02d-%d", timestamp%100, timestamp%10)
 
 		// Create test CSV data
-		csvContent := fmt.Sprintf(`book_id,title,author,isbn,publisher,published_year,genre,description,total_copies,available_copies,shelf_location
-%s,Persistent Book 1,Persistent Author 1,%s,Persistent Publisher,2023,Fiction,Persistent Description,1,1,P1-001`, uniqueID, uniqueISBN)
+		csvContent := fmt.Sprintf(`isbn,book_type,category,title,author,publisher,published_year,genre,description,shelf_location
+%s,storybook,Fiction,Persistent Book 1,Persistent Author 1,Persistent Publisher,2023,Fiction,Persistent Description,P1-001`, uniqueISBN)
 
 		// Create temporary file
 		tmpFile, err := os.CreateTemp("", "test_import_*.csv")
