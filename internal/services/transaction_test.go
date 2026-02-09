@@ -173,6 +173,16 @@ func (m *MockTransactionQueries) GetCopyByBarcodeWithBookInfo(ctx context.Contex
 	return args.Get(0).(queries.GetCopyByBarcodeWithBookInfoRow), args.Error(1)
 }
 
+func (m *MockTransactionQueries) GetCopyByISBNWithBookInfo(ctx context.Context, isbn pgtype.Text) (queries.GetCopyByISBNWithBookInfoRow, error) {
+	args := m.Called(ctx, isbn)
+	return args.Get(0).(queries.GetCopyByISBNWithBookInfoRow), args.Error(1)
+}
+
+func (m *MockTransactionQueries) ListCopiesByISBNWithBookInfo(ctx context.Context, isbn pgtype.Text) ([]queries.ListCopiesByISBNWithBookInfoRow, error) {
+	args := m.Called(ctx, isbn)
+	return args.Get(0).([]queries.ListCopiesByISBNWithBookInfoRow), args.Error(1)
+}
+
 func (m *MockTransactionQueries) UpdateBookCopyStatus(ctx context.Context, arg queries.UpdateBookCopyStatusParams) (queries.BookCopy, error) {
 	args := m.Called(ctx, arg)
 	return args.Get(0).(queries.BookCopy), args.Error(1)

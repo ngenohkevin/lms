@@ -52,6 +52,8 @@ type TransactionQuerier interface {
 	// Copy-level transaction queries
 	GetFirstAvailableCopy(ctx context.Context, bookID int32) (queries.BookCopy, error)
 	GetCopyByBarcodeWithBookInfo(ctx context.Context, barcode string) (queries.GetCopyByBarcodeWithBookInfoRow, error)
+	GetCopyByISBNWithBookInfo(ctx context.Context, isbn pgtype.Text) (queries.GetCopyByISBNWithBookInfoRow, error)
+	ListCopiesByISBNWithBookInfo(ctx context.Context, isbn pgtype.Text) ([]queries.ListCopiesByISBNWithBookInfoRow, error)
 	GetBookCopyByID(ctx context.Context, id int32) (queries.BookCopy, error)
 	UpdateBookCopyStatus(ctx context.Context, arg queries.UpdateBookCopyStatusParams) (queries.BookCopy, error)
 	UpdateBookCopyStatusAndCondition(ctx context.Context, arg queries.UpdateBookCopyStatusAndConditionParams) (queries.BookCopy, error)
@@ -250,6 +252,12 @@ type CurrentBorrowerInfo struct {
 	DueDate       time.Time `json:"due_date"`
 }
 
+// BarcodeScanResponse wraps scan results; when an ISBN is scanned, multiple copies may be returned
+type BarcodeScanResponse struct {
+	Results    []BarcodeScanResult `json:"results"`
+	IsISBNScan bool                `json:"is_isbn_scan"`
+}
+
 // BorrowBook processes a book borrowing request (backward compatible - auto-selects copy)
 func (s *TransactionService) BorrowBook(ctx context.Context, studentID, bookID, librarianID int32, notes string) (*TransactionResponse, error) {
 	return s.BorrowBookWithCopy(ctx, BorrowBookWithCopyRequest{
@@ -269,10 +277,18 @@ func (s *TransactionService) BorrowBookWithCopy(ctx context.Context, req BorrowB
 	if req.Barcode != nil && *req.Barcode != "" {
 		copyInfo, err := s.queries.GetCopyByBarcodeWithBookInfo(ctx, *req.Barcode)
 		if err != nil {
-			if isNoRows(err) {
-				return nil, fmt.Errorf("no copy found with barcode: %s", *req.Barcode)
+			if !isNoRows(err) {
+				return nil, fmt.Errorf("failed to look up barcode: %w", err)
 			}
-			return nil, fmt.Errorf("failed to look up barcode: %w", err)
+			// Fallback: try ISBN lookup (librarian scanning book's ISBN barcode)
+			isbnCopy, isbnErr := s.queries.GetCopyByISBNWithBookInfo(ctx, pgtype.Text{String: *req.Barcode, Valid: true})
+			if isbnErr != nil {
+				if isNoRows(isbnErr) {
+					return nil, fmt.Errorf("no copy found with barcode: %s", *req.Barcode)
+				}
+				return nil, fmt.Errorf("failed to look up barcode: %w", isbnErr)
+			}
+			copyInfo = convertISBNRowToBarcodeRow(isbnCopy)
 		}
 		bookID = copyInfo.BookID
 		copyID = &copyInfo.ID
@@ -642,10 +658,18 @@ func (s *TransactionService) ReturnByBarcode(ctx context.Context, req ReturnByBa
 	// Look up the copy by barcode
 	copyInfo, err := s.queries.GetCopyByBarcodeWithBookInfo(ctx, req.Barcode)
 	if err != nil {
-		if isNoRows(err) {
-			return nil, fmt.Errorf("no copy found with barcode: %s", req.Barcode)
+		if !isNoRows(err) {
+			return nil, fmt.Errorf("failed to look up barcode: %w", err)
 		}
-		return nil, fmt.Errorf("failed to look up barcode: %w", err)
+		// Fallback: try ISBN lookup (librarian scanning book's ISBN barcode)
+		isbnCopy, isbnErr := s.queries.GetCopyByISBNWithBookInfo(ctx, pgtype.Text{String: req.Barcode, Valid: true})
+		if isbnErr != nil {
+			if isNoRows(isbnErr) {
+				return nil, fmt.Errorf("no copy found with barcode: %s", req.Barcode)
+			}
+			return nil, fmt.Errorf("failed to look up barcode: %w", isbnErr)
+		}
+		copyInfo = convertISBNRowToBarcodeRow(isbnCopy)
 	}
 
 	// Check if copy is borrowed
@@ -671,20 +695,52 @@ func (s *TransactionService) ReturnByBarcode(ctx context.Context, req ReturnByBa
 	return s.ReturnBookWithCondition(ctx, transaction.ID, returnCondition, req.ConditionNotes)
 }
 
-// ScanBarcode looks up a copy by barcode and returns detailed information
-func (s *TransactionService) ScanBarcode(ctx context.Context, barcode string) (*BarcodeScanResult, error) {
-	// Look up the copy by barcode
+// ScanBarcode looks up a copy by barcode and returns detailed information.
+// If the barcode matches a copy directly, returns a single result.
+// If it matches an ISBN, returns all copies for that ISBN so the librarian can pick one.
+func (s *TransactionService) ScanBarcode(ctx context.Context, barcode string) (*BarcodeScanResponse, error) {
+	// Try direct copy barcode match first
 	copyInfo, err := s.queries.GetCopyByBarcodeWithBookInfo(ctx, barcode)
-	if err != nil {
-		if isNoRows(err) {
-			return nil, fmt.Errorf("no copy found with barcode: %s", barcode)
-		}
+	if err == nil {
+		// Direct barcode match — single result
+		result := s.buildScanResult(ctx, copyInfo)
+		return &BarcodeScanResponse{
+			Results:    []BarcodeScanResult{result},
+			IsISBNScan: false,
+		}, nil
+	}
+
+	if !isNoRows(err) {
 		return nil, fmt.Errorf("failed to look up barcode: %w", err)
 	}
 
-	result := &BarcodeScanResult{
+	// Fallback: try ISBN lookup — return ALL copies
+	isbnCopies, isbnErr := s.queries.ListCopiesByISBNWithBookInfo(ctx, pgtype.Text{String: barcode, Valid: true})
+	if isbnErr != nil {
+		return nil, fmt.Errorf("failed to look up barcode: %w", isbnErr)
+	}
+	if len(isbnCopies) == 0 {
+		return nil, fmt.Errorf("no copy found with barcode: %s", barcode)
+	}
+
+	results := make([]BarcodeScanResult, 0, len(isbnCopies))
+	for _, copy := range isbnCopies {
+		row := convertISBNListRowToBarcodeRow(copy)
+		result := s.buildScanResult(ctx, row)
+		results = append(results, result)
+	}
+
+	return &BarcodeScanResponse{
+		Results:    results,
+		IsISBNScan: true,
+	}, nil
+}
+
+// buildScanResult builds a BarcodeScanResult from a copy-with-book-info row
+func (s *TransactionService) buildScanResult(ctx context.Context, copyInfo queries.GetCopyByBarcodeWithBookInfoRow) BarcodeScanResult {
+	result := BarcodeScanResult{
 		CopyID:     copyInfo.ID,
-		Barcode:    barcode,
+		Barcode:    copyInfo.Barcode,
 		Condition:  copyInfo.Condition.String,
 		Status:     copyInfo.Status.String,
 		BookID:     copyInfo.BookID,
@@ -712,7 +768,7 @@ func (s *TransactionService) ScanBarcode(ctx context.Context, barcode string) (*
 		}
 	}
 
-	return result, nil
+	return result
 }
 
 // GetActiveBorrowingByCopy looks up current borrower for a copy - needed by the service interface
@@ -1329,6 +1385,49 @@ func (s *TransactionService) updateBookConditionIfNeededWithQuerier(ctx context.
 	}
 
 	return nil
+}
+
+// convertISBNRowToBarcodeRow converts a GetCopyByISBNWithBookInfoRow to GetCopyByBarcodeWithBookInfoRow
+// Both row types have identical fields, just different Go types generated by sqlc.
+func convertISBNRowToBarcodeRow(isbn queries.GetCopyByISBNWithBookInfoRow) queries.GetCopyByBarcodeWithBookInfoRow {
+	return queries.GetCopyByBarcodeWithBookInfoRow{
+		ID:               isbn.ID,
+		BookID:           isbn.BookID,
+		Barcode:          isbn.Barcode,
+		Condition:        isbn.Condition,
+		AcquisitionDate:  isbn.AcquisitionDate,
+		Status:           isbn.Status,
+		Notes:            isbn.Notes,
+		CreatedAt:        isbn.CreatedAt,
+		UpdatedAt:        isbn.UpdatedAt,
+		BarcodePrintedAt: isbn.BarcodePrintedAt,
+		BookDbID:         isbn.BookDbID,
+		Title:            isbn.Title,
+		Author:           isbn.Author,
+		BookCode:         isbn.BookCode,
+		Isbn:             isbn.Isbn,
+	}
+}
+
+// convertISBNListRowToBarcodeRow converts a ListCopiesByISBNWithBookInfoRow to GetCopyByBarcodeWithBookInfoRow
+func convertISBNListRowToBarcodeRow(isbn queries.ListCopiesByISBNWithBookInfoRow) queries.GetCopyByBarcodeWithBookInfoRow {
+	return queries.GetCopyByBarcodeWithBookInfoRow{
+		ID:               isbn.ID,
+		BookID:           isbn.BookID,
+		Barcode:          isbn.Barcode,
+		Condition:        isbn.Condition,
+		AcquisitionDate:  isbn.AcquisitionDate,
+		Status:           isbn.Status,
+		Notes:            isbn.Notes,
+		CreatedAt:        isbn.CreatedAt,
+		UpdatedAt:        isbn.UpdatedAt,
+		BarcodePrintedAt: isbn.BarcodePrintedAt,
+		BookDbID:         isbn.BookDbID,
+		Title:            isbn.Title,
+		Author:           isbn.Author,
+		BookCode:         isbn.BookCode,
+		Isbn:             isbn.Isbn,
+	}
 }
 
 // convertToTransactionResponse converts a queries.Transaction to TransactionResponse

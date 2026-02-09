@@ -177,6 +177,7 @@ type Querier interface {
 	GetCategoryByName(ctx context.Context, name string) (Category, error)
 	GetCopyBorrowingHistory(ctx context.Context, arg GetCopyBorrowingHistoryParams) ([]GetCopyBorrowingHistoryRow, error)
 	GetCopyByBarcodeWithBookInfo(ctx context.Context, barcode string) (GetCopyByBarcodeWithBookInfoRow, error)
+	GetCopyByISBNWithBookInfo(ctx context.Context, isbn pgtype.Text) (GetCopyByISBNWithBookInfoRow, error)
 	GetDashboardMetrics(ctx context.Context) (GetDashboardMetricsRow, error)
 	GetDepartmentByCode(ctx context.Context, code pgtype.Text) (Department, error)
 	GetDepartmentByID(ctx context.Context, id int32) (Department, error)
@@ -330,6 +331,7 @@ type Querier interface {
 	ListBookCopiesByStatus(ctx context.Context, arg ListBookCopiesByStatusParams) ([]BookCopy, error)
 	ListBooks(ctx context.Context, arg ListBooksParams) ([]Book, error)
 	ListCategories(ctx context.Context) ([]Category, error)
+	ListCopiesByISBNWithBookInfo(ctx context.Context, isbn pgtype.Text) ([]ListCopiesByISBNWithBookInfoRow, error)
 	ListDepartments(ctx context.Context) ([]Department, error)
 	ListExpiredReservations(ctx context.Context) ([]ListExpiredReservationsRow, error)
 	// Fines Management Queries

@@ -109,5 +109,26 @@ WHERE id = ANY($1::int[]) RETURNING *;
 -- name: ListUnprintedBookCopies :many
 SELECT * FROM book_copies WHERE book_id = $1 AND barcode_printed_at IS NULL ORDER BY barcode;
 
+-- name: GetCopyByISBNWithBookInfo :one
+SELECT bc.*, b.id as book_db_id, b.title, b.author, b.book_id as book_code, b.isbn
+FROM book_copies bc
+JOIN books b ON bc.book_id = b.id
+WHERE b.isbn = $1 AND b.deleted_at IS NULL
+ORDER BY
+  CASE WHEN bc.status = 'borrowed' THEN 0 ELSE 1 END,
+  CASE WHEN bc.status = 'available' THEN 0 ELSE 1 END,
+  bc.barcode
+LIMIT 1;
+
+-- name: ListCopiesByISBNWithBookInfo :many
+SELECT bc.*, b.id as book_db_id, b.title, b.author, b.book_id as book_code, b.isbn
+FROM book_copies bc
+JOIN books b ON bc.book_id = b.id
+WHERE b.isbn = $1 AND b.deleted_at IS NULL
+ORDER BY
+  CASE WHEN bc.status = 'borrowed' THEN 0 ELSE 1 END,
+  CASE WHEN bc.status = 'available' THEN 0 ELSE 1 END,
+  bc.barcode;
+
 -- name: CountUnprintedBookCopies :one
 SELECT COUNT(*) FROM book_copies WHERE book_id = $1 AND barcode_printed_at IS NULL;

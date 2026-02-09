@@ -400,6 +400,59 @@ func (q *Queries) GetCopyByBarcodeWithBookInfo(ctx context.Context, barcode stri
 	return i, err
 }
 
+const getCopyByISBNWithBookInfo = `-- name: GetCopyByISBNWithBookInfo :one
+SELECT bc.id, bc.book_id, bc.barcode, bc.condition, bc.acquisition_date, bc.status, bc.notes, bc.created_at, bc.updated_at, bc.barcode_printed_at, b.id as book_db_id, b.title, b.author, b.book_id as book_code, b.isbn
+FROM book_copies bc
+JOIN books b ON bc.book_id = b.id
+WHERE b.isbn = $1 AND b.deleted_at IS NULL
+ORDER BY
+  CASE WHEN bc.status = 'borrowed' THEN 0 ELSE 1 END,
+  CASE WHEN bc.status = 'available' THEN 0 ELSE 1 END,
+  bc.barcode
+LIMIT 1
+`
+
+type GetCopyByISBNWithBookInfoRow struct {
+	ID               int32            `db:"id" json:"id"`
+	BookID           int32            `db:"book_id" json:"book_id"`
+	Barcode          string           `db:"barcode" json:"barcode"`
+	Condition        pgtype.Text      `db:"condition" json:"condition"`
+	AcquisitionDate  pgtype.Date      `db:"acquisition_date" json:"acquisition_date"`
+	Status           pgtype.Text      `db:"status" json:"status"`
+	Notes            pgtype.Text      `db:"notes" json:"notes"`
+	CreatedAt        pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt        pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	BarcodePrintedAt pgtype.Timestamp `db:"barcode_printed_at" json:"barcode_printed_at"`
+	BookDbID         int32            `db:"book_db_id" json:"book_db_id"`
+	Title            string           `db:"title" json:"title"`
+	Author           string           `db:"author" json:"author"`
+	BookCode         string           `db:"book_code" json:"book_code"`
+	Isbn             pgtype.Text      `db:"isbn" json:"isbn"`
+}
+
+func (q *Queries) GetCopyByISBNWithBookInfo(ctx context.Context, isbn pgtype.Text) (GetCopyByISBNWithBookInfoRow, error) {
+	row := q.db.QueryRow(ctx, getCopyByISBNWithBookInfo, isbn)
+	var i GetCopyByISBNWithBookInfoRow
+	err := row.Scan(
+		&i.ID,
+		&i.BookID,
+		&i.Barcode,
+		&i.Condition,
+		&i.AcquisitionDate,
+		&i.Status,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.BarcodePrintedAt,
+		&i.BookDbID,
+		&i.Title,
+		&i.Author,
+		&i.BookCode,
+		&i.Isbn,
+	)
+	return i, err
+}
+
 const getFirstAvailableCopy = `-- name: GetFirstAvailableCopy :one
 SELECT id, book_id, barcode, condition, acquisition_date, status, notes, created_at, updated_at, barcode_printed_at FROM book_copies
 WHERE book_id = $1 AND status = 'available'
@@ -494,6 +547,71 @@ func (q *Queries) ListBookCopiesByStatus(ctx context.Context, arg ListBookCopies
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.BarcodePrintedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCopiesByISBNWithBookInfo = `-- name: ListCopiesByISBNWithBookInfo :many
+SELECT bc.id, bc.book_id, bc.barcode, bc.condition, bc.acquisition_date, bc.status, bc.notes, bc.created_at, bc.updated_at, bc.barcode_printed_at, b.id as book_db_id, b.title, b.author, b.book_id as book_code, b.isbn
+FROM book_copies bc
+JOIN books b ON bc.book_id = b.id
+WHERE b.isbn = $1 AND b.deleted_at IS NULL
+ORDER BY
+  CASE WHEN bc.status = 'borrowed' THEN 0 ELSE 1 END,
+  CASE WHEN bc.status = 'available' THEN 0 ELSE 1 END,
+  bc.barcode
+`
+
+type ListCopiesByISBNWithBookInfoRow struct {
+	ID               int32            `db:"id" json:"id"`
+	BookID           int32            `db:"book_id" json:"book_id"`
+	Barcode          string           `db:"barcode" json:"barcode"`
+	Condition        pgtype.Text      `db:"condition" json:"condition"`
+	AcquisitionDate  pgtype.Date      `db:"acquisition_date" json:"acquisition_date"`
+	Status           pgtype.Text      `db:"status" json:"status"`
+	Notes            pgtype.Text      `db:"notes" json:"notes"`
+	CreatedAt        pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt        pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	BarcodePrintedAt pgtype.Timestamp `db:"barcode_printed_at" json:"barcode_printed_at"`
+	BookDbID         int32            `db:"book_db_id" json:"book_db_id"`
+	Title            string           `db:"title" json:"title"`
+	Author           string           `db:"author" json:"author"`
+	BookCode         string           `db:"book_code" json:"book_code"`
+	Isbn             pgtype.Text      `db:"isbn" json:"isbn"`
+}
+
+func (q *Queries) ListCopiesByISBNWithBookInfo(ctx context.Context, isbn pgtype.Text) ([]ListCopiesByISBNWithBookInfoRow, error) {
+	rows, err := q.db.Query(ctx, listCopiesByISBNWithBookInfo, isbn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCopiesByISBNWithBookInfoRow{}
+	for rows.Next() {
+		var i ListCopiesByISBNWithBookInfoRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.BookID,
+			&i.Barcode,
+			&i.Condition,
+			&i.AcquisitionDate,
+			&i.Status,
+			&i.Notes,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.BarcodePrintedAt,
+			&i.BookDbID,
+			&i.Title,
+			&i.Author,
+			&i.BookCode,
+			&i.Isbn,
 		); err != nil {
 			return nil, err
 		}

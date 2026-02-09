@@ -39,7 +39,7 @@ type TransactionServiceInterface interface {
 	ListAllTransactions(ctx context.Context, page, limit int32) (*services.TransactionListResponse, error)
 	GetTransactionStats(ctx context.Context) (*services.TransactionStatsResponse, error)
 	// Copy-level tracking methods
-	ScanBarcode(ctx context.Context, barcode string) (*services.BarcodeScanResult, error)
+	ScanBarcode(ctx context.Context, barcode string) (*services.BarcodeScanResponse, error)
 	// Search methods
 	SearchTransactions(ctx context.Context, params services.TransactionSearchParams) (*services.TransactionSearchResponse, error)
 }
