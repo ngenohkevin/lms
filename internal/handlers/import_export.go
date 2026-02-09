@@ -315,36 +315,35 @@ func (h *ImportExportHandler) DownloadImportTemplate(c *gin.Context) {
 
 	// Generate file content based on format
 	if format == "csv" {
+		// Helper function to safely get string value
+		safeString := func(ptr *string) string {
+			if ptr == nil {
+				return ""
+			}
+			return *ptr
+		}
+
+		// Helper function to safely get int32 value
+		safeInt32 := func(ptr *int32) string {
+			if ptr == nil {
+				return ""
+			}
+			return fmt.Sprintf("%d", *ptr)
+		}
+
 		// Generate CSV content with headers and sample data
-		csvContent := "book_id,title,author,isbn,publisher,published_year,genre,description,total_copies,available_copies,shelf_location\n"
+		csvContent := "isbn,book_type,category,title,author,publisher,published_year,genre,description,shelf_location\n"
 		for _, sample := range template.SampleData {
-			// Helper function to safely get string value
-			safeString := func(ptr *string) string {
-				if ptr == nil {
-					return ""
-				}
-				return *ptr
-			}
-
-			// Helper function to safely get int32 value
-			safeInt32 := func(ptr *int32) int32 {
-				if ptr == nil {
-					return 0
-				}
-				return *ptr
-			}
-
-			csvContent += fmt.Sprintf("%s,%s,%s,%s,%s,%d,%s,%s,%d,%d,%s\n",
-				sample.BookID,
-				sample.Title,
-				sample.Author,
-				safeString(sample.ISBN),
+			csvContent += fmt.Sprintf("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
+				sample.ISBN,
+				sample.BookType,
+				sample.Category,
+				safeString(sample.Title),
+				safeString(sample.Author),
 				safeString(sample.Publisher),
 				safeInt32(sample.PublishedYear),
 				safeString(sample.Genre),
 				safeString(sample.Description),
-				safeInt32(sample.TotalCopies),
-				safeInt32(sample.AvailableCopies),
 				safeString(sample.ShelfLocation),
 			)
 		}
@@ -454,6 +453,159 @@ func (h *ImportExportHandler) GetExportHistory(c *gin.Context) {
 		Data:    response,
 		Message: "Export history retrieved successfully",
 	})
+}
+
+// ImportStudents handles student import from CSV or Excel files
+func (h *ImportExportHandler) ImportStudents(c *gin.Context) {
+	// Get the uploaded file
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "FILE_UPLOAD_ERROR",
+				Message: "Failed to get uploaded file",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+	defer file.Close()
+
+	// Validate file type
+	fileName := header.Filename
+	fileExt := strings.ToLower(filepath.Ext(fileName))
+
+	if fileExt != ".csv" && fileExt != ".xlsx" && fileExt != ".xls" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "UNSUPPORTED_FORMAT",
+				Message: "Only CSV and Excel files are supported",
+				Details: "Supported formats: .csv, .xlsx, .xls",
+			},
+		})
+		return
+	}
+
+	// Check for empty file
+	if header.Size == 0 {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "EMPTY_FILE",
+				Message: "Empty file uploaded",
+				Details: "File size cannot be zero",
+			},
+		})
+		return
+	}
+
+	// Check file size (10MB limit)
+	if header.Size > 10*1024*1024 {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "FILE_TOO_LARGE",
+				Message: "File size exceeds 10MB limit",
+			},
+		})
+		return
+	}
+
+	// Get user ID from middleware
+	userID := int32(getUserIDFromMiddleware(c))
+
+	// Process the import based on file type
+	var result *models.BulkImportResponse
+	if fileExt == ".csv" {
+		result, err = h.importExportService.ImportStudentsFromCSV(c.Request.Context(), file, fileName, userID)
+	} else {
+		result, err = h.importExportService.ImportStudentsFromExcel(c.Request.Context(), file, fileName, userID)
+	}
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "IMPORT_FAILED",
+				Message: "Failed to import students",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    result,
+		Message: "Students imported successfully",
+	})
+}
+
+// DownloadStudentImportTemplate downloads the student import template file
+func (h *ImportExportHandler) DownloadStudentImportTemplate(c *gin.Context) {
+	format := c.DefaultQuery("format", "csv")
+
+	if format != "csv" && format != "excel" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "INVALID_FORMAT",
+				Message: "Invalid template format",
+				Details: "Supported formats: csv, excel",
+			},
+		})
+		return
+	}
+
+	template, err := h.importExportService.GenerateStudentImportTemplate(format)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "TEMPLATE_GENERATION_FAILED",
+				Message: "Failed to generate student import template",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	// Set response headers
+	fileName := "student_import_template." + format
+	if format == "excel" {
+		fileName = "student_import_template.xlsx"
+		c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	} else {
+		c.Header("Content-Type", "text/csv")
+	}
+
+	c.Header("Content-Disposition", "attachment; filename=\""+fileName+"\"")
+	c.Header("Content-Transfer-Encoding", "binary")
+	c.Header("Cache-Control", "no-cache")
+
+	if format == "csv" {
+		csvContent := "student_id,first_name,last_name,year_of_study,email,phone,max_books\n"
+		for _, sample := range template.SampleData {
+			maxBooksStr := ""
+			if sample.MaxBooks > 0 {
+				maxBooksStr = fmt.Sprintf("%d", sample.MaxBooks)
+			}
+			csvContent += fmt.Sprintf("%s,%s,%s,%d,%s,%s,%s\n",
+				sample.StudentID,
+				sample.FirstName,
+				sample.LastName,
+				sample.YearOfStudy,
+				sample.Email,
+				sample.Phone,
+				maxBooksStr,
+			)
+		}
+		c.String(http.StatusOK, csvContent)
+	} else {
+		c.JSON(http.StatusOK, template)
+	}
 }
 
 // getUserIDFromMiddleware extracts user ID from middleware context

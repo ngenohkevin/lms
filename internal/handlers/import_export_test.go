@@ -93,6 +93,30 @@ func (m *MockImportExportService) ReadExcelFile(filePath string) ([]byte, error)
 	return args.Get(0).([]byte), args.Error(1)
 }
 
+func (m *MockImportExportService) ImportStudentsFromCSV(ctx context.Context, reader io.Reader, fileName string, userID int32) (*models.BulkImportResponse, error) {
+	args := m.Called(ctx, reader, fileName, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.BulkImportResponse), args.Error(1)
+}
+
+func (m *MockImportExportService) ImportStudentsFromExcel(ctx context.Context, reader io.Reader, fileName string, userID int32) (*models.BulkImportResponse, error) {
+	args := m.Called(ctx, reader, fileName, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.BulkImportResponse), args.Error(1)
+}
+
+func (m *MockImportExportService) GenerateStudentImportTemplate(format string) (*models.StudentImportTemplate, error) {
+	args := m.Called(format)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.StudentImportTemplate), args.Error(1)
+}
+
 func TestImportExportHandler_ImportBooks(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -112,7 +136,7 @@ func TestImportExportHandler_ImportBooks(t *testing.T) {
 				if err != nil {
 					return nil, err
 				}
-				_, err = part.Write([]byte("book_id,title,author\nBK001,Test Book,Test Author"))
+				_, err = part.Write([]byte("isbn,book_type,category\n978-0123456789,textbook,Science"))
 				if err != nil {
 					return nil, err
 				}
@@ -358,7 +382,7 @@ func TestImportExportHandler_GetImportTemplate(t *testing.T) {
 			setupMock: func(m *MockImportExportService) {
 				template := &models.ImportTemplate{
 					Format:       "csv",
-					Headers:      []string{"book_id", "title", "author"},
+					Headers:      []string{"isbn", "book_type", "category"},
 					Instructions: "Sample instructions",
 				}
 				m.On("GenerateImportTemplate", "csv").Return(template, nil)
@@ -429,31 +453,27 @@ func TestImportExportHandler_DownloadImportTemplate(t *testing.T) {
 		mockService := &MockImportExportService{}
 		handler := NewImportExportHandler(mockService)
 
-		isbn := "978-0123456789"
+		title := "Sample Book"
+		author := "Sample Author"
 		publisher := "Sample Publisher"
 		publishedYear := int32(2023)
 		genre := "Fiction"
-		description := "Sample Description"
-		totalCopies := int32(5)
-		availableCopies := int32(5)
 		shelfLocation := "A1-001"
 
 		template := &models.ImportTemplate{
 			Format:  "csv",
-			Headers: []string{"book_id", "title", "author"},
+			Headers: []string{"isbn", "book_type", "category"},
 			SampleData: []models.BookImportRequest{
 				{
-					BookID:          "BK001",
-					Title:           "Sample Book",
-					Author:          "Sample Author",
-					ISBN:            &isbn,
-					Publisher:       &publisher,
-					PublishedYear:   &publishedYear,
-					Genre:           &genre,
-					Description:     &description,
-					TotalCopies:     &totalCopies,
-					AvailableCopies: &availableCopies,
-					ShelfLocation:   &shelfLocation,
+					ISBN:          "978-0123456789",
+					BookType:      "textbook",
+					Category:      "Science",
+					Title:         &title,
+					Author:        &author,
+					Publisher:     &publisher,
+					PublishedYear: &publishedYear,
+					Genre:         &genre,
+					ShelfLocation: &shelfLocation,
 				},
 			},
 			Instructions: "Sample instructions",
@@ -509,4 +529,146 @@ func TestImportExportHandler_DownloadImportTemplate(t *testing.T) {
 		// Verify mock expectations
 		mockService.AssertExpectations(t)
 	})
+}
+
+func TestImportExportHandler_ImportStudents(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name           string
+		setupRequest   func() (*http.Request, error)
+		setupMock      func(*MockImportExportService)
+		expectedStatus int
+		expectedBody   func(t *testing.T, resp *httptest.ResponseRecorder)
+	}{
+		{
+			name: "successful CSV import",
+			setupRequest: func() (*http.Request, error) {
+				body := &bytes.Buffer{}
+				writer := multipart.NewWriter(body)
+				part, err := writer.CreateFormFile("file", "students.csv")
+				if err != nil {
+					return nil, err
+				}
+				_, err = part.Write([]byte("student_id,first_name,last_name,year_of_study\nSTU2025001,John,Doe,1"))
+				if err != nil {
+					return nil, err
+				}
+				writer.Close()
+
+				req := httptest.NewRequest("POST", "/api/v1/students/bulk-import", body)
+				req.Header.Set("Content-Type", writer.FormDataContentType())
+				return req, nil
+			},
+			setupMock: func(m *MockImportExportService) {
+				result := &models.BulkImportResponse{
+					TotalRecords:    1,
+					SuccessfulCount: 1,
+					FailedCount:     0,
+				}
+				m.On("ImportStudentsFromCSV", mock.Anything, mock.Anything, "students.csv", mock.Anything).Return(result, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedBody: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				var response SuccessResponse
+				err := json.Unmarshal(resp.Body.Bytes(), &response)
+				require.NoError(t, err)
+				assert.True(t, response.Success)
+				assert.Equal(t, "Students imported successfully", response.Message)
+			},
+		},
+		{
+			name: "no file uploaded",
+			setupRequest: func() (*http.Request, error) {
+				req := httptest.NewRequest("POST", "/api/v1/students/bulk-import", nil)
+				req.Header.Set("Content-Type", "application/json")
+				return req, nil
+			},
+			setupMock:      func(m *MockImportExportService) {},
+			expectedStatus: http.StatusBadRequest,
+			expectedBody: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				var response ErrorResponse
+				err := json.Unmarshal(resp.Body.Bytes(), &response)
+				require.NoError(t, err)
+				assert.False(t, response.Success)
+				assert.Equal(t, "FILE_UPLOAD_ERROR", response.Error.Code)
+			},
+		},
+		{
+			name: "invalid file type",
+			setupRequest: func() (*http.Request, error) {
+				body := &bytes.Buffer{}
+				writer := multipart.NewWriter(body)
+				part, err := writer.CreateFormFile("file", "students.txt")
+				if err != nil {
+					return nil, err
+				}
+				_, err = part.Write([]byte("invalid file"))
+				if err != nil {
+					return nil, err
+				}
+				writer.Close()
+
+				req := httptest.NewRequest("POST", "/api/v1/students/bulk-import", body)
+				req.Header.Set("Content-Type", writer.FormDataContentType())
+				return req, nil
+			},
+			setupMock:      func(m *MockImportExportService) {},
+			expectedStatus: http.StatusBadRequest,
+			expectedBody: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				var response ErrorResponse
+				err := json.Unmarshal(resp.Body.Bytes(), &response)
+				require.NoError(t, err)
+				assert.False(t, response.Success)
+				assert.Equal(t, "UNSUPPORTED_FORMAT", response.Error.Code)
+			},
+		},
+		{
+			name: "empty file",
+			setupRequest: func() (*http.Request, error) {
+				body := &bytes.Buffer{}
+				writer := multipart.NewWriter(body)
+				_, err := writer.CreateFormFile("file", "empty.csv")
+				if err != nil {
+					return nil, err
+				}
+				writer.Close()
+
+				req := httptest.NewRequest("POST", "/api/v1/students/bulk-import", body)
+				req.Header.Set("Content-Type", writer.FormDataContentType())
+				return req, nil
+			},
+			setupMock:      func(m *MockImportExportService) {},
+			expectedStatus: http.StatusBadRequest,
+			expectedBody: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				var response ErrorResponse
+				err := json.Unmarshal(resp.Body.Bytes(), &response)
+				require.NoError(t, err)
+				assert.False(t, response.Success)
+				assert.Equal(t, "EMPTY_FILE", response.Error.Code)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockService := &MockImportExportService{}
+			handler := NewImportExportHandler(mockService)
+			tt.setupMock(mockService)
+
+			req, err := tt.setupRequest()
+			require.NoError(t, err)
+
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = req
+
+			handler.ImportStudents(c)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+			tt.expectedBody(t, w)
+
+			mockService.AssertExpectations(t)
+		})
+	}
 }

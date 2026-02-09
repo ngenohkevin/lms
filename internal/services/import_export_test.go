@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -101,19 +102,39 @@ func (m *MockBookService) ProcessRichTextDescription(ctx context.Context, req mo
 	return &content, args.Error(1)
 }
 
+// MockISBNService is a mock implementation of ISBNServiceInterface
+type MockISBNService struct {
+	mock.Mock
+}
+
+func (m *MockISBNService) FetchBookInfoByISBN(ctx context.Context, isbn string) (*models.ISBNBookInfo, error) {
+	args := m.Called(ctx, isbn)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	info := args.Get(0).(*models.ISBNBookInfo)
+	return info, args.Error(1)
+}
+
+func (m *MockISBNService) ValidateISBN(isbn string) error {
+	args := m.Called(isbn)
+	return args.Error(0)
+}
+
 func TestImportExportService(t *testing.T) {
 	// Create temporary directory for test files
 	tmpDir, err := os.MkdirTemp("", "import_export_test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	// Create mock book service
+	// Create mock services
 	mockBookService := &MockBookService{}
+	mockISBNService := &MockISBNService{}
 
 	// Create import/export service
 	// For testing, we'll need to use a real queries instance or refactor to use interfaces
-	// For now, create service with nil queries - this will test non-history functionality
-	service := NewImportExportService(mockBookService, nil, tmpDir)
+	// For now, create service with nil queries and nil studentService - this will test non-history functionality
+	service := NewImportExportService(mockBookService, mockISBNService, nil, nil, tmpDir)
 
 	t.Run("NewImportExportService", func(t *testing.T) {
 		assert.NotNil(t, service)
@@ -130,23 +151,23 @@ func TestImportExportService(t *testing.T) {
 		assert.NotEmpty(t, template.Instructions)
 
 		// Check that required headers are present
-		expectedHeaders := []string{"book_id", "title", "author", "isbn", "publisher", "published_year", "genre", "description", "total_copies", "available_copies", "shelf_location"}
+		expectedHeaders := []string{"isbn", "book_type", "category", "title", "author", "publisher", "published_year", "genre", "description", "shelf_location"}
 		for _, header := range expectedHeaders {
 			assert.Contains(t, template.Headers, header)
 		}
 
 		// Check sample data
 		assert.Len(t, template.SampleData, 2)
-		assert.Equal(t, "BK001", template.SampleData[0].BookID)
-		assert.Equal(t, "Sample Book Title", template.SampleData[0].Title)
-		assert.Equal(t, "Sample Author", template.SampleData[0].Author)
+		assert.Equal(t, "978-0743273565", template.SampleData[0].ISBN)
+		assert.Equal(t, "storybook", template.SampleData[0].BookType)
+		assert.Equal(t, "Fiction", template.SampleData[0].Category)
 	})
 
 	t.Run("ImportBooksFromCSV_Success", func(t *testing.T) {
-		// Create test CSV content
-		csvContent := `book_id,title,author,isbn,publisher,published_year,genre,description,total_copies,available_copies,shelf_location
-TEST001,Test Book 1,Test Author 1,978-0-123456-78-9,Test Publisher,2023,Fiction,Test Description,2,2,T1-001
-TEST002,Test Book 2,Test Author 2,978-0-123456-79-6,Test Publisher,2023,Non-Fiction,Test Description 2,3,3,T1-002`
+		// Create test CSV content with new format
+		csvContent := `isbn,book_type,category,title,author,publisher,published_year,genre,description,shelf_location
+978-0-123456-78-9,textbook,Science,Test Book 1,Test Author 1,Test Publisher,2023,Fiction,Test Description,T1-001
+978-0-123456-79-6,storybook,Fiction,Test Book 2,Test Author 2,Test Publisher,2023,Non-Fiction,Test Description 2,T1-002`
 
 		// Create temporary CSV file
 		csvFile, err := os.CreateTemp(tmpDir, "test_*.csv")
@@ -162,7 +183,11 @@ TEST002,Test Book 2,Test Author 2,978-0-123456-79-6,Test Publisher,2023,Non-Fict
 		require.NoError(t, err)
 		defer file.Close()
 
-		// Set up mock expectations
+		// Set up ISBN service mock - return nil (ISBN lookup skipped since title/author provided)
+		mockISBNService.On("FetchBookInfoByISBN", mock.Anything, "978-0-123456-78-9").Return((*models.ISBNBookInfo)(nil), fmt.Errorf("not found")).Maybe()
+		mockISBNService.On("FetchBookInfoByISBN", mock.Anything, "978-0-123456-79-6").Return((*models.ISBNBookInfo)(nil), fmt.Errorf("not found")).Maybe()
+
+		// Set up mock expectations for CreateBook
 		mockBookService.On("CreateBook", mock.Anything, mock.MatchedBy(func(req models.CreateBookRequest) bool {
 			return req.Title == "Test Book 1"
 		})).Return(models.BookResponse{ID: 1, BookID: "HGL-T000001", Title: "Test Book 1"}, nil)
@@ -171,7 +196,7 @@ TEST002,Test Book 2,Test Author 2,978-0-123456-79-6,Test Publisher,2023,Non-Fict
 			return req.Title == "Test Book 2"
 		})).Return(models.BookResponse{ID: 2, BookID: "HGL-T000002", Title: "Test Book 2"}, nil)
 
-		// Note: History tracking will be skipped in this test since queries is nil
+		// Note: History tracking and category lookup will be skipped since queries is nil
 
 		// Test import
 		result, err := service.ImportBooksFromCSV(context.Background(), file, "test.csv", 1)
@@ -189,10 +214,10 @@ TEST002,Test Book 2,Test Author 2,978-0-123456-79-6,Test Publisher,2023,Non-Fict
 	})
 
 	t.Run("ImportBooksFromCSV_ValidationError", func(t *testing.T) {
-		// Create test CSV content with invalid data
-		csvContent := `book_id,title,author,isbn,publisher,published_year,genre,description,total_copies,available_copies,shelf_location
-,Invalid Book,Test Author,978-0-123456-78-9,Test Publisher,2023,Fiction,Test Description,2,2,T1-001
-TEST003,,,978-0-123456-79-6,Test Publisher,2023,Non-Fiction,Test Description 2,3,3,T1-002`
+		// Create test CSV content with invalid data (missing required fields)
+		csvContent := `isbn,book_type,category,title,author,publisher,published_year,genre,description,shelf_location
+,textbook,Science,Invalid Book,Test Author,Test Publisher,2023,Fiction,Test Description,T1-001
+978-0-123456-79-6,,Science,,,Test Publisher,2023,Non-Fiction,Test Description 2,T1-002`
 
 		// Create temporary CSV file
 		csvFile, err := os.CreateTemp(tmpDir, "test_invalid_*.csv")
@@ -219,8 +244,8 @@ TEST003,,,978-0-123456-79-6,Test Publisher,2023,Non-Fiction,Test Description 2,3
 		assert.Empty(t, result.ImportedBooks)
 
 		// Check that errors contain validation messages
-		assert.Contains(t, result.Errors[0].Message, "Book ID is required")
-		assert.Contains(t, result.Errors[1].Message, "Title is required")
+		assert.Contains(t, result.Errors[0].Message, "ISBN is required")
+		assert.Contains(t, result.Errors[1].Message, "Book type is required")
 	})
 
 	t.Run("ImportBooksFromCSV_EmptyFile", func(t *testing.T) {
@@ -260,10 +285,8 @@ this is not a valid csv file`
 		require.NoError(t, err)
 		defer file.Close()
 
-		// Test import - this should succeed but fail during validation
+		// Test import - CSV parser is lenient, so this may not fail at parse time
 		result, err := service.ImportBooksFromCSV(context.Background(), file, "test_invalid_csv.csv", 1)
-		// CSV parser is lenient, so this may not fail at parse time
-		// Instead it should fail during book creation
 		if err != nil {
 			assert.Contains(t, err.Error(), "failed to parse CSV")
 		} else {
@@ -371,15 +394,15 @@ this is not a valid csv file`
 		assert.True(t, strings.HasSuffix(result.FilePath, ".xlsx"))
 	})
 
-	t.Run("GenerateImportTemplate", func(t *testing.T) {
+	t.Run("GenerateImportTemplate_Formats", func(t *testing.T) {
 		// Test CSV template generation
 		csvTemplate, err := service.GenerateImportTemplate("csv")
 		require.NoError(t, err)
 		assert.Equal(t, "csv", csvTemplate.Format)
 		assert.NotEmpty(t, csvTemplate.Headers)
-		assert.Contains(t, csvTemplate.Headers, "book_id")
-		assert.Contains(t, csvTemplate.Headers, "title")
-		assert.Contains(t, csvTemplate.Headers, "author")
+		assert.Contains(t, csvTemplate.Headers, "isbn")
+		assert.Contains(t, csvTemplate.Headers, "book_type")
+		assert.Contains(t, csvTemplate.Headers, "category")
 
 		// Test Excel template generation
 		excelTemplate, err := service.GenerateImportTemplate("excel")
@@ -416,103 +439,165 @@ func TestImportExportValidation(t *testing.T) {
 	t.Run("BookImportRequest_Validate", func(t *testing.T) {
 		// Test valid book
 		validBook := models.BookImportRequest{
-			BookID:          "VALID001",
-			Title:           "Valid Book",
-			Author:          "Valid Author",
-			ISBN:            stringPtr("978-0-123456-78-9"),
-			Publisher:       stringPtr("Valid Publisher"),
-			PublishedYear:   int32Ptr(2023),
-			Genre:           stringPtr("Fiction"),
-			Description:     stringPtr("Valid Description"),
-			TotalCopies:     int32Ptr(2),
-			AvailableCopies: int32Ptr(2),
-			ShelfLocation:   stringPtr("V1-001"),
+			ISBN:          "978-0-123456-78-9",
+			BookType:      "textbook",
+			Category:      "Science",
+			Title:         stringPtr("Valid Book"),
+			Author:        stringPtr("Valid Author"),
+			Publisher:     stringPtr("Valid Publisher"),
+			PublishedYear: int32Ptr(2023),
+			Genre:         stringPtr("Fiction"),
+			Description:   stringPtr("Valid Description"),
+			ShelfLocation: stringPtr("V1-001"),
 		}
 
 		err := validBook.Validate()
 		assert.NoError(t, err)
 
-		// Test invalid book - empty book ID
+		// Test invalid book - empty ISBN
 		invalidBook := models.BookImportRequest{
-			BookID: "",
-			Title:  "Invalid Book",
-			Author: "Invalid Author",
+			ISBN:     "",
+			BookType: "textbook",
+			Category: "Science",
 		}
 
 		err = invalidBook.Validate()
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "Book ID is required")
+		assert.Contains(t, err.Error(), "ISBN is required")
 
-		// Test invalid book - empty title
+		// Test invalid book - empty book type
 		invalidBook = models.BookImportRequest{
-			BookID: "INVALID001",
-			Title:  "",
-			Author: "Invalid Author",
+			ISBN:     "978-0-123456-78-9",
+			BookType: "",
+			Category: "Science",
 		}
 
 		err = invalidBook.Validate()
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "Title is required")
+		assert.Contains(t, err.Error(), "Book type is required")
 
-		// Test invalid book - empty author
+		// Test invalid book - invalid book type
 		invalidBook = models.BookImportRequest{
-			BookID: "INVALID001",
-			Title:  "Invalid Book",
-			Author: "",
+			ISBN:     "978-0-123456-78-9",
+			BookType: "comic",
+			Category: "Science",
 		}
 
 		err = invalidBook.Validate()
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "Author is required")
+		assert.Contains(t, err.Error(), "Book type must be 'textbook' or 'storybook'")
 
-		// Test invalid book - negative total copies
+		// Test invalid book - empty category
 		invalidBook = models.BookImportRequest{
-			BookID:      "INVALID001",
-			Title:       "Invalid Book",
-			Author:      "Invalid Author",
-			TotalCopies: int32Ptr(-1),
+			ISBN:     "978-0-123456-78-9",
+			BookType: "textbook",
+			Category: "",
 		}
 
 		err = invalidBook.Validate()
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "Total copies cannot be negative")
-
-		// Test invalid book - negative available copies
-		invalidBook = models.BookImportRequest{
-			BookID:          "INVALID001",
-			Title:           "Invalid Book",
-			Author:          "Invalid Author",
-			AvailableCopies: int32Ptr(-1),
-		}
-
-		err = invalidBook.Validate()
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "Available copies cannot be negative")
-
-		// Test invalid book - available copies exceed total copies
-		invalidBook = models.BookImportRequest{
-			BookID:          "INVALID001",
-			Title:           "Invalid Book",
-			Author:          "Invalid Author",
-			TotalCopies:     int32Ptr(2),
-			AvailableCopies: int32Ptr(5),
-		}
-
-		err = invalidBook.Validate()
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "Available copies cannot exceed total copies")
+		assert.Contains(t, err.Error(), "Category is required")
 
 		// Test invalid book - invalid published year
 		invalidBook = models.BookImportRequest{
-			BookID:        "INVALID001",
-			Title:         "Invalid Book",
-			Author:        "Invalid Author",
+			ISBN:          "978-0-123456-78-9",
+			BookType:      "textbook",
+			Category:      "Science",
 			PublishedYear: int32Ptr(500),
 		}
 
 		err = invalidBook.Validate()
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "Published year must be between 1000 and current year")
+	})
+}
+
+func TestImportExportService_StudentImport(t *testing.T) {
+	// Create temporary directory for test files
+	tmpDir, err := os.MkdirTemp("", "student_import_test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	t.Run("GenerateStudentImportTemplate", func(t *testing.T) {
+		service := NewImportExportService(nil, nil, nil, nil, tmpDir)
+
+		template, err := service.GenerateStudentImportTemplate("csv")
+		require.NoError(t, err)
+
+		assert.Equal(t, "csv", template.Format)
+		assert.NotEmpty(t, template.Headers)
+		assert.NotEmpty(t, template.SampleData)
+		assert.NotEmpty(t, template.Instructions)
+
+		// Check that required headers are present
+		expectedHeaders := []string{"student_id", "first_name", "last_name", "year_of_study", "email", "phone", "max_books"}
+		for _, header := range expectedHeaders {
+			assert.Contains(t, template.Headers, header)
+		}
+
+		// Check sample data
+		assert.Len(t, template.SampleData, 2)
+		assert.Equal(t, "STU2025001", template.SampleData[0].StudentID)
+		assert.Equal(t, "John", template.SampleData[0].FirstName)
+	})
+
+	t.Run("GenerateStudentImportTemplate_ExcelFormat", func(t *testing.T) {
+		service := NewImportExportService(nil, nil, nil, nil, tmpDir)
+
+		template, err := service.GenerateStudentImportTemplate("excel")
+		require.NoError(t, err)
+		assert.Equal(t, "excel", template.Format)
+		assert.NotEmpty(t, template.Headers)
+	})
+
+	t.Run("ImportStudentsFromCSV_EmptyFile", func(t *testing.T) {
+		service := NewImportExportService(nil, nil, nil, nil, tmpDir)
+
+		// Create empty CSV file
+		csvFile, err := os.CreateTemp(tmpDir, "test_empty_*.csv")
+		require.NoError(t, err)
+		defer os.Remove(csvFile.Name())
+		csvFile.Close()
+
+		// Open file for reading
+		file, err := os.Open(csvFile.Name())
+		require.NoError(t, err)
+		defer file.Close()
+
+		_, err = service.ImportStudentsFromCSV(context.Background(), file, "test_empty.csv", 1)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "empty csv file given")
+	})
+
+	t.Run("ImportStudentsFromCSV_ValidationError", func(t *testing.T) {
+		service := NewImportExportService(nil, nil, nil, nil, tmpDir)
+
+		// Create CSV with invalid student IDs
+		csvContent := `student_id,first_name,last_name,year_of_study,email,phone,max_books
+INVALID001,John,Doe,1,john@example.com,,5
+STU2025002,,Smith,2,,,`
+
+		csvFile, err := os.CreateTemp(tmpDir, "test_invalid_*.csv")
+		require.NoError(t, err)
+		defer os.Remove(csvFile.Name())
+
+		_, err = csvFile.WriteString(csvContent)
+		require.NoError(t, err)
+		csvFile.Close()
+
+		file, err := os.Open(csvFile.Name())
+		require.NoError(t, err)
+		defer file.Close()
+
+		// studentService is nil, so it will panic if validation passes
+		// But these should fail at validation
+		result, err := service.ImportStudentsFromCSV(context.Background(), file, "test_invalid.csv", 1)
+		require.NoError(t, err) // No system error, just validation errors
+
+		assert.Equal(t, 2, result.TotalRecords)
+		assert.Equal(t, 0, result.SuccessfulCount)
+		assert.Equal(t, 2, result.FailedCount)
+		assert.Len(t, result.Errors, 2)
 	})
 }
 

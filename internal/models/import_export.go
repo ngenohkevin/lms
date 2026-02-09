@@ -6,17 +6,16 @@ import (
 
 // BookImportRequest represents the data structure for importing books
 type BookImportRequest struct {
-	BookID          string  `json:"book_id" csv:"book_id" validate:"required"`
-	Title           string  `json:"title" csv:"title" validate:"required"`
-	Author          string  `json:"author" csv:"author" validate:"required"`
-	ISBN            *string `json:"isbn" csv:"isbn"`
-	Publisher       *string `json:"publisher" csv:"publisher"`
-	PublishedYear   *int32  `json:"published_year" csv:"published_year"`
-	Genre           *string `json:"genre" csv:"genre"`
-	Description     *string `json:"description" csv:"description"`
-	TotalCopies     *int32  `json:"total_copies" csv:"total_copies"`
-	AvailableCopies *int32  `json:"available_copies" csv:"available_copies"`
-	ShelfLocation   *string `json:"shelf_location" csv:"shelf_location"`
+	ISBN          string  `json:"isbn" csv:"isbn" validate:"required"`
+	BookType      string  `json:"book_type" csv:"book_type" validate:"required"`
+	Category      string  `json:"category" csv:"category" validate:"required"`
+	Title         *string `json:"title" csv:"title"`
+	Author        *string `json:"author" csv:"author"`
+	Publisher     *string `json:"publisher" csv:"publisher"`
+	PublishedYear *int32  `json:"published_year" csv:"published_year"`
+	Genre         *string `json:"genre" csv:"genre"`
+	Description   *string `json:"description" csv:"description"`
+	ShelfLocation *string `json:"shelf_location" csv:"shelf_location"`
 }
 
 // BookExportData represents the data structure for exporting books
@@ -50,7 +49,7 @@ type ImportResult struct {
 // ImportError represents an error that occurred during import
 type ImportError struct {
 	Row     int    `json:"row"`
-	BookID  string `json:"book_id"`
+	ISBN    string `json:"isbn"`
 	Field   string `json:"field,omitempty"`
 	Message string `json:"message"`
 	Type    string `json:"type"` // validation, duplicate, database, etc.
@@ -105,25 +104,27 @@ type ImportTemplate struct {
 	Format       string              `json:"format"` // csv or excel
 }
 
+// StudentImportTemplate represents the template structure for student import
+type StudentImportTemplate struct {
+	Headers      []string                   `json:"headers"`
+	SampleData   []BulkImportStudentRequest `json:"sample_data"`
+	Instructions string                     `json:"instructions"`
+	Format       string                     `json:"format"`
+}
+
 // Validate validates the book import request
 func (r *BookImportRequest) Validate() error {
-	if r.BookID == "" {
-		return ErrValidationFailed{Field: "book_id", Message: "Book ID is required"}
+	if r.ISBN == "" {
+		return ErrValidationFailed{Field: "isbn", Message: "ISBN is required"}
 	}
-	if r.Title == "" {
-		return ErrValidationFailed{Field: "title", Message: "Title is required"}
+	if r.BookType == "" {
+		return ErrValidationFailed{Field: "book_type", Message: "Book type is required"}
 	}
-	if r.Author == "" {
-		return ErrValidationFailed{Field: "author", Message: "Author is required"}
+	if r.BookType != string(BookTypeTextbook) && r.BookType != string(BookTypeStorybook) {
+		return ErrValidationFailed{Field: "book_type", Message: "Book type must be 'textbook' or 'storybook'"}
 	}
-	if r.TotalCopies != nil && *r.TotalCopies < 0 {
-		return ErrValidationFailed{Field: "total_copies", Message: "Total copies cannot be negative"}
-	}
-	if r.AvailableCopies != nil && *r.AvailableCopies < 0 {
-		return ErrValidationFailed{Field: "available_copies", Message: "Available copies cannot be negative"}
-	}
-	if r.TotalCopies != nil && r.AvailableCopies != nil && *r.AvailableCopies > *r.TotalCopies {
-		return ErrValidationFailed{Field: "available_copies", Message: "Available copies cannot exceed total copies"}
+	if r.Category == "" {
+		return ErrValidationFailed{Field: "category", Message: "Category is required"}
 	}
 	if r.PublishedYear != nil && (*r.PublishedYear < 1000 || *r.PublishedYear > int32(time.Now().Year())) {
 		return ErrValidationFailed{Field: "published_year", Message: "Published year must be between 1000 and current year"}

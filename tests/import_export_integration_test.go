@@ -69,7 +69,7 @@ func TestImportExportIntegration(t *testing.T) {
 	// Initialize services
 	mockCache := &MockCacheService{}
 	bookService := services.NewBookService(db.Queries, mockCache)
-	importExportService := services.NewImportExportService(bookService, db.Queries, "./testdata")
+	importExportService := services.NewImportExportService(bookService, nil, nil, db.Queries, "./testdata")
 
 	// Initialize handlers
 	importExportHandler := handlers.NewImportExportHandler(importExportService)
@@ -390,7 +390,7 @@ func TestImportExportFileOperations(t *testing.T) {
 
 		mockCache := &MockCacheService{}
 		bookService := services.NewBookService(db.Queries, mockCache)
-		importExportService := services.NewImportExportService(bookService, db.Queries, "./testdata")
+		importExportService := services.NewImportExportService(bookService, nil, nil, db.Queries, "./testdata")
 		importExportHandler := handlers.NewImportExportHandler(importExportService)
 
 		gin.SetMode(gin.TestMode)
@@ -456,7 +456,7 @@ func TestImportExportFileOperations(t *testing.T) {
 
 		mockCache := &MockCacheService{}
 		bookService := services.NewBookService(db.Queries, mockCache)
-		importExportService := services.NewImportExportService(bookService, db.Queries, "./testdata")
+		importExportService := services.NewImportExportService(bookService, nil, nil, db.Queries, "./testdata")
 		importExportHandler := handlers.NewImportExportHandler(importExportService)
 
 		gin.SetMode(gin.TestMode)
@@ -531,7 +531,7 @@ func TestImportExportPersistence(t *testing.T) {
 
 		mockCache := &MockCacheService{}
 		bookService := services.NewBookService(db.Queries, mockCache)
-		importExportService := services.NewImportExportService(bookService, db.Queries, "./testdata")
+		importExportService := services.NewImportExportService(bookService, nil, nil, db.Queries, "./testdata")
 
 		// Use a unique book ID and ISBN for each test run to avoid conflicts
 		timestamp := time.Now().Unix()

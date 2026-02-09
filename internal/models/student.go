@@ -114,6 +114,7 @@ type BulkImportStudentRequest struct {
 	Email       string `csv:"email" binding:"omitempty,email"`
 	Phone       string `csv:"phone" binding:"omitempty"`
 	YearOfStudy int32  `csv:"year_of_study" binding:"required,min=1,max=8"`
+	MaxBooks    int32  `csv:"max_books" binding:"omitempty"`
 }
 
 // BulkImportResponse represents the response for bulk import operations

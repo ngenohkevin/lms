@@ -129,7 +129,7 @@ func main() {
 	isbnService := services.NewISBNService()
 	recommendationService := services.NewRecommendationService(bookService, db.Queries)
 	ratingService := services.NewRatingService(cacheService, bookService, studentService)
-	importExportService := services.NewImportExportService(bookService, db.Queries, "./uploads")
+	importExportService := services.NewImportExportService(bookService, isbnService, studentService, db.Queries, "./uploads")
 	fineService := services.NewFineService(db.Queries, cfg.Borrowing.FinePerDay).
 		WithCacheService(cacheService).
 		WithMaxFineAmount(cfg.Borrowing.MaxFineAmount).
@@ -500,7 +500,7 @@ func setupRoutes(
 				students.PUT("/:id/admin-notes", requirePerm("students.admin_notes"), studentHandler.UpdateAdminNotes)
 
 				// Bulk operations
-				students.POST("/bulk-import", requirePerm("students.create"), studentHandler.BulkImportStudents)
+				students.POST("/bulk-import", requirePerm("students.create"), importExportHandler.ImportStudents)
 				students.POST("/generate-id", requirePerm("students.create"), studentHandler.GenerateStudentID)
 				students.PUT("/status/bulk", requirePerm("students.update"), studentHandler.BulkUpdateStatus)
 				students.POST("/export", requirePerm("reports.export"), studentHandler.ExportStudents)
@@ -634,7 +634,7 @@ func setupRoutes(
 			importExport := protected.Group("/import-export")
 			{
 				importExport.POST("/import/books", requirePerm("books.create"), importExportHandler.ImportBooks)
-				importExport.POST("/import/students", requirePerm("students.create"), studentHandler.BulkImportStudents)
+				importExport.POST("/import/students", requirePerm("students.create"), importExportHandler.ImportStudents)
 				importExport.GET("/export/books", requirePerm("reports.export"), importExportHandler.ExportBooks)
 				importExport.GET("/export/students", requirePerm("reports.export"), studentHandler.ExportStudents)
 				importExport.GET("/history", requirePerm("reports.view"), importExportHandler.GetImportHistory)

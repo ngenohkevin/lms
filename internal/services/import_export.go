@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,28 +23,35 @@ import (
 type ImportExportServiceInterface interface {
 	ImportBooksFromCSV(ctx context.Context, reader io.Reader, fileName string, userID int32) (*models.ImportResult, error)
 	ImportBooksFromExcel(ctx context.Context, reader io.Reader, fileName string, userID int32) (*models.ImportResult, error)
+	ImportStudentsFromCSV(ctx context.Context, reader io.Reader, fileName string, userID int32) (*models.BulkImportResponse, error)
+	ImportStudentsFromExcel(ctx context.Context, reader io.Reader, fileName string, userID int32) (*models.BulkImportResponse, error)
 	ExportBooksToCSV(ctx context.Context, req models.ExportRequest, userID int32) (*models.ExportResult, error)
 	ExportBooksToCSVContent(ctx context.Context, req models.ExportRequest) (string, string, error)
 	ExportBooksToExcel(ctx context.Context, req models.ExportRequest, userID int32) (*models.ExportResult, error)
 	ExportBooksToExcelContent(ctx context.Context, req models.ExportRequest) ([]byte, string, error)
 	ReadExcelFile(filePath string) ([]byte, error)
 	GenerateImportTemplate(format string) (*models.ImportTemplate, error)
+	GenerateStudentImportTemplate(format string) (*models.StudentImportTemplate, error)
 	GetImportHistory(ctx context.Context, userID int32, page, limit int, operationType, entityType, status string) ([]models.ImportHistory, models.Pagination, error)
 }
 
 // ImportExportService handles book import and export operations
 type ImportExportService struct {
-	bookService BookServiceInterface
-	queries     *queries.Queries
-	uploadPath  string
+	bookService    BookServiceInterface
+	isbnService    ISBNServiceInterface
+	studentService *StudentService
+	queries        *queries.Queries
+	uploadPath     string
 }
 
 // NewImportExportService creates a new import/export service
-func NewImportExportService(bookService BookServiceInterface, queries *queries.Queries, uploadPath string) *ImportExportService {
+func NewImportExportService(bookService BookServiceInterface, isbnService ISBNServiceInterface, studentService *StudentService, queries *queries.Queries, uploadPath string) *ImportExportService {
 	return &ImportExportService{
-		bookService: bookService,
-		queries:     queries,
-		uploadPath:  uploadPath,
+		bookService:    bookService,
+		isbnService:    isbnService,
+		studentService: studentService,
+		queries:        queries,
+		uploadPath:     uploadPath,
 	}
 }
 
@@ -160,7 +168,7 @@ func (s *ImportExportService) processImport(ctx context.Context, importData []mo
 
 			result.Errors = append(result.Errors, models.ImportError{
 				Row:     rowNum,
-				BookID:  bookData.BookID,
+				ISBN:    bookData.ISBN,
 				Message: err.Error(),
 				Type:    "validation",
 			})
@@ -168,20 +176,161 @@ func (s *ImportExportService) processImport(ctx context.Context, importData []mo
 			continue
 		}
 
-		// Convert to CreateBookRequest
-		// BookType defaults to textbook for imports, BookID is auto-generated
+		// Rate limit ISBN lookups (500ms between requests)
+		if i > 0 {
+			time.Sleep(500 * time.Millisecond)
+		}
+
+		// Look up book info by ISBN
+		var isbnInfo *models.ISBNBookInfo
+		if s.isbnService != nil {
+			info, err := s.isbnService.FetchBookInfoByISBN(ctx, bookData.ISBN)
+			if err != nil {
+				slog.Warn("ISBN lookup failed, using CSV data only", "isbn", bookData.ISBN, "error", err)
+			} else {
+				isbnInfo = info
+			}
+		}
+
+		// Build CreateBookRequest: CSV values take priority over ISBN-fetched values
+		isbn := bookData.ISBN
 		createReq := models.CreateBookRequest{
-			BookType:        models.BookTypeTextbook,
-			Title:           bookData.Title,
-			Author:          bookData.Author,
-			ISBN:            bookData.ISBN,
-			Publisher:       bookData.Publisher,
-			PublishedYear:   bookData.PublishedYear,
-			Genre:           bookData.Genre,
-			Description:     bookData.Description,
-			TotalCopies:     bookData.TotalCopies,
-			AvailableCopies: bookData.AvailableCopies,
-			ShelfLocation:   bookData.ShelfLocation,
+			BookType: models.BookType(bookData.BookType),
+			ISBN:     &isbn,
+		}
+
+		// Title: CSV > ISBN > empty
+		if bookData.Title != nil && *bookData.Title != "" {
+			createReq.Title = *bookData.Title
+		} else if isbnInfo != nil && isbnInfo.Title != "" {
+			createReq.Title = isbnInfo.Title
+		}
+
+		// Author: CSV > ISBN > empty
+		if bookData.Author != nil && *bookData.Author != "" {
+			createReq.Author = *bookData.Author
+		} else if isbnInfo != nil && isbnInfo.Authors != "" {
+			createReq.Author = isbnInfo.Authors
+		}
+
+		// Publisher: CSV > ISBN
+		if bookData.Publisher != nil && *bookData.Publisher != "" {
+			createReq.Publisher = bookData.Publisher
+		} else if isbnInfo != nil && isbnInfo.Publisher != "" {
+			createReq.Publisher = &isbnInfo.Publisher
+		}
+
+		// PublishedYear: CSV > ISBN
+		if bookData.PublishedYear != nil {
+			createReq.PublishedYear = bookData.PublishedYear
+		} else if isbnInfo != nil && isbnInfo.PublishedYear > 0 {
+			year := int32(isbnInfo.PublishedYear)
+			createReq.PublishedYear = &year
+		}
+
+		// Genre: CSV > ISBN
+		if bookData.Genre != nil && *bookData.Genre != "" {
+			createReq.Genre = bookData.Genre
+		} else if isbnInfo != nil && isbnInfo.Genre != "" {
+			createReq.Genre = &isbnInfo.Genre
+		}
+
+		// Description: CSV > ISBN
+		if bookData.Description != nil && *bookData.Description != "" {
+			createReq.Description = bookData.Description
+		} else if isbnInfo != nil && isbnInfo.Description != "" {
+			createReq.Description = &isbnInfo.Description
+		}
+
+		// CoverImageURL from ISBN
+		if isbnInfo != nil && isbnInfo.CoverImageURL != "" {
+			createReq.CoverImageURL = &isbnInfo.CoverImageURL
+		}
+
+		// Language from ISBN
+		if isbnInfo != nil && isbnInfo.Language != "" {
+			createReq.Language = &isbnInfo.Language
+		}
+
+		// PageCount from ISBN
+		if isbnInfo != nil && isbnInfo.PageCount > 0 {
+			pc := int32(isbnInfo.PageCount)
+			createReq.PageCount = &pc
+		}
+
+		// ShelfLocation from CSV only
+		createReq.ShelfLocation = bookData.ShelfLocation
+
+		// Resolve category name to category_id
+		if s.queries != nil {
+			cat, err := s.queries.GetCategoryByName(ctx, bookData.Category)
+			if err != nil {
+				// Record error
+				if s.queries != nil {
+					errorParams := queries.CreateImportErrorParams{
+						ImportHistoryID: historyID,
+						RowNumber:       int32(rowNum),
+						ErrorType:       "validation",
+						ErrorMessage:    fmt.Sprintf("category '%s' not found", bookData.Category),
+					}
+					_, _ = s.queries.CreateImportError(ctx, errorParams)
+				}
+
+				result.Errors = append(result.Errors, models.ImportError{
+					Row:     rowNum,
+					ISBN:    bookData.ISBN,
+					Field:   "category",
+					Message: fmt.Sprintf("category '%s' not found", bookData.Category),
+					Type:    "validation",
+				})
+				result.FailureCount++
+				continue
+			}
+			createReq.CategoryID = &cat.ID
+		}
+
+		// Require title and author after ISBN lookup
+		if createReq.Title == "" {
+			errMsg := "title is required (not provided in CSV and ISBN lookup did not return a title)"
+			if s.queries != nil {
+				errorParams := queries.CreateImportErrorParams{
+					ImportHistoryID: historyID,
+					RowNumber:       int32(rowNum),
+					ErrorType:       "validation",
+					ErrorMessage:    errMsg,
+				}
+				_, _ = s.queries.CreateImportError(ctx, errorParams)
+			}
+			result.Errors = append(result.Errors, models.ImportError{
+				Row:     rowNum,
+				ISBN:    bookData.ISBN,
+				Field:   "title",
+				Message: errMsg,
+				Type:    "validation",
+			})
+			result.FailureCount++
+			continue
+		}
+		if createReq.Author == "" {
+			errMsg := "author is required (not provided in CSV and ISBN lookup did not return an author)"
+			if s.queries != nil {
+				errorParams := queries.CreateImportErrorParams{
+					ImportHistoryID: historyID,
+					RowNumber:       int32(rowNum),
+					ErrorType:       "validation",
+					ErrorMessage:    errMsg,
+				}
+				_, _ = s.queries.CreateImportError(ctx, errorParams)
+			}
+			result.Errors = append(result.Errors, models.ImportError{
+				Row:     rowNum,
+				ISBN:    bookData.ISBN,
+				Field:   "author",
+				Message: errMsg,
+				Type:    "validation",
+			})
+			result.FailureCount++
+			continue
 		}
 
 		// Try to create the book
@@ -206,7 +355,7 @@ func (s *ImportExportService) processImport(ctx context.Context, importData []mo
 
 			result.Errors = append(result.Errors, models.ImportError{
 				Row:     rowNum,
-				BookID:  bookData.BookID,
+				ISBN:    bookData.ISBN,
 				Message: err.Error(),
 				Type:    errorType,
 			})
@@ -572,57 +721,47 @@ func (s *ImportExportService) ExportBooksToExcel(ctx context.Context, req models
 // GenerateImportTemplate generates a template for importing books
 func (s *ImportExportService) GenerateImportTemplate(format string) (*models.ImportTemplate, error) {
 	headers := []string{
-		"book_id", "title", "author", "isbn", "publisher", "published_year",
-		"genre", "description", "total_copies", "available_copies", "shelf_location",
+		"isbn", "book_type", "category", "title", "author", "publisher",
+		"published_year", "genre", "description", "shelf_location",
 	}
 
 	sampleData := []models.BookImportRequest{
 		{
-			BookID:          "BK001",
-			Title:           "Sample Book Title",
-			Author:          "Sample Author",
-			ISBN:            stringPtr("978-0123456789"),
-			Publisher:       stringPtr("Sample Publisher"),
-			PublishedYear:   int32Ptr(2023),
-			Genre:           stringPtr("Fiction"),
-			Description:     stringPtr("A sample book description"),
-			TotalCopies:     int32Ptr(5),
-			AvailableCopies: int32Ptr(5),
-			ShelfLocation:   stringPtr("A1-001"),
+			ISBN:          "978-0743273565",
+			BookType:      "storybook",
+			Category:      "Fiction",
+			Title:         stringPtr("The Great Gatsby"),
+			Author:        stringPtr("F. Scott Fitzgerald"),
+			Publisher:     stringPtr("Scribner"),
+			PublishedYear: int32Ptr(1925),
+			Genre:         stringPtr("Fiction"),
+			ShelfLocation: stringPtr("A1-001"),
 		},
 		{
-			BookID:          "BK002",
-			Title:           "Another Sample Book",
-			Author:          "Another Author",
-			ISBN:            stringPtr("978-0987654321"),
-			Publisher:       stringPtr("Another Publisher"),
-			PublishedYear:   int32Ptr(2024),
-			Genre:           stringPtr("Non-Fiction"),
-			Description:     stringPtr("Another sample book description"),
-			TotalCopies:     int32Ptr(3),
-			AvailableCopies: int32Ptr(2),
-			ShelfLocation:   stringPtr("B2-005"),
+			ISBN:     "978-0451524935",
+			BookType: "storybook",
+			Category: "Fiction",
 		},
 	}
 
 	instructions := `
 Import Instructions:
-1. book_id: Unique identifier for the book (required)
-2. title: Book title (required)
-3. author: Book author (required)
-4. isbn: ISBN number (optional)
-5. publisher: Publisher name (optional)
-6. published_year: Year of publication (optional)
-7. genre: Book genre (optional)
-8. description: Book description (optional)
-9. total_copies: Total number of copies (optional, defaults to 1)
-10. available_copies: Available copies (optional, defaults to total_copies)
-11. shelf_location: Physical location in library (optional)
+1. isbn: ISBN number (required) - used to auto-fill book details
+2. book_type: Type of book (required) - must be 'textbook' or 'storybook'
+3. category: Book category (required) - must match an existing category name
+4. title: Book title (optional - auto-filled from ISBN lookup)
+5. author: Book author (optional - auto-filled from ISBN lookup)
+6. publisher: Publisher name (optional - auto-filled from ISBN lookup)
+7. published_year: Year of publication (optional - auto-filled from ISBN lookup)
+8. genre: Book genre (optional - auto-filled from ISBN lookup)
+9. description: Book description (optional - auto-filled from ISBN lookup)
+10. shelf_location: Physical location in library (optional)
 
 Notes:
-- Required fields: book_id, title, author
-- book_id must be unique
-- available_copies cannot exceed total_copies
+- Required fields: isbn, book_type, category
+- The system will automatically look up book details from the ISBN
+- Values provided in the CSV take priority over ISBN lookup results
+- If ISBN lookup does not return a title/author, you must provide them in the CSV
 - published_year must be between 1000 and current year
 - Use CSV format for best compatibility
 `
@@ -660,24 +799,36 @@ func (s *ImportExportService) convertExcelRowsToImportData(rows [][]string) ([]m
 	var importData []models.BookImportRequest
 
 	for i, row := range rows[1:] { // Skip header row
-		if len(row) < 3 { // At least book_id, title, author
-			return nil, fmt.Errorf("row %d has insufficient columns", i+2)
+		if len(row) < 3 { // At least isbn, book_type, category
+			return nil, fmt.Errorf("row %d has insufficient columns (need isbn, book_type, category)", i+2)
 		}
 
 		bookData := models.BookImportRequest{
-			BookID: row[0],
-			Title:  row[1],
-			Author: row[2],
+			ISBN:     row[0],
+			BookType: row[1],
+			Category: row[2],
 		}
 
 		// Optional fields
 		if len(row) > 3 && row[3] != "" {
-			bookData.ISBN = &row[3]
+			bookData.Title = &row[3]
 		}
 		if len(row) > 4 && row[4] != "" {
-			bookData.Publisher = &row[4]
+			bookData.Author = &row[4]
 		}
-		// Add more field mappings as needed
+		if len(row) > 5 && row[5] != "" {
+			bookData.Publisher = &row[5]
+		}
+		// published_year (column 6) - skip for Excel, requires int parsing
+		if len(row) > 7 && row[7] != "" {
+			bookData.Genre = &row[7]
+		}
+		if len(row) > 8 && row[8] != "" {
+			bookData.Description = &row[8]
+		}
+		if len(row) > 9 && row[9] != "" {
+			bookData.ShelfLocation = &row[9]
+		}
 
 		importData = append(importData, bookData)
 	}
@@ -763,6 +914,14 @@ func stringPtr(s string) *string {
 
 func int32Ptr(i int32) *int32 {
 	return &i
+}
+
+func parseInt32(s string) (int32, error) {
+	val, err := strconv.ParseInt(strings.TrimSpace(s), 10, 32)
+	if err != nil {
+		return 0, err
+	}
+	return int32(val), nil
 }
 
 // ExportBooksToCSVContent returns CSV content as string for direct response
@@ -952,4 +1111,306 @@ func (s *ImportExportService) GetImportHistory(ctx context.Context, userID int32
 	}
 
 	return history, pagination, nil
+}
+
+// ImportStudentsFromCSV imports students from a CSV file
+func (s *ImportExportService) ImportStudentsFromCSV(ctx context.Context, reader io.Reader, fileName string, userID int32) (*models.BulkImportResponse, error) {
+	startTime := time.Now()
+
+	// Parse CSV
+	var importData []models.BulkImportStudentRequest
+	if err := gocsv.Unmarshal(reader, &importData); err != nil {
+		return nil, fmt.Errorf("failed to parse CSV: %w", err)
+	}
+
+	return s.processStudentImport(ctx, importData, fileName, userID, startTime)
+}
+
+// ImportStudentsFromExcel imports students from an Excel file
+func (s *ImportExportService) ImportStudentsFromExcel(ctx context.Context, reader io.Reader, fileName string, userID int32) (*models.BulkImportResponse, error) {
+	startTime := time.Now()
+
+	// Create temporary file to handle Excel reading
+	tempFile, err := s.createTempFile(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temp file: %w", err)
+	}
+	defer os.Remove(tempFile)
+
+	// Open Excel file
+	f, err := excelize.OpenFile(tempFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open Excel file: %w", err)
+	}
+	defer f.Close()
+
+	// Read the first sheet
+	sheetName := f.GetSheetName(0)
+	rows, err := f.GetRows(sheetName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read Excel rows: %w", err)
+	}
+
+	if len(rows) == 0 {
+		return nil, fmt.Errorf("Excel file is empty")
+	}
+
+	// Convert Excel rows to import data
+	importData, err := s.convertExcelRowsToStudentImportData(rows)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert Excel data: %w", err)
+	}
+
+	return s.processStudentImport(ctx, importData, fileName, userID, startTime)
+}
+
+// processStudentImport processes the student import data with history tracking
+func (s *ImportExportService) processStudentImport(ctx context.Context, importData []models.BulkImportStudentRequest, fileName string, userID int32, startTime time.Time) (*models.BulkImportResponse, error) {
+	// Create initial import history record
+	var historyID int32
+	if s.queries != nil {
+		var startedAtTimestamp pgtype.Timestamp
+		_ = startedAtTimestamp.Scan(startTime)
+
+		historyParams := queries.CreateImportHistoryParams{
+			OperationType:     "import",
+			EntityType:        "students",
+			Filename:          fileName,
+			OriginalFilename:  fileName,
+			FileSize:          1,
+			TotalRecords:      int32(len(importData)),
+			ProcessedRecords:  0,
+			SuccessfulRecords: 0,
+			FailedRecords:     0,
+			Status:            "processing",
+			UserID:            userID,
+			StartedAt:         startedAtTimestamp,
+		}
+
+		history, err := s.queries.CreateImportHistory(ctx, historyParams)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create import history: %w", err)
+		}
+		historyID = history.ID
+	}
+
+	response := &models.BulkImportResponse{
+		TotalRecords:    len(importData),
+		SuccessfulCount: 0,
+		FailedCount:     0,
+		Errors:          []models.BulkImportError{},
+		CreatedStudents: []models.StudentResponse{},
+	}
+
+	for i, req := range importData {
+		rowNum := i + 2 // +2 because row 1 is header and we start from 0
+
+		// Validate the request
+		if err := req.Validate(); err != nil {
+			if s.queries != nil {
+				errorParams := queries.CreateImportErrorParams{
+					ImportHistoryID: historyID,
+					RowNumber:       int32(rowNum),
+					ErrorType:       "validation",
+					ErrorMessage:    err.Error(),
+				}
+				_, _ = s.queries.CreateImportError(ctx, errorParams)
+			}
+
+			response.FailedCount++
+			response.Errors = append(response.Errors, models.BulkImportError{
+				Row:     rowNum,
+				Message: err.Error(),
+				Data:    req.StudentID,
+			})
+			continue
+		}
+
+		// Convert to CreateStudentRequest
+		createReq := &models.CreateStudentRequest{
+			StudentID:   req.StudentID,
+			FirstName:   req.FirstName,
+			LastName:    req.LastName,
+			Email:       req.Email,
+			Phone:       req.Phone,
+			YearOfStudy: req.YearOfStudy,
+		}
+		if req.MaxBooks > 0 {
+			createReq.MaxBooks = req.MaxBooks
+		}
+
+		// Try to create the student
+		student, err := s.studentService.CreateStudent(ctx, createReq)
+		if err != nil {
+			errorType := "database"
+			if strings.Contains(err.Error(), "already exists") {
+				errorType = "duplicate"
+			}
+
+			if s.queries != nil {
+				errorParams := queries.CreateImportErrorParams{
+					ImportHistoryID: historyID,
+					RowNumber:       int32(rowNum),
+					ErrorType:       errorType,
+					ErrorMessage:    err.Error(),
+				}
+				_, _ = s.queries.CreateImportError(ctx, errorParams)
+			}
+
+			response.FailedCount++
+			response.Errors = append(response.Errors, models.BulkImportError{
+				Row:     rowNum,
+				Message: err.Error(),
+				Data:    req.StudentID,
+			})
+			continue
+		}
+
+		// Success
+		response.SuccessfulCount++
+		response.CreatedStudents = append(response.CreatedStudents, student.ToResponse())
+	}
+
+	// Calculate processing time
+	processingTime := time.Since(startTime)
+	processingDurationSec := int32(processingTime.Seconds())
+	completedAt := time.Now()
+
+	// Final status
+	status := "completed"
+	if response.FailedCount == response.TotalRecords {
+		status = "failed"
+	}
+
+	// Update history record with final results
+	if s.queries != nil {
+		var processedRecordsPg pgtype.Int4
+		var successfulRecordsPg pgtype.Int4
+		var failedRecordsPg pgtype.Int4
+		var statusPg pgtype.Text
+		var completedAtPg pgtype.Timestamp
+		var processingDurationPg pgtype.Int4
+
+		_ = processedRecordsPg.Scan(int32(response.TotalRecords))
+		_ = successfulRecordsPg.Scan(int32(response.SuccessfulCount))
+		_ = failedRecordsPg.Scan(int32(response.FailedCount))
+		_ = statusPg.Scan(status)
+		_ = completedAtPg.Scan(completedAt)
+		_ = processingDurationPg.Scan(processingDurationSec)
+
+		updateParams := queries.UpdateImportHistoryParams{
+			ID:                 historyID,
+			ProcessedRecords:   processedRecordsPg,
+			SuccessfulRecords:  successfulRecordsPg,
+			FailedRecords:      failedRecordsPg,
+			Status:             statusPg,
+			CompletedAt:        completedAtPg,
+			ProcessingDuration: processingDurationPg,
+		}
+
+		_, err := s.queries.UpdateImportHistory(ctx, updateParams)
+		if err != nil {
+			slog.Warn("failed to update import history", "error", err)
+		}
+	}
+
+	return response, nil
+}
+
+// convertExcelRowsToStudentImportData converts Excel rows to student import data
+func (s *ImportExportService) convertExcelRowsToStudentImportData(rows [][]string) ([]models.BulkImportStudentRequest, error) {
+	if len(rows) < 2 {
+		return nil, fmt.Errorf("Excel file must have at least 2 rows (header + data)")
+	}
+
+	var importData []models.BulkImportStudentRequest
+
+	for i, row := range rows[1:] { // Skip header row
+		if len(row) < 4 { // At least student_id, first_name, last_name, year_of_study
+			return nil, fmt.Errorf("row %d has insufficient columns (need student_id, first_name, last_name, year_of_study)", i+2)
+		}
+
+		studentData := models.BulkImportStudentRequest{
+			StudentID: strings.TrimSpace(row[0]),
+			FirstName: strings.TrimSpace(row[1]),
+			LastName:  strings.TrimSpace(row[2]),
+		}
+
+		// year_of_study (column 3)
+		if len(row) > 3 && row[3] != "" {
+			year, err := parseInt32(row[3])
+			if err == nil {
+				studentData.YearOfStudy = year
+			}
+		}
+
+		// Optional fields
+		if len(row) > 4 && row[4] != "" {
+			studentData.Email = strings.TrimSpace(row[4])
+		}
+		if len(row) > 5 && row[5] != "" {
+			studentData.Phone = strings.TrimSpace(row[5])
+		}
+		if len(row) > 6 && row[6] != "" {
+			maxBooks, err := parseInt32(row[6])
+			if err == nil {
+				studentData.MaxBooks = maxBooks
+			}
+		}
+
+		importData = append(importData, studentData)
+	}
+
+	return importData, nil
+}
+
+// GenerateStudentImportTemplate generates a template for importing students
+func (s *ImportExportService) GenerateStudentImportTemplate(format string) (*models.StudentImportTemplate, error) {
+	headers := []string{
+		"student_id", "first_name", "last_name", "year_of_study",
+		"email", "phone", "max_books",
+	}
+
+	sampleData := []models.BulkImportStudentRequest{
+		{
+			StudentID:   "STU2025001",
+			FirstName:   "John",
+			LastName:    "Doe",
+			YearOfStudy: 1,
+			Email:       "john.doe@school.edu",
+			Phone:       "+254700000001",
+			MaxBooks:    5,
+		},
+		{
+			StudentID:   "STU2025002",
+			FirstName:   "Jane",
+			LastName:    "Smith",
+			YearOfStudy: 2,
+		},
+	}
+
+	instructions := `
+Import Instructions:
+1. student_id: Unique student identifier (required) - format: STU + year + 3-digit number (e.g., STU2025001)
+2. first_name: Student's first name (required)
+3. last_name: Student's last name (required)
+4. year_of_study: Year of study, 1-8 (required)
+5. email: Student email address (optional)
+6. phone: Phone number (optional)
+7. max_books: Maximum books student can borrow (optional, defaults to 5)
+
+Notes:
+- Required fields: student_id, first_name, last_name, year_of_study
+- Duplicate student IDs will be skipped
+- Default password is the student ID
+- year_of_study must be between 1 and 8
+- Supports CSV and Excel (.xlsx, .xls) formats
+`
+
+	return &models.StudentImportTemplate{
+		Headers:      headers,
+		SampleData:   sampleData,
+		Instructions: instructions,
+		Format:       format,
+	}, nil
 }
