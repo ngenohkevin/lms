@@ -11,6 +11,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/ngenohkevin/lms/internal/database/queries"
+	"github.com/ngenohkevin/lms/internal/middleware"
 	"github.com/ngenohkevin/lms/internal/models"
 	"github.com/ngenohkevin/lms/internal/services"
 )
@@ -28,7 +29,8 @@ type TransactionServiceInterface interface {
 	GetOverdueTransactions(ctx context.Context) ([]queries.ListOverdueTransactionsRow, error)
 	PayFine(ctx context.Context, transactionID int32) error
 	CancelTransaction(ctx context.Context, transactionID int32, reason string) (*services.TransactionResponse, error)
-	MarkAsLost(ctx context.Context, transactionID int32, reason string) (*services.TransactionResponse, error)
+	MarkAsLost(ctx context.Context, transactionID int32, reason string, fineAmount *float64) (*services.TransactionResponse, error)
+	MarkAsFound(ctx context.Context, transactionID int32, reason string, librarianID int32) (*services.TransactionResponse, error)
 	DeleteTransaction(ctx context.Context, transactionID int32) error
 	GetTransactionHistory(ctx context.Context, studentID int32, limit, offset int32) ([]queries.ListTransactionsByStudentRow, error)
 	// Phase 6.7: Enhanced Renewal System methods
@@ -480,7 +482,8 @@ func (h *TransactionHandler) MarkAsLost(c *gin.Context) {
 	}
 
 	var req struct {
-		Reason string `json:"reason" binding:"required,min=1"`
+		Reason     string   `json:"reason" binding:"required,min=1"`
+		FineAmount *float64 `json:"fine_amount"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
@@ -498,6 +501,7 @@ func (h *TransactionHandler) MarkAsLost(c *gin.Context) {
 		c.Request.Context(),
 		int32(transactionID),
 		req.Reason,
+		req.FineAmount,
 	)
 	if err != nil {
 		statusCode := http.StatusBadRequest
@@ -524,6 +528,72 @@ func (h *TransactionHandler) MarkAsLost(c *gin.Context) {
 		Success: true,
 		Data:    response,
 		Message: "Transaction marked as lost successfully",
+	})
+}
+
+// MarkAsFound handles marking a lost transaction as found
+func (h *TransactionHandler) MarkAsFound(c *gin.Context) {
+	idStr := c.Param("id")
+	transactionID, err := strconv.ParseInt(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Invalid transaction ID",
+				Details: "Transaction ID must be a valid integer",
+			},
+		})
+		return
+	}
+
+	var req struct {
+		Reason string `json:"reason" binding:"required,min=1"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "VALIDATION_ERROR",
+				Message: "Reason for marking as found is required",
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	librarianID := middleware.GetUserID(c)
+
+	transaction, err := h.transactionService.MarkAsFound(
+		c.Request.Context(),
+		int32(transactionID),
+		req.Reason,
+		int32(librarianID),
+	)
+	if err != nil {
+		statusCode := http.StatusBadRequest
+		errMsg := err.Error()
+		if errMsg == "transaction not found" {
+			statusCode = http.StatusNotFound
+		} else if strings.Contains(errMsg, "only lost transactions") {
+			statusCode = http.StatusUnprocessableEntity
+		}
+
+		c.JSON(statusCode, ErrorResponse{
+			Success: false,
+			Error: ErrorDetail{
+				Code:    "FOUND_ERROR",
+				Message: err.Error(),
+			},
+		})
+		return
+	}
+
+	response := convertToTransactionResponse(transaction)
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data:    response,
+		Message: "Transaction marked as found successfully",
 	})
 }
 

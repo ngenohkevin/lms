@@ -2,8 +2,10 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -66,8 +68,12 @@ type TransactionQuerier interface {
 	// Cancel transaction queries
 	GetTransactionAge(ctx context.Context, id int32) (int32, error)
 	CancelTransaction(ctx context.Context, arg queries.CancelTransactionParams) (queries.Transaction, error)
+	// Settings
+	GetSettingsByCategory(ctx context.Context, category string) ([]queries.Setting, error)
 	// Mark as lost query
 	MarkTransactionAsLost(ctx context.Context, arg queries.MarkTransactionAsLostParams) (queries.Transaction, error)
+	// Mark as found query
+	MarkTransactionAsFound(ctx context.Context, arg queries.MarkTransactionAsFoundParams) (queries.Transaction, error)
 	// Delete transaction query
 	DeleteTransaction(ctx context.Context, id int32) error
 }
@@ -158,6 +164,28 @@ func (s *TransactionService) invalidateStudentCache(ctx context.Context, student
 			slog.Warn("Failed to invalidate student cache", "student_id", studentID, "error", err)
 		}
 	}
+}
+
+// getLostBookFineFromSettings reads the lost_book_fine from DB settings, falling back to the hardcoded default
+func (s *TransactionService) getLostBookFineFromSettings(ctx context.Context) decimal.Decimal {
+	settings, err := s.queries.GetSettingsByCategory(ctx, "fines")
+	if err != nil {
+		slog.Warn("Failed to read fine settings from DB, using default", "error", err)
+		return s.lostBookFine
+	}
+	for _, setting := range settings {
+		if setting.Key == "lost_book_fine" {
+			var valueStr string
+			if err := json.Unmarshal(setting.Value, &valueStr); err != nil {
+				// Try as raw string
+				valueStr = string(setting.Value)
+			}
+			if v, err := strconv.ParseFloat(valueStr, 64); err == nil && v > 0 {
+				return decimal.NewFromFloat(v)
+			}
+		}
+	}
+	return s.lostBookFine
 }
 
 // BorrowBookRequest represents a book borrowing request
@@ -984,7 +1012,7 @@ func (s *TransactionService) CancelTransaction(ctx context.Context, transactionI
 
 // MarkAsLost marks a transaction as lost - the book was not returned and is considered lost
 // This applies a replacement fine and marks the copy as lost
-func (s *TransactionService) MarkAsLost(ctx context.Context, transactionID int32, reason string) (*TransactionResponse, error) {
+func (s *TransactionService) MarkAsLost(ctx context.Context, transactionID int32, reason string, fineAmount *float64) (*TransactionResponse, error) {
 	if reason == "" {
 		return nil, fmt.Errorf("reason for marking as lost is required")
 	}
@@ -1006,8 +1034,13 @@ func (s *TransactionService) MarkAsLost(ctx context.Context, transactionID int32
 		return nil, fmt.Errorf("cannot mark as lost: only borrow transactions can be marked as lost")
 	}
 
-	// Get the replacement fine amount
-	replacementFine := s.lostBookFine
+	// Get the replacement fine amount — use librarian-specified amount or fall back to DB setting
+	var replacementFine decimal.Decimal
+	if fineAmount != nil && *fineAmount > 0 {
+		replacementFine = decimal.NewFromFloat(*fineAmount)
+	} else {
+		replacementFine = s.getLostBookFineFromSettings(ctx)
+	}
 
 	// Mark the transaction as lost with the replacement fine
 	lostTx, err := s.queries.MarkTransactionAsLost(ctx, queries.MarkTransactionAsLostParams{
@@ -1039,6 +1072,57 @@ func (s *TransactionService) MarkAsLost(ctx context.Context, transactionID int32
 	s.invalidateStudentCache(ctx, tx.StudentID)
 
 	return s.convertToTransactionResponse(lostTx), nil
+}
+
+// MarkAsFound marks a lost transaction as found - the book was recovered
+// This restores the copy to available status, marks the transaction as returned, and waives the replacement fine
+func (s *TransactionService) MarkAsFound(ctx context.Context, transactionID int32, reason string, librarianID int32) (*TransactionResponse, error) {
+	if reason == "" {
+		return nil, fmt.Errorf("reason for marking as found is required")
+	}
+
+	// Get the transaction to verify it exists and get copy info
+	tx, err := s.queries.GetTransactionByIDWithCopy(ctx, transactionID)
+	if err != nil {
+		if isNoRows(err) {
+			return nil, fmt.Errorf("transaction not found")
+		}
+		return nil, fmt.Errorf("failed to get transaction: %w", err)
+	}
+
+	// Validate transaction is currently lost
+	if tx.TransactionType != "lost" {
+		return nil, fmt.Errorf("cannot mark as found: only lost transactions can be marked as found")
+	}
+
+	// Mark the transaction as found and waive the replacement fine
+	foundTx, err := s.queries.MarkTransactionAsFound(ctx, queries.MarkTransactionAsFoundParams{
+		ID:          transactionID,
+		FoundReason: reason,
+		WaivedBy:    pgtype.Int4{Int32: librarianID, Valid: librarianID > 0},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to mark transaction as found: %w", err)
+	}
+
+	// Restore copy status to "available" if copy tracking is enabled
+	if tx.CopyID.Valid {
+		_, copyErr := s.queries.UpdateBookCopyStatus(ctx, queries.UpdateBookCopyStatusParams{
+			ID:     tx.CopyID.Int32,
+			Status: pgtype.Text{String: "available", Valid: true},
+		})
+		if copyErr != nil {
+			slog.Error("Failed to restore copy status after found", "copy_id", tx.CopyID.Int32, "transaction_id", transactionID, "error", copyErr)
+		}
+		if syncErr := s.queries.SyncBookCopyCounts(ctx, tx.BookID); syncErr != nil {
+			slog.Warn("Failed to sync book copy counts after marking found", "book_id", tx.BookID, "error", syncErr)
+		}
+	}
+
+	// Invalidate student cache so borrowing stats are refreshed
+	s.invalidateStudentCache(ctx, tx.StudentID)
+
+	return s.convertToTransactionResponse(foundTx), nil
 }
 
 // DeleteTransaction deletes a transaction by ID
@@ -1881,8 +1965,14 @@ func (s *TransactionService) SearchTransactions(ctx context.Context, params Tran
 			result.LastRenewedBy = &row.LastRenewedBy.Int32
 		}
 
-		// Compute status
-		if row.ReturnedDate.Valid {
+		// Compute status - check explicit DB status first for lost/cancelled/completed
+		if row.Status.Valid && row.Status.String == "lost" {
+			result.Status = "lost"
+		} else if row.Status.Valid && row.Status.String == "cancelled" {
+			result.Status = "cancelled"
+		} else if row.Status.Valid && row.Status.String == "completed" {
+			result.Status = "returned"
+		} else if row.ReturnedDate.Valid {
 			result.Status = "returned"
 		} else if row.DueDate.Valid && now.After(row.DueDate.Time) {
 			result.Status = "overdue"

@@ -238,6 +238,16 @@ func (m *MockTransactionQueries) MarkTransactionAsLost(ctx context.Context, arg 
 	return args.Get(0).(queries.Transaction), args.Error(1)
 }
 
+func (m *MockTransactionQueries) MarkTransactionAsFound(ctx context.Context, arg queries.MarkTransactionAsFoundParams) (queries.Transaction, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(queries.Transaction), args.Error(1)
+}
+
+func (m *MockTransactionQueries) GetSettingsByCategory(ctx context.Context, category string) ([]queries.Setting, error) {
+	args := m.Called(ctx, category)
+	return args.Get(0).([]queries.Setting), args.Error(1)
+}
+
 func (m *MockTransactionQueries) DeleteTransaction(ctx context.Context, id int32) error {
 	args := m.Called(ctx, id)
 	return args.Error(0)

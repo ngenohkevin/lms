@@ -1789,6 +1789,67 @@ func (q *Queries) ListTransactionsWithUnpaidFines(ctx context.Context) ([]ListTr
 	return items, nil
 }
 
+const markTransactionAsFound = `-- name: MarkTransactionAsFound :one
+UPDATE transactions
+SET
+    transaction_type = 'borrow',
+    status = 'returned',
+    fine_waived = true,
+    fine_waived_at = NOW(),
+    fine_waived_by = $1,
+    fine_waived_reason = 'Book found: ' || $2::text,
+    fine_paid = true,
+    fine_paid_at = NOW(),
+    notes = CASE
+        WHEN notes IS NULL OR notes = '' THEN '[FOUND] ' || $2::text || ' | Replacement fine waived'
+        ELSE notes || E'\n\n[FOUND] ' || $2::text || ' | Replacement fine waived'
+    END,
+    updated_at = NOW()
+WHERE id = $3
+  AND transaction_type = 'lost'
+RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by
+`
+
+type MarkTransactionAsFoundParams struct {
+	WaivedBy    pgtype.Int4 `db:"waived_by" json:"waived_by"`
+	FoundReason string      `db:"found_reason" json:"found_reason"`
+	ID          int32       `db:"id" json:"id"`
+}
+
+// Mark a lost transaction as found: restores transaction_type to 'borrow', sets status to 'returned', waives the replacement fine, and adds found note
+func (q *Queries) MarkTransactionAsFound(ctx context.Context, arg MarkTransactionAsFoundParams) (Transaction, error) {
+	row := q.db.QueryRow(ctx, markTransactionAsFound, arg.WaivedBy, arg.FoundReason, arg.ID)
+	var i Transaction
+	err := row.Scan(
+		&i.ID,
+		&i.StudentID,
+		&i.BookID,
+		&i.TransactionType,
+		&i.TransactionDate,
+		&i.DueDate,
+		&i.ReturnedDate,
+		&i.LibrarianID,
+		&i.FineAmount,
+		&i.FinePaid,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ReturnCondition,
+		&i.ConditionNotes,
+		&i.FineWaived,
+		&i.FineWaivedAt,
+		&i.FineWaivedBy,
+		&i.FineWaivedReason,
+		&i.FinePaidAt,
+		&i.CopyID,
+		&i.Status,
+		&i.RenewalCount,
+		&i.LastRenewedAt,
+		&i.LastRenewedBy,
+	)
+	return i, err
+}
+
 const markTransactionAsLost = `-- name: MarkTransactionAsLost :one
 UPDATE transactions
 SET

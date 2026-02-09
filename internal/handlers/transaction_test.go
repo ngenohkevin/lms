@@ -155,8 +155,16 @@ func (m *MockTransactionService) CancelTransaction(ctx context.Context, transact
 	return args.Get(0).(*services.TransactionResponse), args.Error(1)
 }
 
-func (m *MockTransactionService) MarkAsLost(ctx context.Context, transactionID int32, reason string) (*services.TransactionResponse, error) {
-	args := m.Called(ctx, transactionID, reason)
+func (m *MockTransactionService) MarkAsLost(ctx context.Context, transactionID int32, reason string, fineAmount *float64) (*services.TransactionResponse, error) {
+	args := m.Called(ctx, transactionID, reason, fineAmount)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*services.TransactionResponse), args.Error(1)
+}
+
+func (m *MockTransactionService) MarkAsFound(ctx context.Context, transactionID int32, reason string, librarianID int32) (*services.TransactionResponse, error) {
+	args := m.Called(ctx, transactionID, reason, librarianID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -197,6 +205,8 @@ func setupTransactionRouter() (*gin.Engine, *MockTransactionService) {
 		v1.GET("/transactions/:id/can-renew", handler.CanBookBeRenewed)
 		v1.GET("/transactions/renewal-history", handler.GetRenewalHistory)
 		v1.GET("/students/:student_id/renewal-statistics", handler.GetRenewalStatistics)
+		v1.POST("/transactions/:id/lost", handler.MarkAsLost)
+		v1.POST("/transactions/:id/found", handler.MarkAsFound)
 	}
 
 	return router, mockService

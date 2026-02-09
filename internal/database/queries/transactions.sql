@@ -310,6 +310,27 @@ WHERE id = sqlc.arg(id)
   AND transaction_type = 'borrow'
 RETURNING *;
 
+-- name: MarkTransactionAsFound :one
+-- Mark a lost transaction as found: restores transaction_type to 'borrow', sets status to 'returned', waives the replacement fine, and adds found note
+UPDATE transactions
+SET
+    transaction_type = 'borrow',
+    status = 'returned',
+    fine_waived = true,
+    fine_waived_at = NOW(),
+    fine_waived_by = sqlc.arg(waived_by),
+    fine_waived_reason = 'Book found: ' || sqlc.arg(found_reason)::text,
+    fine_paid = true,
+    fine_paid_at = NOW(),
+    notes = CASE
+        WHEN notes IS NULL OR notes = '' THEN '[FOUND] ' || sqlc.arg(found_reason)::text || ' | Replacement fine waived'
+        ELSE notes || E'\n\n[FOUND] ' || sqlc.arg(found_reason)::text || ' | Replacement fine waived'
+    END,
+    updated_at = NOW()
+WHERE id = sqlc.arg(id)
+  AND transaction_type = 'lost'
+RETURNING *;
+
 -- name: RenewTransaction :one
 -- Renew a transaction by updating its due date and incrementing renewal count
 -- This replaces the old approach of creating a new "renew" type transaction
