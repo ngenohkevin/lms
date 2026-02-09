@@ -536,11 +536,12 @@ func (s *BookService) SearchBooks(ctx context.Context, req models.BookSearchRequ
 	}
 
 	// Build cache key from all filter parameters
-	cacheKey := fmt.Sprintf("search:q_%s:g_%s:a_%t:f_%s:l_%s:s_%d:c_%d:sort_%s:p_%d:lim_%d",
+	cacheKey := fmt.Sprintf("search:q_%s:g_%s:a_%t:f_%s:l_%s:s_%d:c_%d:bt_%s:sort_%s:p_%d:lim_%d",
 		req.Query,
 		ptrStr(req.Genre), req.AvailableOnly,
 		ptrStr(req.Format), ptrStr(req.Language),
 		ptrInt32(req.SeriesID), ptrInt32(req.CategoryID),
+		ptrStr(req.BookType),
 		sortBy, req.Page, req.Limit)
 
 	// Try to get from cache first
@@ -596,6 +597,11 @@ func (s *BookService) SearchBooks(ctx context.Context, req models.BookSearchRequ
 		cid := pgtype.Int4{Int32: *req.CategoryID, Valid: true}
 		searchParams.CategoryID = cid
 		countParams.CategoryID = cid
+	}
+	if req.BookType != nil && *req.BookType != "" {
+		bt := pgtype.Text{String: *req.BookType, Valid: true}
+		searchParams.BookType = bt
+		countParams.BookType = bt
 	}
 
 	books, err := s.querier.SearchBooksAdvanced(ctx, searchParams)

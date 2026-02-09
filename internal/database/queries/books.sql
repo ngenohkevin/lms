@@ -153,6 +153,7 @@ WHERE deleted_at IS NULL
   AND (sqlc.narg('language')::text IS NULL OR language = sqlc.narg('language'))
   AND (sqlc.narg('series_id')::int IS NULL OR series_id = sqlc.narg('series_id'))
   AND (sqlc.narg('category_id')::int IS NULL OR category_id = sqlc.narg('category_id'))
+  AND (sqlc.narg('book_type')::text IS NULL OR book_type::text = sqlc.narg('book_type'))
 ORDER BY
   CASE WHEN sqlc.arg('sort_by')::text = 'title' THEN title END ASC NULLS LAST,
   CASE WHEN sqlc.arg('sort_by')::text = '-title' THEN title END DESC NULLS LAST,
@@ -179,4 +180,5 @@ WHERE deleted_at IS NULL
   AND (sqlc.narg('format')::text IS NULL OR format = sqlc.narg('format'))
   AND (sqlc.narg('language')::text IS NULL OR language = sqlc.narg('language'))
   AND (sqlc.narg('series_id')::int IS NULL OR series_id = sqlc.narg('series_id'))
-  AND (sqlc.narg('category_id')::int IS NULL OR category_id = sqlc.narg('category_id'));
+  AND (sqlc.narg('category_id')::int IS NULL OR category_id = sqlc.narg('category_id'))
+  AND (sqlc.narg('book_type')::text IS NULL OR book_type::text = sqlc.narg('book_type'));

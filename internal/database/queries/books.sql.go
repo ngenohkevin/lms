@@ -87,6 +87,7 @@ WHERE deleted_at IS NULL
   AND ($5::text IS NULL OR language = $5)
   AND ($6::int IS NULL OR series_id = $6)
   AND ($7::int IS NULL OR category_id = $7)
+  AND ($8::text IS NULL OR book_type::text = $8)
 `
 
 type CountSearchBooksAdvancedParams struct {
@@ -97,6 +98,7 @@ type CountSearchBooksAdvancedParams struct {
 	Language      pgtype.Text `db:"language" json:"language"`
 	SeriesID      pgtype.Int4 `db:"series_id" json:"series_id"`
 	CategoryID    pgtype.Int4 `db:"category_id" json:"category_id"`
+	BookType      pgtype.Text `db:"book_type" json:"book_type"`
 }
 
 // Count for flexible search with all optional filters
@@ -109,6 +111,7 @@ func (q *Queries) CountSearchBooksAdvanced(ctx context.Context, arg CountSearchB
 		arg.Language,
 		arg.SeriesID,
 		arg.CategoryID,
+		arg.BookType,
 	)
 	var count int64
 	err := row.Scan(&count)
@@ -643,16 +646,17 @@ WHERE deleted_at IS NULL
   AND ($5::text IS NULL OR language = $5)
   AND ($6::int IS NULL OR series_id = $6)
   AND ($7::int IS NULL OR category_id = $7)
+  AND ($8::text IS NULL OR book_type::text = $8)
 ORDER BY
-  CASE WHEN $8::text = 'title' THEN title END ASC NULLS LAST,
-  CASE WHEN $8::text = '-title' THEN title END DESC NULLS LAST,
-  CASE WHEN $8::text = 'author' THEN author END ASC NULLS LAST,
-  CASE WHEN $8::text = '-created_at' THEN created_at END DESC NULLS LAST,
-  CASE WHEN $8::text = 'created_at' THEN created_at END ASC NULLS LAST,
-  CASE WHEN $8::text = '-publication_year' THEN published_year END DESC NULLS LAST,
-  CASE WHEN $8::text = 'publication_year' THEN published_year END ASC NULLS LAST,
+  CASE WHEN $9::text = 'title' THEN title END ASC NULLS LAST,
+  CASE WHEN $9::text = '-title' THEN title END DESC NULLS LAST,
+  CASE WHEN $9::text = 'author' THEN author END ASC NULLS LAST,
+  CASE WHEN $9::text = '-created_at' THEN created_at END DESC NULLS LAST,
+  CASE WHEN $9::text = 'created_at' THEN created_at END ASC NULLS LAST,
+  CASE WHEN $9::text = '-publication_year' THEN published_year END DESC NULLS LAST,
+  CASE WHEN $9::text = 'publication_year' THEN published_year END ASC NULLS LAST,
   title ASC
-LIMIT $10 OFFSET $9
+LIMIT $11 OFFSET $10
 `
 
 type SearchBooksAdvancedParams struct {
@@ -663,6 +667,7 @@ type SearchBooksAdvancedParams struct {
 	Language      pgtype.Text `db:"language" json:"language"`
 	SeriesID      pgtype.Int4 `db:"series_id" json:"series_id"`
 	CategoryID    pgtype.Int4 `db:"category_id" json:"category_id"`
+	BookType      pgtype.Text `db:"book_type" json:"book_type"`
 	SortBy        string      `db:"sort_by" json:"sort_by"`
 	OffsetVal     int32       `db:"offset_val" json:"offset_val"`
 	LimitVal      int32       `db:"limit_val" json:"limit_val"`
@@ -678,6 +683,7 @@ func (q *Queries) SearchBooksAdvanced(ctx context.Context, arg SearchBooksAdvanc
 		arg.Language,
 		arg.SeriesID,
 		arg.CategoryID,
+		arg.BookType,
 		arg.SortBy,
 		arg.OffsetVal,
 		arg.LimitVal,
