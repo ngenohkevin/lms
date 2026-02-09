@@ -57,12 +57,12 @@ func (m *MockTransactionService) ReturnByBarcode(ctx context.Context, req servic
 	return args.Get(0).(*services.TransactionResponse), args.Error(1)
 }
 
-func (m *MockTransactionService) ScanBarcode(ctx context.Context, barcode string) (*services.BarcodeScanResult, error) {
+func (m *MockTransactionService) ScanBarcode(ctx context.Context, barcode string) (*services.BarcodeScanResponse, error) {
 	args := m.Called(ctx, barcode)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*services.BarcodeScanResult), args.Error(1)
+	return args.Get(0).(*services.BarcodeScanResponse), args.Error(1)
 }
 
 func (m *MockTransactionService) ReturnBook(ctx context.Context, transactionID int32) (*services.TransactionResponse, error) {
