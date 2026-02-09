@@ -444,14 +444,21 @@ func (suite *TransactionCopyTestSuite) TestScanBarcode() {
 	require.NoError(suite.T(), err)
 	assert.True(suite.T(), response.Success)
 
-	// Parse the scan result
+	// Parse the scan response (now wrapped in results array)
 	data, ok := response.Data.(map[string]interface{})
 	require.True(suite.T(), ok)
 
-	assert.Equal(suite.T(), suite.testCopy1.Barcode, data["barcode"])
-	assert.Equal(suite.T(), "available", data["status"])
-	assert.Equal(suite.T(), false, data["is_borrowed"])
-	assert.Equal(suite.T(), true, data["can_borrow"])
+	assert.Equal(suite.T(), false, data["is_isbn_scan"])
+	results, ok := data["results"].([]interface{})
+	require.True(suite.T(), ok)
+	require.Len(suite.T(), results, 1)
+
+	result, ok := results[0].(map[string]interface{})
+	require.True(suite.T(), ok)
+	assert.Equal(suite.T(), suite.testCopy1.Barcode, result["barcode"])
+	assert.Equal(suite.T(), "available", result["status"])
+	assert.Equal(suite.T(), false, result["is_borrowed"])
+	assert.Equal(suite.T(), true, result["can_borrow"])
 }
 
 // TestScanBarcodeForBorrowedCopy tests scanning a copy that is currently borrowed
@@ -492,12 +499,19 @@ func (suite *TransactionCopyTestSuite) TestScanBarcodeForBorrowedCopy() {
 	data, ok := response.Data.(map[string]interface{})
 	require.True(suite.T(), ok)
 
-	assert.Equal(suite.T(), "borrowed", data["status"])
-	assert.Equal(suite.T(), true, data["is_borrowed"])
-	assert.Equal(suite.T(), false, data["can_borrow"])
+	assert.Equal(suite.T(), false, data["is_isbn_scan"])
+	results, ok := data["results"].([]interface{})
+	require.True(suite.T(), ok)
+	require.Len(suite.T(), results, 1)
+
+	result, ok := results[0].(map[string]interface{})
+	require.True(suite.T(), ok)
+	assert.Equal(suite.T(), "borrowed", result["status"])
+	assert.Equal(suite.T(), true, result["is_borrowed"])
+	assert.Equal(suite.T(), false, result["can_borrow"])
 
 	// Should have current borrower info
-	currentBorrower, ok := data["current_borrower"].(map[string]interface{})
+	currentBorrower, ok := result["current_borrower"].(map[string]interface{})
 	require.True(suite.T(), ok)
 	assert.NotNil(suite.T(), currentBorrower["student_name"])
 	assert.NotNil(suite.T(), currentBorrower["due_date"])
