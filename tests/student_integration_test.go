@@ -366,10 +366,10 @@ func (suite *StudentIntegrationTestSuite) TestCreateStudent() {
 		{
 			name: "Invalid year of study",
 			studentData: models.CreateStudentRequest{
-				StudentID:   "STU2024003",
+				StudentID:   "STU003",
 				FirstName:   "Bob",
 				LastName:    "Smith",
-				YearOfStudy: 10, // Invalid: must be 1-8
+				YearOfStudy: 14, // Invalid: must be 1-13
 			},
 			expectedStatus: http.StatusBadRequest,
 			expectError:    true,
@@ -856,7 +856,7 @@ func (suite *StudentIntegrationTestSuite) TestStudentValidation() {
 				"student_id":    "STU2024001",
 				"first_name":    "John",
 				"last_name":     "Doe",
-				"year_of_study": 10,
+				"year_of_study": 14,
 			},
 			expectedCode: http.StatusBadRequest,
 			errorField:   "year_of_study",
