@@ -193,7 +193,7 @@ func TestStudentAccountWorkflow(t *testing.T) {
 		assert.True(t, newPasswordValid, "New password should work")
 
 		// Cleanup
-		err = studentService.DeleteStudent(ctx, student.ID, 1)
+		err = studentService.DeleteStudent(ctx, student.ID, 0)
 		require.NoError(t, err)
 	})
 
@@ -236,7 +236,7 @@ func TestStudentAccountWorkflow(t *testing.T) {
 		assert.True(t, isValid, "Student ID should work as password")
 
 		// Cleanup
-		err = studentService.DeleteStudent(ctx, student.ID, 1)
+		err = studentService.DeleteStudent(ctx, student.ID, 0)
 		require.NoError(t, err)
 	})
 
@@ -294,7 +294,7 @@ func TestStudentAccountWorkflow(t *testing.T) {
 			assert.True(t, isValid, "Student ID should work as password for %s", expectedStudentID)
 
 			// Cleanup
-			err = studentService.DeleteStudent(ctx, student.ID, 1)
+			err = studentService.DeleteStudent(ctx, student.ID, 0)
 			require.NoError(t, err)
 		}
 	})
@@ -359,7 +359,7 @@ func TestStudentAccountWorkflow(t *testing.T) {
 		assert.ErrorIs(t, err, models.ErrEmailExists)
 
 		// Cleanup
-		err = studentService.DeleteStudent(ctx, student1.ID, 1)
+		err = studentService.DeleteStudent(ctx, student1.ID, 0)
 		require.NoError(t, err)
 	})
 
@@ -421,7 +421,7 @@ func TestStudentAccountWorkflow(t *testing.T) {
 		assert.Contains(t, stats, "by_year")
 
 		// Cleanup
-		err = studentService.DeleteStudent(ctx, student.ID, 1)
+		err = studentService.DeleteStudent(ctx, student.ID, 0)
 		require.NoError(t, err)
 	})
 }
