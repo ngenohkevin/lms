@@ -104,7 +104,7 @@ func TestSoftDeleteService_SoftDeleteStudent(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test soft delete
-	err = service.SoftDeleteStudent(ctx, student.ID)
+	err = service.SoftDeleteStudent(ctx, student.ID, 0)
 	assert.NoError(t, err)
 
 	// Verify student is soft deleted
@@ -206,7 +206,7 @@ func TestSoftDeleteService_RestoreStudent(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	err = service.SoftDeleteStudent(ctx, student.ID)
+	err = service.SoftDeleteStudent(ctx, student.ID, 0)
 	require.NoError(t, err)
 
 	// Test restore
@@ -378,7 +378,7 @@ func TestSoftDeleteService_ListDeletedStudents(t *testing.T) {
 		require.NoError(t, err)
 		studentIDs = append(studentIDs, student.ID)
 
-		err = service.SoftDeleteStudent(ctx, student.ID)
+		err = service.SoftDeleteStudent(ctx, student.ID, 0)
 		require.NoError(t, err)
 	}
 

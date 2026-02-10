@@ -29,7 +29,7 @@ type StudentQuerier interface {
 	GetStudentByEmail(ctx context.Context, email pgtype.Text) (queries.Student, error)
 	UpdateStudent(ctx context.Context, params queries.UpdateStudentParams) (queries.Student, error)
 	UpdateStudentPassword(ctx context.Context, params queries.UpdateStudentPasswordParams) error
-	SoftDeleteStudent(ctx context.Context, id int32) error
+	SoftDeleteStudent(ctx context.Context, arg queries.SoftDeleteStudentParams) error
 	ListStudents(ctx context.Context, params queries.ListStudentsParams) ([]queries.Student, error)
 	ListStudentsByYear(ctx context.Context, params queries.ListStudentsByYearParams) ([]queries.Student, error)
 	CountStudents(ctx context.Context) (int64, error)
@@ -422,7 +422,7 @@ func (s *StudentService) UpdateStudentProfile(ctx context.Context, id int32, req
 }
 
 // DeleteStudent soft deletes a student after validation
-func (s *StudentService) DeleteStudent(ctx context.Context, id int32) error {
+func (s *StudentService) DeleteStudent(ctx context.Context, id int32, deletedBy int32) error {
 	// Check if student exists
 	student, err := s.queries.GetStudentByID(ctx, id)
 	if err != nil {
@@ -448,7 +448,10 @@ func (s *StudentService) DeleteStudent(ctx context.Context, id int32) error {
 	}
 
 	// Soft delete the student
-	err = s.queries.SoftDeleteStudent(ctx, id)
+	err = s.queries.SoftDeleteStudent(ctx, queries.SoftDeleteStudentParams{
+		ID:        id,
+		DeletedBy: pgtype.Int4{Int32: deletedBy, Valid: deletedBy > 0},
+	})
 	if err != nil {
 		return fmt.Errorf("failed to delete student: %w", err)
 	}

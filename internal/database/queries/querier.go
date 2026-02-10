@@ -412,7 +412,7 @@ type Querier interface {
 	SearchUsers(ctx context.Context, arg SearchUsersParams) ([]User, error)
 	SetUserPassword(ctx context.Context, arg SetUserPasswordParams) error
 	SoftDeleteBook(ctx context.Context, id int32) error
-	SoftDeleteStudent(ctx context.Context, id int32) error
+	SoftDeleteStudent(ctx context.Context, arg SoftDeleteStudentParams) error
 	SoftDeleteUser(ctx context.Context, id int32) error
 	// Student Status Management Queries
 	SuspendStudent(ctx context.Context, arg SuspendStudentParams) (Student, error)

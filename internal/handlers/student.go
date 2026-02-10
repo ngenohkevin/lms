@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/ngenohkevin/lms/internal/middleware"
 	"github.com/ngenohkevin/lms/internal/models"
 	"github.com/ngenohkevin/lms/internal/services"
 )
@@ -239,7 +240,8 @@ func (h *StudentHandler) DeleteStudent(c *gin.Context) {
 		return
 	}
 
-	err = h.studentService.DeleteStudent(c.Request.Context(), int32(id))
+	deletedBy := int32(middleware.GetUserID(c))
+	err = h.studentService.DeleteStudent(c.Request.Context(), int32(id), deletedBy)
 	if err != nil {
 		if err == models.ErrStudentNotFound {
 			c.JSON(http.StatusNotFound, ErrorResponse{

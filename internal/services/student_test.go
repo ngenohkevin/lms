@@ -65,8 +65,8 @@ func (m *MockQueries) UpdateStudentPassword(ctx context.Context, params queries.
 	return args.Error(0)
 }
 
-func (m *MockQueries) SoftDeleteStudent(ctx context.Context, id int32) error {
-	args := m.Called(ctx, id)
+func (m *MockQueries) SoftDeleteStudent(ctx context.Context, arg queries.SoftDeleteStudentParams) error {
+	args := m.Called(ctx, arg)
 	return args.Error(0)
 }
 
@@ -542,7 +542,7 @@ func TestStudentService_DeleteStudent(t *testing.T) {
 				m.On("CountActiveBorrowingsByStudent", mock.Anything, int32(1)).Return(int64(0), nil)
 				// Deletion validation: no unpaid fines
 				m.On("GetStudentFineStats", mock.Anything, int32(1)).Return(queries.GetStudentFineStatsRow{}, nil)
-				m.On("SoftDeleteStudent", mock.Anything, int32(1)).Return(nil)
+				m.On("SoftDeleteStudent", mock.Anything, mock.AnythingOfType("queries.SoftDeleteStudentParams")).Return(nil)
 			},
 			expectError: false,
 		},
@@ -567,7 +567,7 @@ func TestStudentService_DeleteStudent(t *testing.T) {
 			service := NewStudentService(mockQueries, mockAuth, nil)
 			ctx := context.Background()
 
-			err := service.DeleteStudent(ctx, tt.studentID)
+			err := service.DeleteStudent(ctx, tt.studentID, 1)
 
 			if tt.expectError {
 				assert.Error(t, err)

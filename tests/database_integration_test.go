@@ -209,7 +209,7 @@ func (suite *DatabaseIntegrationTestSuite) TestCompleteStudentWorkflow() {
 	assert.Equal(suite.T(), int32(3), updatedStudent.YearOfStudy)
 
 	// Test soft delete and restore
-	err = suite.softDeleteSvc.SoftDeleteStudent(suite.ctx, student.ID)
+	err = suite.softDeleteSvc.SoftDeleteStudent(suite.ctx, student.ID, 0)
 	require.NoError(suite.T(), err)
 
 	_, err = suite.queries.GetStudentByID(suite.ctx, student.ID)

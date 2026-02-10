@@ -612,50 +612,53 @@ SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.
        s.first_name, s.last_name, s.student_id,
        b.title, b.author, b.book_id, b.cover_image_url,
        bc.barcode as copy_barcode, bc.condition as copy_condition,
-       s.deleted_at as student_deleted_at
+       s.deleted_at as student_deleted_at,
+       del_user.username as student_deleted_by_name
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
 LEFT JOIN book_copies bc ON t.copy_id = bc.id
+LEFT JOIN users del_user ON s.deleted_by = del_user.id
 WHERE t.id = $1
 `
 
 type GetTransactionByIDWithCopyRow struct {
-	ID               int32            `db:"id" json:"id"`
-	StudentID        int32            `db:"student_id" json:"student_id"`
-	BookID           int32            `db:"book_id" json:"book_id"`
-	TransactionType  string           `db:"transaction_type" json:"transaction_type"`
-	TransactionDate  pgtype.Timestamp `db:"transaction_date" json:"transaction_date"`
-	DueDate          pgtype.Timestamp `db:"due_date" json:"due_date"`
-	ReturnedDate     pgtype.Timestamp `db:"returned_date" json:"returned_date"`
-	LibrarianID      pgtype.Int4      `db:"librarian_id" json:"librarian_id"`
-	FineAmount       pgtype.Numeric   `db:"fine_amount" json:"fine_amount"`
-	FinePaid         pgtype.Bool      `db:"fine_paid" json:"fine_paid"`
-	Notes            pgtype.Text      `db:"notes" json:"notes"`
-	CreatedAt        pgtype.Timestamp `db:"created_at" json:"created_at"`
-	UpdatedAt        pgtype.Timestamp `db:"updated_at" json:"updated_at"`
-	ReturnCondition  pgtype.Text      `db:"return_condition" json:"return_condition"`
-	ConditionNotes   pgtype.Text      `db:"condition_notes" json:"condition_notes"`
-	FineWaived       pgtype.Bool      `db:"fine_waived" json:"fine_waived"`
-	FineWaivedAt     pgtype.Timestamp `db:"fine_waived_at" json:"fine_waived_at"`
-	FineWaivedBy     pgtype.Int4      `db:"fine_waived_by" json:"fine_waived_by"`
-	FineWaivedReason pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
-	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
-	CopyID           pgtype.Int4      `db:"copy_id" json:"copy_id"`
-	Status           pgtype.Text      `db:"status" json:"status"`
-	RenewalCount     pgtype.Int4      `db:"renewal_count" json:"renewal_count"`
-	LastRenewedAt    pgtype.Timestamp `db:"last_renewed_at" json:"last_renewed_at"`
-	LastRenewedBy    pgtype.Int4      `db:"last_renewed_by" json:"last_renewed_by"`
-	FirstName        string           `db:"first_name" json:"first_name"`
-	LastName         string           `db:"last_name" json:"last_name"`
-	StudentID_2      string           `db:"student_id_2" json:"student_id_2"`
-	Title            string           `db:"title" json:"title"`
-	Author           string           `db:"author" json:"author"`
-	BookID_2         string           `db:"book_id_2" json:"book_id_2"`
-	CoverImageUrl    pgtype.Text      `db:"cover_image_url" json:"cover_image_url"`
-	CopyBarcode      pgtype.Text      `db:"copy_barcode" json:"copy_barcode"`
-	CopyCondition    pgtype.Text      `db:"copy_condition" json:"copy_condition"`
-	StudentDeletedAt pgtype.Timestamp `db:"student_deleted_at" json:"student_deleted_at"`
+	ID                   int32            `db:"id" json:"id"`
+	StudentID            int32            `db:"student_id" json:"student_id"`
+	BookID               int32            `db:"book_id" json:"book_id"`
+	TransactionType      string           `db:"transaction_type" json:"transaction_type"`
+	TransactionDate      pgtype.Timestamp `db:"transaction_date" json:"transaction_date"`
+	DueDate              pgtype.Timestamp `db:"due_date" json:"due_date"`
+	ReturnedDate         pgtype.Timestamp `db:"returned_date" json:"returned_date"`
+	LibrarianID          pgtype.Int4      `db:"librarian_id" json:"librarian_id"`
+	FineAmount           pgtype.Numeric   `db:"fine_amount" json:"fine_amount"`
+	FinePaid             pgtype.Bool      `db:"fine_paid" json:"fine_paid"`
+	Notes                pgtype.Text      `db:"notes" json:"notes"`
+	CreatedAt            pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt            pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	ReturnCondition      pgtype.Text      `db:"return_condition" json:"return_condition"`
+	ConditionNotes       pgtype.Text      `db:"condition_notes" json:"condition_notes"`
+	FineWaived           pgtype.Bool      `db:"fine_waived" json:"fine_waived"`
+	FineWaivedAt         pgtype.Timestamp `db:"fine_waived_at" json:"fine_waived_at"`
+	FineWaivedBy         pgtype.Int4      `db:"fine_waived_by" json:"fine_waived_by"`
+	FineWaivedReason     pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
+	FinePaidAt           pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
+	CopyID               pgtype.Int4      `db:"copy_id" json:"copy_id"`
+	Status               pgtype.Text      `db:"status" json:"status"`
+	RenewalCount         pgtype.Int4      `db:"renewal_count" json:"renewal_count"`
+	LastRenewedAt        pgtype.Timestamp `db:"last_renewed_at" json:"last_renewed_at"`
+	LastRenewedBy        pgtype.Int4      `db:"last_renewed_by" json:"last_renewed_by"`
+	FirstName            string           `db:"first_name" json:"first_name"`
+	LastName             string           `db:"last_name" json:"last_name"`
+	StudentID_2          string           `db:"student_id_2" json:"student_id_2"`
+	Title                string           `db:"title" json:"title"`
+	Author               string           `db:"author" json:"author"`
+	BookID_2             string           `db:"book_id_2" json:"book_id_2"`
+	CoverImageUrl        pgtype.Text      `db:"cover_image_url" json:"cover_image_url"`
+	CopyBarcode          pgtype.Text      `db:"copy_barcode" json:"copy_barcode"`
+	CopyCondition        pgtype.Text      `db:"copy_condition" json:"copy_condition"`
+	StudentDeletedAt     pgtype.Timestamp `db:"student_deleted_at" json:"student_deleted_at"`
+	StudentDeletedByName pgtype.Text      `db:"student_deleted_by_name" json:"student_deleted_by_name"`
 }
 
 // Copy-level transaction tracking queries
@@ -698,6 +701,7 @@ func (q *Queries) GetTransactionByIDWithCopy(ctx context.Context, id int32) (Get
 		&i.CopyBarcode,
 		&i.CopyCondition,
 		&i.StudentDeletedAt,
+		&i.StudentDeletedByName,
 	)
 	return i, err
 }
@@ -1626,11 +1630,13 @@ SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.
        s.first_name, s.last_name, s.student_id,
        b.title, b.author, b.book_id, b.cover_image_url,
        bc.barcode as copy_barcode, bc.condition as copy_condition,
-       s.deleted_at as student_deleted_at
+       s.deleted_at as student_deleted_at,
+       del_user.username as student_deleted_by_name
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
 LEFT JOIN book_copies bc ON t.copy_id = bc.id
+LEFT JOIN users del_user ON s.deleted_by = del_user.id
 ORDER BY t.transaction_date DESC
 LIMIT $1 OFFSET $2
 `
@@ -1641,41 +1647,42 @@ type ListTransactionsWithCopiesParams struct {
 }
 
 type ListTransactionsWithCopiesRow struct {
-	ID               int32            `db:"id" json:"id"`
-	StudentID        int32            `db:"student_id" json:"student_id"`
-	BookID           int32            `db:"book_id" json:"book_id"`
-	TransactionType  string           `db:"transaction_type" json:"transaction_type"`
-	TransactionDate  pgtype.Timestamp `db:"transaction_date" json:"transaction_date"`
-	DueDate          pgtype.Timestamp `db:"due_date" json:"due_date"`
-	ReturnedDate     pgtype.Timestamp `db:"returned_date" json:"returned_date"`
-	LibrarianID      pgtype.Int4      `db:"librarian_id" json:"librarian_id"`
-	FineAmount       pgtype.Numeric   `db:"fine_amount" json:"fine_amount"`
-	FinePaid         pgtype.Bool      `db:"fine_paid" json:"fine_paid"`
-	Notes            pgtype.Text      `db:"notes" json:"notes"`
-	CreatedAt        pgtype.Timestamp `db:"created_at" json:"created_at"`
-	UpdatedAt        pgtype.Timestamp `db:"updated_at" json:"updated_at"`
-	ReturnCondition  pgtype.Text      `db:"return_condition" json:"return_condition"`
-	ConditionNotes   pgtype.Text      `db:"condition_notes" json:"condition_notes"`
-	FineWaived       pgtype.Bool      `db:"fine_waived" json:"fine_waived"`
-	FineWaivedAt     pgtype.Timestamp `db:"fine_waived_at" json:"fine_waived_at"`
-	FineWaivedBy     pgtype.Int4      `db:"fine_waived_by" json:"fine_waived_by"`
-	FineWaivedReason pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
-	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
-	CopyID           pgtype.Int4      `db:"copy_id" json:"copy_id"`
-	Status           pgtype.Text      `db:"status" json:"status"`
-	RenewalCount     pgtype.Int4      `db:"renewal_count" json:"renewal_count"`
-	LastRenewedAt    pgtype.Timestamp `db:"last_renewed_at" json:"last_renewed_at"`
-	LastRenewedBy    pgtype.Int4      `db:"last_renewed_by" json:"last_renewed_by"`
-	FirstName        string           `db:"first_name" json:"first_name"`
-	LastName         string           `db:"last_name" json:"last_name"`
-	StudentID_2      string           `db:"student_id_2" json:"student_id_2"`
-	Title            string           `db:"title" json:"title"`
-	Author           string           `db:"author" json:"author"`
-	BookID_2         string           `db:"book_id_2" json:"book_id_2"`
-	CoverImageUrl    pgtype.Text      `db:"cover_image_url" json:"cover_image_url"`
-	CopyBarcode      pgtype.Text      `db:"copy_barcode" json:"copy_barcode"`
-	CopyCondition    pgtype.Text      `db:"copy_condition" json:"copy_condition"`
-	StudentDeletedAt pgtype.Timestamp `db:"student_deleted_at" json:"student_deleted_at"`
+	ID                   int32            `db:"id" json:"id"`
+	StudentID            int32            `db:"student_id" json:"student_id"`
+	BookID               int32            `db:"book_id" json:"book_id"`
+	TransactionType      string           `db:"transaction_type" json:"transaction_type"`
+	TransactionDate      pgtype.Timestamp `db:"transaction_date" json:"transaction_date"`
+	DueDate              pgtype.Timestamp `db:"due_date" json:"due_date"`
+	ReturnedDate         pgtype.Timestamp `db:"returned_date" json:"returned_date"`
+	LibrarianID          pgtype.Int4      `db:"librarian_id" json:"librarian_id"`
+	FineAmount           pgtype.Numeric   `db:"fine_amount" json:"fine_amount"`
+	FinePaid             pgtype.Bool      `db:"fine_paid" json:"fine_paid"`
+	Notes                pgtype.Text      `db:"notes" json:"notes"`
+	CreatedAt            pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt            pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	ReturnCondition      pgtype.Text      `db:"return_condition" json:"return_condition"`
+	ConditionNotes       pgtype.Text      `db:"condition_notes" json:"condition_notes"`
+	FineWaived           pgtype.Bool      `db:"fine_waived" json:"fine_waived"`
+	FineWaivedAt         pgtype.Timestamp `db:"fine_waived_at" json:"fine_waived_at"`
+	FineWaivedBy         pgtype.Int4      `db:"fine_waived_by" json:"fine_waived_by"`
+	FineWaivedReason     pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
+	FinePaidAt           pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
+	CopyID               pgtype.Int4      `db:"copy_id" json:"copy_id"`
+	Status               pgtype.Text      `db:"status" json:"status"`
+	RenewalCount         pgtype.Int4      `db:"renewal_count" json:"renewal_count"`
+	LastRenewedAt        pgtype.Timestamp `db:"last_renewed_at" json:"last_renewed_at"`
+	LastRenewedBy        pgtype.Int4      `db:"last_renewed_by" json:"last_renewed_by"`
+	FirstName            string           `db:"first_name" json:"first_name"`
+	LastName             string           `db:"last_name" json:"last_name"`
+	StudentID_2          string           `db:"student_id_2" json:"student_id_2"`
+	Title                string           `db:"title" json:"title"`
+	Author               string           `db:"author" json:"author"`
+	BookID_2             string           `db:"book_id_2" json:"book_id_2"`
+	CoverImageUrl        pgtype.Text      `db:"cover_image_url" json:"cover_image_url"`
+	CopyBarcode          pgtype.Text      `db:"copy_barcode" json:"copy_barcode"`
+	CopyCondition        pgtype.Text      `db:"copy_condition" json:"copy_condition"`
+	StudentDeletedAt     pgtype.Timestamp `db:"student_deleted_at" json:"student_deleted_at"`
+	StudentDeletedByName pgtype.Text      `db:"student_deleted_by_name" json:"student_deleted_by_name"`
 }
 
 func (q *Queries) ListTransactionsWithCopies(ctx context.Context, arg ListTransactionsWithCopiesParams) ([]ListTransactionsWithCopiesRow, error) {
@@ -1723,6 +1730,7 @@ func (q *Queries) ListTransactionsWithCopies(ctx context.Context, arg ListTransa
 			&i.CopyBarcode,
 			&i.CopyCondition,
 			&i.StudentDeletedAt,
+			&i.StudentDeletedByName,
 		); err != nil {
 			return nil, err
 		}
@@ -1838,7 +1846,7 @@ const markTransactionAsFound = `-- name: MarkTransactionAsFound :one
 UPDATE transactions
 SET
     transaction_type = 'borrow',
-    status = 'returned',
+    status = 'completed',
     fine_waived = true,
     fine_waived_at = NOW(),
     fine_waived_by = $1,
@@ -2112,11 +2120,13 @@ SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.
        s.first_name, s.last_name, s.student_id as student_code,
        b.title, b.author, b.book_id as book_code, b.cover_image_url,
        bc.barcode as copy_barcode, bc.condition as copy_condition,
-       s.deleted_at as student_deleted_at
+       s.deleted_at as student_deleted_at,
+       del_user.username as student_deleted_by_name
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
 LEFT JOIN book_copies bc ON t.copy_id = bc.id
+LEFT JOIN users del_user ON s.deleted_by = del_user.id
 WHERE
     ($1::text IS NULL OR $1 = '' OR
      b.title ILIKE '%' || $1 || '%' OR
@@ -2153,41 +2163,42 @@ type SearchTransactionsParams struct {
 }
 
 type SearchTransactionsRow struct {
-	ID               int32            `db:"id" json:"id"`
-	StudentID        int32            `db:"student_id" json:"student_id"`
-	BookID           int32            `db:"book_id" json:"book_id"`
-	TransactionType  string           `db:"transaction_type" json:"transaction_type"`
-	TransactionDate  pgtype.Timestamp `db:"transaction_date" json:"transaction_date"`
-	DueDate          pgtype.Timestamp `db:"due_date" json:"due_date"`
-	ReturnedDate     pgtype.Timestamp `db:"returned_date" json:"returned_date"`
-	LibrarianID      pgtype.Int4      `db:"librarian_id" json:"librarian_id"`
-	FineAmount       pgtype.Numeric   `db:"fine_amount" json:"fine_amount"`
-	FinePaid         pgtype.Bool      `db:"fine_paid" json:"fine_paid"`
-	Notes            pgtype.Text      `db:"notes" json:"notes"`
-	CreatedAt        pgtype.Timestamp `db:"created_at" json:"created_at"`
-	UpdatedAt        pgtype.Timestamp `db:"updated_at" json:"updated_at"`
-	ReturnCondition  pgtype.Text      `db:"return_condition" json:"return_condition"`
-	ConditionNotes   pgtype.Text      `db:"condition_notes" json:"condition_notes"`
-	FineWaived       pgtype.Bool      `db:"fine_waived" json:"fine_waived"`
-	FineWaivedAt     pgtype.Timestamp `db:"fine_waived_at" json:"fine_waived_at"`
-	FineWaivedBy     pgtype.Int4      `db:"fine_waived_by" json:"fine_waived_by"`
-	FineWaivedReason pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
-	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
-	CopyID           pgtype.Int4      `db:"copy_id" json:"copy_id"`
-	Status           pgtype.Text      `db:"status" json:"status"`
-	RenewalCount     pgtype.Int4      `db:"renewal_count" json:"renewal_count"`
-	LastRenewedAt    pgtype.Timestamp `db:"last_renewed_at" json:"last_renewed_at"`
-	LastRenewedBy    pgtype.Int4      `db:"last_renewed_by" json:"last_renewed_by"`
-	FirstName        string           `db:"first_name" json:"first_name"`
-	LastName         string           `db:"last_name" json:"last_name"`
-	StudentCode      string           `db:"student_code" json:"student_code"`
-	Title            string           `db:"title" json:"title"`
-	Author           string           `db:"author" json:"author"`
-	BookCode         string           `db:"book_code" json:"book_code"`
-	CoverImageUrl    pgtype.Text      `db:"cover_image_url" json:"cover_image_url"`
-	CopyBarcode      pgtype.Text      `db:"copy_barcode" json:"copy_barcode"`
-	CopyCondition    pgtype.Text      `db:"copy_condition" json:"copy_condition"`
-	StudentDeletedAt pgtype.Timestamp `db:"student_deleted_at" json:"student_deleted_at"`
+	ID                   int32            `db:"id" json:"id"`
+	StudentID            int32            `db:"student_id" json:"student_id"`
+	BookID               int32            `db:"book_id" json:"book_id"`
+	TransactionType      string           `db:"transaction_type" json:"transaction_type"`
+	TransactionDate      pgtype.Timestamp `db:"transaction_date" json:"transaction_date"`
+	DueDate              pgtype.Timestamp `db:"due_date" json:"due_date"`
+	ReturnedDate         pgtype.Timestamp `db:"returned_date" json:"returned_date"`
+	LibrarianID          pgtype.Int4      `db:"librarian_id" json:"librarian_id"`
+	FineAmount           pgtype.Numeric   `db:"fine_amount" json:"fine_amount"`
+	FinePaid             pgtype.Bool      `db:"fine_paid" json:"fine_paid"`
+	Notes                pgtype.Text      `db:"notes" json:"notes"`
+	CreatedAt            pgtype.Timestamp `db:"created_at" json:"created_at"`
+	UpdatedAt            pgtype.Timestamp `db:"updated_at" json:"updated_at"`
+	ReturnCondition      pgtype.Text      `db:"return_condition" json:"return_condition"`
+	ConditionNotes       pgtype.Text      `db:"condition_notes" json:"condition_notes"`
+	FineWaived           pgtype.Bool      `db:"fine_waived" json:"fine_waived"`
+	FineWaivedAt         pgtype.Timestamp `db:"fine_waived_at" json:"fine_waived_at"`
+	FineWaivedBy         pgtype.Int4      `db:"fine_waived_by" json:"fine_waived_by"`
+	FineWaivedReason     pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
+	FinePaidAt           pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
+	CopyID               pgtype.Int4      `db:"copy_id" json:"copy_id"`
+	Status               pgtype.Text      `db:"status" json:"status"`
+	RenewalCount         pgtype.Int4      `db:"renewal_count" json:"renewal_count"`
+	LastRenewedAt        pgtype.Timestamp `db:"last_renewed_at" json:"last_renewed_at"`
+	LastRenewedBy        pgtype.Int4      `db:"last_renewed_by" json:"last_renewed_by"`
+	FirstName            string           `db:"first_name" json:"first_name"`
+	LastName             string           `db:"last_name" json:"last_name"`
+	StudentCode          string           `db:"student_code" json:"student_code"`
+	Title                string           `db:"title" json:"title"`
+	Author               string           `db:"author" json:"author"`
+	BookCode             string           `db:"book_code" json:"book_code"`
+	CoverImageUrl        pgtype.Text      `db:"cover_image_url" json:"cover_image_url"`
+	CopyBarcode          pgtype.Text      `db:"copy_barcode" json:"copy_barcode"`
+	CopyCondition        pgtype.Text      `db:"copy_condition" json:"copy_condition"`
+	StudentDeletedAt     pgtype.Timestamp `db:"student_deleted_at" json:"student_deleted_at"`
+	StudentDeletedByName pgtype.Text      `db:"student_deleted_by_name" json:"student_deleted_by_name"`
 }
 
 func (q *Queries) SearchTransactions(ctx context.Context, arg SearchTransactionsParams) ([]SearchTransactionsRow, error) {
@@ -2246,6 +2257,7 @@ func (q *Queries) SearchTransactions(ctx context.Context, arg SearchTransactions
 			&i.CopyBarcode,
 			&i.CopyCondition,
 			&i.StudentDeletedAt,
+			&i.StudentDeletedByName,
 		); err != nil {
 			return nil, err
 		}

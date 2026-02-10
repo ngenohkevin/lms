@@ -1146,7 +1146,7 @@ func (s *TransactionService) MarkAsLost(ctx context.Context, transactionID int32
 	// Mark the transaction as lost with the replacement fine
 	lostTx, err := s.queries.MarkTransactionAsLost(ctx, queries.MarkTransactionAsLostParams{
 		ID:              transactionID,
-		ReplacementFine: pgtype.Numeric{Int: replacementFine.BigInt(), Exp: replacementFine.Exponent(), Valid: true},
+		ReplacementFine: pgtype.Numeric{Int: replacementFine.BigInt(), Exp: 0, Valid: true},
 		LostReason:      reason,
 	})
 	if err != nil {
@@ -1927,7 +1927,8 @@ type TransactionSearchResult struct {
 	LastRenewedAt *time.Time `json:"last_renewed_at,omitempty"`
 	LastRenewedBy *int32     `json:"last_renewed_by,omitempty"`
 	// Student soft-delete indicator
-	StudentDeleted bool `json:"student_deleted"`
+	StudentDeleted       bool   `json:"student_deleted"`
+	StudentDeletedByName string `json:"student_deleted_by_name,omitempty"`
 }
 
 // TransactionSearchResponse represents the search response
@@ -2082,6 +2083,9 @@ func (s *TransactionService) SearchTransactions(ctx context.Context, params Tran
 
 		// Student soft-delete indicator
 		result.StudentDeleted = row.StudentDeletedAt.Valid
+		if row.StudentDeletedByName.Valid {
+			result.StudentDeletedByName = row.StudentDeletedByName.String
+		}
 
 		// Compute status - check explicit DB status first for lost/cancelled/completed
 		if row.Status.Valid && row.Status.String == "lost" {

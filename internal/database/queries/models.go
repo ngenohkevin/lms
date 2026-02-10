@@ -299,6 +299,7 @@ type Student struct {
 	SuspensionReason pgtype.Text      `db:"suspension_reason" json:"suspension_reason"`
 	GraduatedAt      pgtype.Timestamp `db:"graduated_at" json:"graduated_at"`
 	AdminNotes       pgtype.Text      `db:"admin_notes" json:"admin_notes"`
+	DeletedBy        pgtype.Int4      `db:"deleted_by" json:"deleted_by"`
 }
 
 type Transaction struct {

@@ -192,7 +192,8 @@ func TestQueries_StudentOperations(t *testing.T) {
 	assert.Greater(t, count, int64(0))
 
 	// Test SoftDeleteStudent
-	err = q.SoftDeleteStudent(ctx, student.ID)
+	err = q.SoftDeleteStudent(ctx, queries.SoftDeleteStudentParams{ID: student.ID})
+
 	require.NoError(t, err)
 
 	// Cleanup

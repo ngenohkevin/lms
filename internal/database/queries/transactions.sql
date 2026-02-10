@@ -234,11 +234,13 @@ SELECT t.*,
        s.first_name, s.last_name, s.student_id,
        b.title, b.author, b.book_id, b.cover_image_url,
        bc.barcode as copy_barcode, bc.condition as copy_condition,
-       s.deleted_at as student_deleted_at
+       s.deleted_at as student_deleted_at,
+       del_user.username as student_deleted_by_name
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
 LEFT JOIN book_copies bc ON t.copy_id = bc.id
+LEFT JOIN users del_user ON s.deleted_by = del_user.id
 WHERE t.id = $1;
 
 -- name: GetActiveTransactionByCopy :one
@@ -251,11 +253,13 @@ SELECT t.*,
        s.first_name, s.last_name, s.student_id,
        b.title, b.author, b.book_id, b.cover_image_url,
        bc.barcode as copy_barcode, bc.condition as copy_condition,
-       s.deleted_at as student_deleted_at
+       s.deleted_at as student_deleted_at,
+       del_user.username as student_deleted_by_name
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
 LEFT JOIN book_copies bc ON t.copy_id = bc.id
+LEFT JOIN users del_user ON s.deleted_by = del_user.id
 ORDER BY t.transaction_date DESC
 LIMIT $1 OFFSET $2;
 
@@ -264,11 +268,13 @@ SELECT t.*,
        s.first_name, s.last_name, s.student_id as student_code,
        b.title, b.author, b.book_id as book_code, b.cover_image_url,
        bc.barcode as copy_barcode, bc.condition as copy_condition,
-       s.deleted_at as student_deleted_at
+       s.deleted_at as student_deleted_at,
+       del_user.username as student_deleted_by_name
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
 LEFT JOIN book_copies bc ON t.copy_id = bc.id
+LEFT JOIN users del_user ON s.deleted_by = del_user.id
 WHERE
     (sqlc.narg('query')::text IS NULL OR sqlc.narg('query') = '' OR
      b.title ILIKE '%' || sqlc.narg('query') || '%' OR
@@ -334,7 +340,7 @@ RETURNING *;
 UPDATE transactions
 SET
     transaction_type = 'borrow',
-    status = 'returned',
+    status = 'completed',
     fine_waived = true,
     fine_waived_at = NOW(),
     fine_waived_by = sqlc.arg(waived_by),

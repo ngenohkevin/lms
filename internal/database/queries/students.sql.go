@@ -15,7 +15,7 @@ const activateStudent = `-- name: ActivateStudent :one
 UPDATE students
 SET status = 'active', suspension_reason = NULL, is_active = true, updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes
+RETURNING id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes, deleted_by
 `
 
 func (q *Queries) ActivateStudent(ctx context.Context, id int32) (Student, error) {
@@ -40,6 +40,7 @@ func (q *Queries) ActivateStudent(ctx context.Context, id int32) (Student, error
 		&i.SuspensionReason,
 		&i.GraduatedAt,
 		&i.AdminNotes,
+		&i.DeletedBy,
 	)
 	return i, err
 }
@@ -139,7 +140,7 @@ func (q *Queries) CountStudentsWithOverdueBooks(ctx context.Context) (int64, err
 const createStudent = `-- name: CreateStudent :one
 INSERT INTO students (student_id, first_name, last_name, email, phone, year_of_study, password_hash, max_books)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes
+RETURNING id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes, deleted_by
 `
 
 type CreateStudentParams struct {
@@ -184,12 +185,13 @@ func (q *Queries) CreateStudent(ctx context.Context, arg CreateStudentParams) (S
 		&i.SuspensionReason,
 		&i.GraduatedAt,
 		&i.AdminNotes,
+		&i.DeletedBy,
 	)
 	return i, err
 }
 
 const getStudentByEmail = `-- name: GetStudentByEmail :one
-SELECT id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes FROM students
+SELECT id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes, deleted_by FROM students
 WHERE email = $1 AND deleted_at IS NULL
 `
 
@@ -215,12 +217,13 @@ func (q *Queries) GetStudentByEmail(ctx context.Context, email pgtype.Text) (Stu
 		&i.SuspensionReason,
 		&i.GraduatedAt,
 		&i.AdminNotes,
+		&i.DeletedBy,
 	)
 	return i, err
 }
 
 const getStudentByID = `-- name: GetStudentByID :one
-SELECT id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes FROM students
+SELECT id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes, deleted_by FROM students
 WHERE id = $1 AND deleted_at IS NULL
 `
 
@@ -246,12 +249,13 @@ func (q *Queries) GetStudentByID(ctx context.Context, id int32) (Student, error)
 		&i.SuspensionReason,
 		&i.GraduatedAt,
 		&i.AdminNotes,
+		&i.DeletedBy,
 	)
 	return i, err
 }
 
 const getStudentByStudentID = `-- name: GetStudentByStudentID :one
-SELECT id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes FROM students
+SELECT id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes, deleted_by FROM students
 WHERE student_id = $1 AND deleted_at IS NULL
 `
 
@@ -277,6 +281,7 @@ func (q *Queries) GetStudentByStudentID(ctx context.Context, studentID string) (
 		&i.SuspensionReason,
 		&i.GraduatedAt,
 		&i.AdminNotes,
+		&i.DeletedBy,
 	)
 	return i, err
 }
@@ -356,7 +361,7 @@ func (q *Queries) GetStudentEnrollmentTrends(ctx context.Context, arg GetStudent
 }
 
 const getStudentsByStatus = `-- name: GetStudentsByStatus :many
-SELECT id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes FROM students 
+SELECT id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes, deleted_by FROM students 
 WHERE is_active = $1 AND deleted_at IS NULL
 ORDER BY last_name, first_name
 LIMIT $2 OFFSET $3
@@ -396,6 +401,7 @@ func (q *Queries) GetStudentsByStatus(ctx context.Context, arg GetStudentsByStat
 			&i.SuspensionReason,
 			&i.GraduatedAt,
 			&i.AdminNotes,
+			&i.DeletedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -409,7 +415,7 @@ func (q *Queries) GetStudentsByStatus(ctx context.Context, arg GetStudentsByStat
 
 const getStudentsByStatusType = `-- name: GetStudentsByStatusType :many
 
-SELECT id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes FROM students
+SELECT id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes, deleted_by FROM students
 WHERE status = $1 AND deleted_at IS NULL
 ORDER BY last_name, first_name
 LIMIT $2 OFFSET $3
@@ -450,6 +456,7 @@ func (q *Queries) GetStudentsByStatusType(ctx context.Context, arg GetStudentsBy
 			&i.SuspensionReason,
 			&i.GraduatedAt,
 			&i.AdminNotes,
+			&i.DeletedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -465,7 +472,7 @@ const graduateStudent = `-- name: GraduateStudent :one
 UPDATE students
 SET status = 'graduated', graduated_at = COALESCE($2, NOW()), is_active = false, updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes
+RETURNING id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes, deleted_by
 `
 
 type GraduateStudentParams struct {
@@ -495,12 +502,13 @@ func (q *Queries) GraduateStudent(ctx context.Context, arg GraduateStudentParams
 		&i.SuspensionReason,
 		&i.GraduatedAt,
 		&i.AdminNotes,
+		&i.DeletedBy,
 	)
 	return i, err
 }
 
 const listStudents = `-- name: ListStudents :many
-SELECT id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes FROM students
+SELECT id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes, deleted_by FROM students
 WHERE deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
@@ -539,6 +547,7 @@ func (q *Queries) ListStudents(ctx context.Context, arg ListStudentsParams) ([]S
 			&i.SuspensionReason,
 			&i.GraduatedAt,
 			&i.AdminNotes,
+			&i.DeletedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -551,7 +560,7 @@ func (q *Queries) ListStudents(ctx context.Context, arg ListStudentsParams) ([]S
 }
 
 const listStudentsByYear = `-- name: ListStudentsByYear :many
-SELECT id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes FROM students
+SELECT id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes, deleted_by FROM students
 WHERE year_of_study = $1 AND deleted_at IS NULL
 ORDER BY last_name, first_name
 LIMIT $2 OFFSET $3
@@ -591,6 +600,7 @@ func (q *Queries) ListStudentsByYear(ctx context.Context, arg ListStudentsByYear
 			&i.SuspensionReason,
 			&i.GraduatedAt,
 			&i.AdminNotes,
+			&i.DeletedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -604,7 +614,7 @@ func (q *Queries) ListStudentsByYear(ctx context.Context, arg ListStudentsByYear
 
 const listStudentsWithFines = `-- name: ListStudentsWithFines :many
 
-SELECT DISTINCT s.id, s.student_id, s.first_name, s.last_name, s.email, s.phone, s.year_of_study, s.enrollment_date, s.password_hash, s.is_active, s.deleted_at, s.created_at, s.updated_at, s.max_books, s.status, s.suspension_reason, s.graduated_at, s.admin_notes FROM students s
+SELECT DISTINCT s.id, s.student_id, s.first_name, s.last_name, s.email, s.phone, s.year_of_study, s.enrollment_date, s.password_hash, s.is_active, s.deleted_at, s.created_at, s.updated_at, s.max_books, s.status, s.suspension_reason, s.graduated_at, s.admin_notes, s.deleted_by FROM students s
 INNER JOIN transactions t ON s.id = t.student_id
 WHERE s.deleted_at IS NULL
   AND t.fine_amount > 0 AND t.fine_paid = false AND COALESCE(t.fine_waived, false) = false
@@ -646,6 +656,7 @@ func (q *Queries) ListStudentsWithFines(ctx context.Context, arg ListStudentsWit
 			&i.SuspensionReason,
 			&i.GraduatedAt,
 			&i.AdminNotes,
+			&i.DeletedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -658,7 +669,7 @@ func (q *Queries) ListStudentsWithFines(ctx context.Context, arg ListStudentsWit
 }
 
 const listStudentsWithFinesAndOverdue = `-- name: ListStudentsWithFinesAndOverdue :many
-SELECT DISTINCT s.id, s.student_id, s.first_name, s.last_name, s.email, s.phone, s.year_of_study, s.enrollment_date, s.password_hash, s.is_active, s.deleted_at, s.created_at, s.updated_at, s.max_books, s.status, s.suspension_reason, s.graduated_at, s.admin_notes FROM students s
+SELECT DISTINCT s.id, s.student_id, s.first_name, s.last_name, s.email, s.phone, s.year_of_study, s.enrollment_date, s.password_hash, s.is_active, s.deleted_at, s.created_at, s.updated_at, s.max_books, s.status, s.suspension_reason, s.graduated_at, s.admin_notes, s.deleted_by FROM students s
 INNER JOIN transactions t ON s.id = t.student_id
 WHERE s.deleted_at IS NULL
   AND ((t.fine_amount > 0 AND t.fine_paid = false AND COALESCE(t.fine_waived, false) = false) OR (t.due_date < NOW() AND t.returned_date IS NULL))
@@ -699,6 +710,7 @@ func (q *Queries) ListStudentsWithFinesAndOverdue(ctx context.Context, arg ListS
 			&i.SuspensionReason,
 			&i.GraduatedAt,
 			&i.AdminNotes,
+			&i.DeletedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -711,7 +723,7 @@ func (q *Queries) ListStudentsWithFinesAndOverdue(ctx context.Context, arg ListS
 }
 
 const listStudentsWithOverdue = `-- name: ListStudentsWithOverdue :many
-SELECT DISTINCT s.id, s.student_id, s.first_name, s.last_name, s.email, s.phone, s.year_of_study, s.enrollment_date, s.password_hash, s.is_active, s.deleted_at, s.created_at, s.updated_at, s.max_books, s.status, s.suspension_reason, s.graduated_at, s.admin_notes FROM students s
+SELECT DISTINCT s.id, s.student_id, s.first_name, s.last_name, s.email, s.phone, s.year_of_study, s.enrollment_date, s.password_hash, s.is_active, s.deleted_at, s.created_at, s.updated_at, s.max_books, s.status, s.suspension_reason, s.graduated_at, s.admin_notes, s.deleted_by FROM students s
 INNER JOIN transactions t ON s.id = t.student_id
 WHERE s.deleted_at IS NULL
   AND t.due_date < NOW() AND t.returned_date IS NULL
@@ -752,6 +764,7 @@ func (q *Queries) ListStudentsWithOverdue(ctx context.Context, arg ListStudentsW
 			&i.SuspensionReason,
 			&i.GraduatedAt,
 			&i.AdminNotes,
+			&i.DeletedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -764,7 +777,7 @@ func (q *Queries) ListStudentsWithOverdue(ctx context.Context, arg ListStudentsW
 }
 
 const searchStudents = `-- name: SearchStudents :many
-SELECT id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes FROM students
+SELECT id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes, deleted_by FROM students
 WHERE (first_name ILIKE $1 OR last_name ILIKE $1 OR student_id ILIKE $1 OR email ILIKE $1)
 AND deleted_at IS NULL
 ORDER BY last_name, first_name
@@ -805,6 +818,7 @@ func (q *Queries) SearchStudents(ctx context.Context, arg SearchStudentsParams) 
 			&i.SuspensionReason,
 			&i.GraduatedAt,
 			&i.AdminNotes,
+			&i.DeletedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -817,7 +831,7 @@ func (q *Queries) SearchStudents(ctx context.Context, arg SearchStudentsParams) 
 }
 
 const searchStudentsIncludingDeleted = `-- name: SearchStudentsIncludingDeleted :many
-SELECT id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes FROM students
+SELECT id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes, deleted_by FROM students
 WHERE student_id ILIKE $1
 ORDER BY student_id
 LIMIT $2 OFFSET $3
@@ -857,6 +871,7 @@ func (q *Queries) SearchStudentsIncludingDeleted(ctx context.Context, arg Search
 			&i.SuspensionReason,
 			&i.GraduatedAt,
 			&i.AdminNotes,
+			&i.DeletedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -870,12 +885,17 @@ func (q *Queries) SearchStudentsIncludingDeleted(ctx context.Context, arg Search
 
 const softDeleteStudent = `-- name: SoftDeleteStudent :exec
 UPDATE students
-SET deleted_at = NOW(), updated_at = NOW()
+SET deleted_at = NOW(), deleted_by = $2, updated_at = NOW()
 WHERE id = $1
 `
 
-func (q *Queries) SoftDeleteStudent(ctx context.Context, id int32) error {
-	_, err := q.db.Exec(ctx, softDeleteStudent, id)
+type SoftDeleteStudentParams struct {
+	ID        int32       `db:"id" json:"id"`
+	DeletedBy pgtype.Int4 `db:"deleted_by" json:"deleted_by"`
+}
+
+func (q *Queries) SoftDeleteStudent(ctx context.Context, arg SoftDeleteStudentParams) error {
+	_, err := q.db.Exec(ctx, softDeleteStudent, arg.ID, arg.DeletedBy)
 	return err
 }
 
@@ -884,7 +904,7 @@ const suspendStudent = `-- name: SuspendStudent :one
 UPDATE students
 SET status = 'suspended', suspension_reason = $2, is_active = false, updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes
+RETURNING id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes, deleted_by
 `
 
 type SuspendStudentParams struct {
@@ -915,6 +935,7 @@ func (q *Queries) SuspendStudent(ctx context.Context, arg SuspendStudentParams) 
 		&i.SuspensionReason,
 		&i.GraduatedAt,
 		&i.AdminNotes,
+		&i.DeletedBy,
 	)
 	return i, err
 }
@@ -923,7 +944,7 @@ const updateStudent = `-- name: UpdateStudent :one
 UPDATE students
 SET first_name = $2, last_name = $3, email = $4, phone = $5, year_of_study = $6, max_books = $7, updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes
+RETURNING id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes, deleted_by
 `
 
 type UpdateStudentParams struct {
@@ -966,6 +987,7 @@ func (q *Queries) UpdateStudent(ctx context.Context, arg UpdateStudentParams) (S
 		&i.SuspensionReason,
 		&i.GraduatedAt,
 		&i.AdminNotes,
+		&i.DeletedBy,
 	)
 	return i, err
 }
@@ -974,7 +996,7 @@ const updateStudentAdminNotes = `-- name: UpdateStudentAdminNotes :one
 UPDATE students
 SET admin_notes = $2, updated_at = NOW()
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes
+RETURNING id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes, deleted_by
 `
 
 type UpdateStudentAdminNotesParams struct {
@@ -1004,6 +1026,7 @@ func (q *Queries) UpdateStudentAdminNotes(ctx context.Context, arg UpdateStudent
 		&i.SuspensionReason,
 		&i.GraduatedAt,
 		&i.AdminNotes,
+		&i.DeletedBy,
 	)
 	return i, err
 }
@@ -1029,7 +1052,7 @@ const updateStudentStatus = `-- name: UpdateStudentStatus :one
 UPDATE students 
 SET is_active = $2, updated_at = NOW() 
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes
+RETURNING id, student_id, first_name, last_name, email, phone, year_of_study, enrollment_date, password_hash, is_active, deleted_at, created_at, updated_at, max_books, status, suspension_reason, graduated_at, admin_notes, deleted_by
 `
 
 type UpdateStudentStatusParams struct {
@@ -1060,6 +1083,7 @@ func (q *Queries) UpdateStudentStatus(ctx context.Context, arg UpdateStudentStat
 		&i.SuspensionReason,
 		&i.GraduatedAt,
 		&i.AdminNotes,
+		&i.DeletedBy,
 	)
 	return i, err
 }

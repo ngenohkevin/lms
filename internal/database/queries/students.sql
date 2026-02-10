@@ -28,7 +28,7 @@ WHERE id = $1;
 
 -- name: SoftDeleteStudent :exec
 UPDATE students
-SET deleted_at = NOW(), updated_at = NOW()
+SET deleted_at = NOW(), deleted_by = $2, updated_at = NOW()
 WHERE id = $1;
 
 -- name: ListStudents :many

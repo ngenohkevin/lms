@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/ngenohkevin/lms/internal/database/queries"
 )
@@ -31,8 +32,11 @@ func (s *SoftDeleteService) SoftDeleteUser(ctx context.Context, userID int32) er
 }
 
 // SoftDeleteStudent marks a student as deleted without removing from database
-func (s *SoftDeleteService) SoftDeleteStudent(ctx context.Context, studentID int32) error {
-	err := s.queries.SoftDeleteStudent(ctx, studentID)
+func (s *SoftDeleteService) SoftDeleteStudent(ctx context.Context, studentID int32, deletedBy int32) error {
+	err := s.queries.SoftDeleteStudent(ctx, queries.SoftDeleteStudentParams{
+		ID:        studentID,
+		DeletedBy: pgtype.Int4{Int32: deletedBy, Valid: deletedBy > 0},
+	})
 	if err != nil {
 		return fmt.Errorf("failed to soft delete student: %w", err)
 	}
@@ -60,7 +64,7 @@ func (s *SoftDeleteService) RestoreUser(ctx context.Context, userID int32) error
 
 // RestoreStudent restores a soft-deleted student
 func (s *SoftDeleteService) RestoreStudent(ctx context.Context, studentID int32) error {
-	query := `UPDATE students SET deleted_at = NULL, updated_at = NOW() WHERE id = $1 AND deleted_at IS NOT NULL`
+	query := `UPDATE students SET deleted_at = NULL, deleted_by = NULL, updated_at = NOW() WHERE id = $1 AND deleted_at IS NOT NULL`
 	_, err := s.db.Exec(ctx, query, studentID)
 	if err != nil {
 		return fmt.Errorf("failed to restore student: %w", err)
