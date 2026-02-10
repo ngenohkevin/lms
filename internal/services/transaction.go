@@ -13,6 +13,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/ngenohkevin/lms/internal/database/queries"
+	"github.com/ngenohkevin/lms/internal/models"
 )
 
 // TransactionQuerier defines the interface for transaction database operations
@@ -24,7 +25,8 @@ type TransactionQuerier interface {
 	ListTransactions(ctx context.Context, arg queries.ListTransactionsParams) ([]queries.ListTransactionsRow, error)
 	ListTransactionsByStudent(ctx context.Context, arg queries.ListTransactionsByStudentParams) ([]queries.ListTransactionsByStudentRow, error)
 	ListActiveTransactionsByStudent(ctx context.Context, studentID int32) ([]queries.ListActiveTransactionsByStudentRow, error)
-	ListOverdueTransactions(ctx context.Context) ([]queries.ListOverdueTransactionsRow, error)
+	ListOverdueTransactions(ctx context.Context, arg queries.ListOverdueTransactionsParams) ([]queries.ListOverdueTransactionsRow, error)
+	CountOverdueTransactionsFiltered(ctx context.Context) (int64, error)
 	ReturnBook(ctx context.Context, arg queries.ReturnBookParams) (queries.Transaction, error)
 	UpdateTransactionFine(ctx context.Context, arg queries.UpdateTransactionFineParams) error
 	PayTransactionFine(ctx context.Context, id int32) (queries.Transaction, error)
@@ -911,13 +913,112 @@ func (s *TransactionService) CancelRenewal(ctx context.Context, transactionID in
 	return s.convertToTransactionResponse(transaction), nil
 }
 
-// GetOverdueTransactions returns all overdue transactions
-func (s *TransactionService) GetOverdueTransactions(ctx context.Context) ([]queries.ListOverdueTransactionsRow, error) {
-	transactions, err := s.queries.ListOverdueTransactions(ctx)
+// GetOverdueTransactions returns paginated overdue transactions with nested book/student objects
+func (s *TransactionService) GetOverdueTransactions(ctx context.Context, page, limit int32) (*OverdueTransactionListResponse, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+	offset := (page - 1) * limit
+
+	transactions, err := s.queries.ListOverdueTransactions(ctx, queries.ListOverdueTransactionsParams{
+		Limit:  limit,
+		Offset: offset,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get overdue transactions: %w", err)
 	}
-	return transactions, nil
+
+	total, err := s.queries.CountOverdueTransactionsFiltered(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count overdue transactions: %w", err)
+	}
+
+	totalPages := int(total) / int(limit)
+	if int(total)%int(limit) > 0 {
+		totalPages++
+	}
+
+	result := make([]models.OverdueTransactionResponse, len(transactions))
+	for i, tx := range transactions {
+		result[i] = s.convertToOverdueResponse(tx)
+	}
+
+	return &OverdueTransactionListResponse{
+		Transactions: result,
+		Pagination: PaginationInfo{
+			Page:       int(page),
+			Limit:      int(limit),
+			Total:      total,
+			TotalPages: totalPages,
+		},
+	}, nil
+}
+
+// convertToOverdueResponse converts a database row to an overdue transaction response
+func (s *TransactionService) convertToOverdueResponse(tx queries.ListOverdueTransactionsRow) models.OverdueTransactionResponse {
+	fineAmount := 0.0
+	if tx.FineAmount.Valid && tx.FineAmount.Int != nil {
+		d := decimal.NewFromBigInt(tx.FineAmount.Int, tx.FineAmount.Exp)
+		fineAmount, _ = d.Float64()
+	}
+
+	daysOverdue := int(tx.DaysOverdue)
+	if daysOverdue < 0 {
+		daysOverdue = 0
+	}
+
+	// Calculate estimated fine based on days overdue and configured rate
+	calculatedFine := float64(daysOverdue) * 50.0 // Default rate; fine_amount from DB used if available
+	if fineAmount > 0 {
+		calculatedFine = fineAmount
+	}
+
+	renewalCount := int32(0)
+	if tx.RenewalCount.Valid {
+		renewalCount = tx.RenewalCount.Int32
+	}
+
+	isbn := ""
+	if tx.Isbn.Valid {
+		isbn = tx.Isbn.String
+	}
+
+	email := ""
+	if tx.Email.Valid {
+		email = tx.Email.String
+	}
+
+	return models.OverdueTransactionResponse{
+		ID:             tx.ID,
+		BookID:         tx.BookID,
+		StudentID:      tx.StudentID,
+		Type:           tx.TransactionType,
+		Status:         "overdue",
+		BorrowedAt:     tx.TransactionDate.Time,
+		DueDate:        tx.DueDate.Time,
+		FineAmount:     fineAmount,
+		FinePaid:       tx.FinePaid.Bool,
+		RenewalCount:   renewalCount,
+		DaysOverdue:    daysOverdue,
+		CalculatedFine: calculatedFine,
+		CreatedAt:      tx.CreatedAt.Time,
+		UpdatedAt:      tx.UpdatedAt.Time,
+		Book: &models.OverdueBookInfo{
+			ID:     tx.BookID,
+			Title:  tx.Title,
+			Author: tx.Author,
+			ISBN:   isbn,
+		},
+		Student: &models.OverdueStudentInfo{
+			ID:        tx.StudentID,
+			StudentID: tx.StudentID_2,
+			Name:      tx.FirstName + " " + tx.LastName,
+			Email:     email,
+		},
+	}
 }
 
 // PayFine marks a transaction fine as paid
@@ -1672,6 +1773,12 @@ type PaginationInfo struct {
 	Limit      int   `json:"limit"`
 	Total      int64 `json:"total"`
 	TotalPages int   `json:"total_pages"`
+}
+
+// OverdueTransactionListResponse represents a paginated list of overdue transactions
+type OverdueTransactionListResponse struct {
+	Transactions []models.OverdueTransactionResponse `json:"transactions"`
+	Pagination   PaginationInfo                      `json:"pagination"`
 }
 
 // TransactionStatsResponse represents transaction statistics

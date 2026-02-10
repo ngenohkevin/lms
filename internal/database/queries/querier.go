@@ -68,6 +68,7 @@ type Querier interface {
 	CountLanguages(ctx context.Context, dollar_1 bool) (int64, error)
 	CountNotificationsByType(ctx context.Context, type_ string) (int64, error)
 	CountOverdueTransactions(ctx context.Context) (int64, error)
+	CountOverdueTransactionsFiltered(ctx context.Context) (int64, error)
 	CountPendingInvites(ctx context.Context) (int64, error)
 	CountPermissions(ctx context.Context) (int64, error)
 	// Renewal-related queries for Phase 6.7
@@ -340,7 +341,7 @@ type Querier interface {
 	ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]Notification, error)
 	ListNotificationsByRecipient(ctx context.Context, arg ListNotificationsByRecipientParams) ([]Notification, error)
 	ListNotificationsByType(ctx context.Context, arg ListNotificationsByTypeParams) ([]Notification, error)
-	ListOverdueTransactions(ctx context.Context) ([]ListOverdueTransactionsRow, error)
+	ListOverdueTransactions(ctx context.Context, arg ListOverdueTransactionsParams) ([]ListOverdueTransactionsRow, error)
 	ListPendingInvites(ctx context.Context, arg ListPendingInvitesParams) ([]ListPendingInvitesRow, error)
 	// =====================================================
 	// Permission Queries

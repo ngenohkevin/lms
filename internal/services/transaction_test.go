@@ -47,9 +47,14 @@ func (m *MockTransactionQueries) ListActiveTransactionsByStudent(ctx context.Con
 	return args.Get(0).([]queries.ListActiveTransactionsByStudentRow), args.Error(1)
 }
 
-func (m *MockTransactionQueries) ListOverdueTransactions(ctx context.Context) ([]queries.ListOverdueTransactionsRow, error) {
-	args := m.Called(ctx)
+func (m *MockTransactionQueries) ListOverdueTransactions(ctx context.Context, arg queries.ListOverdueTransactionsParams) ([]queries.ListOverdueTransactionsRow, error) {
+	args := m.Called(ctx, arg)
 	return args.Get(0).([]queries.ListOverdueTransactionsRow), args.Error(1)
+}
+
+func (m *MockTransactionQueries) CountOverdueTransactionsFiltered(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(int64), args.Error(1)
 }
 
 func (m *MockTransactionQueries) ReturnBook(ctx context.Context, arg queries.ReturnBookParams) (queries.Transaction, error) {
@@ -728,23 +733,37 @@ func TestTransactionService_GetOverdueTransactions_Success(t *testing.T) {
 			BookID:          1,
 			TransactionType: "borrow",
 			DueDate:         pgtype.Timestamp{Time: time.Now().AddDate(0, 0, -5), Valid: true},
+			TransactionDate: pgtype.Timestamp{Time: time.Now().AddDate(0, 0, -19), Valid: true},
+			CreatedAt:       pgtype.Timestamp{Time: time.Now().AddDate(0, 0, -19), Valid: true},
+			UpdatedAt:       pgtype.Timestamp{Time: time.Now().AddDate(0, 0, -19), Valid: true},
 			ReturnedDate:    pgtype.Timestamp{Valid: false},
 			FirstName:       "John",
 			LastName:        "Doe",
 			Title:           "Test Book",
+			Author:          "Author",
+			DaysOverdue:     5,
 		},
 	}
 
-	// Setup mock
-	mockQueries.On("ListOverdueTransactions", ctx).Return(overdueTransactions, nil)
+	expectedParams := queries.ListOverdueTransactionsParams{Limit: 20, Offset: 0}
+
+	// Setup mocks
+	mockQueries.On("ListOverdueTransactions", ctx, expectedParams).Return(overdueTransactions, nil)
+	mockQueries.On("CountOverdueTransactionsFiltered", ctx).Return(int64(1), nil)
 
 	// Execute
-	result, err := service.GetOverdueTransactions(ctx)
+	result, err := service.GetOverdueTransactions(ctx, 1, 20)
 
 	// Assert
 	require.NoError(t, err)
-	assert.Len(t, result, 1)
-	assert.Equal(t, int32(1), result[0].ID)
+	assert.Len(t, result.Transactions, 1)
+	assert.Equal(t, int32(1), result.Transactions[0].ID)
+	assert.Equal(t, "overdue", result.Transactions[0].Status)
+	assert.NotNil(t, result.Transactions[0].Book)
+	assert.Equal(t, "Test Book", result.Transactions[0].Book.Title)
+	assert.NotNil(t, result.Transactions[0].Student)
+	assert.Equal(t, "John Doe", result.Transactions[0].Student.Name)
+	assert.Equal(t, int64(1), result.Pagination.Total)
 	mockQueries.AssertExpectations(t)
 }
 

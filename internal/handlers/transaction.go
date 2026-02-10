@@ -26,7 +26,7 @@ type TransactionServiceInterface interface {
 	ReturnByBarcode(ctx context.Context, req services.ReturnByBarcodeRequest) (*services.TransactionResponse, error)
 	RenewBook(ctx context.Context, transactionID, librarianID int32, extensionDays *int32) (*services.TransactionResponse, error)
 	CancelRenewal(ctx context.Context, transactionID int32, newDueDate time.Time) (*services.TransactionResponse, error)
-	GetOverdueTransactions(ctx context.Context) ([]queries.ListOverdueTransactionsRow, error)
+	GetOverdueTransactions(ctx context.Context, page, limit int32) (*services.OverdueTransactionListResponse, error)
 	PayFine(ctx context.Context, transactionID int32) error
 	CancelTransaction(ctx context.Context, transactionID int32, reason string) (*services.TransactionResponse, error)
 	MarkAsLost(ctx context.Context, transactionID int32, reason string, fineAmount *float64) (*services.TransactionResponse, error)
@@ -340,16 +340,32 @@ func (h *TransactionHandler) CancelRenewal(c *gin.Context) {
 	})
 }
 
-// GetOverdueTransactions returns all overdue transactions
+// GetOverdueTransactions returns paginated overdue transactions
 // @Summary Get overdue transactions
-// @Description Get a list of all overdue book transactions
+// @Description Get a paginated list of overdue book transactions with nested book/student info
 // @Tags transactions
 // @Produce json
-// @Success 200 {object} SuccessResponse{data=[]models.OverdueTransactionResponse}
+// @Param page query int false "Page number" default(1)
+// @Param per_page query int false "Items per page" default(20)
+// @Success 200 {object} SuccessResponse{data=services.OverdueTransactionListResponse}
 // @Failure 500 {object} ErrorResponse
 // @Router /api/v1/transactions/overdue [get]
 func (h *TransactionHandler) GetOverdueTransactions(c *gin.Context) {
-	transactions, err := h.transactionService.GetOverdueTransactions(c.Request.Context())
+	page := int32(1)
+	limit := int32(20)
+
+	if p := c.Query("page"); p != "" {
+		if v, err := strconv.Atoi(p); err == nil && v > 0 {
+			page = int32(v)
+		}
+	}
+	if l := c.Query("per_page"); l != "" {
+		if v, err := strconv.Atoi(l); err == nil && v > 0 {
+			limit = int32(v)
+		}
+	}
+
+	result, err := h.transactionService.GetOverdueTransactions(c.Request.Context(), page, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Success: false,
@@ -362,14 +378,9 @@ func (h *TransactionHandler) GetOverdueTransactions(c *gin.Context) {
 		return
 	}
 
-	response := make([]models.OverdueTransactionResponse, len(transactions))
-	for i, tx := range transactions {
-		response[i] = convertToOverdueTransactionResponse(tx)
-	}
-
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
-		Data:    response,
+		Data:    result,
 		Message: "Overdue transactions retrieved successfully",
 	})
 }
@@ -795,36 +806,7 @@ func convertToTransactionResponse(tx *services.TransactionResponse) models.Trans
 	return resp
 }
 
-func convertToOverdueTransactionResponse(tx queries.ListOverdueTransactionsRow) models.OverdueTransactionResponse {
-	studentName := tx.FirstName + " " + tx.LastName
-	fineAmount := decimal.Zero
-	if tx.FineAmount.Valid && tx.FineAmount.Int != nil {
-		fineAmount = decimal.NewFromBigInt(tx.FineAmount.Int, tx.FineAmount.Exp)
-	}
 
-	daysOverdue := 0
-	if tx.DueDate.Valid {
-		daysOverdue = int(time.Since(tx.DueDate.Time).Hours() / 24)
-		if daysOverdue < 0 {
-			daysOverdue = 0
-		}
-	}
-
-	return models.OverdueTransactionResponse{
-		ID:              tx.ID,
-		StudentID:       tx.StudentID,
-		BookID:          tx.BookID,
-		TransactionType: tx.TransactionType,
-		DueDate:         tx.DueDate.Time,
-		FineAmount:      fineAmount,
-		StudentName:     studentName,
-		StudentIDCode:   tx.StudentID_2,
-		BookTitle:       tx.Title,
-		BookAuthor:      tx.Author,
-		BookIDCode:      tx.BookID_2,
-		DaysOverdue:     daysOverdue,
-	}
-}
 
 func convertToTransactionHistoryResponse(tx queries.ListTransactionsByStudentRow) models.TransactionHistoryResponse {
 	fineAmount := decimal.Zero

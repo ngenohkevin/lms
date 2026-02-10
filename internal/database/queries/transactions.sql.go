@@ -160,6 +160,23 @@ func (q *Queries) CountOverdueTransactions(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countOverdueTransactionsFiltered = `-- name: CountOverdueTransactionsFiltered :one
+SELECT COUNT(*) FROM transactions t
+JOIN students s ON t.student_id = s.id
+JOIN books b ON t.book_id = b.id
+WHERE t.due_date < NOW() AND t.returned_date IS NULL AND t.transaction_type = 'borrow'
+  AND s.deleted_at IS NULL
+  AND s.is_active = true
+  AND b.deleted_at IS NULL
+`
+
+func (q *Queries) CountOverdueTransactionsFiltered(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countOverdueTransactionsFiltered)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countRenewalsByStudentAndBook = `-- name: CountRenewalsByStudentAndBook :one
 
 SELECT COUNT(*) FROM transactions
@@ -903,13 +920,23 @@ func (q *Queries) ListActiveTransactionsByStudent(ctx context.Context, studentID
 }
 
 const listOverdueTransactions = `-- name: ListOverdueTransactions :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id, b.isbn,
+    EXTRACT(DAY FROM (NOW() - t.due_date))::int as days_overdue
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
 WHERE t.due_date < NOW() AND t.returned_date IS NULL AND t.transaction_type = 'borrow'
+  AND s.deleted_at IS NULL
+  AND s.is_active = true
+  AND b.deleted_at IS NULL
 ORDER BY t.due_date ASC
+LIMIT $1 OFFSET $2
 `
+
+type ListOverdueTransactionsParams struct {
+	Limit  int32 `db:"limit" json:"limit"`
+	Offset int32 `db:"offset" json:"offset"`
+}
 
 type ListOverdueTransactionsRow struct {
 	ID               int32            `db:"id" json:"id"`
@@ -940,13 +967,16 @@ type ListOverdueTransactionsRow struct {
 	FirstName        string           `db:"first_name" json:"first_name"`
 	LastName         string           `db:"last_name" json:"last_name"`
 	StudentID_2      string           `db:"student_id_2" json:"student_id_2"`
+	Email            pgtype.Text      `db:"email" json:"email"`
 	Title            string           `db:"title" json:"title"`
 	Author           string           `db:"author" json:"author"`
 	BookID_2         string           `db:"book_id_2" json:"book_id_2"`
+	Isbn             pgtype.Text      `db:"isbn" json:"isbn"`
+	DaysOverdue      int32            `db:"days_overdue" json:"days_overdue"`
 }
 
-func (q *Queries) ListOverdueTransactions(ctx context.Context) ([]ListOverdueTransactionsRow, error) {
-	rows, err := q.db.Query(ctx, listOverdueTransactions)
+func (q *Queries) ListOverdueTransactions(ctx context.Context, arg ListOverdueTransactionsParams) ([]ListOverdueTransactionsRow, error) {
+	rows, err := q.db.Query(ctx, listOverdueTransactions, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -983,9 +1013,12 @@ func (q *Queries) ListOverdueTransactions(ctx context.Context) ([]ListOverdueTra
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentID_2,
+			&i.Email,
 			&i.Title,
 			&i.Author,
 			&i.BookID_2,
+			&i.Isbn,
+			&i.DaysOverdue,
 		); err != nil {
 			return nil, err
 		}
@@ -1388,6 +1421,7 @@ JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
 WHERE t.due_date >= NOW() AND t.due_date <= NOW() + INTERVAL '3 days'
   AND t.returned_date IS NULL
+  AND t.transaction_type = 'borrow'
   AND s.is_active = true
   AND s.deleted_at IS NULL
 ORDER BY t.due_date ASC
@@ -1488,6 +1522,7 @@ FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
 WHERE t.due_date < NOW() AND t.returned_date IS NULL
+  AND t.transaction_type = 'borrow'
   AND s.is_active = true
   AND s.deleted_at IS NULL
 ORDER BY t.due_date ASC

@@ -59,12 +59,26 @@ ORDER BY t.transaction_date DESC
 LIMIT $2 OFFSET $3;
 
 -- name: ListOverdueTransactions :many
-SELECT t.*, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
+SELECT t.*, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id, b.isbn,
+    EXTRACT(DAY FROM (NOW() - t.due_date))::int as days_overdue
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
 WHERE t.due_date < NOW() AND t.returned_date IS NULL AND t.transaction_type = 'borrow'
-ORDER BY t.due_date ASC;
+  AND s.deleted_at IS NULL
+  AND s.is_active = true
+  AND b.deleted_at IS NULL
+ORDER BY t.due_date ASC
+LIMIT $1 OFFSET $2;
+
+-- name: CountOverdueTransactionsFiltered :one
+SELECT COUNT(*) FROM transactions t
+JOIN students s ON t.student_id = s.id
+JOIN books b ON t.book_id = b.id
+WHERE t.due_date < NOW() AND t.returned_date IS NULL AND t.transaction_type = 'borrow'
+  AND s.deleted_at IS NULL
+  AND s.is_active = true
+  AND b.deleted_at IS NULL;
 
 -- name: ListActiveTransactionsByStudent :many
 SELECT t.*, b.title, b.author, b.book_id
@@ -132,6 +146,7 @@ JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
 WHERE t.due_date >= NOW() AND t.due_date <= NOW() + INTERVAL '3 days'
   AND t.returned_date IS NULL
+  AND t.transaction_type = 'borrow'
   AND s.is_active = true
   AND s.deleted_at IS NULL
 ORDER BY t.due_date ASC;
@@ -142,6 +157,7 @@ FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
 WHERE t.due_date < NOW() AND t.returned_date IS NULL
+  AND t.transaction_type = 'borrow'
   AND s.is_active = true
   AND s.deleted_at IS NULL
 ORDER BY t.due_date ASC;

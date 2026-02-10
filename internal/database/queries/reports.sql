@@ -158,7 +158,7 @@ SELECT
     (SELECT COUNT(*) FROM students WHERE deleted_at IS NULL AND is_active = true)::int as total_students,
     (SELECT COUNT(*) FROM transactions WHERE transaction_type = 'borrow')::int as total_borrows,
     (SELECT COUNT(*) FROM transactions WHERE transaction_type = 'borrow' AND returned_date IS NULL)::int as active_borrows,
-    (SELECT COUNT(*) FROM transactions WHERE due_date < NOW() AND returned_date IS NULL)::int as overdue_books,
+    (SELECT COUNT(*) FROM transactions WHERE due_date < NOW() AND returned_date IS NULL AND transaction_type = 'borrow')::int as overdue_books,
     (SELECT COUNT(*) FROM reservations WHERE status = 'active' AND expires_at > NOW())::int as total_reservations,
     COALESCE((SELECT SUM(available_copies) FROM books WHERE deleted_at IS NULL AND is_active = true), 0)::int as available_books,
     COALESCE((SELECT SUM(fine_amount) FROM transactions WHERE fine_paid = false AND COALESCE(fine_waived, false) = false), 0)::text as total_fines;
@@ -167,7 +167,7 @@ SELECT
 SELECT
     (SELECT COUNT(*) FROM transactions WHERE transaction_type = 'borrow' AND DATE(transaction_date) = CURRENT_DATE)::int as today_borrows,
     (SELECT COUNT(*) FROM transactions WHERE transaction_type = 'return' AND DATE(transaction_date) = CURRENT_DATE)::int as today_returns,
-    (SELECT COUNT(*) FROM transactions WHERE due_date < NOW() AND returned_date IS NULL)::int as current_overdue,
+    (SELECT COUNT(*) FROM transactions WHERE due_date < NOW() AND returned_date IS NULL AND transaction_type = 'borrow')::int as current_overdue,
     (SELECT COUNT(*) FROM students WHERE DATE(created_at) = CURRENT_DATE AND deleted_at IS NULL)::int as new_students,
     (SELECT COUNT(DISTINCT student_id) FROM transactions WHERE DATE(transaction_date) = CURRENT_DATE)::int as active_users,
     COALESCE((SELECT SUM(available_copies) FROM books WHERE deleted_at IS NULL AND is_active = true), 0)::int as available_books,

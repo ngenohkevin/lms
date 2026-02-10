@@ -124,7 +124,7 @@ RETURNING *;
 -- name: GetFineOverviewStats :one
 SELECT
     COUNT(*) FILTER (WHERE fine_paid = false AND (COALESCE(fine_waived, false) = false))::int as unpaid_count,
-    COUNT(*) FILTER (WHERE fine_paid = true)::int as paid_count,
+    COUNT(*) FILTER (WHERE fine_paid = true AND COALESCE(fine_waived, false) = false)::int as paid_count,
     COUNT(*) FILTER (WHERE COALESCE(fine_waived, false) = true)::int as waived_count,
     COALESCE(SUM(fine_amount) FILTER (WHERE fine_paid = false AND (COALESCE(fine_waived, false) = false)), 0)::numeric as total_unpaid,
     COALESCE(SUM(fine_amount) FILTER (WHERE fine_paid = true AND (COALESCE(fine_waived, false) = false)), 0)::numeric as total_collected,

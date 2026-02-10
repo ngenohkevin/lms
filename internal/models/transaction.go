@@ -88,20 +88,40 @@ type TransactionResponse struct {
 	LastRenewedBy *int32     `json:"last_renewed_by,omitempty"`
 }
 
-// OverdueTransactionResponse represents an overdue transaction with additional details
+// OverdueTransactionResponse represents an overdue transaction with nested book/student objects
 type OverdueTransactionResponse struct {
-	ID              int32           `json:"id"`
-	StudentID       int32           `json:"student_id"`
-	BookID          int32           `json:"book_id"`
-	TransactionType string          `json:"transaction_type"`
-	DueDate         time.Time       `json:"due_date"`
-	FineAmount      decimal.Decimal `json:"fine_amount"`
-	StudentName     string          `json:"student_name"`
-	StudentIDCode   string          `json:"student_id_code"`
-	BookTitle       string          `json:"book_title"`
-	BookAuthor      string          `json:"book_author"`
-	BookIDCode      string          `json:"book_id_code"`
-	DaysOverdue     int             `json:"days_overdue"`
+	ID             int32              `json:"id"`
+	BookID         int32              `json:"book_id"`
+	StudentID      int32              `json:"student_id"`
+	Type           string             `json:"type"`
+	Status         string             `json:"status"`
+	BorrowedAt     time.Time          `json:"borrowed_at"`
+	DueDate        time.Time          `json:"due_date"`
+	FineAmount     float64            `json:"fine_amount"`
+	FinePaid       bool               `json:"fine_paid"`
+	RenewalCount   int32              `json:"renewal_count"`
+	DaysOverdue    int                `json:"days_overdue"`
+	CalculatedFine float64            `json:"calculated_fine"`
+	CreatedAt      time.Time          `json:"created_at"`
+	UpdatedAt      time.Time          `json:"updated_at"`
+	Book           *OverdueBookInfo   `json:"book,omitempty"`
+	Student        *OverdueStudentInfo `json:"student,omitempty"`
+}
+
+// OverdueBookInfo represents book info nested in an overdue transaction
+type OverdueBookInfo struct {
+	ID     int32  `json:"id"`
+	Title  string `json:"title"`
+	Author string `json:"author"`
+	ISBN   string `json:"isbn"`
+}
+
+// OverdueStudentInfo represents student info nested in an overdue transaction
+type OverdueStudentInfo struct {
+	ID        int32  `json:"id"`
+	StudentID string `json:"student_id"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
 }
 
 // TransactionHistoryResponse represents a transaction history entry

@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ngenohkevin/lms/internal/database/queries"
+	"github.com/ngenohkevin/lms/internal/models"
 	"github.com/ngenohkevin/lms/internal/services"
 )
 
@@ -89,9 +90,12 @@ func (m *MockTransactionService) RenewBook(ctx context.Context, transactionID, l
 	return args.Get(0).(*services.TransactionResponse), args.Error(1)
 }
 
-func (m *MockTransactionService) GetOverdueTransactions(ctx context.Context) ([]queries.ListOverdueTransactionsRow, error) {
-	args := m.Called(ctx)
-	return args.Get(0).([]queries.ListOverdueTransactionsRow), args.Error(1)
+func (m *MockTransactionService) GetOverdueTransactions(ctx context.Context, page, limit int32) (*services.OverdueTransactionListResponse, error) {
+	args := m.Called(ctx, page, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*services.OverdueTransactionListResponse), args.Error(1)
 }
 
 func (m *MockTransactionService) PayFine(ctx context.Context, transactionID int32) error {
@@ -423,19 +427,35 @@ func TestTransactionHandler_RenewBook_Success(t *testing.T) {
 func TestTransactionHandler_GetOverdueTransactions_Success(t *testing.T) {
 	router, mockService := setupTransactionRouter()
 
-	overdueTransactions := []queries.ListOverdueTransactionsRow{
-		{
-			ID:        1,
-			StudentID: 1,
-			BookID:    1,
-			Title:     "Test Book",
-			FirstName: "John",
-			LastName:  "Doe",
+	overdueResult := &services.OverdueTransactionListResponse{
+		Transactions: []models.OverdueTransactionResponse{
+			{
+				ID:        1,
+				BookID:    1,
+				StudentID: 1,
+				Type:      "borrow",
+				Status:    "overdue",
+				DaysOverdue: 5,
+				Book: &models.OverdueBookInfo{
+					ID:    1,
+					Title: "Test Book",
+				},
+				Student: &models.OverdueStudentInfo{
+					ID:   1,
+					Name: "John Doe",
+				},
+			},
+		},
+		Pagination: services.PaginationInfo{
+			Page:       1,
+			Limit:      20,
+			Total:      1,
+			TotalPages: 1,
 		},
 	}
 
-	// Setup mock
-	mockService.On("GetOverdueTransactions", mock.Anything).Return(overdueTransactions, nil)
+	// Setup mock - default page=1, limit=20
+	mockService.On("GetOverdueTransactions", mock.Anything, int32(1), int32(20)).Return(overdueResult, nil)
 
 	// Create request
 	req, _ := http.NewRequest("GET", "/api/v1/transactions/overdue", nil)
