@@ -31,7 +31,7 @@ type BorrowBookRequest struct {
 	CopyID      *int32  `json:"copy_id" binding:"omitempty,min=1"`
 	Barcode     *string `json:"barcode" binding:"omitempty"`
 	Notes       string  `json:"notes"`
-	DueDays     *int32  `json:"due_days" binding:"omitempty,min=1,max=90"` // Custom due period in days (overrides year-based default)
+	DueDays     *int32  `json:"due_days" binding:"omitempty,min=1,max=365"` // Custom due period in days (overrides year-based default)
 }
 
 // BorrowByBarcodeRequest represents a quick checkout by barcode
