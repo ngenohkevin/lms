@@ -738,6 +738,7 @@ func convertToReservationDetailsResponse(r *services.ReservationResponse) models
 		BookTitle:     r.BookTitle,
 		BookAuthor:    r.BookAuthor,
 		BookIDCode:    r.BookIDCode,
+		BookCoverURL:  r.BookCoverURL,
 	}
 }
 
@@ -752,9 +753,10 @@ func convertToStudentReservationResponse(r *services.ReservationResponse) models
 		FulfilledAt: r.FulfilledAt,
 		CreatedAt:   r.CreatedAt,
 		UpdatedAt:   r.UpdatedAt,
-		BookTitle:   r.BookTitle,
-		BookAuthor:  r.BookAuthor,
-		BookIDCode:  r.BookIDCode,
+		BookTitle:    r.BookTitle,
+		BookAuthor:   r.BookAuthor,
+		BookIDCode:   r.BookIDCode,
+		BookCoverURL: r.BookCoverURL,
 	}
 }
 

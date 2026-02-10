@@ -56,9 +56,10 @@ type ReservationDetailsResponse struct {
 	StudentName   string `json:"student_name"`
 	StudentIDCode string `json:"student_id_code"`
 	// Book information
-	BookTitle  string `json:"book_title"`
-	BookAuthor string `json:"book_author"`
-	BookIDCode string `json:"book_id_code"`
+	BookTitle    string `json:"book_title"`
+	BookAuthor   string `json:"book_author"`
+	BookIDCode   string `json:"book_id_code"`
+	BookCoverURL string `json:"book_cover_url,omitempty"`
 }
 
 // StudentReservationResponse represents a reservation response for student-specific queries
@@ -74,9 +75,10 @@ type StudentReservationResponse struct {
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
 	// Book information
-	BookTitle  string `json:"book_title"`
-	BookAuthor string `json:"book_author"`
-	BookIDCode string `json:"book_id_code"`
+	BookTitle    string `json:"book_title"`
+	BookAuthor   string `json:"book_author"`
+	BookIDCode   string `json:"book_id_code"`
+	BookCoverURL string `json:"book_cover_url,omitempty"`
 }
 
 // BookReservationResponse represents a reservation response for book-specific queries
