@@ -412,10 +412,12 @@ func (suite *TransactionIntegrationTestSuite) TestGetOverdueTransactions() {
 	assert.True(suite.T(), response.Success)
 	assert.NotNil(suite.T(), response.Data)
 
-	// Verify we have at least one overdue transaction
-	responseData, ok := response.Data.([]interface{})
+	// Verify we have a paginated response with at least one overdue transaction
+	responseData, ok := response.Data.(map[string]interface{})
 	require.True(suite.T(), ok)
-	assert.GreaterOrEqual(suite.T(), len(responseData), 1)
+	transactions, ok := responseData["transactions"].([]interface{})
+	require.True(suite.T(), ok)
+	assert.GreaterOrEqual(suite.T(), len(transactions), 1)
 }
 
 // Test transaction history retrieval
