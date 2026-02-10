@@ -5,7 +5,7 @@ import "time"
 // AcademicYearRequest represents a request to create or update an academic year
 type AcademicYearRequest struct {
 	Name        string  `json:"name" binding:"required,min=1,max=50"`
-	Level       int32   `json:"level" binding:"required,min=1,max=10"`
+	Level       int32   `json:"level" binding:"required,min=1,max=13"`
 	Description *string `json:"description,omitempty"`
 }
 

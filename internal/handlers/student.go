@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/csv"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -687,23 +686,7 @@ func (h *StudentHandler) GetStudentStatistics(c *gin.Context) {
 
 // GenerateStudentID handles POST /api/v1/students/generate-id
 func (h *StudentHandler) GenerateStudentID(c *gin.Context) {
-	var req struct {
-		Year int `json:"year" binding:"required,min=2000,max=2100"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Success: false,
-			Error: ErrorDetail{
-				Code:    "VALIDATION_ERROR",
-				Message: "Invalid year provided",
-				Details: err.Error(),
-			},
-		})
-		return
-	}
-
-	studentID, err := h.studentService.GenerateNextStudentID(c.Request.Context(), req.Year)
+	studentID, err := h.studentService.GenerateNextStudentID(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Success: false,
@@ -718,7 +701,6 @@ func (h *StudentHandler) GenerateStudentID(c *gin.Context) {
 
 	response := map[string]string{
 		"student_id": studentID,
-		"year":       fmt.Sprintf("%d", req.Year),
 	}
 
 	c.JSON(http.StatusOK, SuccessResponse{

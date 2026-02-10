@@ -537,7 +537,7 @@ func TestImportExportService_StudentImport(t *testing.T) {
 
 		// Check sample data
 		assert.Len(t, template.SampleData, 2)
-		assert.Equal(t, "STU2025001", template.SampleData[0].StudentID)
+		assert.Equal(t, "STU001", template.SampleData[0].StudentID)
 		assert.Equal(t, "John", template.SampleData[0].FirstName)
 	})
 

@@ -301,10 +301,10 @@ func TestStudentService_CreateStudent(t *testing.T) {
 		{
 			name: "invalid year of study",
 			request: &models.CreateStudentRequest{
-				StudentID:   "STU2024001",
+				StudentID:   "STU001",
 				FirstName:   "John",
 				LastName:    "Doe",
-				YearOfStudy: 10, // Invalid: should be 1-8
+				YearOfStudy: 14, // Invalid: should be 1-13
 			},
 			setupMocks: func(m *MockQueries) {
 				// No mocks needed - validation fails before database calls
@@ -880,36 +880,33 @@ func TestStudentService_BulkImportStudents(t *testing.T) {
 func TestStudentService_GenerateNextStudentID(t *testing.T) {
 	tests := []struct {
 		name        string
-		year        int
 		setupMocks  func(*MockQueries)
 		expectedID  string
 		expectError bool
 	}{
 		{
-			name: "first student for year",
-			year: 2024,
+			name: "first student",
 			setupMocks: func(m *MockQueries) {
 				m.On("SearchStudentsIncludingDeleted", mock.Anything, mock.MatchedBy(func(params queries.SearchStudentsIncludingDeletedParams) bool {
-					return params.StudentID == "STU2024%"
+					return params.StudentID == "STU%"
 				})).Return([]queries.Student{}, nil)
 			},
-			expectedID:  "STU2024001",
+			expectedID:  "STU1",
 			expectError: false,
 		},
 		{
 			name: "next student after existing ones",
-			year: 2024,
 			setupMocks: func(m *MockQueries) {
 				existingStudents := []queries.Student{
-					{StudentID: "STU2024001"},
-					{StudentID: "STU2024003"},
-					{StudentID: "STU2024002"},
+					{StudentID: "STU1"},
+					{StudentID: "STU3"},
+					{StudentID: "STU2"},
 				}
 				m.On("SearchStudentsIncludingDeleted", mock.Anything, mock.MatchedBy(func(params queries.SearchStudentsIncludingDeletedParams) bool {
-					return params.StudentID == "STU2024%"
+					return params.StudentID == "STU%"
 				})).Return(existingStudents, nil)
 			},
-			expectedID:  "STU2024004",
+			expectedID:  "STU4",
 			expectError: false,
 		},
 	}
@@ -924,7 +921,7 @@ func TestStudentService_GenerateNextStudentID(t *testing.T) {
 			service := NewStudentService(mockQueries, mockAuth, nil)
 			ctx := context.Background()
 
-			result, err := service.GenerateNextStudentID(ctx, tt.year)
+			result, err := service.GenerateNextStudentID(ctx)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -1010,7 +1007,7 @@ func TestStudentRequestValidation(t *testing.T) {
 
 		// Test invalid year
 		invalidYearRequest := *validRequest
-		invalidYearRequest.YearOfStudy = 10
+		invalidYearRequest.YearOfStudy = 14
 		assert.ErrorIs(t, invalidYearRequest.Validate(), models.ErrInvalidYear)
 
 		// Test missing first name

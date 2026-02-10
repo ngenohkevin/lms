@@ -1373,7 +1373,7 @@ func (s *ImportExportService) GenerateStudentImportTemplate(format string) (*mod
 
 	sampleData := []models.BulkImportStudentRequest{
 		{
-			StudentID:   "STU2025001",
+			StudentID:   "STU001",
 			FirstName:   "John",
 			LastName:    "Doe",
 			YearOfStudy: 1,
@@ -1382,7 +1382,7 @@ func (s *ImportExportService) GenerateStudentImportTemplate(format string) (*mod
 			MaxBooks:    5,
 		},
 		{
-			StudentID:   "STU2025002",
+			StudentID:   "STU002",
 			FirstName:   "Jane",
 			LastName:    "Smith",
 			YearOfStudy: 2,
@@ -1391,10 +1391,10 @@ func (s *ImportExportService) GenerateStudentImportTemplate(format string) (*mod
 
 	instructions := `
 Import Instructions:
-1. student_id: Unique student identifier (required) - format: STU + year + 3-digit number (e.g., STU2025001)
+1. student_id: Unique student identifier (required) - format: STU + number (e.g., STU200)
 2. first_name: Student's first name (required)
 3. last_name: Student's last name (required)
-4. year_of_study: Year of study, 1-8 (required)
+4. year_of_study: Year of study, 1-13 (required)
 5. email: Student email address (optional)
 6. phone: Phone number (optional)
 7. max_books: Maximum books student can borrow (optional, defaults to 5)
@@ -1403,7 +1403,7 @@ Notes:
 - Required fields: student_id, first_name, last_name, year_of_study
 - Duplicate student IDs will be skipped
 - Default password is the student ID
-- year_of_study must be between 1 and 8
+- year_of_study must be between 1 and 13
 - Supports CSV and Excel (.xlsx, .xls) formats
 `
 

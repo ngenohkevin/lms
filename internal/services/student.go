@@ -727,37 +727,27 @@ func (s *StudentService) BulkImportStudents(ctx context.Context, requests []mode
 	return response
 }
 
-// GenerateNextStudentID generates the next available student ID for a given year
-func (s *StudentService) GenerateNextStudentID(ctx context.Context, year int) (string, error) {
-	// Get the current count of students for this year
-	yearPrefix := fmt.Sprintf("STU%d", year)
-
-	// This is a simplified approach - in production, you might want a more sophisticated sequence
-	// For now, we'll get the highest sequence number for the year and increment it
-
-	// Search for existing student IDs with this year prefix (including soft-deleted)
-	searchPattern := yearPrefix + "%"
+// GenerateNextStudentID generates the next available student ID
+func (s *StudentService) GenerateNextStudentID(ctx context.Context) (string, error) {
+	// Search for all existing student IDs (including soft-deleted)
+	searchPattern := "STU%"
 	students, err := s.queries.SearchStudentsIncludingDeleted(ctx, queries.SearchStudentsIncludingDeletedParams{
 		StudentID: searchPattern,
-		Limit:     1000, // Get a large number to find the highest sequence
+		Limit:     10000,
 		Offset:    0,
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to search for existing student IDs: %w", err)
 	}
 
-	// Find the highest sequence number (only considering properly formatted IDs with 3-digit sequences)
+	// Find the highest sequence number
 	maxSequence := 0
 	for _, student := range students {
-		if strings.HasPrefix(student.StudentID, yearPrefix) {
-			// Extract sequence number (should be exactly 3 digits)
-			sequenceStr := student.StudentID[len(yearPrefix):]
-			// Only consider properly formatted IDs (exactly 3 digits)
-			if len(sequenceStr) == 3 {
-				if sequence, err := strconv.Atoi(sequenceStr); err == nil {
-					if sequence > maxSequence {
-						maxSequence = sequence
-					}
+		if strings.HasPrefix(student.StudentID, "STU") {
+			sequenceStr := student.StudentID[3:]
+			if sequence, err := strconv.Atoi(sequenceStr); err == nil {
+				if sequence > maxSequence {
+					maxSequence = sequence
 				}
 			}
 		}
@@ -766,12 +756,7 @@ func (s *StudentService) GenerateNextStudentID(ctx context.Context, year int) (s
 	// Generate next ID
 	nextSequence := maxSequence + 1
 
-	// Check if we've exceeded the 3-digit limit (001-999)
-	if nextSequence > 999 {
-		return "", fmt.Errorf("maximum number of students for year %d exceeded (999)", year)
-	}
-
-	return models.GenerateStudentID(year, nextSequence), nil
+	return models.GenerateStudentID(nextSequence), nil
 }
 
 // UpdateStudentPassword updates a student's password (admin use - no current password required)

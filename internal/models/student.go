@@ -43,7 +43,7 @@ type CreateStudentRequest struct {
 	LastName    string `json:"last_name" binding:"required"`
 	Email       string `json:"email" binding:"omitempty,email"`
 	Phone       string `json:"phone" binding:"omitempty"`
-	YearOfStudy int32  `json:"year_of_study" binding:"required,min=1,max=8"`
+	YearOfStudy int32  `json:"year_of_study" binding:"required,min=1,max=13"`
 	MaxBooks    int32  `json:"max_books" binding:"omitempty,min=1,max=20"`
 }
 
@@ -53,7 +53,7 @@ type UpdateStudentRequest struct {
 	LastName    string `json:"last_name" binding:"required"`
 	Email       string `json:"email" binding:"omitempty,email"`
 	Phone       string `json:"phone" binding:"omitempty"`
-	YearOfStudy int32  `json:"year_of_study" binding:"required,min=1,max=8"`
+	YearOfStudy int32  `json:"year_of_study" binding:"required,min=1,max=13"`
 	MaxBooks    int32  `json:"max_books" binding:"omitempty,min=1,max=20"`
 }
 
@@ -98,7 +98,7 @@ type StudentListResponse struct {
 // StudentSearchRequest represents the request payload for searching students
 type StudentSearchRequest struct {
 	Query       string `form:"q" binding:"omitempty"`
-	YearOfStudy int32  `form:"year" binding:"omitempty,min=1,max=8"`
+	YearOfStudy int32  `form:"year" binding:"omitempty,min=1,max=13"`
 	IsActive    *bool  `form:"active" binding:"omitempty"`
 	HasFines    *bool  `form:"has_fines" binding:"omitempty"`   // Filter students with unpaid fines
 	HasOverdue  *bool  `form:"has_overdue" binding:"omitempty"` // Filter students with overdue books
@@ -113,7 +113,7 @@ type BulkImportStudentRequest struct {
 	LastName    string `csv:"last_name" binding:"required"`
 	Email       string `csv:"email" binding:"omitempty,email"`
 	Phone       string `csv:"phone" binding:"omitempty"`
-	YearOfStudy int32  `csv:"year_of_study" binding:"required,min=1,max=8"`
+	YearOfStudy int32  `csv:"year_of_study" binding:"required,min=1,max=13"`
 	MaxBooks    int32  `csv:"max_books" binding:"omitempty"`
 }
 
@@ -136,8 +136,8 @@ type BulkImportError struct {
 
 // Student ID validation patterns
 var (
-	// StudentIDPattern defines the valid pattern for student IDs (e.g., STU2024001, STU2024002, etc.)
-	StudentIDPattern = regexp.MustCompile(`^STU\d{4}\d{3}$`)
+	// StudentIDPattern defines the valid pattern for student IDs (e.g., STU200, STU199, etc.)
+	StudentIDPattern = regexp.MustCompile(`^STU\d+$`)
 
 	// PhonePattern defines the valid pattern for phone numbers
 	PhonePattern = regexp.MustCompile(`^\+?[\d\s\-\(\)]+$`)
@@ -145,8 +145,8 @@ var (
 
 // Common validation errors
 var (
-	ErrInvalidStudentID     = errors.New("student ID must follow format STU + year + 3-digit number (e.g., STU2024001)")
-	ErrInvalidYear          = errors.New("year of study must be between 1 and 8")
+	ErrInvalidStudentID     = errors.New("student ID must follow format STU + number (e.g., STU200)")
+	ErrInvalidYear          = errors.New("year of study must be between 1 and 13")
 	ErrInvalidEmail         = errors.New("invalid email format")
 	ErrInvalidPhone         = errors.New("invalid phone number format")
 	ErrStudentIDExists      = errors.New("student ID already exists")
@@ -179,7 +179,7 @@ func (r *CreateStudentRequest) Validate() error {
 	}
 
 	// Validate year of study
-	if r.YearOfStudy < 1 || r.YearOfStudy > 8 {
+	if r.YearOfStudy < 1 || r.YearOfStudy > 13 {
 		return ErrInvalidYear
 	}
 
@@ -208,7 +208,7 @@ func (r *UpdateStudentRequest) Validate() error {
 	}
 
 	// Validate year of study
-	if r.YearOfStudy < 1 || r.YearOfStudy > 8 {
+	if r.YearOfStudy < 1 || r.YearOfStudy > 13 {
 		return ErrInvalidYear
 	}
 
@@ -267,7 +267,7 @@ func (r *BulkImportStudentRequest) Validate() error {
 	}
 
 	// Validate year of study
-	if r.YearOfStudy < 1 || r.YearOfStudy > 8 {
+	if r.YearOfStudy < 1 || r.YearOfStudy > 13 {
 		return ErrInvalidYear
 	}
 
@@ -335,9 +335,9 @@ func (s *StudentDB) ToResponse() StudentResponse {
 	return response
 }
 
-// GenerateStudentID generates a new student ID based on current year and next sequence number
-func GenerateStudentID(year int, sequence int) string {
-	return fmt.Sprintf("STU%d%03d", year, sequence)
+// GenerateStudentID generates a new student ID based on the next sequence number
+func GenerateStudentID(sequence int) string {
+	return fmt.Sprintf("STU%d", sequence)
 }
 
 // GetFullName returns the full name of the student
@@ -447,7 +447,7 @@ const (
 // StudentExportRequest represents a request to export student data
 type StudentExportRequest struct {
 	Format          StudentExportFormat `json:"format" binding:"required,oneof=csv json xlsx"`
-	YearOfStudy     *int32              `json:"year_of_study,omitempty" binding:"omitempty,min=1,max=8"`
+	YearOfStudy     *int32              `json:"year_of_study,omitempty" binding:"omitempty,min=1,max=13"`
 	Department      string              `json:"department,omitempty"`
 	IncludeInactive bool                `json:"include_inactive"`
 	Fields          []string            `json:"fields,omitempty"` // If empty, export all fields

@@ -131,10 +131,10 @@ func TestStudentAccountWorkflow(t *testing.T) {
 
 	t.Run("complete account creation workflow", func(t *testing.T) {
 		// Step 1: Generate a student ID for the current year
-		studentID, err := studentService.GenerateNextStudentID(ctx, 2023)
+		studentID, err := studentService.GenerateNextStudentID(ctx)
 		require.NoError(t, err)
 		require.NotEmpty(t, studentID)
-		assert.Contains(t, studentID, "STU2023")
+		assert.Contains(t, studentID, "STU")
 
 		// Step 2: Create a student account with minimal required information
 		createReq := &models.CreateStudentRequest{
@@ -201,7 +201,7 @@ func TestStudentAccountWorkflow(t *testing.T) {
 		// Clean up workflow test data to avoid conflicts
 		cleanWorkflowTestData(t, db.Pool)
 		// Generate student ID
-		studentID, err := studentService.GenerateNextStudentID(ctx, 2023)
+		studentID, err := studentService.GenerateNextStudentID(ctx)
 		require.NoError(t, err)
 
 		// Create student with comprehensive information
@@ -367,7 +367,7 @@ func TestStudentAccountWorkflow(t *testing.T) {
 		// Clean up workflow test data to avoid conflicts
 		cleanWorkflowTestData(t, db.Pool)
 		// Generate student ID for new student
-		studentID, err := studentService.GenerateNextStudentID(ctx, 2023)
+		studentID, err := studentService.GenerateNextStudentID(ctx)
 		require.NoError(t, err)
 
 		// Step 1: Librarian creates student account quickly

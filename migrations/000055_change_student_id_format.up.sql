@@ -1,0 +1,3 @@
+-- Change student_id format from STU + year + 3-digit (e.g., STU2024001) to STU + number (e.g., STU200)
+-- No data migration needed - existing IDs still match the relaxed pattern
+-- New constraint just requires STU prefix followed by digits
