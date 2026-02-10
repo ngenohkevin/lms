@@ -59,7 +59,7 @@ ORDER BY t.transaction_date DESC
 LIMIT $2 OFFSET $3;
 
 -- name: ListOverdueTransactions :many
-SELECT t.*, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id, b.isbn,
+SELECT t.*, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id, b.isbn, b.cover_image_url,
     EXTRACT(DAY FROM (NOW() - t.due_date))::int as days_overdue
 FROM transactions t
 JOIN students s ON t.student_id = s.id

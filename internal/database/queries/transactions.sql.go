@@ -929,7 +929,7 @@ func (q *Queries) ListActiveTransactionsByStudent(ctx context.Context, studentID
 }
 
 const listOverdueTransactions = `-- name: ListOverdueTransactions :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id, b.isbn,
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id, b.isbn, b.cover_image_url,
     EXTRACT(DAY FROM (NOW() - t.due_date))::int as days_overdue
 FROM transactions t
 JOIN students s ON t.student_id = s.id
@@ -981,6 +981,7 @@ type ListOverdueTransactionsRow struct {
 	Author           string           `db:"author" json:"author"`
 	BookID_2         string           `db:"book_id_2" json:"book_id_2"`
 	Isbn             pgtype.Text      `db:"isbn" json:"isbn"`
+	CoverImageUrl    pgtype.Text      `db:"cover_image_url" json:"cover_image_url"`
 	DaysOverdue      int32            `db:"days_overdue" json:"days_overdue"`
 }
 
@@ -1027,6 +1028,7 @@ func (q *Queries) ListOverdueTransactions(ctx context.Context, arg ListOverdueTr
 			&i.Author,
 			&i.BookID_2,
 			&i.Isbn,
+			&i.CoverImageUrl,
 			&i.DaysOverdue,
 		); err != nil {
 			return nil, err

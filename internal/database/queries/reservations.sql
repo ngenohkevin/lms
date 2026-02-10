@@ -4,7 +4,7 @@ VALUES ($1, $2, $3)
 RETURNING *;
 
 -- name: GetReservationByID :one
-SELECT r.*, s.first_name, s.last_name, s.student_id as student_code, b.title, b.author, b.book_id as book_code
+SELECT r.*, s.first_name, s.last_name, s.student_id as student_code, b.title, b.author, b.book_id as book_code, b.cover_image_url
 FROM reservations r
 JOIN students s ON r.student_id = s.id
 JOIN books b ON r.book_id = b.id
@@ -23,7 +23,7 @@ WHERE id = $1
 RETURNING *;
 
 -- name: ListReservations :many
-SELECT r.*, s.first_name, s.last_name, s.student_id as student_code, b.title, b.author, b.book_id as book_code
+SELECT r.*, s.first_name, s.last_name, s.student_id as student_code, b.title, b.author, b.book_id as book_code, b.cover_image_url
 FROM reservations r
 JOIN students s ON r.student_id = s.id
 JOIN books b ON r.book_id = b.id
@@ -31,7 +31,7 @@ ORDER BY r.reserved_at ASC
 LIMIT $1 OFFSET $2;
 
 -- name: ListReservationsByStudent :many
-SELECT r.*, b.title, b.author, b.book_id as book_code
+SELECT r.*, b.title, b.author, b.book_id as book_code, b.cover_image_url
 FROM reservations r
 JOIN books b ON r.book_id = b.id
 WHERE r.student_id = $1
@@ -46,7 +46,7 @@ WHERE r.book_id = $1 AND r.status = 'active'
 ORDER BY r.reserved_at ASC;
 
 -- name: ListActiveReservations :many
-SELECT r.*, s.first_name, s.last_name, s.student_id as student_code, b.title, b.author, b.book_id as book_code
+SELECT r.*, s.first_name, s.last_name, s.student_id as student_code, b.title, b.author, b.book_id as book_code, b.cover_image_url
 FROM reservations r
 JOIN students s ON r.student_id = s.id
 JOIN books b ON r.book_id = b.id
@@ -54,7 +54,7 @@ WHERE r.status = 'active'
 ORDER BY r.reserved_at ASC;
 
 -- name: ListExpiredReservations :many
-SELECT r.*, s.first_name, s.last_name, s.student_id as student_code, b.title, b.author, b.book_id as book_code
+SELECT r.*, s.first_name, s.last_name, s.student_id as student_code, b.title, b.author, b.book_id as book_code, b.cover_image_url
 FROM reservations r
 JOIN students s ON r.student_id = s.id
 JOIN books b ON r.book_id = b.id
@@ -97,7 +97,7 @@ RETURNING *;
 -- Notification-related queries for Phase 7.2
 
 -- name: ListActiveReservationsForAvailableBook :many
-SELECT r.*, s.first_name, s.last_name, s.student_id as student_code, s.email, b.title, b.author, b.book_id as book_code
+SELECT r.*, s.first_name, s.last_name, s.student_id as student_code, s.email, b.title, b.author, b.book_id as book_code, b.cover_image_url
 FROM reservations r
 JOIN students s ON r.student_id = s.id
 JOIN books b ON r.book_id = b.id

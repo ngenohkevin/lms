@@ -1007,10 +1007,11 @@ func (s *TransactionService) convertToOverdueResponse(tx queries.ListOverdueTran
 		CreatedAt:      tx.CreatedAt.Time,
 		UpdatedAt:      tx.UpdatedAt.Time,
 		Book: &models.OverdueBookInfo{
-			ID:     tx.BookID,
-			Title:  tx.Title,
-			Author: tx.Author,
-			ISBN:   isbn,
+			ID:       tx.BookID,
+			Title:    tx.Title,
+			Author:   tx.Author,
+			ISBN:     isbn,
+			CoverURL: tx.CoverImageUrl.String,
 		},
 		Student: &models.OverdueStudentInfo{
 			ID:        tx.StudentID,

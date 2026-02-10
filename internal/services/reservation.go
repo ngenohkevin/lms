@@ -84,6 +84,7 @@ type ReservationResponse struct {
 	BookTitle     string `json:"book_title,omitempty"`
 	BookAuthor    string `json:"book_author,omitempty"`
 	BookIDCode    string `json:"book_id_code,omitempty"`
+	BookCoverURL  string `json:"book_cover_url,omitempty"`
 	QueuePosition int    `json:"queue_position,omitempty"`
 }
 
@@ -537,6 +538,7 @@ func (s *ReservationService) convertToExtendedReservationResponse(reservation qu
 		BookTitle:     reservation.Title,
 		BookAuthor:    reservation.Author,
 		BookIDCode:    reservation.BookCode,
+		BookCoverURL:  reservation.CoverImageUrl.String,
 		QueuePosition: queuePosition,
 	}
 
@@ -553,17 +555,18 @@ func (s *ReservationService) convertToExtendedReservationResponse(reservation qu
 // convertToStudentReservationResponse converts a queries.ListReservationsByStudentRow to ReservationResponse
 func (s *ReservationService) convertToStudentReservationResponse(reservation queries.ListReservationsByStudentRow) ReservationResponse {
 	response := ReservationResponse{
-		ID:         reservation.ID,
-		StudentID:  reservation.StudentID,
-		BookID:     reservation.BookID,
-		ReservedAt: reservation.ReservedAt.Time,
-		ExpiresAt:  reservation.ExpiresAt.Time,
-		Status:     mapStatusToAPI(reservation.Status.String),
-		CreatedAt:  reservation.CreatedAt.Time,
-		UpdatedAt:  reservation.UpdatedAt.Time,
-		BookTitle:  reservation.Title,
-		BookAuthor: reservation.Author,
-		BookIDCode: reservation.BookCode,
+		ID:           reservation.ID,
+		StudentID:    reservation.StudentID,
+		BookID:       reservation.BookID,
+		ReservedAt:   reservation.ReservedAt.Time,
+		ExpiresAt:    reservation.ExpiresAt.Time,
+		Status:       mapStatusToAPI(reservation.Status.String),
+		CreatedAt:    reservation.CreatedAt.Time,
+		UpdatedAt:    reservation.UpdatedAt.Time,
+		BookTitle:    reservation.Title,
+		BookAuthor:   reservation.Author,
+		BookIDCode:   reservation.BookCode,
+		BookCoverURL: reservation.CoverImageUrl.String,
 	}
 
 	if reservation.NotifiedAt.Valid {
@@ -642,6 +645,7 @@ func (s *ReservationService) convertToListReservationResponse(reservation querie
 		BookTitle:     reservation.Title,
 		BookAuthor:    reservation.Author,
 		BookIDCode:    reservation.BookCode,
+		BookCoverURL:  reservation.CoverImageUrl.String,
 	}
 
 	if reservation.NotifiedAt.Valid {

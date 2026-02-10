@@ -110,10 +110,11 @@ type OverdueTransactionResponse struct {
 
 // OverdueBookInfo represents book info nested in an overdue transaction
 type OverdueBookInfo struct {
-	ID     int32  `json:"id"`
-	Title  string `json:"title"`
-	Author string `json:"author"`
-	ISBN   string `json:"isbn"`
+	ID       int32  `json:"id"`
+	Title    string `json:"title"`
+	Author   string `json:"author"`
+	ISBN     string `json:"isbn"`
+	CoverURL string `json:"cover_url,omitempty"`
 }
 
 // OverdueStudentInfo represents student info nested in an overdue transaction
