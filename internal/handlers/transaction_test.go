@@ -430,11 +430,11 @@ func TestTransactionHandler_GetOverdueTransactions_Success(t *testing.T) {
 	overdueResult := &services.OverdueTransactionListResponse{
 		Transactions: []models.OverdueTransactionResponse{
 			{
-				ID:        1,
-				BookID:    1,
-				StudentID: 1,
-				Type:      "borrow",
-				Status:    "overdue",
+				ID:          1,
+				BookID:      1,
+				StudentID:   1,
+				Type:        "borrow",
+				Status:      "overdue",
 				DaysOverdue: 5,
 				Book: &models.OverdueBookInfo{
 					ID:    1,

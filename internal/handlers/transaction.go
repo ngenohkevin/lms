@@ -806,8 +806,6 @@ func convertToTransactionResponse(tx *services.TransactionResponse) models.Trans
 	return resp
 }
 
-
-
 func convertToTransactionHistoryResponse(tx queries.ListTransactionsByStudentRow) models.TransactionHistoryResponse {
 	fineAmount := decimal.Zero
 	if tx.FineAmount.Valid && tx.FineAmount.Int != nil {
