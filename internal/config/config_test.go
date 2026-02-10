@@ -126,3 +126,38 @@ func TestConfigDefaults(t *testing.T) {
 		t.Errorf("Expected default JWT expiry 24 hours, got %d", cfg.JWT.ExpiryHours)
 	}
 }
+
+func TestDatabaseURL(t *testing.T) {
+	t.Run("uses DATABASE_URL env var when set", func(t *testing.T) {
+		envURL := "postgres://envuser:envpass@envhost:5432/envdb?sslmode=disable"
+		os.Setenv("DATABASE_URL", envURL)
+		defer os.Unsetenv("DATABASE_URL")
+
+		cfg := &Config{
+			Database: DatabaseConfig{
+				Host: "cfghost", Port: 5432, User: "cfguser",
+				Password: "cfgpass", Name: "cfgdb", SSLMode: "disable",
+			},
+		}
+
+		if got := cfg.DatabaseURL(); got != envURL {
+			t.Errorf("DatabaseURL() = %q, want %q", got, envURL)
+		}
+	})
+
+	t.Run("builds URL from config when env var not set", func(t *testing.T) {
+		os.Unsetenv("DATABASE_URL")
+
+		cfg := &Config{
+			Database: DatabaseConfig{
+				Host: "myhost", Port: 5432, User: "myuser",
+				Password: "mypass", Name: "mydb", SSLMode: "disable",
+			},
+		}
+
+		expected := "postgres://myuser:mypass@myhost:5432/mydb?sslmode=disable"
+		if got := cfg.DatabaseURL(); got != expected {
+			t.Errorf("DatabaseURL() = %q, want %q", got, expected)
+		}
+	})
+}

@@ -25,6 +25,7 @@ import (
 	"github.com/ngenohkevin/lms/internal/handlers"
 	"github.com/ngenohkevin/lms/internal/middleware"
 	"github.com/ngenohkevin/lms/internal/services"
+	"github.com/ngenohkevin/lms/migrations"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -47,6 +48,11 @@ func main() {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 	defer db.Close()
+
+	// Run database migrations
+	if err := database.RunMigrations(cfg.DatabaseURL(), migrations.FS); err != nil {
+		log.Fatalf("Failed to run database migrations: %v", err)
+	}
 
 	// Initialize Redis
 	var redisClient *database.RedisClient

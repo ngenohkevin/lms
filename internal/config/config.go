@@ -223,6 +223,19 @@ func Load() (*Config, error) {
 	return &config, nil
 }
 
+// DatabaseURL returns the database connection string, preferring DATABASE_URL env var.
+func (c *Config) DatabaseURL() string {
+	if envURL := os.Getenv("DATABASE_URL"); envURL != "" {
+		return envURL
+	}
+	return fmt.Sprintf(
+		"postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		c.Database.User, c.Database.Password,
+		c.Database.Host, c.Database.Port,
+		c.Database.Name, c.Database.SSLMode,
+	)
+}
+
 // GetEmailConfig creates a models.EmailConfig from the main config
 func (c *Config) GetEmailConfig() *models.EmailConfig {
 	return &models.EmailConfig{
