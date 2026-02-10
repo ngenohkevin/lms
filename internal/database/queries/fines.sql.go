@@ -118,6 +118,7 @@ SELECT
     t.book_id,
     b.title as book_title,
     b.author as book_author,
+    b.cover_image_url as book_cover_url,
     t.fine_amount,
     t.fine_paid,
     t.fine_paid_at,
@@ -146,6 +147,7 @@ type GetFineByTransactionIDRow struct {
 	BookID           int32            `db:"book_id" json:"book_id"`
 	BookTitle        string           `db:"book_title" json:"book_title"`
 	BookAuthor       string           `db:"book_author" json:"book_author"`
+	BookCoverUrl     pgtype.Text      `db:"book_cover_url" json:"book_cover_url"`
 	FineAmount       pgtype.Numeric   `db:"fine_amount" json:"fine_amount"`
 	FinePaid         pgtype.Bool      `db:"fine_paid" json:"fine_paid"`
 	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
@@ -171,6 +173,7 @@ func (q *Queries) GetFineByTransactionID(ctx context.Context, id int32) (GetFine
 		&i.BookID,
 		&i.BookTitle,
 		&i.BookAuthor,
+		&i.BookCoverUrl,
 		&i.FineAmount,
 		&i.FinePaid,
 		&i.FinePaidAt,
@@ -355,6 +358,7 @@ SELECT
     t.book_id,
     b.title as book_title,
     b.author as book_author,
+    b.cover_image_url as book_cover_url,
     t.fine_amount,
     t.due_date,
     t.returned_date,
@@ -375,6 +379,7 @@ type GetUnpaidFinesByStudentRow struct {
 	BookID        int32            `db:"book_id" json:"book_id"`
 	BookTitle     string           `db:"book_title" json:"book_title"`
 	BookAuthor    string           `db:"book_author" json:"book_author"`
+	BookCoverUrl  pgtype.Text      `db:"book_cover_url" json:"book_cover_url"`
 	FineAmount    pgtype.Numeric   `db:"fine_amount" json:"fine_amount"`
 	DueDate       pgtype.Timestamp `db:"due_date" json:"due_date"`
 	ReturnedDate  pgtype.Timestamp `db:"returned_date" json:"returned_date"`
@@ -396,6 +401,7 @@ func (q *Queries) GetUnpaidFinesByStudent(ctx context.Context, studentID int32) 
 			&i.BookID,
 			&i.BookTitle,
 			&i.BookAuthor,
+			&i.BookCoverUrl,
 			&i.FineAmount,
 			&i.DueDate,
 			&i.ReturnedDate,
@@ -422,6 +428,7 @@ SELECT
     t.book_id,
     b.title as book_title,
     b.author as book_author,
+    b.cover_image_url as book_cover_url,
     t.fine_amount,
     t.fine_paid,
     t.fine_paid_at,
@@ -462,6 +469,7 @@ type ListFinesRow struct {
 	BookID           int32            `db:"book_id" json:"book_id"`
 	BookTitle        string           `db:"book_title" json:"book_title"`
 	BookAuthor       string           `db:"book_author" json:"book_author"`
+	BookCoverUrl     pgtype.Text      `db:"book_cover_url" json:"book_cover_url"`
 	FineAmount       pgtype.Numeric   `db:"fine_amount" json:"fine_amount"`
 	FinePaid         pgtype.Bool      `db:"fine_paid" json:"fine_paid"`
 	FinePaidAt       pgtype.Timestamp `db:"fine_paid_at" json:"fine_paid_at"`
@@ -498,6 +506,7 @@ func (q *Queries) ListFines(ctx context.Context, arg ListFinesParams) ([]ListFin
 			&i.BookID,
 			&i.BookTitle,
 			&i.BookAuthor,
+			&i.BookCoverUrl,
 			&i.FineAmount,
 			&i.FinePaid,
 			&i.FinePaidAt,

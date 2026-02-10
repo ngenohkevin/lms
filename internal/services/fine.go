@@ -38,6 +38,7 @@ type Fine struct {
 	BookID        int32      `json:"book_id"`
 	BookTitle     string     `json:"book_title"`
 	BookAuthor    string     `json:"book_author"`
+	BookCoverURL  string     `json:"book_cover_url,omitempty"`
 	Amount        float64    `json:"amount"`
 	Paid          bool       `json:"paid"`
 	PaidAt        *time.Time `json:"paid_at,omitempty"`
@@ -57,6 +58,7 @@ type UnpaidFine struct {
 	BookID        int32      `json:"book_id"`
 	BookTitle     string     `json:"book_title"`
 	BookAuthor    string     `json:"book_author"`
+	BookCoverURL  string     `json:"book_cover_url,omitempty"`
 	Amount        float64    `json:"amount"`
 	DueDate       time.Time  `json:"due_date"`
 	ReturnedDate  *time.Time `json:"returned_date,omitempty"`
@@ -225,6 +227,7 @@ func (s *FineService) GetUnpaidFinesByStudent(ctx context.Context, studentID int
 			BookID:        row.BookID,
 			BookTitle:     row.BookTitle,
 			BookAuthor:    row.BookAuthor,
+			BookCoverURL:  row.BookCoverUrl.String,
 			Amount:        numericToFloat64(row.FineAmount),
 			DueDate:       row.DueDate.Time,
 			DaysOverdue:   daysOverdue,
@@ -465,6 +468,7 @@ func (s *FineService) rowToFine(row queries.ListFinesRow) Fine {
 		BookID:        row.BookID,
 		BookTitle:     row.BookTitle,
 		BookAuthor:    row.BookAuthor,
+		BookCoverURL:  row.BookCoverUrl.String,
 		Amount:        numericToFloat64(row.FineAmount),
 		Paid:          row.FinePaid.Bool,
 		Waived:        row.FineWaived,
@@ -513,6 +517,7 @@ func (s *FineService) detailRowToFine(row queries.GetFineByTransactionIDRow) Fin
 		BookID:        row.BookID,
 		BookTitle:     row.BookTitle,
 		BookAuthor:    row.BookAuthor,
+		BookCoverURL:  row.BookCoverUrl.String,
 		Amount:        numericToFloat64(row.FineAmount),
 		Paid:          row.FinePaid.Bool,
 		Waived:        row.FineWaived,
