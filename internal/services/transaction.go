@@ -1925,6 +1925,8 @@ type TransactionSearchResult struct {
 	RenewalCount  int32      `json:"renewal_count"`
 	LastRenewedAt *time.Time `json:"last_renewed_at,omitempty"`
 	LastRenewedBy *int32     `json:"last_renewed_by,omitempty"`
+	// Student soft-delete indicator
+	StudentDeleted bool `json:"student_deleted"`
 }
 
 // TransactionSearchResponse represents the search response
@@ -2071,6 +2073,9 @@ func (s *TransactionService) SearchTransactions(ctx context.Context, params Tran
 		if row.LastRenewedBy.Valid {
 			result.LastRenewedBy = &row.LastRenewedBy.Int32
 		}
+
+		// Student soft-delete indicator
+		result.StudentDeleted = row.StudentDeletedAt.Valid
 
 		// Compute status - check explicit DB status first for lost/cancelled/completed
 		if row.Status.Valid && row.Status.String == "lost" {

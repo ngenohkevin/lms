@@ -233,7 +233,8 @@ WHERE id = sqlc.arg(id);
 SELECT t.*,
        s.first_name, s.last_name, s.student_id,
        b.title, b.author, b.book_id,
-       bc.barcode as copy_barcode, bc.condition as copy_condition
+       bc.barcode as copy_barcode, bc.condition as copy_condition,
+       s.deleted_at as student_deleted_at
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
@@ -249,7 +250,8 @@ LIMIT 1;
 SELECT t.*,
        s.first_name, s.last_name, s.student_id,
        b.title, b.author, b.book_id,
-       bc.barcode as copy_barcode, bc.condition as copy_condition
+       bc.barcode as copy_barcode, bc.condition as copy_condition,
+       s.deleted_at as student_deleted_at
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
@@ -261,7 +263,8 @@ LIMIT $1 OFFSET $2;
 SELECT t.*,
        s.first_name, s.last_name, s.student_id as student_code,
        b.title, b.author, b.book_id as book_code,
-       bc.barcode as copy_barcode, bc.condition as copy_condition
+       bc.barcode as copy_barcode, bc.condition as copy_condition,
+       s.deleted_at as student_deleted_at
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
