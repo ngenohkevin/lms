@@ -306,7 +306,7 @@ func (suite *StudentIntegrationTestSuite) makeUnauthenticatedRequest(method, url
 // createTestStudent creates a test student for use in tests
 func (suite *StudentIntegrationTestSuite) createTestStudent() *queries.Student {
 	params := queries.CreateStudentParams{
-		StudentID:   "STU2024001",
+		StudentID:   "STU001",
 		FirstName:   "John",
 		LastName:    "Doe",
 		YearOfStudy: 1,
@@ -329,7 +329,7 @@ func (suite *StudentIntegrationTestSuite) TestCreateStudent() {
 		{
 			name: "Valid student creation",
 			studentData: models.CreateStudentRequest{
-				StudentID:   "STU2024001",
+				StudentID:   "STU001",
 				FirstName:   "John",
 				LastName:    "Doe",
 				Email:       "john.doe@test.com",
@@ -343,7 +343,7 @@ func (suite *StudentIntegrationTestSuite) TestCreateStudent() {
 		{
 			name: "Missing required fields",
 			studentData: models.CreateStudentRequest{
-				StudentID: "STU2024002",
+				StudentID: "STU002",
 				// Missing FirstName and LastName
 				YearOfStudy: 1,
 				MaxBooks:    5,
@@ -377,7 +377,7 @@ func (suite *StudentIntegrationTestSuite) TestCreateStudent() {
 		{
 			name: "Invalid email format",
 			studentData: models.CreateStudentRequest{
-				StudentID:   "STU2024004",
+				StudentID:   "STU004",
 				FirstName:   "Alice",
 				LastName:    "Johnson",
 				Email:       "invalid-email",
@@ -601,7 +601,7 @@ func (suite *StudentIntegrationTestSuite) TestListStudents() {
 	// Create multiple test students
 	for i := 1; i <= 5; i++ {
 		params := queries.CreateStudentParams{
-			StudentID:   fmt.Sprintf("STU202400%d", i),
+			StudentID:   fmt.Sprintf("STU%03d", i),
 			FirstName:   fmt.Sprintf("Student%d", i),
 			LastName:    "Test",
 			YearOfStudy: int32(i%4 + 1), // Years 1-4
@@ -682,21 +682,21 @@ func (suite *StudentIntegrationTestSuite) TestSearchStudents() {
 	// Create test students with different names and departments
 	testStudents := []queries.CreateStudentParams{
 		{
-			StudentID:   "STU2024001",
+			StudentID:   "STU001",
 			FirstName:   "John",
 			LastName:    "Doe",
 			YearOfStudy: 1,
 			MaxBooks:    5,
 		},
 		{
-			StudentID:   "STU2024002",
+			StudentID:   "STU002",
 			FirstName:   "Jane",
 			LastName:    "Smith",
 			YearOfStudy: 2,
 			MaxBooks:    5,
 		},
 		{
-			StudentID:   "STU2024003",
+			StudentID:   "STU003",
 			FirstName:   "Bob",
 			LastName:    "Johnson",
 			YearOfStudy: 1,
@@ -842,7 +842,7 @@ func (suite *StudentIntegrationTestSuite) TestStudentValidation() {
 		{
 			name: "Year of study too low",
 			studentData: map[string]interface{}{
-				"student_id":    "STU2024001",
+				"student_id":    "STU001",
 				"first_name":    "John",
 				"last_name":     "Doe",
 				"year_of_study": 0,
@@ -853,7 +853,7 @@ func (suite *StudentIntegrationTestSuite) TestStudentValidation() {
 		{
 			name: "Year of study too high",
 			studentData: map[string]interface{}{
-				"student_id":    "STU2024001",
+				"student_id":    "STU001",
 				"first_name":    "John",
 				"last_name":     "Doe",
 				"year_of_study": 14,
@@ -864,7 +864,7 @@ func (suite *StudentIntegrationTestSuite) TestStudentValidation() {
 		{
 			name: "Invalid email format",
 			studentData: map[string]interface{}{
-				"student_id":    "STU2024001",
+				"student_id":    "STU001",
 				"first_name":    "John",
 				"last_name":     "Doe",
 				"email":         "invalid-email",

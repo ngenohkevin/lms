@@ -111,11 +111,11 @@ func cleanTestDatabase(t *testing.T, db *database.Database) {
 func cleanWorkflowTestData(t *testing.T, pool *pgxpool.Pool) {
 	ctx := context.Background()
 
-	// Delete workflow test data using year 2023 to avoid conflicts with database tests using 2024
-	_, _ = pool.Exec(ctx, "DELETE FROM audit_logs WHERE table_name = 'students' AND record_id IN (SELECT id FROM students WHERE student_id LIKE 'STU2023%')")
-	_, _ = pool.Exec(ctx, "DELETE FROM transactions WHERE student_id IN (SELECT id FROM students WHERE student_id LIKE 'STU2023%')")
-	_, _ = pool.Exec(ctx, "DELETE FROM reservations WHERE student_id IN (SELECT id FROM students WHERE student_id LIKE 'STU2023%')")
-	_, _ = pool.Exec(ctx, "DELETE FROM students WHERE student_id LIKE 'STU2023%'")
+	// Delete workflow test data to avoid conflicts with other integration tests
+	_, _ = pool.Exec(ctx, "DELETE FROM audit_logs WHERE table_name = 'students' AND record_id IN (SELECT id FROM students WHERE student_id LIKE 'STUW%')")
+	_, _ = pool.Exec(ctx, "DELETE FROM transactions WHERE student_id IN (SELECT id FROM students WHERE student_id LIKE 'STUW%')")
+	_, _ = pool.Exec(ctx, "DELETE FROM reservations WHERE student_id IN (SELECT id FROM students WHERE student_id LIKE 'STUW%')")
+	_, _ = pool.Exec(ctx, "DELETE FROM students WHERE student_id LIKE 'STUW%'")
 	_, _ = pool.Exec(ctx, "DELETE FROM users WHERE username LIKE 'test_workflow_%'")
 }
 
@@ -246,21 +246,21 @@ func TestStudentAccountWorkflow(t *testing.T) {
 		// Prepare bulk import data
 		bulkRequests := []models.BulkImportStudentRequest{
 			{
-				StudentID:   "STU2023100",
+				StudentID:   "STUW100",
 				FirstName:   "Alice",
 				LastName:    "Johnson",
 				Email:       "alice.johnson@university.edu",
 				YearOfStudy: 1,
 			},
 			{
-				StudentID:   "STU2023101",
+				StudentID:   "STUW101",
 				FirstName:   "Bob",
 				LastName:    "Smith",
 				Email:       "bob.smith@university.edu",
 				YearOfStudy: 1,
 			},
 			{
-				StudentID:   "STU2023102",
+				StudentID:   "STUW102",
 				FirstName:   "Carol",
 				LastName:    "Wilson",
 				Email:       "carol.wilson@university.edu",
@@ -303,7 +303,7 @@ func TestStudentAccountWorkflow(t *testing.T) {
 		// Clean up workflow test data to avoid conflicts
 		cleanWorkflowTestData(t, db.Pool)
 		// Test duplicate student ID validation
-		studentID := "STU2023500"
+		studentID := "STUW500"
 
 		// Create first student
 		createReq1 := &models.CreateStudentRequest{
@@ -346,7 +346,7 @@ func TestStudentAccountWorkflow(t *testing.T) {
 
 		// Try to create new student with same email
 		createReq3 := &models.CreateStudentRequest{
-			StudentID:   "STU2023501",
+			StudentID:   "STUW501",
 			FirstName:   "Third",
 			LastName:    "Student",
 			Email:       email, // Same email

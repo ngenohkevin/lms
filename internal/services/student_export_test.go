@@ -41,7 +41,7 @@ func TestStudentService_DataExport(t *testing.T) {
 				})).Return([]queries.Student{
 					{
 						ID:          1,
-						StudentID:   "STU2024001",
+						StudentID:   "STU001",
 						FirstName:   "John",
 						LastName:    "Doe",
 						YearOfStudy: 1,
@@ -49,7 +49,7 @@ func TestStudentService_DataExport(t *testing.T) {
 					},
 					{
 						ID:          2,
-						StudentID:   "STU2024002",
+						StudentID:   "STU002",
 						FirstName:   "Jane",
 						LastName:    "Smith",
 						YearOfStudy: 2,
@@ -88,7 +88,7 @@ func TestStudentService_DataExport(t *testing.T) {
 				})).Return([]queries.Student{
 					{
 						ID:          1,
-						StudentID:   "STU2024001",
+						StudentID:   "STU001",
 						FirstName:   "John",
 						LastName:    "Doe",
 						YearOfStudy: 1,
@@ -136,7 +136,7 @@ func TestStudentService_DataExport(t *testing.T) {
 				})).Return([]queries.Student{
 					{
 						ID:          1,
-						StudentID:   "STU2024001",
+						StudentID:   "STU001",
 						FirstName:   "John",
 						LastName:    "Doe",
 						YearOfStudy: 1,
@@ -169,7 +169,7 @@ func TestStudentService_DataExport(t *testing.T) {
 				})).Return([]queries.Student{
 					{
 						ID:          1,
-						StudentID:   "STU2024001",
+						StudentID:   "STU001",
 						FirstName:   "John",
 						LastName:    "Doe",
 						YearOfStudy: 1,
@@ -199,14 +199,14 @@ func TestStudentService_DataExport(t *testing.T) {
 				})).Return([]queries.Student{
 					{
 						ID:        1,
-						StudentID: "STU2024001",
+						StudentID: "STU001",
 						FirstName: "John",
 						LastName:  "Doe",
 						IsActive:  pgtype.Bool{Bool: true, Valid: true},
 					},
 					{
 						ID:        2,
-						StudentID: "STU2024002",
+						StudentID: "STU002",
 						FirstName: "Inactive",
 						LastName:  "Student",
 						IsActive:  pgtype.Bool{Bool: false, Valid: true},
@@ -400,7 +400,7 @@ func TestStudentService_ExportByYear(t *testing.T) {
 				})).Return([]queries.Student{
 					{
 						ID:          1,
-						StudentID:   "STU2024001",
+						StudentID:   "STU001",
 						FirstName:   "John",
 						LastName:    "Doe",
 						YearOfStudy: 1,
@@ -423,7 +423,7 @@ func TestStudentService_ExportByYear(t *testing.T) {
 				})).Return([]queries.Student{
 					{
 						ID:          3,
-						StudentID:   "STU2022001",
+						StudentID:   "STU001",
 						FirstName:   "Senior",
 						LastName:    "Student",
 						YearOfStudy: 3,

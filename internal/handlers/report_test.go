@@ -308,7 +308,7 @@ func (suite *ReportHandlerTestSuite) TestGetOverdueBooks_Success() {
 	expectedReport := &models.OverdueBooksReport{
 		Books: []models.OverdueBookDetail{
 			{
-				StudentID:     "STU2024001",
+				StudentID:     "STU001",
 				StudentName:   "John Doe",
 				YearOfStudy:   2,
 				BookTitle:     "Data Structures",
@@ -414,7 +414,7 @@ func (suite *ReportHandlerTestSuite) TestGetStudentActivity_Success() {
 	expectedReport := &models.StudentActivityReport{
 		Students: []models.StudentActivityDetail{
 			{
-				StudentID:    "STU2024001",
+				StudentID:    "STU001",
 				StudentName:  "Alice Johnson",
 				YearOfStudy:  3,
 				TotalBorrows: 15,

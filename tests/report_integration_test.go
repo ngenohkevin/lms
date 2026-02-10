@@ -57,7 +57,7 @@ func (suite *ReportIntegrationTestSuite) createTestDataForReports() {
 
 	// Create test students
 	_, err = suite.queries.CreateStudent(ctx, queries.CreateStudentParams{
-		StudentID:   "STU2024001",
+		StudentID:   "STU001",
 		FirstName:   "John",
 		LastName:    "Doe",
 		YearOfStudy: 1,
@@ -66,7 +66,7 @@ func (suite *ReportIntegrationTestSuite) createTestDataForReports() {
 	assert.NoError(suite.T(), err)
 
 	_, err = suite.queries.CreateStudent(ctx, queries.CreateStudentParams{
-		StudentID:   "STU2024002",
+		StudentID:   "STU002",
 		FirstName:   "Jane",
 		LastName:    "Smith",
 		YearOfStudy: 2,

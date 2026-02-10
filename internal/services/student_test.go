@@ -199,7 +199,7 @@ func createMockStudent() queries.Student {
 	now := time.Now()
 	return queries.Student{
 		ID:             1,
-		StudentID:      "STU2024001",
+		StudentID:      "STU001",
 		FirstName:      "John",
 		LastName:       "Doe",
 		Email:          pgtype.Text{String: "john.doe@test.com", Valid: true},
@@ -225,7 +225,7 @@ func TestStudentService_CreateStudent(t *testing.T) {
 		{
 			name: "successful student creation",
 			request: &models.CreateStudentRequest{
-				StudentID:   "STU2024001",
+				StudentID:   "STU001",
 				FirstName:   "John",
 				LastName:    "Doe",
 				Email:       "john.doe@test.com",
@@ -234,7 +234,7 @@ func TestStudentService_CreateStudent(t *testing.T) {
 			},
 			setupMocks: func(m *MockQueries) {
 				// Student ID doesn't exist
-				m.On("GetStudentByStudentID", mock.Anything, "STU2024001").Return(queries.Student{}, assert.AnError)
+				m.On("GetStudentByStudentID", mock.Anything, "STU001").Return(queries.Student{}, assert.AnError)
 
 				// Email doesn't exist
 				email := pgtype.Text{String: "john.doe@test.com", Valid: true}
@@ -242,7 +242,7 @@ func TestStudentService_CreateStudent(t *testing.T) {
 
 				// Create student succeeds
 				m.On("CreateStudent", mock.Anything, mock.MatchedBy(func(params queries.CreateStudentParams) bool {
-					return params.StudentID == "STU2024001" &&
+					return params.StudentID == "STU001" &&
 						params.FirstName == "John" &&
 						params.LastName == "Doe"
 				})).Return(createMockStudent(), nil)
@@ -266,14 +266,14 @@ func TestStudentService_CreateStudent(t *testing.T) {
 		{
 			name: "student ID already exists",
 			request: &models.CreateStudentRequest{
-				StudentID:   "STU2024001",
+				StudentID:   "STU001",
 				FirstName:   "John",
 				LastName:    "Doe",
 				YearOfStudy: 1,
 			},
 			setupMocks: func(m *MockQueries) {
 				// Student ID exists
-				m.On("GetStudentByStudentID", mock.Anything, "STU2024001").Return(createMockStudent(), nil)
+				m.On("GetStudentByStudentID", mock.Anything, "STU001").Return(createMockStudent(), nil)
 			},
 			expectError: true,
 			errorType:   models.ErrStudentIDExists,
@@ -281,7 +281,7 @@ func TestStudentService_CreateStudent(t *testing.T) {
 		{
 			name: "email already exists",
 			request: &models.CreateStudentRequest{
-				StudentID:   "STU2024002",
+				StudentID:   "STU002",
 				FirstName:   "Jane",
 				LastName:    "Doe",
 				Email:       "existing@test.com",
@@ -289,7 +289,7 @@ func TestStudentService_CreateStudent(t *testing.T) {
 			},
 			setupMocks: func(m *MockQueries) {
 				// Student ID doesn't exist
-				m.On("GetStudentByStudentID", mock.Anything, "STU2024002").Return(queries.Student{}, assert.AnError)
+				m.On("GetStudentByStudentID", mock.Anything, "STU002").Return(queries.Student{}, assert.AnError)
 
 				// Email exists
 				email := pgtype.Text{String: "existing@test.com", Valid: true}
@@ -315,7 +315,7 @@ func TestStudentService_CreateStudent(t *testing.T) {
 		{
 			name: "missing required fields",
 			request: &models.CreateStudentRequest{
-				StudentID: "STU2024001",
+				StudentID: "STU001",
 				// Missing FirstName and LastName
 				YearOfStudy: 1,
 			},
@@ -589,7 +589,7 @@ func TestStudentService_ListStudents(t *testing.T) {
 		createMockStudent(),
 		{
 			ID:          2,
-			StudentID:   "STU2024002",
+			StudentID:   "STU002",
 			FirstName:   "Jane",
 			LastName:    "Smith",
 			YearOfStudy: 2,
@@ -780,13 +780,13 @@ func TestStudentService_SearchStudents(t *testing.T) {
 func TestStudentService_BulkImportStudents(t *testing.T) {
 	validRequests := []models.BulkImportStudentRequest{
 		{
-			StudentID:   "STU2024001",
+			StudentID:   "STU001",
 			FirstName:   "John",
 			LastName:    "Doe",
 			YearOfStudy: 1,
 		},
 		{
-			StudentID:   "STU2024002",
+			StudentID:   "STU002",
 			FirstName:   "Jane",
 			LastName:    "Smith",
 			YearOfStudy: 2,
@@ -990,7 +990,7 @@ func TestStudentService_GetStudentStatistics(t *testing.T) {
 func TestStudentRequestValidation(t *testing.T) {
 	t.Run("CreateStudentRequest validation", func(t *testing.T) {
 		validRequest := &models.CreateStudentRequest{
-			StudentID:   "STU2024001",
+			StudentID:   "STU001",
 			FirstName:   "John",
 			LastName:    "Doe",
 			Email:       "john@test.com",
@@ -1034,7 +1034,7 @@ func TestStudentRequestValidation(t *testing.T) {
 
 	t.Run("BulkImportStudentRequest validation", func(t *testing.T) {
 		validRequest := &models.BulkImportStudentRequest{
-			StudentID:   "STU2024001",
+			StudentID:   "STU001",
 			FirstName:   "John",
 			LastName:    "Doe",
 			YearOfStudy: 1,
@@ -1139,45 +1139,45 @@ func TestStudentService_StudentIDAsDefaultPassword(t *testing.T) {
 	}{
 		{
 			name:      "student ID used as password",
-			studentID: "STU2024001",
+			studentID: "STU001",
 			setupMocks: func(m *MockQueries, a *MockAuthService) {
 				// Student ID doesn't exist
-				m.On("GetStudentByStudentID", mock.Anything, "STU2024001").Return(queries.Student{}, assert.AnError)
+				m.On("GetStudentByStudentID", mock.Anything, "STU001").Return(queries.Student{}, assert.AnError)
 
 				// Password should be the student ID
-				a.On("HashPassword", "STU2024001").Return("hashed_STU2024001", nil)
+				a.On("HashPassword", "STU001").Return("hashed_STU001", nil)
 
 				// Create student succeeds
 				m.On("CreateStudent", mock.Anything, mock.MatchedBy(func(params queries.CreateStudentParams) bool {
-					return params.StudentID == "STU2024001" &&
-						params.PasswordHash.String == "hashed_STU2024001" &&
+					return params.StudentID == "STU001" &&
+						params.PasswordHash.String == "hashed_STU001" &&
 						params.PasswordHash.Valid == true
 				})).Return(createMockStudent(), nil)
 			},
 			expectError:  false,
-			passwordUsed: "STU2024001",
+			passwordUsed: "STU001",
 		},
 		{
 			name:      "different student ID used as password",
-			studentID: "STU2024999",
+			studentID: "STU999",
 			setupMocks: func(m *MockQueries, a *MockAuthService) {
 				// Student ID doesn't exist
-				m.On("GetStudentByStudentID", mock.Anything, "STU2024999").Return(queries.Student{}, assert.AnError)
+				m.On("GetStudentByStudentID", mock.Anything, "STU999").Return(queries.Student{}, assert.AnError)
 
 				// Password should be the student ID
-				a.On("HashPassword", "STU2024999").Return("hashed_STU2024999", nil)
+				a.On("HashPassword", "STU999").Return("hashed_STU999", nil)
 
 				// Create student succeeds
 				mockStudent := createMockStudent()
-				mockStudent.StudentID = "STU2024999"
+				mockStudent.StudentID = "STU999"
 				m.On("CreateStudent", mock.Anything, mock.MatchedBy(func(params queries.CreateStudentParams) bool {
-					return params.StudentID == "STU2024999" &&
-						params.PasswordHash.String == "hashed_STU2024999" &&
+					return params.StudentID == "STU999" &&
+						params.PasswordHash.String == "hashed_STU999" &&
 						params.PasswordHash.Valid == true
 				})).Return(mockStudent, nil)
 			},
 			expectError:  false,
-			passwordUsed: "STU2024999",
+			passwordUsed: "STU999",
 		},
 	}
 
@@ -1230,41 +1230,41 @@ func TestStudentService_QuickAccountCreation(t *testing.T) {
 		{
 			name: "minimal required fields with auto password",
 			studentData: &models.CreateStudentRequest{
-				StudentID:   "STU2024001",
+				StudentID:   "STU001",
 				FirstName:   "John",
 				LastName:    "Doe",
 				YearOfStudy: 1,
 			},
 			setupMocks: func(m *MockQueries, a *MockAuthService) {
 				// Student ID doesn't exist
-				m.On("GetStudentByStudentID", mock.Anything, "STU2024001").Return(queries.Student{}, assert.AnError)
+				m.On("GetStudentByStudentID", mock.Anything, "STU001").Return(queries.Student{}, assert.AnError)
 
 				// Password is auto-generated from student ID
-				a.On("HashPassword", "STU2024001").Return("hashed_STU2024001", nil)
+				a.On("HashPassword", "STU001").Return("hashed_STU001", nil)
 
 				// Create student succeeds
 				mockStudent := createMockStudent()
-				mockStudent.StudentID = "STU2024001"
+				mockStudent.StudentID = "STU001"
 				mockStudent.FirstName = "John"
 				mockStudent.LastName = "Doe"
-				mockStudent.PasswordHash = pgtype.Text{String: "hashed_STU2024001", Valid: true}
+				mockStudent.PasswordHash = pgtype.Text{String: "hashed_STU001", Valid: true}
 				m.On("CreateStudent", mock.Anything, mock.MatchedBy(func(params queries.CreateStudentParams) bool {
-					return params.StudentID == "STU2024001" &&
+					return params.StudentID == "STU001" &&
 						params.FirstName == "John" &&
 						params.LastName == "Doe" &&
 						params.YearOfStudy == 1 &&
 						params.PasswordHash.Valid == true &&
-						params.PasswordHash.String == "hashed_STU2024001"
+						params.PasswordHash.String == "hashed_STU001"
 				})).Return(mockStudent, nil)
 			},
 			expectError:         false,
-			expectedStudentID:   "STU2024001",
+			expectedStudentID:   "STU001",
 			expectedPasswordSet: true,
 		},
 		{
 			name: "full data with auto password",
 			studentData: &models.CreateStudentRequest{
-				StudentID:   "STU2024002",
+				StudentID:   "STU002",
 				FirstName:   "Jane",
 				LastName:    "Smith",
 				Email:       "jane.smith@university.edu",
@@ -1273,54 +1273,54 @@ func TestStudentService_QuickAccountCreation(t *testing.T) {
 			},
 			setupMocks: func(m *MockQueries, a *MockAuthService) {
 				// Student ID doesn't exist
-				m.On("GetStudentByStudentID", mock.Anything, "STU2024002").Return(queries.Student{}, assert.AnError)
+				m.On("GetStudentByStudentID", mock.Anything, "STU002").Return(queries.Student{}, assert.AnError)
 
 				// Email doesn't exist
 				email := pgtype.Text{String: "jane.smith@university.edu", Valid: true}
 				m.On("GetStudentByEmail", mock.Anything, email).Return(queries.Student{}, assert.AnError)
 
 				// Password is auto-generated from student ID
-				a.On("HashPassword", "STU2024002").Return("hashed_STU2024002", nil)
+				a.On("HashPassword", "STU002").Return("hashed_STU002", nil)
 
 				// Create student succeeds
 				mockStudent := createMockStudent()
-				mockStudent.StudentID = "STU2024002"
+				mockStudent.StudentID = "STU002"
 				mockStudent.FirstName = "Jane"
 				mockStudent.LastName = "Smith"
 				mockStudent.Email = pgtype.Text{String: "jane.smith@university.edu", Valid: true}
 				mockStudent.Phone = pgtype.Text{String: "+1234567890", Valid: true}
 				mockStudent.YearOfStudy = 2
-				mockStudent.PasswordHash = pgtype.Text{String: "hashed_STU2024002", Valid: true}
+				mockStudent.PasswordHash = pgtype.Text{String: "hashed_STU002", Valid: true}
 
 				m.On("CreateStudent", mock.Anything, mock.MatchedBy(func(params queries.CreateStudentParams) bool {
-					return params.StudentID == "STU2024002" &&
+					return params.StudentID == "STU002" &&
 						params.FirstName == "Jane" &&
 						params.LastName == "Smith" &&
 						params.Email.String == "jane.smith@university.edu" &&
 						params.Phone.String == "+1234567890" &&
 						params.YearOfStudy == 2 &&
 						params.PasswordHash.Valid == true &&
-						params.PasswordHash.String == "hashed_STU2024002"
+						params.PasswordHash.String == "hashed_STU002"
 				})).Return(mockStudent, nil)
 			},
 			expectError:         false,
-			expectedStudentID:   "STU2024002",
+			expectedStudentID:   "STU002",
 			expectedPasswordSet: true,
 		},
 		{
 			name: "account creation with password hashing failure",
 			studentData: &models.CreateStudentRequest{
-				StudentID:   "STU2024003",
+				StudentID:   "STU003",
 				FirstName:   "Bob",
 				LastName:    "Wilson",
 				YearOfStudy: 1,
 			},
 			setupMocks: func(m *MockQueries, a *MockAuthService) {
 				// Student ID doesn't exist
-				m.On("GetStudentByStudentID", mock.Anything, "STU2024003").Return(queries.Student{}, assert.AnError)
+				m.On("GetStudentByStudentID", mock.Anything, "STU003").Return(queries.Student{}, assert.AnError)
 
 				// Password hashing fails
-				a.On("HashPassword", "STU2024003").Return("", assert.AnError)
+				a.On("HashPassword", "STU003").Return("", assert.AnError)
 			},
 			expectError:         true,
 			expectedPasswordSet: false,
@@ -1382,7 +1382,7 @@ func TestStudentService_YearOrganization(t *testing.T) {
 					createMockStudent(),
 					{
 						ID:          2,
-						StudentID:   "STU2024002",
+						StudentID:   "STU002",
 						FirstName:   "Jane",
 						LastName:    "Smith",
 						YearOfStudy: 1,
@@ -1407,7 +1407,7 @@ func TestStudentService_YearOrganization(t *testing.T) {
 				year3Students := []queries.Student{
 					{
 						ID:          3,
-						StudentID:   "STU2022001",
+						StudentID:   "STU001",
 						FirstName:   "Senior",
 						LastName:    "Student",
 						YearOfStudy: 3,

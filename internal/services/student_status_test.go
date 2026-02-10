@@ -129,7 +129,7 @@ func TestStudentService_GetStudentsByStatus(t *testing.T) {
 		createMockStudent(),
 		{
 			ID:          2,
-			StudentID:   "STU2024002",
+			StudentID:   "STU002",
 			FirstName:   "Jane",
 			LastName:    "Smith",
 			YearOfStudy: 2,
@@ -140,7 +140,7 @@ func TestStudentService_GetStudentsByStatus(t *testing.T) {
 	inactiveStudents := []queries.Student{
 		{
 			ID:          3,
-			StudentID:   "STU2024003",
+			StudentID:   "STU003",
 			FirstName:   "Bob",
 			LastName:    "Wilson",
 			YearOfStudy: 1,

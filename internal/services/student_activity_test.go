@@ -46,7 +46,7 @@ func TestStudentService_ActivityTracking(t *testing.T) {
 			setupMocks: func(m *MockQueries) {
 				inactiveStudent := createMockStudent()
 				inactiveStudent.ID = 2
-				inactiveStudent.StudentID = "STU2024002"
+				inactiveStudent.StudentID = "STU002"
 				inactiveStudent.IsActive = pgtype.Bool{Bool: false, Valid: true}
 
 				m.On("GetStudentByID", mock.Anything, int32(2)).Return(inactiveStudent, nil)
@@ -209,7 +209,7 @@ func TestStudentService_ActivityScoring(t *testing.T) {
 			setupMocks: func(m *MockQueries) {
 				moderateStudent := createMockStudent()
 				moderateStudent.ID = 2
-				moderateStudent.StudentID = "STU2024002"
+				moderateStudent.StudentID = "STU002"
 				m.On("GetStudentByID", mock.Anything, int32(2)).Return(moderateStudent, nil)
 				m.On("CountActiveBorrowingsByStudent", mock.Anything, int32(2)).Return(int64(1), nil)
 				m.On("GetStudentTotalBorrowed", mock.Anything, int32(2)).Return(int64(5), nil)
@@ -225,7 +225,7 @@ func TestStudentService_ActivityScoring(t *testing.T) {
 			setupMocks: func(m *MockQueries) {
 				lowActiveStudent := createMockStudent()
 				lowActiveStudent.ID = 3
-				lowActiveStudent.StudentID = "STU2024003"
+				lowActiveStudent.StudentID = "STU003"
 				m.On("GetStudentByID", mock.Anything, int32(3)).Return(lowActiveStudent, nil)
 				m.On("CountActiveBorrowingsByStudent", mock.Anything, int32(3)).Return(int64(0), nil)
 				m.On("GetStudentTotalBorrowed", mock.Anything, int32(3)).Return(int64(1), nil)

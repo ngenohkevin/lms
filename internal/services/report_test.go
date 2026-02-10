@@ -301,7 +301,7 @@ func (suite *ReportServiceTestSuite) TestGetOverdueBooks_Success() {
 
 	expectedRows := []queries.GetOverdueBooksByYearRow{
 		{
-			StudentID:     "STU2024001",
+			StudentID:     "STU001",
 			StudentName:   "John Doe",
 			YearOfStudy:   2,
 			BookTitle:     "Data Structures",
@@ -321,7 +321,7 @@ func (suite *ReportServiceTestSuite) TestGetOverdueBooks_Success() {
 	// Then
 	assert.NoError(suite.T(), err)
 	assert.Len(suite.T(), result.Books, 1)
-	assert.Equal(suite.T(), "STU2024001", result.Books[0].StudentID)
+	assert.Equal(suite.T(), "STU001", result.Books[0].StudentID)
 	assert.Equal(suite.T(), "Data Structures", result.Books[0].BookTitle)
 	assert.Equal(suite.T(), int32(1), result.Summary.TotalOverdue)
 	assert.Equal(suite.T(), "2.50", result.Summary.TotalFines)
@@ -392,7 +392,7 @@ func (suite *ReportServiceTestSuite) TestGetStudentActivity_Success() {
 
 	expectedRows := []queries.GetStudentActivityRow{
 		{
-			StudentID:    "STU2024001",
+			StudentID:    "STU001",
 			StudentName:  "Alice Johnson",
 			YearOfStudy:  3,
 			TotalBorrows: 15,
@@ -412,7 +412,7 @@ func (suite *ReportServiceTestSuite) TestGetStudentActivity_Success() {
 	// Then
 	assert.NoError(suite.T(), err)
 	assert.Len(suite.T(), result.Students, 1)
-	assert.Equal(suite.T(), "STU2024001", result.Students[0].StudentID)
+	assert.Equal(suite.T(), "STU001", result.Students[0].StudentID)
 	assert.Equal(suite.T(), int32(15), result.Students[0].TotalBorrows)
 	assert.Equal(suite.T(), int32(15), result.Summary.TotalBorrows)
 	assert.Equal(suite.T(), int32(1), result.Summary.ActiveStudents)

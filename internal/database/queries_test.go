@@ -121,15 +121,15 @@ func TestQueries_StudentOperations(t *testing.T) {
 	ctx := context.Background()
 
 	// Clean up any existing test data to avoid conflicts
-	_, _ = db.Pool.Exec(ctx, "DELETE FROM transactions WHERE student_id IN (SELECT id FROM students WHERE student_id = 'STU2024001')")
-	_, _ = db.Pool.Exec(ctx, "DELETE FROM reservations WHERE student_id IN (SELECT id FROM students WHERE student_id = 'STU2024001')")
-	_, _ = db.Pool.Exec(ctx, "DELETE FROM students WHERE student_id = 'STU2024001'")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM transactions WHERE student_id IN (SELECT id FROM students WHERE student_id = 'STU001')")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM reservations WHERE student_id IN (SELECT id FROM students WHERE student_id = 'STU001')")
+	_, _ = db.Pool.Exec(ctx, "DELETE FROM students WHERE student_id = 'STU001'")
 	_, _ = db.Pool.Exec(ctx, "DELETE FROM books WHERE book_id = 'BOOK001'")
 	_, _ = db.Pool.Exec(ctx, "DELETE FROM users WHERE username LIKE 'testuser_queries%'")
 
 	// Test CreateStudent
 	student, err := q.CreateStudent(ctx, queries.CreateStudentParams{
-		StudentID:   "STU2024001",
+		StudentID:   "STU001",
 		FirstName:   "John",
 		LastName:    "Doe",
 		Email:       pgtype.Text{String: "john.doe@student.edu", Valid: true},
@@ -139,7 +139,7 @@ func TestQueries_StudentOperations(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.NotZero(t, student.ID)
-	assert.Equal(t, "STU2024001", student.StudentID)
+	assert.Equal(t, "STU001", student.StudentID)
 	assert.Equal(t, "John", student.FirstName)
 	assert.Equal(t, "Doe", student.LastName)
 	assert.Equal(t, int32(2), student.YearOfStudy)
@@ -150,7 +150,7 @@ func TestQueries_StudentOperations(t *testing.T) {
 	assert.Equal(t, student.ID, foundStudent.ID)
 
 	// Test GetStudentByStudentID
-	foundStudent, err = q.GetStudentByStudentID(ctx, "STU2024001")
+	foundStudent, err = q.GetStudentByStudentID(ctx, "STU001")
 	require.NoError(t, err)
 	assert.Equal(t, student.ID, foundStudent.ID)
 
