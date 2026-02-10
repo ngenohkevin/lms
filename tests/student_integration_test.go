@@ -732,7 +732,7 @@ func (suite *StudentIntegrationTestSuite) TestSearchStudents() {
 		},
 		{
 			name:           "Search by student ID",
-			queryParams:    "?q=STU2024001",
+			queryParams:    "?q=STU001",
 			expectedStatus: http.StatusOK,
 			expectedCount:  1,
 			expectError:    false,

@@ -106,7 +106,7 @@ func parseRSAPrivateKey(privateKeyPEM string) (*rsa.PrivateKey, error) {
 }
 
 func (s *AuthService) HashPassword(password string) (string, error) {
-	if len(password) < 8 {
+	if len(password) < 6 {
 		return "", ErrInvalidPassword
 	}
 
