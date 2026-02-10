@@ -1918,6 +1918,7 @@ type TransactionSearchResult struct {
 	BookTitle       string          `json:"book_title"`
 	BookAuthor      string          `json:"book_author"`
 	BookCode        string          `json:"book_code"`
+	BookCoverURL    string          `json:"book_cover_url,omitempty"`
 	CopyID          *int32          `json:"copy_id,omitempty"`
 	CopyBarcode     *string         `json:"copy_barcode,omitempty"`
 	CopyCondition   *string         `json:"copy_condition,omitempty"`
@@ -2026,6 +2027,11 @@ func (s *TransactionService) SearchTransactions(ctx context.Context, params Tran
 			BookTitle:       row.Title,
 			BookAuthor:      row.Author,
 			BookCode:        row.BookCode,
+		}
+
+		// Book cover URL
+		if row.CoverImageUrl.Valid {
+			result.BookCoverURL = row.CoverImageUrl.String
 		}
 
 		// Handle optional fields

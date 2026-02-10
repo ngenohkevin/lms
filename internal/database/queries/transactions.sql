@@ -232,7 +232,7 @@ WHERE id = sqlc.arg(id);
 -- name: GetTransactionByIDWithCopy :one
 SELECT t.*,
        s.first_name, s.last_name, s.student_id,
-       b.title, b.author, b.book_id,
+       b.title, b.author, b.book_id, b.cover_image_url,
        bc.barcode as copy_barcode, bc.condition as copy_condition,
        s.deleted_at as student_deleted_at
 FROM transactions t
@@ -249,7 +249,7 @@ LIMIT 1;
 -- name: ListTransactionsWithCopies :many
 SELECT t.*,
        s.first_name, s.last_name, s.student_id,
-       b.title, b.author, b.book_id,
+       b.title, b.author, b.book_id, b.cover_image_url,
        bc.barcode as copy_barcode, bc.condition as copy_condition,
        s.deleted_at as student_deleted_at
 FROM transactions t
@@ -262,7 +262,7 @@ LIMIT $1 OFFSET $2;
 -- name: SearchTransactions :many
 SELECT t.*,
        s.first_name, s.last_name, s.student_id as student_code,
-       b.title, b.author, b.book_id as book_code,
+       b.title, b.author, b.book_id as book_code, b.cover_image_url,
        bc.barcode as copy_barcode, bc.condition as copy_condition,
        s.deleted_at as student_deleted_at
 FROM transactions t
