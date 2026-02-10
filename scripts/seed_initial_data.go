@@ -171,7 +171,7 @@ func main() {
 		Department string
 	}{
 		{
-			StudentID:  "STU2024001",
+			StudentID:  "STU1",
 			FirstName:  "John",
 			LastName:   "Doe",
 			Email:      "john.doe@school.edu",
@@ -180,7 +180,7 @@ func main() {
 			Department: "Computer Science",
 		},
 		{
-			StudentID:  "STU2024002",
+			StudentID:  "STU2",
 			FirstName:  "Jane",
 			LastName:   "Smith",
 			Email:      "jane.smith@school.edu",
@@ -189,7 +189,7 @@ func main() {
 			Department: "Literature",
 		},
 		{
-			StudentID:  "STU2024003",
+			StudentID:  "STU3",
 			FirstName:  "Robert",
 			LastName:   "Johnson",
 			Email:      "robert.johnson@school.edu",

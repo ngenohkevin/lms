@@ -136,7 +136,7 @@ type BulkImportError struct {
 
 // Student ID validation patterns
 var (
-	// StudentIDPattern defines the valid pattern for student IDs (e.g., STU200, STU199, etc.)
+	// StudentIDPattern defines the valid pattern for student IDs (e.g., STU001, STU199, etc.)
 	StudentIDPattern = regexp.MustCompile(`^STU\d+$`)
 
 	// PhonePattern defines the valid pattern for phone numbers
@@ -145,7 +145,7 @@ var (
 
 // Common validation errors
 var (
-	ErrInvalidStudentID     = errors.New("student ID must follow format STU + number (e.g., STU200)")
+	ErrInvalidStudentID     = errors.New("student ID must follow format STU + number (e.g., STU001)")
 	ErrInvalidYear          = errors.New("year of study must be between 1 and 13")
 	ErrInvalidEmail         = errors.New("invalid email format")
 	ErrInvalidPhone         = errors.New("invalid phone number format")
@@ -337,7 +337,7 @@ func (s *StudentDB) ToResponse() StudentResponse {
 
 // GenerateStudentID generates a new student ID based on the next sequence number
 func GenerateStudentID(sequence int) string {
-	return fmt.Sprintf("STU%d", sequence)
+	return fmt.Sprintf("STU%03d", sequence)
 }
 
 // GetFullName returns the full name of the student

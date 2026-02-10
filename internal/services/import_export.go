@@ -1391,7 +1391,7 @@ func (s *ImportExportService) GenerateStudentImportTemplate(format string) (*mod
 
 	instructions := `
 Import Instructions:
-1. student_id: Unique student identifier (required) - format: STU + number (e.g., STU200)
+1. student_id: Unique student identifier (required) - format: STU + number (e.g., STU001)
 2. first_name: Student's first name (required)
 3. last_name: Student's last name (required)
 4. year_of_study: Year of study, 1-13 (required)

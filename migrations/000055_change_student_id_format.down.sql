@@ -1,1 +1,2 @@
--- Revert student_id format change (no-op, validation is in application layer)
+-- Cannot automatically revert student ID renumbering - original year-based IDs are lost
+-- This is a one-way migration

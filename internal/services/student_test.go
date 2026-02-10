@@ -891,22 +891,22 @@ func TestStudentService_GenerateNextStudentID(t *testing.T) {
 					return params.StudentID == "STU%"
 				})).Return([]queries.Student{}, nil)
 			},
-			expectedID:  "STU1",
+			expectedID:  "STU001",
 			expectError: false,
 		},
 		{
 			name: "next student after existing ones",
 			setupMocks: func(m *MockQueries) {
 				existingStudents := []queries.Student{
-					{StudentID: "STU1"},
-					{StudentID: "STU3"},
-					{StudentID: "STU2"},
+					{StudentID: "STU001"},
+					{StudentID: "STU003"},
+					{StudentID: "STU002"},
 				}
 				m.On("SearchStudentsIncludingDeleted", mock.Anything, mock.MatchedBy(func(params queries.SearchStudentsIncludingDeletedParams) bool {
 					return params.StudentID == "STU%"
 				})).Return(existingStudents, nil)
 			},
-			expectedID:  "STU4",
+			expectedID:  "STU004",
 			expectError: false,
 		},
 	}
