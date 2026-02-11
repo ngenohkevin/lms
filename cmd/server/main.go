@@ -380,6 +380,12 @@ func setupRoutes(
 			auth.GET("/invite/:token", inviteHandler.ValidateInvite)
 		}
 
+		// Image proxy (public - serves cached book covers, domain-allowlisted)
+		images := v1.Group("/images")
+		{
+			images.GET("/proxy", imageProxyHandler.ProxyImage)
+		}
+
 		// Protected routes (require authentication)
 		protected := v1.Group("")
 		protected.Use(authMiddleware.RequireAuth())
@@ -689,12 +695,6 @@ func setupRoutes(
 				permissions.PUT("/roles/:role", requirePerm("permissions.manage"), permissionHandler.UpdateRolePermissions)
 				permissions.POST("/users/:id/overrides", requirePerm("permissions.manage"), permissionHandler.CreateUserOverride)
 				permissions.DELETE("/users/:id/overrides/:code", requirePerm("permissions.manage"), permissionHandler.DeleteUserOverride)
-			}
-
-			// Image proxy routes
-			images := protected.Group("/images")
-			{
-				images.GET("/proxy", imageProxyHandler.ProxyImage)
 			}
 
 			// Settings routes
