@@ -224,11 +224,12 @@ func main() {
 	languageHandler := handlers.NewLanguageHandler(languageService)
 	qrCodeHandler := handlers.NewQRCodeHandler(qrCodeService, bookService, bookCopyService, cfg.Server.FrontendURL)
 	settingsHandler := handlers.NewSettingsHandler(settingsService)
+	imageProxyHandler := handlers.NewImageProxyHandler(rc)
 
 	// Setup routes
 	setupRoutes(router, authHandler, healthHandler, bookHandler, studentHandler,
 		transactionHandler, reservationHandler, notificationHandler,
-		reportHandler, importExportHandler, uploadHandler, ratingHandler, categoryHandler, departmentHandler, academicYearHandler, fineHandler, userHandler, inviteHandler, setupHandler, permissionHandler, bookCopyHandler, authorHandler, seriesHandler, languageHandler, qrCodeHandler, settingsHandler, authMiddleware, permissionMiddleware)
+		reportHandler, importExportHandler, uploadHandler, ratingHandler, categoryHandler, departmentHandler, academicYearHandler, fineHandler, userHandler, inviteHandler, setupHandler, permissionHandler, bookCopyHandler, authorHandler, seriesHandler, languageHandler, qrCodeHandler, settingsHandler, imageProxyHandler, authMiddleware, permissionMiddleware)
 
 	// Start scheduler
 	if err := schedulerService.Start(); err != nil {
@@ -340,6 +341,7 @@ func setupRoutes(
 	languageHandler *handlers.LanguageHandler,
 	qrCodeHandler *handlers.QRCodeHandler,
 	settingsHandler *handlers.SettingsHandler,
+	imageProxyHandler *handlers.ImageProxyHandler,
 	authMiddleware *middleware.AuthMiddleware,
 	permissionMiddleware *middleware.PermissionMiddleware,
 ) {
@@ -687,6 +689,12 @@ func setupRoutes(
 				permissions.PUT("/roles/:role", requirePerm("permissions.manage"), permissionHandler.UpdateRolePermissions)
 				permissions.POST("/users/:id/overrides", requirePerm("permissions.manage"), permissionHandler.CreateUserOverride)
 				permissions.DELETE("/users/:id/overrides/:code", requirePerm("permissions.manage"), permissionHandler.DeleteUserOverride)
+			}
+
+			// Image proxy routes
+			images := protected.Group("/images")
+			{
+				images.GET("/proxy", imageProxyHandler.ProxyImage)
 			}
 
 			// Settings routes
