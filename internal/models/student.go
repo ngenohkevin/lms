@@ -100,8 +100,9 @@ type StudentSearchRequest struct {
 	Query       string `form:"q" binding:"omitempty"`
 	YearOfStudy int32  `form:"year" binding:"omitempty,min=1,max=13"`
 	IsActive    *bool  `form:"active" binding:"omitempty"`
-	HasFines    *bool  `form:"has_fines" binding:"omitempty"`   // Filter students with unpaid fines
-	HasOverdue  *bool  `form:"has_overdue" binding:"omitempty"` // Filter students with overdue books
+	Status      string `form:"status" binding:"omitempty,oneof=active suspended graduated inactive"` // Filter by specific status
+	HasFines    *bool  `form:"has_fines" binding:"omitempty"`                                        // Filter students with unpaid fines
+	HasOverdue  *bool  `form:"has_overdue" binding:"omitempty"`                                      // Filter students with overdue books
 	Page        int    `form:"page" binding:"omitempty,min=1"`
 	Limit       int    `form:"limit" binding:"omitempty,min=1,max=100"`
 }

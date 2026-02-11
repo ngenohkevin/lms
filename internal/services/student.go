@@ -40,7 +40,9 @@ type StudentQuerier interface {
 	// Status Management
 	UpdateStudentStatus(ctx context.Context, params queries.UpdateStudentStatusParams) (queries.Student, error)
 	GetStudentsByStatus(ctx context.Context, params queries.GetStudentsByStatusParams) ([]queries.Student, error)
+	GetStudentsByStatusType(ctx context.Context, arg queries.GetStudentsByStatusTypeParams) ([]queries.Student, error)
 	CountStudentsByStatus(ctx context.Context, isActive pgtype.Bool) (int64, error)
+	CountStudentsByStatusType(ctx context.Context, status pgtype.Text) (int64, error)
 	BulkUpdateStudentStatus(ctx context.Context, params queries.BulkUpdateStudentStatusParams) error
 
 	// Enhanced Statistics
@@ -475,7 +477,7 @@ func (s *StudentService) ListStudents(ctx context.Context, req *models.StudentSe
 	var err error
 
 	// Apply filtering based on request parameters
-	// Priority: has_fines > has_overdue > year_of_study > all
+	// Priority: has_fines > has_overdue > status > year_of_study > all
 	if req.HasFines != nil && *req.HasFines {
 		// Filter students with unpaid fines
 		students, err = s.queries.ListStudentsWithFines(ctx, queries.ListStudentsWithFinesParams{
@@ -503,6 +505,21 @@ func (s *StudentService) ListStudents(ctx context.Context, req *models.StudentSe
 		totalCount, err = s.queries.CountStudentsWithOverdueBooks(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to count students with overdue: %w", err)
+		}
+	} else if req.Status != "" {
+		// Filter by specific status (active, suspended, graduated, inactive)
+		students, err = s.queries.GetStudentsByStatusType(ctx, queries.GetStudentsByStatusTypeParams{
+			Status: pgtype.Text{String: req.Status, Valid: true},
+			Limit:  req.GetLimit(),
+			Offset: req.GetOffset(),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to list students by status: %w", err)
+		}
+
+		totalCount, err = s.queries.CountStudentsByStatusType(ctx, pgtype.Text{String: req.Status, Valid: true})
+		if err != nil {
+			return nil, fmt.Errorf("failed to count students by status: %w", err)
 		}
 	} else if req.YearOfStudy > 0 {
 		// Filter by year of study

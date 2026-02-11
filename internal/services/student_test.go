@@ -116,6 +116,16 @@ func (m *MockQueries) CountStudentsByStatus(ctx context.Context, isActive pgtype
 	return args.Get(0).(int64), args.Error(1)
 }
 
+func (m *MockQueries) GetStudentsByStatusType(ctx context.Context, arg queries.GetStudentsByStatusTypeParams) ([]queries.Student, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).([]queries.Student), args.Error(1)
+}
+
+func (m *MockQueries) CountStudentsByStatusType(ctx context.Context, status pgtype.Text) (int64, error) {
+	args := m.Called(ctx, status)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 func (m *MockQueries) BulkUpdateStudentStatus(ctx context.Context, params queries.BulkUpdateStudentStatusParams) error {
 	args := m.Called(ctx, params)
 	return args.Error(0)
