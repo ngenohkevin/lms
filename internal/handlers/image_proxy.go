@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -25,6 +24,7 @@ const (
 	imageCachePrefix = "img:"
 	maxImageSize     = 2 * 1024 * 1024 // 2MB
 	fetchTimeout     = 10 * time.Second
+	maxRetries       = 3
 )
 
 type ImageProxyHandler struct {
@@ -80,39 +80,11 @@ func (h *ImageProxyHandler) ProxyImage(c *gin.Context) {
 		}
 	}
 
-	// Fetch from external URL
-	req, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create request"})
-		return
-	}
-
-	resp, err := h.httpClient.Do(req)
+	// Fetch from external URL with retry on 429
+	data, contentType, err := h.fetchWithRetry(ctx, rawURL)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to fetch image"})
 		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		c.JSON(resp.StatusCode, gin.H{"error": fmt.Sprintf("upstream returned %d", resp.StatusCode)})
-		return
-	}
-
-	limitedReader := io.LimitReader(resp.Body, maxImageSize+1)
-	data, err := io.ReadAll(limitedReader)
-	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": "failed to read image"})
-		return
-	}
-	if len(data) > maxImageSize {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "image too large"})
-		return
-	}
-
-	contentType := resp.Header.Get("Content-Type")
-	if contentType == "" || !strings.HasPrefix(contentType, "image/") {
-		contentType = "image/jpeg"
 	}
 
 	// Cache in Redis
@@ -126,6 +98,64 @@ func (h *ImageProxyHandler) ProxyImage(c *gin.Context) {
 	c.Header("X-Cache", "MISS")
 	c.Header("Cache-Control", "public, max-age=604800")
 	c.Data(http.StatusOK, contentType, data)
+}
+
+// fetchWithRetry fetches an image, retrying with exponential backoff on 429.
+func (h *ImageProxyHandler) fetchWithRetry(ctx context.Context, rawURL string) ([]byte, string, error) {
+	var lastErr error
+
+	for attempt := range maxRetries {
+		if attempt > 0 {
+			backoff := time.Duration(1<<uint(attempt-1)) * time.Second // 1s, 2s, 4s
+			select {
+			case <-ctx.Done():
+				return nil, "", ctx.Err()
+			case <-time.After(backoff):
+			}
+		}
+
+		req, err := http.NewRequestWithContext(ctx, "GET", rawURL, nil)
+		if err != nil {
+			return nil, "", err
+		}
+
+		resp, err := h.httpClient.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		if resp.StatusCode == http.StatusTooManyRequests {
+			resp.Body.Close()
+			lastErr = http.ErrHandlerTimeout
+			continue
+		}
+
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			lastErr = http.ErrNotSupported
+			continue
+		}
+
+		limitedReader := io.LimitReader(resp.Body, maxImageSize+1)
+		data, err := io.ReadAll(limitedReader)
+		if err != nil {
+			return nil, "", err
+		}
+		if len(data) > maxImageSize {
+			return nil, "", http.ErrContentLength
+		}
+
+		contentType := resp.Header.Get("Content-Type")
+		if contentType == "" || !strings.HasPrefix(contentType, "image/") {
+			contentType = "image/jpeg"
+		}
+
+		return data, contentType, nil
+	}
+
+	return nil, "", lastErr
 }
 
 // InvalidateCache removes a cached image by URL.
