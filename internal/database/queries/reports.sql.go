@@ -368,32 +368,7 @@ SELECT
     COUNT(CASE WHEN t.transaction_type = 'borrow' THEN 1 END)::int as borrow_count,
     COUNT(CASE WHEN t.transaction_type = 'return' THEN 1 END)::int as return_count,
     COUNT(CASE WHEN t.due_date < NOW() AND t.returned_date IS NULL THEN 1 END)::int as overdue_count,
-    (SELECT COUNT(*) FROM students s2
-     WHERE s2.deleted_at IS NULL
-     AND s2.created_at >= DATE_TRUNC(
-         CASE
-             WHEN $3::text = 'day' THEN 'day'
-             WHEN $3::text = 'week' THEN 'week'
-             WHEN $3::text = 'month' THEN 'month'
-             WHEN $3::text = 'year' THEN 'year'
-             ELSE 'month'
-         END, t.transaction_date)
-     AND s2.created_at < DATE_TRUNC(
-         CASE
-             WHEN $3::text = 'day' THEN 'day'
-             WHEN $3::text = 'week' THEN 'week'
-             WHEN $3::text = 'month' THEN 'month'
-             WHEN $3::text = 'year' THEN 'year'
-             ELSE 'month'
-         END, t.transaction_date) + ('1 ' ||
-         CASE
-             WHEN $3::text = 'day' THEN 'day'
-             WHEN $3::text = 'week' THEN 'week'
-             WHEN $3::text = 'month' THEN 'month'
-             WHEN $3::text = 'year' THEN 'year'
-             ELSE 'month'
-         END)::interval
-    )::int as new_students,
+    0::int as new_students,
     COUNT(DISTINCT t.student_id)::int as total_students
 FROM transactions t
 INNER JOIN students s ON t.student_id = s.id

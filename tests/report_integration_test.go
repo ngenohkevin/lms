@@ -9,6 +9,7 @@ import (
 	"github.com/ngenohkevin/lms/internal/database/queries"
 	"github.com/ngenohkevin/lms/internal/services"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -80,8 +81,8 @@ func (suite *ReportIntegrationTestSuite) TestGetLibraryOverview() {
 
 	report, err := suite.reportService.GetLibraryOverview(ctx)
 
-	assert.NoError(suite.T(), err)
-	assert.NotNil(suite.T(), report)
+	require.NoError(suite.T(), err)
+	require.NotNil(suite.T(), report)
 	assert.Greater(suite.T(), report.TotalBooks, int32(0))
 	assert.Greater(suite.T(), report.TotalStudents, int32(0))
 	assert.NotZero(suite.T(), report.GeneratedAt)
@@ -92,8 +93,8 @@ func (suite *ReportIntegrationTestSuite) TestGetInventoryStatus() {
 
 	report, err := suite.reportService.GetInventoryStatus(ctx)
 
-	assert.NoError(suite.T(), err)
-	assert.NotNil(suite.T(), report)
+	require.NoError(suite.T(), err)
+	require.NotNil(suite.T(), report)
 	assert.NotNil(suite.T(), report.Genres)
 	assert.NotNil(suite.T(), report.Summary)
 	assert.NotZero(suite.T(), report.GeneratedAt)
@@ -106,8 +107,8 @@ func (suite *ReportIntegrationTestSuite) TestGetBorrowingStatistics() {
 
 	report, err := suite.reportService.GetBorrowingStatistics(ctx, startDate, endDate, nil)
 
-	assert.NoError(suite.T(), err)
-	assert.NotNil(suite.T(), report)
+	require.NoError(suite.T(), err)
+	require.NotNil(suite.T(), report)
 	assert.NotNil(suite.T(), report.MonthlyData)
 	assert.NotNil(suite.T(), report.Summary)
 	assert.NotZero(suite.T(), report.GeneratedAt)
@@ -118,8 +119,8 @@ func (suite *ReportIntegrationTestSuite) TestGetOverdueBooks() {
 
 	report, err := suite.reportService.GetOverdueBooks(ctx, nil)
 
-	assert.NoError(suite.T(), err)
-	assert.NotNil(suite.T(), report)
+	require.NoError(suite.T(), err)
+	require.NotNil(suite.T(), report)
 	assert.NotNil(suite.T(), report.Books)
 	assert.NotNil(suite.T(), report.Summary)
 	assert.NotZero(suite.T(), report.GeneratedAt)
@@ -133,8 +134,8 @@ func (suite *ReportIntegrationTestSuite) TestGetPopularBooks() {
 
 	report, err := suite.reportService.GetPopularBooks(ctx, startDate, endDate, limit, nil)
 
-	assert.NoError(suite.T(), err)
-	assert.NotNil(suite.T(), report)
+	require.NoError(suite.T(), err)
+	require.NotNil(suite.T(), report)
 	assert.NotNil(suite.T(), report.Books)
 	assert.NotNil(suite.T(), report.Summary)
 	assert.NotZero(suite.T(), report.GeneratedAt)
@@ -147,8 +148,8 @@ func (suite *ReportIntegrationTestSuite) TestGetStudentActivity() {
 
 	report, err := suite.reportService.GetStudentActivity(ctx, nil, startDate, endDate)
 
-	assert.NoError(suite.T(), err)
-	assert.NotNil(suite.T(), report)
+	require.NoError(suite.T(), err)
+	require.NotNil(suite.T(), report)
 	assert.NotNil(suite.T(), report.Students)
 	assert.NotNil(suite.T(), report.Summary)
 	assert.NotZero(suite.T(), report.GeneratedAt)
@@ -162,8 +163,8 @@ func (suite *ReportIntegrationTestSuite) TestGetBorrowingTrends() {
 
 	report, err := suite.reportService.GetBorrowingTrends(ctx, startDate, endDate, interval)
 
-	assert.NoError(suite.T(), err)
-	assert.NotNil(suite.T(), report)
+	require.NoError(suite.T(), err)
+	require.NotNil(suite.T(), report)
 	assert.NotNil(suite.T(), report.Periods)
 	assert.NotNil(suite.T(), report.Summary)
 	assert.Equal(suite.T(), interval, report.Summary.Interval)
@@ -176,8 +177,8 @@ func (suite *ReportIntegrationTestSuite) TestGetYearlyComparison() {
 
 	report, err := suite.reportService.GetYearlyComparison(ctx, years)
 
-	assert.NoError(suite.T(), err)
-	assert.NotNil(suite.T(), report)
+	require.NoError(suite.T(), err)
+	require.NotNil(suite.T(), report)
 	assert.NotNil(suite.T(), report.Years)
 	assert.NotNil(suite.T(), report.Summary)
 	assert.NotZero(suite.T(), report.GeneratedAt)
