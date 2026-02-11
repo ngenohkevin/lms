@@ -260,9 +260,9 @@ ORDER BY month
 `
 
 type GetBorrowingStatisticsParams struct {
-	Column1 pgtype.Timestamp `db:"column_1" json:"column_1"`
-	Column2 pgtype.Timestamp `db:"column_2" json:"column_2"`
-	Column3 int32            `db:"column_3" json:"column_3"`
+	Column1     pgtype.Timestamp `db:"column_1" json:"column_1"`
+	Column2     pgtype.Timestamp `db:"column_2" json:"column_2"`
+	YearOfStudy pgtype.Int4      `db:"year_of_study" json:"year_of_study"`
 }
 
 type GetBorrowingStatisticsRow struct {
@@ -274,7 +274,7 @@ type GetBorrowingStatisticsRow struct {
 }
 
 func (q *Queries) GetBorrowingStatistics(ctx context.Context, arg GetBorrowingStatisticsParams) ([]GetBorrowingStatisticsRow, error) {
-	rows, err := q.db.Query(ctx, getBorrowingStatistics, arg.Column1, arg.Column2, arg.Column3)
+	rows, err := q.db.Query(ctx, getBorrowingStatistics, arg.Column1, arg.Column2, arg.YearOfStudy)
 	if err != nil {
 		return nil, err
 	}
@@ -317,9 +317,9 @@ ORDER BY s.year_of_study, month
 `
 
 type GetBorrowingStatisticsByYearOfStudyParams struct {
-	Column1 pgtype.Timestamp `db:"column_1" json:"column_1"`
-	Column2 pgtype.Timestamp `db:"column_2" json:"column_2"`
-	Column3 int32            `db:"column_3" json:"column_3"`
+	Column1     pgtype.Timestamp `db:"column_1" json:"column_1"`
+	Column2     pgtype.Timestamp `db:"column_2" json:"column_2"`
+	YearOfStudy pgtype.Int4      `db:"year_of_study" json:"year_of_study"`
 }
 
 type GetBorrowingStatisticsByYearOfStudyRow struct {
@@ -331,7 +331,7 @@ type GetBorrowingStatisticsByYearOfStudyRow struct {
 }
 
 func (q *Queries) GetBorrowingStatisticsByYearOfStudy(ctx context.Context, arg GetBorrowingStatisticsByYearOfStudyParams) ([]GetBorrowingStatisticsByYearOfStudyRow, error) {
-	rows, err := q.db.Query(ctx, getBorrowingStatisticsByYearOfStudy, arg.Column1, arg.Column2, arg.Column3)
+	rows, err := q.db.Query(ctx, getBorrowingStatisticsByYearOfStudy, arg.Column1, arg.Column2, arg.YearOfStudy)
 	if err != nil {
 		return nil, err
 	}
@@ -368,7 +368,32 @@ SELECT
     COUNT(CASE WHEN t.transaction_type = 'borrow' THEN 1 END)::int as borrow_count,
     COUNT(CASE WHEN t.transaction_type = 'return' THEN 1 END)::int as return_count,
     COUNT(CASE WHEN t.due_date < NOW() AND t.returned_date IS NULL THEN 1 END)::int as overdue_count,
-    0::int as new_students,  -- Placeholder - would need separate query for new student registrations
+    (SELECT COUNT(*) FROM students s2
+     WHERE s2.deleted_at IS NULL
+     AND s2.created_at >= DATE_TRUNC(
+         CASE
+             WHEN $3::text = 'day' THEN 'day'
+             WHEN $3::text = 'week' THEN 'week'
+             WHEN $3::text = 'month' THEN 'month'
+             WHEN $3::text = 'year' THEN 'year'
+             ELSE 'month'
+         END, t.transaction_date)
+     AND s2.created_at < DATE_TRUNC(
+         CASE
+             WHEN $3::text = 'day' THEN 'day'
+             WHEN $3::text = 'week' THEN 'week'
+             WHEN $3::text = 'month' THEN 'month'
+             WHEN $3::text = 'year' THEN 'year'
+             ELSE 'month'
+         END, t.transaction_date) + ('1 ' ||
+         CASE
+             WHEN $3::text = 'day' THEN 'day'
+             WHEN $3::text = 'week' THEN 'week'
+             WHEN $3::text = 'month' THEN 'month'
+             WHEN $3::text = 'year' THEN 'year'
+             ELSE 'month'
+         END)::interval
+    )::int as new_students,
     COUNT(DISTINCT t.student_id)::int as total_students
 FROM transactions t
 INNER JOIN students s ON t.student_id = s.id
@@ -1503,8 +1528,8 @@ type GetOverdueBooksByYearRow struct {
 	TransactionID int32            `db:"transaction_id" json:"transaction_id"`
 }
 
-func (q *Queries) GetOverdueBooksByYear(ctx context.Context, dollar_1 int32) ([]GetOverdueBooksByYearRow, error) {
-	rows, err := q.db.Query(ctx, getOverdueBooksByYear, dollar_1)
+func (q *Queries) GetOverdueBooksByYear(ctx context.Context, yearOfStudy pgtype.Int4) ([]GetOverdueBooksByYearRow, error) {
+	rows, err := q.db.Query(ctx, getOverdueBooksByYear, yearOfStudy)
 	if err != nil {
 		return nil, err
 	}
@@ -1540,8 +1565,7 @@ SELECT
     b.author,
     b.genre,
     COUNT(t.id)::int as borrow_count,
-    COUNT(DISTINCT t.student_id)::int as unique_users,
-    '4.5' as avg_rating  -- Placeholder for future rating system
+    COUNT(DISTINCT t.student_id)::int as unique_users
 FROM books b
 INNER JOIN transactions t ON b.id = t.book_id
 INNER JOIN students s ON t.student_id = s.id
@@ -1557,10 +1581,10 @@ LIMIT $3::int
 `
 
 type GetPopularBooksParams struct {
-	Column1 pgtype.Timestamp `db:"column_1" json:"column_1"`
-	Column2 pgtype.Timestamp `db:"column_2" json:"column_2"`
-	Column3 int32            `db:"column_3" json:"column_3"`
-	Column4 int32            `db:"column_4" json:"column_4"`
+	Column1     pgtype.Timestamp `db:"column_1" json:"column_1"`
+	Column2     pgtype.Timestamp `db:"column_2" json:"column_2"`
+	Column3     int32            `db:"column_3" json:"column_3"`
+	YearOfStudy pgtype.Int4      `db:"year_of_study" json:"year_of_study"`
 }
 
 type GetPopularBooksRow struct {
@@ -1570,7 +1594,6 @@ type GetPopularBooksRow struct {
 	Genre       pgtype.Text `db:"genre" json:"genre"`
 	BorrowCount int32       `db:"borrow_count" json:"borrow_count"`
 	UniqueUsers int32       `db:"unique_users" json:"unique_users"`
-	AvgRating   string      `db:"avg_rating" json:"avg_rating"`
 }
 
 func (q *Queries) GetPopularBooks(ctx context.Context, arg GetPopularBooksParams) ([]GetPopularBooksRow, error) {
@@ -1578,7 +1601,7 @@ func (q *Queries) GetPopularBooks(ctx context.Context, arg GetPopularBooksParams
 		arg.Column1,
 		arg.Column2,
 		arg.Column3,
-		arg.Column4,
+		arg.YearOfStudy,
 	)
 	if err != nil {
 		return nil, err
@@ -1594,7 +1617,6 @@ func (q *Queries) GetPopularBooks(ctx context.Context, arg GetPopularBooksParams
 			&i.Genre,
 			&i.BorrowCount,
 			&i.UniqueUsers,
-			&i.AvgRating,
 		); err != nil {
 			return nil, err
 		}
@@ -1806,9 +1828,9 @@ SELECT
     COALESCE(MAX(t.transaction_date), s.created_at) as last_activity
 FROM students s
 LEFT JOIN transactions t ON s.id = t.student_id
-    AND t.transaction_date >= $2::timestamp
-    AND t.transaction_date <= $3::timestamp
-WHERE ($1::int IS NULL OR s.year_of_study = $1::int)
+    AND t.transaction_date >= $1::timestamp
+    AND t.transaction_date <= $2::timestamp
+WHERE ($3::int IS NULL OR s.year_of_study = $3::int)
     AND s.deleted_at IS NULL
     AND s.is_active = true
 GROUP BY s.id, s.student_id, s.first_name, s.last_name, s.year_of_study, s.created_at
@@ -1817,9 +1839,9 @@ ORDER BY total_borrows DESC, last_activity DESC
 `
 
 type GetStudentActivityParams struct {
-	Column1 int32            `db:"column_1" json:"column_1"`
-	Column2 pgtype.Timestamp `db:"column_2" json:"column_2"`
-	Column3 pgtype.Timestamp `db:"column_3" json:"column_3"`
+	Column1     pgtype.Timestamp `db:"column_1" json:"column_1"`
+	Column2     pgtype.Timestamp `db:"column_2" json:"column_2"`
+	YearOfStudy pgtype.Int4      `db:"year_of_study" json:"year_of_study"`
 }
 
 type GetStudentActivityRow struct {
@@ -1835,7 +1857,7 @@ type GetStudentActivityRow struct {
 }
 
 func (q *Queries) GetStudentActivity(ctx context.Context, arg GetStudentActivityParams) ([]GetStudentActivityRow, error) {
-	rows, err := q.db.Query(ctx, getStudentActivity, arg.Column1, arg.Column2, arg.Column3)
+	rows, err := q.db.Query(ctx, getStudentActivity, arg.Column1, arg.Column2, arg.YearOfStudy)
 	if err != nil {
 		return nil, err
 	}
@@ -1914,9 +1936,9 @@ ORDER BY s.year_of_study
 `
 
 type GetStudentBehaviorAnalysisParams struct {
-	Column1 pgtype.Timestamp `db:"column_1" json:"column_1"`
-	Column2 pgtype.Timestamp `db:"column_2" json:"column_2"`
-	Column3 int32            `db:"column_3" json:"column_3"`
+	Column1     pgtype.Timestamp `db:"column_1" json:"column_1"`
+	Column2     pgtype.Timestamp `db:"column_2" json:"column_2"`
+	YearOfStudy pgtype.Int4      `db:"year_of_study" json:"year_of_study"`
 }
 
 type GetStudentBehaviorAnalysisRow struct {
@@ -1931,7 +1953,7 @@ type GetStudentBehaviorAnalysisRow struct {
 }
 
 func (q *Queries) GetStudentBehaviorAnalysis(ctx context.Context, arg GetStudentBehaviorAnalysisParams) ([]GetStudentBehaviorAnalysisRow, error) {
-	rows, err := q.db.Query(ctx, getStudentBehaviorAnalysis, arg.Column1, arg.Column2, arg.Column3)
+	rows, err := q.db.Query(ctx, getStudentBehaviorAnalysis, arg.Column1, arg.Column2, arg.YearOfStudy)
 	if err != nil {
 		return nil, err
 	}
@@ -2156,17 +2178,17 @@ WHERE t.transaction_type = 'borrow'
     AND t.transaction_date >= $1::timestamp
     AND t.transaction_date <= $2::timestamp
     AND s.deleted_at IS NULL
-    AND ($3::int IS NULL OR s.year_of_study = $3::int)
+    AND ($4::int IS NULL OR s.year_of_study = $4::int)
 GROUP BY s.id, s.student_id, s.first_name, s.last_name, s.year_of_study
 ORDER BY total_borrows DESC
-LIMIT $4::int
+LIMIT $3::int
 `
 
 type GetTopBorrowingStudentsParams struct {
-	Column1 pgtype.Timestamp `db:"column_1" json:"column_1"`
-	Column2 pgtype.Timestamp `db:"column_2" json:"column_2"`
-	Column3 int32            `db:"column_3" json:"column_3"`
-	Column4 int32            `db:"column_4" json:"column_4"`
+	Column1     pgtype.Timestamp `db:"column_1" json:"column_1"`
+	Column2     pgtype.Timestamp `db:"column_2" json:"column_2"`
+	Column3     int32            `db:"column_3" json:"column_3"`
+	YearOfStudy pgtype.Int4      `db:"year_of_study" json:"year_of_study"`
 }
 
 type GetTopBorrowingStudentsRow struct {
@@ -2183,7 +2205,7 @@ func (q *Queries) GetTopBorrowingStudents(ctx context.Context, arg GetTopBorrowi
 		arg.Column1,
 		arg.Column2,
 		arg.Column3,
-		arg.Column4,
+		arg.YearOfStudy,
 	)
 	if err != nil {
 		return nil, err
@@ -2291,9 +2313,9 @@ ORDER BY day_of_week, hour_of_day
 `
 
 type GetUsagePatternAnalysisParams struct {
-	Column1 pgtype.Timestamp `db:"column_1" json:"column_1"`
-	Column2 pgtype.Timestamp `db:"column_2" json:"column_2"`
-	Column3 int32            `db:"column_3" json:"column_3"`
+	Column1     pgtype.Timestamp `db:"column_1" json:"column_1"`
+	Column2     pgtype.Timestamp `db:"column_2" json:"column_2"`
+	YearOfStudy pgtype.Int4      `db:"year_of_study" json:"year_of_study"`
 }
 
 type GetUsagePatternAnalysisRow struct {
@@ -2307,7 +2329,7 @@ type GetUsagePatternAnalysisRow struct {
 
 // Phase 8.3 - Advanced Analytics Queries
 func (q *Queries) GetUsagePatternAnalysis(ctx context.Context, arg GetUsagePatternAnalysisParams) ([]GetUsagePatternAnalysisRow, error) {
-	rows, err := q.db.Query(ctx, getUsagePatternAnalysis, arg.Column1, arg.Column2, arg.Column3)
+	rows, err := q.db.Query(ctx, getUsagePatternAnalysis, arg.Column1, arg.Column2, arg.YearOfStudy)
 	if err != nil {
 		return nil, err
 	}

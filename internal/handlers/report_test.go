@@ -367,7 +367,6 @@ func (suite *ReportHandlerTestSuite) TestGetPopularBooks_Success() {
 				Genre:       "Computer Science",
 				BorrowCount: 25,
 				UniqueUsers: 15,
-				AvgRating:   "4.5",
 			},
 		},
 		Summary: models.PopularBooksSummary{

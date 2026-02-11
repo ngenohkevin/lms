@@ -22,7 +22,7 @@ func (m *MockReportQuerier) GetBorrowingStatistics(ctx context.Context, arg quer
 	return args.Get(0).([]queries.GetBorrowingStatisticsRow), args.Error(1)
 }
 
-func (m *MockReportQuerier) GetOverdueBooksByYear(ctx context.Context, yearOfStudy int32) ([]queries.GetOverdueBooksByYearRow, error) {
+func (m *MockReportQuerier) GetOverdueBooksByYear(ctx context.Context, yearOfStudy pgtype.Int4) ([]queries.GetOverdueBooksByYearRow, error) {
 	args := m.Called(ctx, yearOfStudy)
 	return args.Get(0).([]queries.GetOverdueBooksByYearRow), args.Error(1)
 }
@@ -224,9 +224,9 @@ func (suite *ReportServiceTestSuite) TestGetBorrowingStatistics_Success() {
 	yearOfStudy := int32(1)
 
 	expectedParams := queries.GetBorrowingStatisticsParams{
-		Column1: pgtype.Timestamp{Time: startDate, Valid: true},
-		Column2: pgtype.Timestamp{Time: endDate, Valid: true},
-		Column3: yearOfStudy,
+		Column1:     pgtype.Timestamp{Time: startDate, Valid: true},
+		Column2:     pgtype.Timestamp{Time: endDate, Valid: true},
+		YearOfStudy: pgtype.Int4{Int32: yearOfStudy, Valid: true},
 	}
 
 	expectedRows := []queries.GetBorrowingStatisticsRow{
@@ -268,9 +268,9 @@ func (suite *ReportServiceTestSuite) TestGetBorrowingStatistics_NoYear() {
 	endDate := time.Date(2024, 12, 31, 23, 59, 59, 0, time.UTC)
 
 	expectedParams := queries.GetBorrowingStatisticsParams{
-		Column1: pgtype.Timestamp{Time: startDate, Valid: true},
-		Column2: pgtype.Timestamp{Time: endDate, Valid: true},
-		Column3: 0, // 0 for no year filter
+		Column1:     pgtype.Timestamp{Time: startDate, Valid: true},
+		Column2:     pgtype.Timestamp{Time: endDate, Valid: true},
+		YearOfStudy: pgtype.Int4{Valid: false},
 	}
 
 	expectedRows := []queries.GetBorrowingStatisticsRow{
@@ -313,7 +313,7 @@ func (suite *ReportServiceTestSuite) TestGetOverdueBooks_Success() {
 		},
 	}
 
-	suite.mockDB.On("GetOverdueBooksByYear", suite.ctx, yearOfStudy).Return(expectedRows, nil)
+	suite.mockDB.On("GetOverdueBooksByYear", suite.ctx, pgtype.Int4{Int32: yearOfStudy, Valid: true}).Return(expectedRows, nil)
 
 	// When
 	result, err := suite.service.GetOverdueBooks(suite.ctx, &yearOfStudy)
@@ -336,10 +336,10 @@ func (suite *ReportServiceTestSuite) TestGetPopularBooks_Success() {
 	yearOfStudy := int32(1)
 
 	expectedParams := queries.GetPopularBooksParams{
-		Column1: pgtype.Timestamp{Time: startDate, Valid: true},
-		Column2: pgtype.Timestamp{Time: endDate, Valid: true},
-		Column3: limit,
-		Column4: yearOfStudy,
+		Column1:     pgtype.Timestamp{Time: startDate, Valid: true},
+		Column2:     pgtype.Timestamp{Time: endDate, Valid: true},
+		Column3:     limit,
+		YearOfStudy: pgtype.Int4{Int32: yearOfStudy, Valid: true},
 	}
 
 	expectedRows := []queries.GetPopularBooksRow{
@@ -350,7 +350,6 @@ func (suite *ReportServiceTestSuite) TestGetPopularBooks_Success() {
 			Genre:       pgtype.Text{String: "Computer Science", Valid: true},
 			BorrowCount: 25,
 			UniqueUsers: 15,
-			AvgRating:   "4.5",
 		},
 		{
 			BookID:      "BK002",
@@ -359,7 +358,6 @@ func (suite *ReportServiceTestSuite) TestGetPopularBooks_Success() {
 			Genre:       pgtype.Text{String: "Software Engineering", Valid: true},
 			BorrowCount: 20,
 			UniqueUsers: 12,
-			AvgRating:   "4.7",
 		},
 	}
 
@@ -385,9 +383,9 @@ func (suite *ReportServiceTestSuite) TestGetStudentActivity_Success() {
 	endDate := time.Date(2024, 12, 31, 23, 59, 59, 0, time.UTC)
 
 	expectedParams := queries.GetStudentActivityParams{
-		Column1: yearOfStudy,
-		Column2: pgtype.Timestamp{Time: startDate, Valid: true},
-		Column3: pgtype.Timestamp{Time: endDate, Valid: true},
+		Column1:     pgtype.Timestamp{Time: startDate, Valid: true},
+		Column2:     pgtype.Timestamp{Time: endDate, Valid: true},
+		YearOfStudy: pgtype.Int4{Int32: yearOfStudy, Valid: true},
 	}
 
 	expectedRows := []queries.GetStudentActivityRow{
@@ -578,9 +576,9 @@ func (suite *ReportServiceTestSuite) TestGetBorrowingStatistics_DatabaseError() 
 	endDate := time.Date(2024, 12, 31, 23, 59, 59, 0, time.UTC)
 
 	expectedParams := queries.GetBorrowingStatisticsParams{
-		Column1: pgtype.Timestamp{Time: startDate, Valid: true},
-		Column2: pgtype.Timestamp{Time: endDate, Valid: true},
-		Column3: 0, // 0 for no year filter
+		Column1:     pgtype.Timestamp{Time: startDate, Valid: true},
+		Column2:     pgtype.Timestamp{Time: endDate, Valid: true},
+		YearOfStudy: pgtype.Int4{Valid: false},
 	}
 
 	suite.mockDB.On("GetBorrowingStatistics", suite.ctx, expectedParams).Return([]queries.GetBorrowingStatisticsRow{}, assert.AnError)

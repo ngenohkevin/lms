@@ -235,7 +235,7 @@ type Querier interface {
 	GetNextQueueItems(ctx context.Context, limit int32) ([]EmailQueue, error)
 	GetNextReservationForBook(ctx context.Context, bookID int32) (GetNextReservationForBookRow, error)
 	GetNotificationByID(ctx context.Context, id int32) (Notification, error)
-	GetOverdueBooksByYear(ctx context.Context, dollar_1 int32) ([]GetOverdueBooksByYearRow, error)
+	GetOverdueBooksByYear(ctx context.Context, yearOfStudy pgtype.Int4) ([]GetOverdueBooksByYearRow, error)
 	GetOverdueTransactionsForFineCalculation(ctx context.Context) ([]GetOverdueTransactionsForFineCalculationRow, error)
 	GetPendingEmailDeliveries(ctx context.Context, limit int32) ([]EmailDelivery, error)
 	GetPermissionByCode(ctx context.Context, code string) (Permission, error)

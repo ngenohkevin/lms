@@ -81,7 +81,6 @@ type PopularBookDetail struct {
 	Genre       string `json:"genre"`
 	BorrowCount int32  `json:"borrow_count"`
 	UniqueUsers int32  `json:"unique_users"`
-	AvgRating   string `json:"avg_rating"`
 }
 
 // PopularBooksSummary represents summary of popular books

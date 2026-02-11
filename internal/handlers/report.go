@@ -1150,7 +1150,7 @@ func (rh *ReportHandler) exportToCSV(baseFileName string, data interface{}) (str
 
 	case *models.PopularBooksReport:
 		// Write header
-		header := []string{"Book ID", "Title", "Author", "Genre", "Borrow Count", "Unique Users", "Avg Rating"}
+		header := []string{"Book ID", "Title", "Author", "Genre", "Borrow Count", "Unique Users"}
 		if err := writer.Write(header); err != nil {
 			return "", nil, "", fmt.Errorf("failed to write CSV header: %w", err)
 		}
@@ -1164,7 +1164,6 @@ func (rh *ReportHandler) exportToCSV(baseFileName string, data interface{}) (str
 				book.Genre,
 				fmt.Sprintf("%d", book.BorrowCount),
 				fmt.Sprintf("%d", book.UniqueUsers),
-				book.AvgRating,
 			}
 			if err := writer.Write(record); err != nil {
 				return "", nil, "", fmt.Errorf("failed to write CSV record: %w", err)
@@ -1398,7 +1397,7 @@ func (rh *ReportHandler) writeBorrowingStatisticsToExcel(f *excelize.File, sheet
 // writePopularBooksToExcel writes popular books to Excel
 func (rh *ReportHandler) writePopularBooksToExcel(f *excelize.File, sheetName string, data *models.PopularBooksReport) error {
 	// Write header
-	headers := []string{"Rank", "Book ID", "Title", "Author", "Genre", "Borrow Count", "Unique Users", "Avg Rating"}
+	headers := []string{"Rank", "Book ID", "Title", "Author", "Genre", "Borrow Count", "Unique Users"}
 	for i, header := range headers {
 		cell := fmt.Sprintf("%s1", string(rune('A'+i)))
 		if err := f.SetCellValue(sheetName, cell, header); err != nil {
@@ -1428,9 +1427,6 @@ func (rh *ReportHandler) writePopularBooksToExcel(f *excelize.File, sheetName st
 			return fmt.Errorf("failed to set cell value: %w", err)
 		}
 		if err := f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), book.UniqueUsers); err != nil {
-			return fmt.Errorf("failed to set cell value: %w", err)
-		}
-		if err := f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), book.AvgRating); err != nil {
 			return fmt.Errorf("failed to set cell value: %w", err)
 		}
 	}

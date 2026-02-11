@@ -9,7 +9,7 @@ FROM transactions t
 INNER JOIN students s ON t.student_id = s.id
 WHERE t.transaction_date >= $1::timestamp
     AND t.transaction_date <= $2::timestamp
-    AND ($3::int IS NULL OR s.year_of_study = $3::int)
+    AND (sqlc.narg(year_of_study)::int IS NULL OR s.year_of_study = sqlc.narg(year_of_study)::int)
     AND s.deleted_at IS NULL
 GROUP BY DATE_TRUNC('month', t.transaction_date)
 ORDER BY month;
@@ -30,7 +30,7 @@ INNER JOIN students s ON t.student_id = s.id
 INNER JOIN books b ON t.book_id = b.id
 WHERE t.due_date < NOW()
     AND t.returned_date IS NULL
-    AND ($1::int IS NULL OR s.year_of_study = $1::int)
+    AND (sqlc.narg(year_of_study)::int IS NULL OR s.year_of_study = sqlc.narg(year_of_study)::int)
     AND s.deleted_at IS NULL
     AND b.deleted_at IS NULL
 ORDER BY t.due_date ASC;
@@ -42,15 +42,14 @@ SELECT
     b.author,
     b.genre,
     COUNT(t.id)::int as borrow_count,
-    COUNT(DISTINCT t.student_id)::int as unique_users,
-    '4.5' as avg_rating  -- Placeholder for future rating system
+    COUNT(DISTINCT t.student_id)::int as unique_users
 FROM books b
 INNER JOIN transactions t ON b.id = t.book_id
 INNER JOIN students s ON t.student_id = s.id
 WHERE t.transaction_type = 'borrow'
     AND t.transaction_date >= $1::timestamp
     AND t.transaction_date <= $2::timestamp
-    AND ($4::int IS NULL OR s.year_of_study = $4::int)
+    AND (sqlc.narg(year_of_study)::int IS NULL OR s.year_of_study = sqlc.narg(year_of_study)::int)
     AND b.deleted_at IS NULL
     AND s.deleted_at IS NULL
 GROUP BY b.id, b.book_id, b.title, b.author, b.genre
@@ -70,9 +69,9 @@ SELECT
     COALESCE(MAX(t.transaction_date), s.created_at) as last_activity
 FROM students s
 LEFT JOIN transactions t ON s.id = t.student_id
-    AND t.transaction_date >= $2::timestamp
-    AND t.transaction_date <= $3::timestamp
-WHERE ($1::int IS NULL OR s.year_of_study = $1::int)
+    AND t.transaction_date >= $1::timestamp
+    AND t.transaction_date <= $2::timestamp
+WHERE (sqlc.narg(year_of_study)::int IS NULL OR s.year_of_study = sqlc.narg(year_of_study)::int)
     AND s.deleted_at IS NULL
     AND s.is_active = true
 GROUP BY s.id, s.student_id, s.first_name, s.last_name, s.year_of_study, s.created_at
@@ -115,7 +114,32 @@ SELECT
     COUNT(CASE WHEN t.transaction_type = 'borrow' THEN 1 END)::int as borrow_count,
     COUNT(CASE WHEN t.transaction_type = 'return' THEN 1 END)::int as return_count,
     COUNT(CASE WHEN t.due_date < NOW() AND t.returned_date IS NULL THEN 1 END)::int as overdue_count,
-    0::int as new_students,  -- Placeholder - would need separate query for new student registrations
+    (SELECT COUNT(*) FROM students s2
+     WHERE s2.deleted_at IS NULL
+     AND s2.created_at >= DATE_TRUNC(
+         CASE
+             WHEN $3::text = 'day' THEN 'day'
+             WHEN $3::text = 'week' THEN 'week'
+             WHEN $3::text = 'month' THEN 'month'
+             WHEN $3::text = 'year' THEN 'year'
+             ELSE 'month'
+         END, t.transaction_date)
+     AND s2.created_at < DATE_TRUNC(
+         CASE
+             WHEN $3::text = 'day' THEN 'day'
+             WHEN $3::text = 'week' THEN 'week'
+             WHEN $3::text = 'month' THEN 'month'
+             WHEN $3::text = 'year' THEN 'year'
+             ELSE 'month'
+         END, t.transaction_date) + ('1 ' ||
+         CASE
+             WHEN $3::text = 'day' THEN 'day'
+             WHEN $3::text = 'week' THEN 'week'
+             WHEN $3::text = 'month' THEN 'month'
+             WHEN $3::text = 'year' THEN 'year'
+             ELSE 'month'
+         END)::interval
+    )::int as new_students,
     COUNT(DISTINCT t.student_id)::int as total_students
 FROM transactions t
 INNER JOIN students s ON t.student_id = s.id
@@ -187,7 +211,7 @@ INNER JOIN students s ON t.student_id = s.id
 WHERE t.transaction_date >= $1::timestamp
     AND t.transaction_date <= $2::timestamp
     AND s.deleted_at IS NULL
-    AND ($3::int IS NULL OR s.year_of_study = $3::int)
+    AND (sqlc.narg(year_of_study)::int IS NULL OR s.year_of_study = sqlc.narg(year_of_study)::int)
 GROUP BY s.year_of_study, DATE_TRUNC('month', t.transaction_date)
 ORDER BY s.year_of_study, month;
 
@@ -205,10 +229,10 @@ WHERE t.transaction_type = 'borrow'
     AND t.transaction_date >= $1::timestamp
     AND t.transaction_date <= $2::timestamp
     AND s.deleted_at IS NULL
-    AND ($3::int IS NULL OR s.year_of_study = $3::int)
+    AND (sqlc.narg(year_of_study)::int IS NULL OR s.year_of_study = sqlc.narg(year_of_study)::int)
 GROUP BY s.id, s.student_id, s.first_name, s.last_name, s.year_of_study
 ORDER BY total_borrows DESC
-LIMIT $4::int;
+LIMIT $3::int;
 
 -- name: GetBookUtilizationReport :many
 SELECT 
@@ -401,7 +425,7 @@ INNER JOIN students s ON t.student_id = s.id
 WHERE t.transaction_date >= $1::timestamp
     AND t.transaction_date <= $2::timestamp
     AND s.deleted_at IS NULL
-    AND ($3::int IS NULL OR s.year_of_study = $3::int)
+    AND (sqlc.narg(year_of_study)::int IS NULL OR s.year_of_study = sqlc.narg(year_of_study)::int)
 GROUP BY EXTRACT(DOW FROM t.transaction_date), EXTRACT(HOUR FROM t.transaction_date)
 ORDER BY day_of_week, hour_of_day;
 
@@ -524,7 +548,7 @@ INNER JOIN (
         AND t.transaction_date <= $2::timestamp
     WHERE s.deleted_at IS NULL
     AND s.is_active = true
-    AND ($3::int IS NULL OR s.year_of_study = $3::int)
+    AND (sqlc.narg(year_of_study)::int IS NULL OR s.year_of_study = sqlc.narg(year_of_study)::int)
     GROUP BY s.id, s.year_of_study
 ) student_stats ON s.id = student_stats.id
 GROUP BY s.year_of_study

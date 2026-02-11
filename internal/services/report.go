@@ -15,7 +15,7 @@ import (
 // ReportQuerier interface defines the database operations needed for reports
 type ReportQuerier interface {
 	GetBorrowingStatistics(ctx context.Context, arg queries.GetBorrowingStatisticsParams) ([]queries.GetBorrowingStatisticsRow, error)
-	GetOverdueBooksByYear(ctx context.Context, yearOfStudy int32) ([]queries.GetOverdueBooksByYearRow, error)
+	GetOverdueBooksByYear(ctx context.Context, yearOfStudy pgtype.Int4) ([]queries.GetOverdueBooksByYearRow, error)
 	GetPopularBooks(ctx context.Context, arg queries.GetPopularBooksParams) ([]queries.GetPopularBooksRow, error)
 	GetStudentActivity(ctx context.Context, arg queries.GetStudentActivityParams) ([]queries.GetStudentActivityRow, error)
 	GetInventoryStatus(ctx context.Context) ([]queries.GetInventoryStatusRow, error)
@@ -81,16 +81,13 @@ func (rs *ReportService) GetBorrowingStatistics(ctx context.Context, startDate, 
 		return nil, err
 	}
 
-	// Convert yearOfStudy pointer to value for the query
-	var yearValue int32
-	if yearOfStudy != nil {
-		yearValue = *yearOfStudy
-	}
-
 	params := queries.GetBorrowingStatisticsParams{
-		Column1: pgtype.Timestamp{Time: startDate, Valid: true},
-		Column2: pgtype.Timestamp{Time: endDate, Valid: true},
-		Column3: yearValue,
+		Column1:     pgtype.Timestamp{Time: startDate, Valid: true},
+		Column2:     pgtype.Timestamp{Time: endDate, Valid: true},
+		YearOfStudy: pgtype.Int4{Valid: yearOfStudy != nil},
+	}
+	if yearOfStudy != nil {
+		params.YearOfStudy.Int32 = *yearOfStudy
 	}
 
 	rows, err := rs.db.GetBorrowingStatistics(ctx, params)
@@ -103,13 +100,12 @@ func (rs *ReportService) GetBorrowingStatistics(ctx context.Context, startDate, 
 
 // GetOverdueBooks gets all overdue books with optional filtering by year of study
 func (rs *ReportService) GetOverdueBooks(ctx context.Context, yearOfStudy *int32) (*models.OverdueBooksReport, error) {
-	// Convert yearOfStudy pointer to value for the query
-	var yearValue int32
+	yearParam := pgtype.Int4{Valid: yearOfStudy != nil}
 	if yearOfStudy != nil {
-		yearValue = *yearOfStudy
+		yearParam.Int32 = *yearOfStudy
 	}
 
-	rows, err := rs.db.GetOverdueBooksByYear(ctx, yearValue)
+	rows, err := rs.db.GetOverdueBooksByYear(ctx, yearParam)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get overdue books: %w", err)
 	}
@@ -127,17 +123,16 @@ func (rs *ReportService) GetPopularBooks(ctx context.Context, startDate, endDate
 		limit = 10 // Default limit
 	}
 
-	var yearValue int32
-	if yearOfStudy != nil {
-		yearValue = *yearOfStudy
-	}
-
 	// Note: Cache key could be used for more sophisticated caching logic
+	yearVal := int32(0)
+	if yearOfStudy != nil {
+		yearVal = *yearOfStudy
+	}
 	_ = fmt.Sprintf("popular_books:%s:%s:%d:%d",
 		startDate.Format("2006-01-02"),
 		endDate.Format("2006-01-02"),
 		limit,
-		yearValue)
+		yearVal)
 
 	// Try to get from cache first
 	if rs.cacheService != nil {
@@ -152,11 +147,16 @@ func (rs *ReportService) GetPopularBooks(ctx context.Context, startDate, endDate
 		}
 	}
 
+	yearOfStudyParam := pgtype.Int4{Valid: yearOfStudy != nil}
+	if yearOfStudy != nil {
+		yearOfStudyParam.Int32 = *yearOfStudy
+	}
+
 	params := queries.GetPopularBooksParams{
-		Column1: pgtype.Timestamp{Time: startDate, Valid: true},
-		Column2: pgtype.Timestamp{Time: endDate, Valid: true},
-		Column3: limit,
-		Column4: yearValue,
+		Column1:     pgtype.Timestamp{Time: startDate, Valid: true},
+		Column2:     pgtype.Timestamp{Time: endDate, Valid: true},
+		Column3:     limit,
+		YearOfStudy: yearOfStudyParam,
 	}
 
 	rows, err := rs.db.GetPopularBooks(ctx, params)
@@ -180,15 +180,15 @@ func (rs *ReportService) GetStudentActivity(ctx context.Context, yearOfStudy *in
 		return nil, err
 	}
 
-	var yearValue int32
+	yearOfStudyParam := pgtype.Int4{Valid: yearOfStudy != nil}
 	if yearOfStudy != nil {
-		yearValue = *yearOfStudy
+		yearOfStudyParam.Int32 = *yearOfStudy
 	}
 
 	params := queries.GetStudentActivityParams{
-		Column1: yearValue,
-		Column2: pgtype.Timestamp{Time: startDate, Valid: true},
-		Column3: pgtype.Timestamp{Time: endDate, Valid: true},
+		Column1:     pgtype.Timestamp{Time: startDate, Valid: true},
+		Column2:     pgtype.Timestamp{Time: endDate, Valid: true},
+		YearOfStudy: yearOfStudyParam,
 	}
 
 	rows, err := rs.db.GetStudentActivity(ctx, params)
@@ -390,7 +390,6 @@ func (rs *ReportService) buildPopularBooksReport(rows []queries.GetPopularBooksR
 			Genre:       genre,
 			BorrowCount: row.BorrowCount,
 			UniqueUsers: row.UniqueUsers,
-			AvgRating:   row.AvgRating,
 		}
 		totalBorrows += row.BorrowCount
 		totalUniqueUsers += row.UniqueUsers
@@ -791,15 +790,15 @@ func (rs *ReportService) GetUsagePatternAnalysis(ctx context.Context, startDate,
 		return nil, err
 	}
 
-	var yearValue int32
+	yearOfStudyParam := pgtype.Int4{Valid: yearOfStudy != nil}
 	if yearOfStudy != nil {
-		yearValue = *yearOfStudy
+		yearOfStudyParam.Int32 = *yearOfStudy
 	}
 
 	params := queries.GetUsagePatternAnalysisParams{
-		Column1: pgtype.Timestamp{Time: startDate, Valid: true},
-		Column2: pgtype.Timestamp{Time: endDate, Valid: true},
-		Column3: yearValue,
+		Column1:     pgtype.Timestamp{Time: startDate, Valid: true},
+		Column2:     pgtype.Timestamp{Time: endDate, Valid: true},
+		YearOfStudy: yearOfStudyParam,
 	}
 
 	rows, err := rs.db.GetUsagePatternAnalysis(ctx, params)
@@ -860,15 +859,15 @@ func (rs *ReportService) GetStudentBehaviorAnalysis(ctx context.Context, startDa
 		return nil, err
 	}
 
-	var yearValue int32
+	yearOfStudyParam := pgtype.Int4{Valid: yearOfStudy != nil}
 	if yearOfStudy != nil {
-		yearValue = *yearOfStudy
+		yearOfStudyParam.Int32 = *yearOfStudy
 	}
 
 	params := queries.GetStudentBehaviorAnalysisParams{
-		Column1: pgtype.Timestamp{Time: startDate, Valid: true},
-		Column2: pgtype.Timestamp{Time: endDate, Valid: true},
-		Column3: yearValue,
+		Column1:     pgtype.Timestamp{Time: startDate, Valid: true},
+		Column2:     pgtype.Timestamp{Time: endDate, Valid: true},
+		YearOfStudy: yearOfStudyParam,
 	}
 
 	rows, err := rs.db.GetStudentBehaviorAnalysis(ctx, params)
