@@ -544,7 +544,7 @@ func TestFineService_CalculateFines_UsesDynamicRate(t *testing.T) {
 	mockProvider := new(MockFineRateProviderForFine)
 
 	service := NewFineService(mockQuerier, 0.50). // config fallback
-		WithFineRateProvider(mockProvider)
+							WithFineRateProvider(mockProvider)
 
 	// Provider returns 50 KSH/day
 	mockProvider.On("GetCachedFinePerDay", mock.Anything).Return(50.0, nil)
