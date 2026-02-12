@@ -586,6 +586,7 @@ func numericToFloat64(n pgtype.Numeric) float64 {
 
 func float64ToNumeric(f float64) pgtype.Numeric {
 	var n pgtype.Numeric
-	_ = n.Scan(f) // Error is safe to ignore - Scan from float64 always succeeds
+	// Use string format for reliable conversion - Scan(float64) can silently fail in pgx v5
+	_ = n.Scan(fmt.Sprintf("%.2f", f))
 	return n
 }
