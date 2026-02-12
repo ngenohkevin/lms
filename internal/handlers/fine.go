@@ -21,7 +21,7 @@ type FineService interface {
 	GetFineStatistics(ctx context.Context) (*services.FineStatistics, error)
 	CalculateFinesForOverdueBooks(ctx context.Context) (int, error)
 	GetStudentsWithHighFines(ctx context.Context, threshold float64) ([]services.StudentWithHighFines, error)
-	GetFinePerDay() float64
+	GetFinePerDay(ctx context.Context) float64
 	BulkPayFines(ctx context.Context, transactionIDs []int32) (int64, error)
 	BulkWaiveFines(ctx context.Context, transactionIDs []int32, waivedBy int32, reason string) (int64, error)
 }
@@ -360,13 +360,28 @@ func (h *FineHandler) GetFineStatistics(c *gin.Context) {
 		return
 	}
 
-	// Add fine rate to response
+	finePerDay := h.fineService.GetFinePerDay(c.Request.Context())
+
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Message: "Fine statistics retrieved successfully",
 		Data: gin.H{
-			"statistics":   stats,
-			"fine_per_day": h.fineService.GetFinePerDay(),
+			"total_fines_count":   stats.UnpaidCount + stats.PaidCount + stats.WaivedCount,
+			"total_fines_amount":  stats.TotalUnpaid + stats.TotalCollected + stats.TotalWaived,
+			"unpaid_fines_count":  stats.UnpaidCount,
+			"unpaid_fines_amount": stats.TotalUnpaid,
+			"paid_fines_count":    stats.PaidCount,
+			"paid_fines_amount":   stats.TotalCollected,
+			"waived_fines_count":  stats.WaivedCount,
+			"waived_fines_amount": stats.TotalWaived,
+			"fine_per_day":        finePerDay,
+			"average_fine_amount": func() float64 {
+				total := stats.UnpaidCount + stats.PaidCount + stats.WaivedCount
+				if total == 0 {
+					return 0
+				}
+				return (stats.TotalUnpaid + stats.TotalCollected + stats.TotalWaived) / float64(total)
+			}(),
 		},
 	})
 }
@@ -397,6 +412,7 @@ func (h *FineHandler) CalculateFines(c *gin.Context) {
 		Success: true,
 		Message: "Fines calculated successfully",
 		Data: gin.H{
+			"processed":     count,
 			"updated_count": count,
 		},
 	})

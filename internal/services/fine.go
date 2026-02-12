@@ -77,13 +77,18 @@ type FineStatistics struct {
 	StudentsWithUnpaidFines int32   `json:"students_with_unpaid_fines"`
 }
 
+// FineListPagination contains pagination info for fine list results
+type FineListPagination struct {
+	Page       int32 `json:"page"`
+	Limit      int32 `json:"limit"`
+	Total      int64 `json:"total"`
+	TotalPages int32 `json:"total_pages"`
+}
+
 // FineListResult represents paginated fine list results
 type FineListResult struct {
-	Fines      []Fine `json:"fines"`
-	Total      int64  `json:"total"`
-	Page       int32  `json:"page"`
-	Limit      int32  `json:"limit"`
-	TotalPages int32  `json:"total_pages"`
+	Fines      []Fine              `json:"fines"`
+	Pagination *FineListPagination `json:"pagination"`
 }
 
 // StudentWithHighFines represents a student with high outstanding fines
@@ -205,11 +210,13 @@ func (s *FineService) ListFines(ctx context.Context, paid *bool, studentID *int3
 	}
 
 	return &FineListResult{
-		Fines:      fines,
-		Total:      total,
-		Page:       page,
-		Limit:      limit,
-		TotalPages: totalPages,
+		Fines: fines,
+		Pagination: &FineListPagination{
+			Page:       page,
+			Limit:      limit,
+			Total:      total,
+			TotalPages: totalPages,
+		},
 	}, nil
 }
 
@@ -395,9 +402,9 @@ func (s *FineService) GetStudentsWithHighFines(ctx context.Context, threshold fl
 	return students, nil
 }
 
-// GetFinePerDay returns the current fine rate per day
-func (s *FineService) GetFinePerDay() float64 {
-	return s.finePerDay
+// GetFinePerDay returns the effective fine rate per day (from DB settings or config)
+func (s *FineService) GetFinePerDay(ctx context.Context) float64 {
+	return s.getEffectiveFinePerDay(ctx)
 }
 
 // BulkPayFines marks multiple fines as paid

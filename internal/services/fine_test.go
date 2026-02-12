@@ -102,18 +102,19 @@ func (m *MockFineQuerier) GetTransactionByID(ctx context.Context, id int32) (que
 }
 
 func TestNewFineService(t *testing.T) {
+	ctx := context.Background()
 	mockQuerier := new(MockFineQuerier)
 
 	t.Run("creates service with default fine rate", func(t *testing.T) {
 		service := NewFineService(mockQuerier, 0)
 		assert.NotNil(t, service)
-		assert.Equal(t, 0.50, service.GetFinePerDay())
+		assert.Equal(t, 0.50, service.GetFinePerDay(ctx))
 	})
 
 	t.Run("creates service with custom fine rate", func(t *testing.T) {
 		service := NewFineService(mockQuerier, 1.00)
 		assert.NotNil(t, service)
-		assert.Equal(t, 1.00, service.GetFinePerDay())
+		assert.Equal(t, 1.00, service.GetFinePerDay(ctx))
 	})
 }
 
@@ -149,7 +150,7 @@ func TestFineService_ListFines(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Len(t, result.Fines, 1)
-		assert.Equal(t, int64(1), result.Total)
+		assert.Equal(t, int64(1), result.Pagination.Total)
 		assert.Equal(t, "John Doe", result.Fines[0].StudentName)
 	})
 

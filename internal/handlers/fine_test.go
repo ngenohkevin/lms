@@ -144,8 +144,8 @@ func (m *MockFineService) GetStudentsWithHighFines(ctx context.Context, threshol
 	return args.Get(0).([]services.StudentWithHighFines), args.Error(1)
 }
 
-func (m *MockFineService) GetFinePerDay() float64 {
-	args := m.Called()
+func (m *MockFineService) GetFinePerDay(ctx context.Context) float64 {
+	args := m.Called(ctx)
 	return args.Get(0).(float64)
 }
 
@@ -241,10 +241,12 @@ func TestFineHandler_ListFines(t *testing.T) {
 					Paid:          false,
 				},
 			},
-			Total:      1,
-			Page:       1,
-			Limit:      20,
-			TotalPages: 1,
+			Pagination: &services.FineListPagination{
+				Total:      1,
+				Page:       1,
+				Limit:      20,
+				TotalPages: 1,
+			},
 		}
 
 		mockService.On("ListFines", mock.Anything, (*bool)(nil), (*int32)(nil), int32(1), int32(20)).Return(result, nil).Once()
@@ -484,7 +486,7 @@ func TestFineHandler_GetFineStatistics(t *testing.T) {
 		}
 
 		mockService.On("GetFineStatistics", mock.Anything).Return(stats, nil).Once()
-		mockService.On("GetFinePerDay").Return(0.50).Once()
+		mockService.On("GetFinePerDay", mock.Anything).Return(0.50).Once()
 
 		req, _ := http.NewRequest("GET", "/api/v1/fines/statistics", nil)
 		w := httptest.NewRecorder()
