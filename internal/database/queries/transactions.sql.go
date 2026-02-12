@@ -930,7 +930,7 @@ func (q *Queries) ListActiveTransactionsByStudent(ctx context.Context, studentID
 
 const listOverdueTransactions = `-- name: ListOverdueTransactions :many
 SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id, b.isbn, b.cover_image_url,
-    GREATEST(EXTRACT(EPOCH FROM (NOW() - t.due_date))::int / 86400, 0)::int as days_overdue
+    GREATEST(CURRENT_DATE - t.due_date::date, 0)::int as days_overdue
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id

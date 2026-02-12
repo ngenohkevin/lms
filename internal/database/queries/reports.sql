@@ -904,7 +904,7 @@ SELECT
     t.fine_waived_reason,
     t.due_date,
     t.returned_date,
-    GREATEST(EXTRACT(EPOCH FROM (COALESCE(t.returned_date, NOW()) - t.due_date))::int / 86400, 0) as days_overdue,
+    GREATEST(COALESCE(t.returned_date::date, CURRENT_DATE) - t.due_date::date, 0) as days_overdue,
     s.student_id as student_code,
     CONCAT(s.first_name, ' ', s.last_name) as student_name,
     s.year_of_study,

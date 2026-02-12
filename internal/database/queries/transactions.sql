@@ -60,7 +60,7 @@ LIMIT $2 OFFSET $3;
 
 -- name: ListOverdueTransactions :many
 SELECT t.*, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id, b.isbn, b.cover_image_url,
-    GREATEST(EXTRACT(EPOCH FROM (NOW() - t.due_date))::int / 86400, 0)::int as days_overdue
+    GREATEST(CURRENT_DATE - t.due_date::date, 0)::int as days_overdue
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
