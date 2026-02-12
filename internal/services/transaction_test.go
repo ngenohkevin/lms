@@ -640,16 +640,35 @@ func TestTransactionService_ReturnBook_AlreadyReturned(t *testing.T) {
 	mockQueries.AssertExpectations(t)
 }
 
+// MockFineRateProvider implements FineRateProvider for testing
+type MockFineRateProvider struct {
+	mock.Mock
+}
+
+func (m *MockFineRateProvider) GetCachedFinePerDay(ctx context.Context) (float64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(float64), args.Error(1)
+}
+
+func (m *MockFineRateProvider) GetFineSettings(ctx context.Context) (*FineSettings, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*FineSettings), args.Error(1)
+}
+
 func TestTransactionService_CalculateFine_NoFine(t *testing.T) {
 	service := &TransactionService{
 		finePerDay: decimal.NewFromFloat(0.50),
 	}
+	ctx := context.Background()
 
 	// Book returned on time
 	dueDate := time.Now().AddDate(0, 0, 1)
 	returnDate := time.Now()
 
-	fine := service.calculateFine(dueDate, returnDate)
+	fine := service.calculateFine(ctx, dueDate, returnDate)
 	assert.True(t, decimal.Zero.Equal(fine))
 }
 
@@ -657,15 +676,62 @@ func TestTransactionService_CalculateFine_WithFine(t *testing.T) {
 	service := &TransactionService{
 		finePerDay: decimal.NewFromFloat(0.50),
 	}
+	ctx := context.Background()
 
 	// Book returned 3 days late (calendar days)
 	dueDate := time.Now().AddDate(0, 0, -3)
 	returnDate := time.Now()
 
-	fine := service.calculateFine(dueDate, returnDate)
+	fine := service.calculateFine(ctx, dueDate, returnDate)
 	expected := decimal.NewFromFloat(1.50) // 3 days * $0.50 (exactly 3 calendar days)
 
 	assert.True(t, expected.Equal(fine))
+}
+
+func TestTransactionService_CalculateFine_UsesDynamicRate(t *testing.T) {
+	mockProvider := &MockFineRateProvider{}
+	mockProvider.On("GetCachedFinePerDay", mock.Anything).Return(50.0, nil)
+	mockProvider.On("GetFineSettings", mock.Anything).Return(&FineSettings{
+		FinePerDay:          50.0,
+		MaxFineAmount:       1000.0,
+		FineGracePeriodDays: 0,
+	}, nil)
+
+	service := &TransactionService{
+		finePerDay:       decimal.NewFromFloat(0.50), // Config value (should be overridden)
+		fineRateProvider: mockProvider,
+	}
+	ctx := context.Background()
+
+	// Book returned 3 days late
+	dueDate := time.Now().AddDate(0, 0, -3)
+	returnDate := time.Now()
+
+	fine := service.calculateFine(ctx, dueDate, returnDate)
+	expected := decimal.NewFromFloat(150.0) // 3 days * 50.0 from settings
+
+	assert.True(t, expected.Equal(fine), "expected %s, got %s", expected, fine)
+	mockProvider.AssertExpectations(t)
+}
+
+func TestTransactionService_CalculateFine_FallsBackToConfig(t *testing.T) {
+	mockProvider := &MockFineRateProvider{}
+	mockProvider.On("GetCachedFinePerDay", mock.Anything).Return(0.0, assert.AnError)
+	mockProvider.On("GetFineSettings", mock.Anything).Return((*FineSettings)(nil), assert.AnError)
+
+	service := &TransactionService{
+		finePerDay:       decimal.NewFromFloat(0.50),
+		fineRateProvider: mockProvider,
+	}
+	ctx := context.Background()
+
+	dueDate := time.Now().AddDate(0, 0, -3)
+	returnDate := time.Now()
+
+	fine := service.calculateFine(ctx, dueDate, returnDate)
+	expected := decimal.NewFromFloat(1.50) // 3 days * 0.50 config fallback
+
+	assert.True(t, expected.Equal(fine), "expected %s, got %s", expected, fine)
 }
 
 func TestTransactionService_RenewBook_Success(t *testing.T) {

@@ -80,6 +80,12 @@ type TransactionQuerier interface {
 	DeleteTransaction(ctx context.Context, id int32) error
 }
 
+// FineRateProvider defines the interface for fetching dynamic fine rates from settings
+type FineRateProvider interface {
+	GetCachedFinePerDay(ctx context.Context) (float64, error)
+	GetFineSettings(ctx context.Context) (*FineSettings, error)
+}
+
 // CacheInvalidator defines the interface for cache invalidation
 type CacheInvalidator interface {
 	InvalidateStudentProfile(ctx context.Context, studentID int) error
@@ -90,6 +96,7 @@ type TransactionService struct {
 	queries             TransactionQuerier
 	pool                *pgxpool.Pool // Database pool for transaction support
 	cacheService        CacheInvalidator
+	fineRateProvider    FineRateProvider
 	defaultLoanDays     int
 	finePerDay          decimal.Decimal
 	lostBookFine        decimal.Decimal // Default fine for lost books
@@ -157,6 +164,45 @@ func (s *TransactionService) WithFineGracePeriodDays(days int) *TransactionServi
 func (s *TransactionService) WithCacheService(cacheService CacheInvalidator) *TransactionService {
 	s.cacheService = cacheService
 	return s
+}
+
+// WithFineRateProvider sets the provider for dynamic fine rates from DB settings
+func (s *TransactionService) WithFineRateProvider(provider FineRateProvider) *TransactionService {
+	s.fineRateProvider = provider
+	return s
+}
+
+// getEffectiveFinePerDay returns the fine rate from DB settings, falling back to the config value
+func (s *TransactionService) getEffectiveFinePerDay(ctx context.Context) decimal.Decimal {
+	if s.fineRateProvider != nil {
+		rate, err := s.fineRateProvider.GetCachedFinePerDay(ctx)
+		if err == nil && rate > 0 {
+			return decimal.NewFromFloat(rate)
+		}
+	}
+	return s.finePerDay
+}
+
+// getEffectiveMaxFine returns the max fine from DB settings, falling back to the config value
+func (s *TransactionService) getEffectiveMaxFine(ctx context.Context) decimal.Decimal {
+	if s.fineRateProvider != nil {
+		settings, err := s.fineRateProvider.GetFineSettings(ctx)
+		if err == nil && settings.MaxFineAmount > 0 {
+			return decimal.NewFromFloat(settings.MaxFineAmount)
+		}
+	}
+	return s.maxFineAmount
+}
+
+// getEffectiveGracePeriod returns the grace period from DB settings, falling back to the config value
+func (s *TransactionService) getEffectiveGracePeriod(ctx context.Context) int {
+	if s.fineRateProvider != nil {
+		settings, err := s.fineRateProvider.GetFineSettings(ctx)
+		if err == nil {
+			return settings.FineGracePeriodDays
+		}
+	}
+	return s.fineGracePeriodDays
 }
 
 // invalidateStudentCache invalidates the student profile cache after a transaction
@@ -559,10 +605,10 @@ func (s *TransactionService) ReturnBookWithCondition(ctx context.Context, transa
 		return nil, err
 	}
 
-	// Calculate fine if overdue
+	// Calculate fine if overdue (uses dynamic rate from settings)
 	fine := decimal.Zero
 	if transactionRow.DueDate.Valid {
-		fine = s.calculateFine(transactionRow.DueDate.Time, time.Now())
+		fine = s.calculateFine(ctx, transactionRow.DueDate.Time, time.Now())
 	}
 
 	// Convert decimal to pgtype.Numeric with proper precision
@@ -941,9 +987,11 @@ func (s *TransactionService) GetOverdueTransactions(ctx context.Context, page, l
 		totalPages++
 	}
 
+	fineRate, _ := s.getEffectiveFinePerDay(ctx).Float64()
+
 	result := make([]models.OverdueTransactionResponse, len(transactions))
 	for i, tx := range transactions {
-		result[i] = s.convertToOverdueResponse(tx)
+		result[i] = s.convertToOverdueResponse(tx, fineRate)
 	}
 
 	return &OverdueTransactionListResponse{
@@ -958,7 +1006,7 @@ func (s *TransactionService) GetOverdueTransactions(ctx context.Context, page, l
 }
 
 // convertToOverdueResponse converts a database row to an overdue transaction response
-func (s *TransactionService) convertToOverdueResponse(tx queries.ListOverdueTransactionsRow) models.OverdueTransactionResponse {
+func (s *TransactionService) convertToOverdueResponse(tx queries.ListOverdueTransactionsRow, fineRate float64) models.OverdueTransactionResponse {
 	fineAmount := 0.0
 	if tx.FineAmount.Valid && tx.FineAmount.Int != nil {
 		d := decimal.NewFromBigInt(tx.FineAmount.Int, tx.FineAmount.Exp)
@@ -970,8 +1018,8 @@ func (s *TransactionService) convertToOverdueResponse(tx queries.ListOverdueTran
 		daysOverdue = 0
 	}
 
-	// Calculate estimated fine based on days overdue and configured rate
-	calculatedFine := float64(daysOverdue) * 50.0 // Default rate; fine_amount from DB used if available
+	// Calculate estimated fine based on days overdue and dynamic rate from settings
+	calculatedFine := float64(daysOverdue) * fineRate
 	if fineAmount > 0 {
 		calculatedFine = fineAmount
 	}
@@ -1287,8 +1335,8 @@ func (s *TransactionService) GetTransactionHistory(ctx context.Context, studentI
 	return transactions, nil
 }
 
-// calculateFine calculates the fine amount based on overdue days
-func (s *TransactionService) calculateFine(dueDate, returnDate time.Time) decimal.Decimal {
+// calculateFine calculates the fine amount based on overdue days using dynamic settings
+func (s *TransactionService) calculateFine(ctx context.Context, dueDate, returnDate time.Time) decimal.Decimal {
 	if returnDate.Before(dueDate) || returnDate.Equal(dueDate) {
 		return decimal.Zero
 	}
@@ -1303,19 +1351,22 @@ func (s *TransactionService) calculateFine(dueDate, returnDate time.Time) decima
 		return decimal.Zero
 	}
 
-	// Subtract grace period
-	if s.fineGracePeriodDays > 0 {
-		daysDiff -= s.fineGracePeriodDays
+	// Subtract grace period (from settings)
+	gracePeriod := s.getEffectiveGracePeriod(ctx)
+	if gracePeriod > 0 {
+		daysDiff -= gracePeriod
 		if daysDiff <= 0 {
 			return decimal.Zero
 		}
 	}
 
-	fine := s.finePerDay.Mul(decimal.NewFromInt(int64(daysDiff)))
+	finePerDay := s.getEffectiveFinePerDay(ctx)
+	fine := finePerDay.Mul(decimal.NewFromInt(int64(daysDiff)))
 
 	// Cap at max fine amount if configured
-	if s.maxFineAmount.IsPositive() && fine.GreaterThan(s.maxFineAmount) {
-		fine = s.maxFineAmount
+	maxFine := s.getEffectiveMaxFine(ctx)
+	if maxFine.IsPositive() && fine.GreaterThan(maxFine) {
+		fine = maxFine
 	}
 
 	return fine

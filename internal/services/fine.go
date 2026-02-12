@@ -103,6 +103,7 @@ type FineService struct {
 	maxFineAmount       float64
 	fineGracePeriodDays int
 	cacheService        CacheInvalidator
+	fineRateProvider    FineRateProvider
 }
 
 // NewFineService creates a new fine service
@@ -132,6 +133,23 @@ func (s *FineService) WithMaxFineAmount(maxFine float64) *FineService {
 func (s *FineService) WithFineGracePeriodDays(days int) *FineService {
 	s.fineGracePeriodDays = days
 	return s
+}
+
+// WithFineRateProvider sets the provider for dynamic fine rates from DB settings
+func (s *FineService) WithFineRateProvider(provider FineRateProvider) *FineService {
+	s.fineRateProvider = provider
+	return s
+}
+
+// getEffectiveFinePerDay returns the fine rate from DB settings, falling back to the config value
+func (s *FineService) getEffectiveFinePerDay(ctx context.Context) float64 {
+	if s.fineRateProvider != nil {
+		rate, err := s.fineRateProvider.GetCachedFinePerDay(ctx)
+		if err == nil && rate > 0 {
+			return rate
+		}
+	}
+	return s.finePerDay
 }
 
 // ListFines retrieves a paginated list of fines
@@ -320,8 +338,8 @@ func (s *FineService) CalculateFinesForOverdueBooks(ctx context.Context) (int, e
 			continue
 		}
 
-		// Calculate expected fine
-		expectedFine := float64(effectiveDays) * s.finePerDay
+		// Calculate expected fine using dynamic rate from settings
+		expectedFine := float64(effectiveDays) * s.getEffectiveFinePerDay(ctx)
 
 		// Cap at max fine amount
 		if s.maxFineAmount > 0 && expectedFine > s.maxFineAmount {

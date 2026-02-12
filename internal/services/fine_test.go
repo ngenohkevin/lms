@@ -520,6 +520,83 @@ func TestFineService_GetStudentsWithHighFines(t *testing.T) {
 	})
 }
 
+// MockFineRateProviderForFine implements FineRateProvider for fine service tests
+type MockFineRateProviderForFine struct {
+	mock.Mock
+}
+
+func (m *MockFineRateProviderForFine) GetCachedFinePerDay(ctx context.Context) (float64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(float64), args.Error(1)
+}
+
+func (m *MockFineRateProviderForFine) GetFineSettings(ctx context.Context) (*FineSettings, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*FineSettings), args.Error(1)
+}
+
+func TestFineService_CalculateFines_UsesDynamicRate(t *testing.T) {
+	ctx := context.Background()
+	mockQuerier := new(MockFineQuerier)
+	mockProvider := new(MockFineRateProviderForFine)
+
+	service := NewFineService(mockQuerier, 0.50). // config fallback
+		WithFineRateProvider(mockProvider)
+
+	// Provider returns 50 KSH/day
+	mockProvider.On("GetCachedFinePerDay", mock.Anything).Return(50.0, nil)
+
+	rows := []queries.GetOverdueTransactionsForFineCalculationRow{
+		{
+			ID:          1,
+			DaysOverdue: int32(5),
+			FineAmount:  createFineNumeric(0),
+		},
+	}
+
+	mockQuerier.On("GetOverdueTransactionsForFineCalculation", ctx).Return(rows, nil).Once()
+	mockQuerier.On("UpdateFineAmount", ctx, mock.AnythingOfType("queries.UpdateFineAmountParams")).Return(nil).Once()
+
+	count, err := service.CalculateFinesForOverdueBooks(ctx)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 1, count)
+	mockQuerier.AssertExpectations(t)
+	mockProvider.AssertExpectations(t)
+}
+
+func TestFineService_CalculateFines_FallsBackOnError(t *testing.T) {
+	ctx := context.Background()
+	mockQuerier := new(MockFineQuerier)
+	mockProvider := new(MockFineRateProviderForFine)
+
+	service := NewFineService(mockQuerier, 0.50).
+		WithFineRateProvider(mockProvider)
+
+	// Provider returns error - should fall back to 0.50
+	mockProvider.On("GetCachedFinePerDay", mock.Anything).Return(0.0, assert.AnError)
+
+	rows := []queries.GetOverdueTransactionsForFineCalculationRow{
+		{
+			ID:          1,
+			DaysOverdue: int32(5),
+			FineAmount:  createFineNumeric(0),
+		},
+	}
+
+	mockQuerier.On("GetOverdueTransactionsForFineCalculation", ctx).Return(rows, nil).Once()
+	mockQuerier.On("UpdateFineAmount", ctx, mock.AnythingOfType("queries.UpdateFineAmountParams")).Return(nil).Once()
+
+	count, err := service.CalculateFinesForOverdueBooks(ctx)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 1, count) // Should still calculate with fallback rate
+	mockQuerier.AssertExpectations(t)
+}
+
 // Helper function to create pgtype.Numeric
 func createFineNumeric(val float64) pgtype.Numeric {
 	var n pgtype.Numeric

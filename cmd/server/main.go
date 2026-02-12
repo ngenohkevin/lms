@@ -120,6 +120,7 @@ func main() {
 
 	studentService := services.NewStudentService(db.Queries, authService, cacheService)
 	bookService := services.NewBookService(db.Queries, cacheService)
+	settingsService := services.NewSettingsService(db.Queries)
 	transactionService := services.NewTransactionService(db.Queries).
 		WithPool(db.Pool).
 		WithCacheService(cacheService).
@@ -128,7 +129,8 @@ func main() {
 		WithFinePerDay(decimal.NewFromFloat(cfg.Borrowing.FinePerDay)).
 		WithMaxRenewals(cfg.Borrowing.MaxRenewals).
 		WithMaxFineAmount(decimal.NewFromFloat(cfg.Borrowing.MaxFineAmount)).
-		WithFineGracePeriodDays(cfg.Borrowing.FineGracePeriodDays)
+		WithFineGracePeriodDays(cfg.Borrowing.FineGracePeriodDays).
+		WithFineRateProvider(settingsService)
 	reservationService := services.NewReservationService(db.Queries).
 		WithDefaultReservationDays(cfg.Borrowing.ReservationExpiryDays)
 	reportService := services.NewReportService(db.Queries, cacheService)
@@ -139,8 +141,8 @@ func main() {
 	fineService := services.NewFineService(db.Queries, cfg.Borrowing.FinePerDay).
 		WithCacheService(cacheService).
 		WithMaxFineAmount(cfg.Borrowing.MaxFineAmount).
-		WithFineGracePeriodDays(cfg.Borrowing.FineGracePeriodDays)
-	settingsService := services.NewSettingsService(db.Queries)
+		WithFineGracePeriodDays(cfg.Borrowing.FineGracePeriodDays).
+		WithFineRateProvider(settingsService)
 	inviteService := services.NewInviteService(db.Pool, logger)
 	setupService := services.NewSetupService(db.Pool, logger)
 	bookCopyService := services.NewBookCopyService(db.Queries, db.Queries, cacheService).WithBookQuerier(db.Queries)
