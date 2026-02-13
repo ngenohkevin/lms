@@ -420,7 +420,7 @@ func (s *AuthService) RefreshTokens(refreshTokenString string) (string, string, 
 	}
 
 	// Use the actual role from the database, not the one from the token
-	return s.GenerateTokens(user, claims.UserType)
+	return s.GenerateTokens(user, string(user.Role))
 }
 
 // BlacklistToken adds a token to the blacklist

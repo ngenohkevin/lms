@@ -71,21 +71,21 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		// Verify password
 		isValid, err := h.authService.VerifyPassword(user.PasswordHash, req.Password)
 		if err != nil {
-			middleware.AuditAuth(c, h.auditLogger, "LOGIN_FAILED", nil, "librarian", map[string]interface{}{"username": req.Username, "reason": "password_verification_error"})
+			middleware.AuditAuth(c, h.auditLogger, "LOGIN_FAILED", nil, string(user.Role), map[string]interface{}{"username": req.Username, "reason": "password_verification_error"})
 			c.JSON(http.StatusUnauthorized, invalidCredentialsResponse)
 			return
 		}
 
 		if !isValid {
 			userID := int32(user.ID)
-			middleware.AuditAuth(c, h.auditLogger, "LOGIN_FAILED", &userID, "librarian", map[string]interface{}{"username": req.Username, "reason": "invalid_password"})
+			middleware.AuditAuth(c, h.auditLogger, "LOGIN_FAILED", &userID, string(user.Role), map[string]interface{}{"username": req.Username, "reason": "invalid_password"})
 			c.JSON(http.StatusUnauthorized, invalidCredentialsResponse)
 			return
 		}
 
 		if !user.IsActive {
 			userID := int32(user.ID)
-			middleware.AuditAuth(c, h.auditLogger, "LOGIN_FAILED", &userID, "librarian", map[string]interface{}{"username": req.Username, "reason": "account_inactive"})
+			middleware.AuditAuth(c, h.auditLogger, "LOGIN_FAILED", &userID, string(user.Role), map[string]interface{}{"username": req.Username, "reason": "account_inactive"})
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"success": false,
 				"error": gin.H{
@@ -97,7 +97,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		}
 
 		// Generate tokens for librarian
-		accessToken, refreshToken, err := h.authService.GenerateTokens(user, "librarian")
+		accessToken, refreshToken, err := h.authService.GenerateTokens(user, string(user.Role))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"success": false,
@@ -113,7 +113,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		_ = h.userService.UpdateLastLogin(user.ID)
 
 		userID := int32(user.ID)
-		middleware.AuditAuth(c, h.auditLogger, "LOGIN", &userID, "librarian", map[string]interface{}{"username": req.Username, "role": user.Role})
+		middleware.AuditAuth(c, h.auditLogger, "LOGIN", &userID, string(user.Role), map[string]interface{}{"username": req.Username, "role": user.Role})
 
 		response := models.LoginResponse{
 			User:         user,
