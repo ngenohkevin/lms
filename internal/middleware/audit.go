@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/netip"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -165,18 +166,23 @@ func getUserTypeFromContext(c *gin.Context) string {
 }
 
 func getClientIP(c *gin.Context) string {
-	// Check various headers for the real client IP
-	clientIP := c.GetHeader("X-Forwarded-For")
-	if clientIP == "" {
-		clientIP = c.GetHeader("X-Real-IP")
+	// Check Cloudflare header first (most reliable when behind Cloudflare)
+	if ip := c.GetHeader("CF-Connecting-IP"); ip != "" {
+		return ip
 	}
-	if clientIP == "" {
-		clientIP = c.GetHeader("X-Forwarded-For")
+	// Then check standard proxy headers
+	if ip := c.GetHeader("X-Real-IP"); ip != "" {
+		return ip
 	}
-	if clientIP == "" {
-		clientIP = c.ClientIP()
+	if forwarded := c.GetHeader("X-Forwarded-For"); forwarded != "" {
+		// X-Forwarded-For can contain multiple IPs: client, proxy1, proxy2
+		// The first one is the real client IP
+		if idx := strings.Index(forwarded, ","); idx != -1 {
+			return strings.TrimSpace(forwarded[:idx])
+		}
+		return forwarded
 	}
-	return clientIP
+	return c.ClientIP()
 }
 
 // Helper function to get audit logger from context
