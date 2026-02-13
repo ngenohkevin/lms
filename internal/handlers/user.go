@@ -442,7 +442,6 @@ func (h *UserHandler) ResetUserPassword(c *gin.Context) {
 // GET /api/v1/users/roles
 func (h *UserHandler) GetRoles(c *gin.Context) {
 	roles := []gin.H{
-		{"value": string(models.RoleSuperAdmin), "label": "Super Admin", "description": "Supreme authority over all users and settings"},
 		{"value": string(models.RoleAdmin), "label": "Admin", "description": "Full system access"},
 		{"value": string(models.RoleLibrarian), "label": "Librarian", "description": "Library management access"},
 		{"value": string(models.RoleStaff), "label": "Staff", "description": "Basic staff access"},

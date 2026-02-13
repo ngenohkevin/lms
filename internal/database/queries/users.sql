@@ -44,6 +44,7 @@ WHERE deleted_at IS NULL;
 -- name: SearchUsers :many
 SELECT * FROM users
 WHERE deleted_at IS NULL
+  AND role != 'super_admin'
   AND ($1::text IS NULL OR $1 = '' OR
        username ILIKE '%' || $1 || '%' OR
        email ILIKE '%' || $1 || '%')
@@ -55,6 +56,7 @@ LIMIT $4 OFFSET $5;
 -- name: CountSearchUsers :one
 SELECT COUNT(*) FROM users
 WHERE deleted_at IS NULL
+  AND role != 'super_admin'
   AND ($1::text IS NULL OR $1 = '' OR
        username ILIKE '%' || $1 || '%' OR
        email ILIKE '%' || $1 || '%')

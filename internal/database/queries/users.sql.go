@@ -91,6 +91,7 @@ func (q *Queries) CountPendingInvites(ctx context.Context) (int64, error) {
 const countSearchUsers = `-- name: CountSearchUsers :one
 SELECT COUNT(*) FROM users
 WHERE deleted_at IS NULL
+  AND role != 'super_admin'
   AND ($1::text IS NULL OR $1 = '' OR
        username ILIKE '%' || $1 || '%' OR
        email ILIKE '%' || $1 || '%')
@@ -572,6 +573,7 @@ func (q *Queries) MarkInviteAccepted(ctx context.Context, arg MarkInviteAccepted
 const searchUsers = `-- name: SearchUsers :many
 SELECT id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at, invited_by FROM users
 WHERE deleted_at IS NULL
+  AND role != 'super_admin'
   AND ($1::text IS NULL OR $1 = '' OR
        username ILIKE '%' || $1 || '%' OR
        email ILIKE '%' || $1 || '%')
