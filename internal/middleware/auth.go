@@ -111,20 +111,13 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 		if actualRole == "" && m.db == nil {
 			actualRole = claims.Role
 		} else if claims.UserType == "librarian" && string(actualRole) != string(claims.Role) {
-			// Check for role tampering only when we have a database
-			m.logger.Warn("Potential role tampering detected",
+			// Role mismatch between JWT and DB - log warning but allow request
+			// The verified DB role (actualRole) is used for all authorization decisions,
+			// so this is safe even if the JWT has a stale role (e.g., after role promotion)
+			m.logger.Warn("Role mismatch between token and database",
 				"user_id", claims.UserID,
 				"claimed_role", claims.Role,
 				"actual_role", actualRole)
-			c.JSON(http.StatusForbidden, gin.H{
-				"success": false,
-				"error": gin.H{
-					"code":    "ROLE_MISMATCH",
-					"message": "Token contains invalid role claims",
-				},
-			})
-			c.Abort()
-			return
 		}
 
 		// Set user information in context with VERIFIED role (or claims role in test mode)
