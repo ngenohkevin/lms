@@ -276,6 +276,9 @@ type TransactionResponse struct {
 	RenewalCount  int32      `json:"renewal_count"`
 	LastRenewedAt *time.Time `json:"last_renewed_at,omitempty"`
 	LastRenewedBy *int32     `json:"last_renewed_by,omitempty"`
+	// Human-readable fields for audit logging
+	StudentName string `json:"student_name,omitempty"`
+	BookTitle   string `json:"book_title,omitempty"`
 }
 
 // BorrowBookWithCopyRequest represents a book borrowing request with optional copy specification
@@ -555,6 +558,10 @@ func (s *TransactionService) BorrowBookWithCopy(ctx context.Context, req BorrowB
 	// Build response
 	response := s.convertToTransactionResponse(transaction)
 
+	// Add human-readable names for audit logging
+	response.BookTitle = book.Title
+	response.StudentName = student.FirstName + " " + student.LastName
+
 	// Add copy info if using copy-level tracking
 	if selectedCopy != nil {
 		response.CopyID = &selectedCopy.ID
@@ -725,6 +732,8 @@ func (s *TransactionService) ReturnBookWithCondition(ctx context.Context, transa
 			response.CopyCondition = &transactionRow.CopyCondition.String
 		}
 	}
+
+	s.enrichResponseWithNames(ctx, response)
 
 	return response, nil
 }
@@ -911,7 +920,9 @@ func (s *TransactionService) RenewBook(ctx context.Context, transactionID, libra
 	// Invalidate student cache so borrowing stats are refreshed
 	s.invalidateStudentCache(ctx, transactionRow.StudentID)
 
-	return s.convertToTransactionResponse(transaction), nil
+	response := s.convertToTransactionResponse(transaction)
+	s.enrichResponseWithNames(ctx, response)
+	return response, nil
 }
 
 // CancelRenewal cancels the last renewal by decrementing the renewal count and setting a new due date
@@ -956,7 +967,9 @@ func (s *TransactionService) CancelRenewal(ctx context.Context, transactionID in
 	// Invalidate student cache so borrowing stats are refreshed
 	s.invalidateStudentCache(ctx, transactionRow.StudentID)
 
-	return s.convertToTransactionResponse(transaction), nil
+	response := s.convertToTransactionResponse(transaction)
+	s.enrichResponseWithNames(ctx, response)
+	return response, nil
 }
 
 // GetOverdueTransactions returns paginated overdue transactions with nested book/student objects
@@ -1157,7 +1170,9 @@ func (s *TransactionService) CancelTransaction(ctx context.Context, transactionI
 	// Invalidate student cache so borrowing stats are refreshed
 	s.invalidateStudentCache(ctx, tx.StudentID)
 
-	return s.convertToTransactionResponse(cancelledTx), nil
+	response := s.convertToTransactionResponse(cancelledTx)
+	s.enrichResponseWithNames(ctx, response)
+	return response, nil
 }
 
 // MarkAsLost marks a transaction as lost - the book was not returned and is considered lost
@@ -1221,7 +1236,9 @@ func (s *TransactionService) MarkAsLost(ctx context.Context, transactionID int32
 	// Invalidate student cache so borrowing stats are refreshed
 	s.invalidateStudentCache(ctx, tx.StudentID)
 
-	return s.convertToTransactionResponse(lostTx), nil
+	response := s.convertToTransactionResponse(lostTx)
+	s.enrichResponseWithNames(ctx, response)
+	return response, nil
 }
 
 // MarkAsFound marks a lost transaction as found - the book was recovered
@@ -1272,7 +1289,9 @@ func (s *TransactionService) MarkAsFound(ctx context.Context, transactionID int3
 	// Invalidate student cache so borrowing stats are refreshed
 	s.invalidateStudentCache(ctx, tx.StudentID)
 
-	return s.convertToTransactionResponse(foundTx), nil
+	response := s.convertToTransactionResponse(foundTx)
+	s.enrichResponseWithNames(ctx, response)
+	return response, nil
 }
 
 // DeleteTransaction deletes a transaction by ID
@@ -1693,6 +1712,21 @@ func (s *TransactionService) convertToTransactionResponse(tx queries.Transaction
 	}
 
 	return response
+}
+
+// enrichResponseWithNames populates human-readable StudentName and BookTitle
+// by looking up the student and book from the DB. Failures are silently ignored
+// since these fields are used for audit display, not critical logic.
+func (s *TransactionService) enrichResponseWithNames(ctx context.Context, response *TransactionResponse) {
+	if response == nil {
+		return
+	}
+	if book, err := s.queries.GetBookByID(ctx, response.BookID); err == nil {
+		response.BookTitle = book.Title
+	}
+	if student, err := s.queries.GetStudentByID(ctx, response.StudentID); err == nil {
+		response.StudentName = student.FirstName + " " + student.LastName
+	}
 }
 
 // Phase 6.7: Enhanced Renewal System Functions

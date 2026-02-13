@@ -87,7 +87,7 @@ func (h *ReservationHandler) ReserveBook(c *gin.Context) {
 	}
 
 	response := convertToReservationResponse(reservation)
-	middleware.Audit(c, "reservations", reservation.ID, "CREATE", nil, map[string]interface{}{"student_id": req.StudentID, "book_id": req.BookID})
+	middleware.Audit(c, "reservations", reservation.ID, "CREATE", nil, map[string]interface{}{"student": reservation.StudentName, "book": reservation.BookTitle, "student_id": req.StudentID, "book_id": req.BookID})
 	c.JSON(http.StatusCreated, SuccessResponse{
 		Success: true,
 		Data:    response,
@@ -182,7 +182,7 @@ func (h *ReservationHandler) CancelReservation(c *gin.Context) {
 	}
 
 	response := convertToReservationResponse(reservation)
-	middleware.Audit(c, "reservations", reservation.ID, "STATUS_CHANGE", nil, map[string]interface{}{"status": "cancelled"})
+	middleware.Audit(c, "reservations", reservation.ID, "STATUS_CHANGE", nil, map[string]interface{}{"status": "cancelled", "student": reservation.StudentName, "book": reservation.BookTitle})
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    response,
@@ -216,6 +216,9 @@ func (h *ReservationHandler) DeleteReservation(c *gin.Context) {
 		return
 	}
 
+	// Fetch reservation info before deleting for audit trail
+	reservationInfo, _ := h.reservationService.GetReservationByID(c.Request.Context(), int32(reservationID))
+
 	err = h.reservationService.DeleteReservation(c.Request.Context(), int32(reservationID))
 	if err != nil {
 		statusCode, errorCode := h.getErrorCodeAndStatus(err)
@@ -229,7 +232,12 @@ func (h *ReservationHandler) DeleteReservation(c *gin.Context) {
 		return
 	}
 
-	middleware.Audit(c, "reservations", int32(reservationID), "DELETE", nil, nil)
+	auditData := map[string]interface{}{}
+	if reservationInfo != nil {
+		auditData["student"] = reservationInfo.StudentName
+		auditData["book"] = reservationInfo.BookTitle
+	}
+	middleware.Audit(c, "reservations", int32(reservationID), "DELETE", nil, auditData)
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    nil,
@@ -277,7 +285,7 @@ func (h *ReservationHandler) FulfillReservation(c *gin.Context) {
 	}
 
 	response := convertToReservationResponse(reservation)
-	middleware.Audit(c, "reservations", reservation.ID, "STATUS_CHANGE", nil, map[string]interface{}{"status": "fulfilled"})
+	middleware.Audit(c, "reservations", reservation.ID, "STATUS_CHANGE", nil, map[string]interface{}{"status": "fulfilled", "student": reservation.StudentName, "book": reservation.BookTitle})
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    response,
@@ -610,7 +618,7 @@ func (h *ReservationHandler) MarkReservationReady(c *gin.Context) {
 	}
 
 	response := convertToReservationResponse(reservation)
-	middleware.Audit(c, "reservations", reservation.ID, "STATUS_CHANGE", nil, map[string]interface{}{"status": "ready"})
+	middleware.Audit(c, "reservations", reservation.ID, "STATUS_CHANGE", nil, map[string]interface{}{"status": "ready", "student": reservation.StudentName, "book": reservation.BookTitle})
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    response,

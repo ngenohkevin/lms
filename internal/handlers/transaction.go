@@ -109,7 +109,7 @@ func (h *TransactionHandler) BorrowBook(c *gin.Context) {
 		return
 	}
 
-	middleware.Audit(c, "transactions", transaction.ID, "CREATE", nil, map[string]interface{}{"type": "borrow", "student_id": req.StudentID, "book_id": req.BookID})
+	middleware.Audit(c, "transactions", transaction.ID, "CREATE", nil, map[string]interface{}{"type": "borrow", "book": transaction.BookTitle, "student": transaction.StudentName, "student_id": req.StudentID, "book_id": req.BookID})
 
 	response := convertToTransactionResponseWithCopy(transaction)
 	c.JSON(http.StatusCreated, SuccessResponse{
@@ -175,7 +175,7 @@ func (h *TransactionHandler) ReturnBook(c *gin.Context) {
 		return
 	}
 
-	middleware.Audit(c, "transactions", int32(transactionID), "UPDATE", nil, map[string]interface{}{"type": "return"})
+	middleware.Audit(c, "transactions", int32(transactionID), "UPDATE", nil, map[string]interface{}{"type": "return", "book": transaction.BookTitle, "student": transaction.StudentName})
 
 	response := convertToTransactionResponse(transaction)
 	c.JSON(http.StatusOK, SuccessResponse{
@@ -248,7 +248,7 @@ func (h *TransactionHandler) RenewBook(c *gin.Context) {
 		return
 	}
 
-	middleware.Audit(c, "transactions", int32(transactionID), "UPDATE", nil, map[string]interface{}{"type": "renew"})
+	middleware.Audit(c, "transactions", int32(transactionID), "UPDATE", nil, map[string]interface{}{"type": "renew", "book": transaction.BookTitle, "student": transaction.StudentName})
 
 	response := convertToTransactionResponse(transaction)
 	c.JSON(http.StatusOK, SuccessResponse{
@@ -338,7 +338,7 @@ func (h *TransactionHandler) CancelRenewal(c *gin.Context) {
 		return
 	}
 
-	middleware.Audit(c, "transactions", int32(transactionID), "UPDATE", nil, map[string]interface{}{"type": "cancel_renewal"})
+	middleware.Audit(c, "transactions", int32(transactionID), "UPDATE", nil, map[string]interface{}{"type": "cancel_renewal", "book": transaction.BookTitle, "student": transaction.StudentName})
 
 	response := convertToTransactionResponse(transaction)
 	c.JSON(http.StatusOK, SuccessResponse{
@@ -463,7 +463,7 @@ func (h *TransactionHandler) CancelTransaction(c *gin.Context) {
 		return
 	}
 
-	middleware.Audit(c, "transactions", int32(transactionID), "UPDATE", nil, map[string]interface{}{"type": "cancel", "reason": req.Reason})
+	middleware.Audit(c, "transactions", int32(transactionID), "UPDATE", nil, map[string]interface{}{"type": "cancel", "reason": req.Reason, "book": transaction.BookTitle, "student": transaction.StudentName})
 
 	response := convertToTransactionResponse(transaction)
 	c.JSON(http.StatusOK, SuccessResponse{
@@ -544,7 +544,7 @@ func (h *TransactionHandler) MarkAsLost(c *gin.Context) {
 		return
 	}
 
-	middleware.Audit(c, "transactions", int32(transactionID), "STATUS_CHANGE", nil, map[string]interface{}{"status": "lost", "reason": req.Reason})
+	middleware.Audit(c, "transactions", int32(transactionID), "STATUS_CHANGE", nil, map[string]interface{}{"status": "lost", "reason": req.Reason, "book": transaction.BookTitle, "student": transaction.StudentName})
 
 	response := convertToTransactionResponse(transaction)
 	c.JSON(http.StatusOK, SuccessResponse{
@@ -612,7 +612,7 @@ func (h *TransactionHandler) MarkAsFound(c *gin.Context) {
 		return
 	}
 
-	middleware.Audit(c, "transactions", int32(transactionID), "STATUS_CHANGE", map[string]interface{}{"status": "lost"}, map[string]interface{}{"status": "found", "reason": req.Reason})
+	middleware.Audit(c, "transactions", int32(transactionID), "STATUS_CHANGE", map[string]interface{}{"status": "lost"}, map[string]interface{}{"status": "found", "reason": req.Reason, "book": transaction.BookTitle, "student": transaction.StudentName})
 
 	response := convertToTransactionResponse(transaction)
 	c.JSON(http.StatusOK, SuccessResponse{
@@ -1206,7 +1206,7 @@ func (h *TransactionHandler) BorrowByBarcode(c *gin.Context) {
 		return
 	}
 
-	middleware.Audit(c, "transactions", transaction.ID, "CREATE", nil, map[string]interface{}{"type": "borrow_by_barcode", "barcode": req.Barcode, "student_id": req.StudentID})
+	middleware.Audit(c, "transactions", transaction.ID, "CREATE", nil, map[string]interface{}{"type": "borrow_by_barcode", "barcode": req.Barcode, "book": transaction.BookTitle, "student": transaction.StudentName})
 
 	response := convertToTransactionResponseWithCopy(transaction)
 	c.JSON(http.StatusCreated, SuccessResponse{
@@ -1266,7 +1266,7 @@ func (h *TransactionHandler) ReturnByBarcode(c *gin.Context) {
 		return
 	}
 
-	middleware.Audit(c, "transactions", transaction.ID, "UPDATE", nil, map[string]interface{}{"type": "return_by_barcode", "barcode": req.Barcode})
+	middleware.Audit(c, "transactions", transaction.ID, "UPDATE", nil, map[string]interface{}{"type": "return_by_barcode", "barcode": req.Barcode, "book": transaction.BookTitle, "student": transaction.StudentName})
 
 	response := convertToTransactionResponseWithCopy(transaction)
 	c.JSON(http.StatusOK, SuccessResponse{

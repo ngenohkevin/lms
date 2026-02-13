@@ -440,7 +440,7 @@ func (h *BookCopyHandler) DeleteBookCopy(c *gin.Context) {
 		return
 	}
 
-	middleware.Audit(c, "book_copies", int32(copyID), "DELETE", nil, nil)
+	middleware.Audit(c, "book_copies", int32(copyID), "DELETE", nil, map[string]interface{}{"barcode": existing.Barcode, "book_id": existing.BookID})
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Message: "Book copy deleted successfully",

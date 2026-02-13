@@ -244,6 +244,9 @@ func (h *StudentHandler) DeleteStudent(c *gin.Context) {
 		return
 	}
 
+	// Fetch student info before deleting for audit trail
+	studentInfo, _ := h.studentService.GetStudentByID(c.Request.Context(), int32(id))
+
 	deletedBy := int32(middleware.GetUserID(c))
 	err = h.studentService.DeleteStudent(c.Request.Context(), int32(id), deletedBy)
 	if err != nil {
@@ -269,7 +272,12 @@ func (h *StudentHandler) DeleteStudent(c *gin.Context) {
 		return
 	}
 
-	middleware.Audit(c, "students", int32(id), "DELETE", nil, nil)
+	auditData := map[string]interface{}{}
+	if studentInfo != nil {
+		auditData["name"] = studentInfo.FirstName + " " + studentInfo.LastName
+		auditData["student_id"] = studentInfo.StudentID
+	}
+	middleware.Audit(c, "students", int32(id), "DELETE", nil, auditData)
 
 	c.JSON(http.StatusNoContent, nil)
 }

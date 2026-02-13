@@ -331,6 +331,9 @@ func (h *BookHandler) DeleteBook(c *gin.Context) {
 		return
 	}
 
+	// Fetch book info before deleting for audit trail
+	bookInfo, _ := h.bookService.GetBookByID(c.Request.Context(), int32(id))
+
 	err = h.bookService.DeleteBook(c.Request.Context(), int32(id))
 	if err != nil {
 		if isNotFoundError(err) {
@@ -363,7 +366,12 @@ func (h *BookHandler) DeleteBook(c *gin.Context) {
 		return
 	}
 
-	middleware.Audit(c, "books", int32(id), "DELETE", nil, nil)
+	auditData := map[string]interface{}{}
+	if bookInfo != nil {
+		auditData["title"] = bookInfo.Title
+		auditData["isbn"] = bookInfo.ISBN
+	}
+	middleware.Audit(c, "books", int32(id), "DELETE", nil, auditData)
 
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,

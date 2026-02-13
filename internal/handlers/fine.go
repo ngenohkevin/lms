@@ -251,7 +251,7 @@ func (h *FineHandler) PayFine(c *gin.Context) {
 		return
 	}
 
-	middleware.Audit(c, "fines", int32(id), "UPDATE", nil, map[string]interface{}{"action": "pay"})
+	middleware.Audit(c, "fines", int32(id), "UPDATE", nil, map[string]interface{}{"action": "pay", "student": fine.StudentName, "book": fine.BookTitle, "amount": fine.Amount})
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Message: "Fine paid successfully",
@@ -332,7 +332,7 @@ func (h *FineHandler) WaiveFine(c *gin.Context) {
 		return
 	}
 
-	middleware.Audit(c, "fines", int32(id), "UPDATE", nil, map[string]interface{}{"action": "waive", "reason": req.Reason, "waived_by": userID})
+	middleware.Audit(c, "fines", int32(id), "UPDATE", nil, map[string]interface{}{"action": "waive", "reason": req.Reason, "waived_by": userID, "student": fine.StudentName, "book": fine.BookTitle, "amount": fine.Amount})
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Message: "Fine waived successfully",
