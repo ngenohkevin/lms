@@ -305,13 +305,26 @@ func (h *PermissionHandler) CreateUserOverride(c *gin.Context) {
 	}
 
 	// Check if user exists
-	_, err = h.userService.GetUserByID(id)
+	targetUser, err := h.userService.GetUserByID(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"success": false,
 			"error": gin.H{
 				"code":    "USER_NOT_FOUND",
 				"message": "User not found",
+			},
+		})
+		return
+	}
+
+	// Prevent non-super_admins from modifying super_admin permissions
+	currentUserRole := middleware.GetUserRole(c)
+	if targetUser.Role == models.RoleSuperAdmin && currentUserRole != models.RoleSuperAdmin {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "CANNOT_MODIFY_SUPER_ADMIN",
+				"message": "Only super admins can modify super admin permissions",
 			},
 		})
 		return
@@ -392,6 +405,30 @@ func (h *PermissionHandler) DeleteUserOverride(c *gin.Context) {
 			"error": gin.H{
 				"code":    "INVALID_ID",
 				"message": "Invalid user ID",
+			},
+		})
+		return
+	}
+
+	// Prevent non-super_admins from modifying super_admin permissions
+	targetUser, err := h.userService.GetUserByID(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "USER_NOT_FOUND",
+				"message": "User not found",
+			},
+		})
+		return
+	}
+	currentUserRole := middleware.GetUserRole(c)
+	if targetUser.Role == models.RoleSuperAdmin && currentUserRole != models.RoleSuperAdmin {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "CANNOT_MODIFY_SUPER_ADMIN",
+				"message": "Only super admins can modify super admin permissions",
 			},
 		})
 		return
