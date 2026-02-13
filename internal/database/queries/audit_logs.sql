@@ -47,3 +47,25 @@ WHERE table_name = $1;
 -- name: DeleteOldAuditLogs :exec
 DELETE FROM audit_logs
 WHERE created_at < $1;
+
+-- name: SearchAuditLogs :many
+SELECT * FROM audit_logs
+WHERE
+  (sqlc.narg('table_name')::text IS NULL OR table_name = sqlc.narg('table_name'))
+  AND (sqlc.narg('action')::text IS NULL OR action = sqlc.narg('action'))
+  AND (sqlc.narg('user_id')::int IS NULL OR user_id = sqlc.narg('user_id'))
+  AND (sqlc.narg('user_type')::text IS NULL OR user_type = sqlc.narg('user_type'))
+  AND (sqlc.narg('start_date')::timestamp IS NULL OR created_at >= sqlc.narg('start_date'))
+  AND (sqlc.narg('end_date')::timestamp IS NULL OR created_at <= sqlc.narg('end_date'))
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2;
+
+-- name: CountSearchAuditLogs :one
+SELECT COUNT(*) FROM audit_logs
+WHERE
+  (sqlc.narg('table_name')::text IS NULL OR table_name = sqlc.narg('table_name'))
+  AND (sqlc.narg('action')::text IS NULL OR action = sqlc.narg('action'))
+  AND (sqlc.narg('user_id')::int IS NULL OR user_id = sqlc.narg('user_id'))
+  AND (sqlc.narg('user_type')::text IS NULL OR user_type = sqlc.narg('user_type'))
+  AND (sqlc.narg('start_date')::timestamp IS NULL OR created_at >= sqlc.narg('start_date'))
+  AND (sqlc.narg('end_date')::timestamp IS NULL OR created_at <= sqlc.narg('end_date'));

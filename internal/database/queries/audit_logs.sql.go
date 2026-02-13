@@ -35,6 +35,40 @@ func (q *Queries) CountAuditLogsByTable(ctx context.Context, tableName string) (
 	return count, err
 }
 
+const countSearchAuditLogs = `-- name: CountSearchAuditLogs :one
+SELECT COUNT(*) FROM audit_logs
+WHERE
+  ($1::text IS NULL OR table_name = $1)
+  AND ($2::text IS NULL OR action = $2)
+  AND ($3::int IS NULL OR user_id = $3)
+  AND ($4::text IS NULL OR user_type = $4)
+  AND ($5::timestamp IS NULL OR created_at >= $5)
+  AND ($6::timestamp IS NULL OR created_at <= $6)
+`
+
+type CountSearchAuditLogsParams struct {
+	TableName pgtype.Text      `db:"table_name" json:"table_name"`
+	Action    pgtype.Text      `db:"action" json:"action"`
+	UserID    pgtype.Int4      `db:"user_id" json:"user_id"`
+	UserType  pgtype.Text      `db:"user_type" json:"user_type"`
+	StartDate pgtype.Timestamp `db:"start_date" json:"start_date"`
+	EndDate   pgtype.Timestamp `db:"end_date" json:"end_date"`
+}
+
+func (q *Queries) CountSearchAuditLogs(ctx context.Context, arg CountSearchAuditLogsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchAuditLogs,
+		arg.TableName,
+		arg.Action,
+		arg.UserID,
+		arg.UserType,
+		arg.StartDate,
+		arg.EndDate,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createAuditLog = `-- name: CreateAuditLog :exec
 INSERT INTO audit_logs (table_name, record_id, action, old_values, new_values, user_id, user_type, ip_address, user_agent)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -332,6 +366,71 @@ func (q *Queries) ListAuditLogsByUser(ctx context.Context, arg ListAuditLogsByUs
 		arg.UserType,
 		arg.Limit,
 		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AuditLog{}
+	for rows.Next() {
+		var i AuditLog
+		if err := rows.Scan(
+			&i.ID,
+			&i.TableName,
+			&i.RecordID,
+			&i.Action,
+			&i.OldValues,
+			&i.NewValues,
+			&i.UserID,
+			&i.UserType,
+			&i.IpAddress,
+			&i.UserAgent,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchAuditLogs = `-- name: SearchAuditLogs :many
+SELECT id, table_name, record_id, action, old_values, new_values, user_id, user_type, ip_address, user_agent, created_at FROM audit_logs
+WHERE
+  ($3::text IS NULL OR table_name = $3)
+  AND ($4::text IS NULL OR action = $4)
+  AND ($5::int IS NULL OR user_id = $5)
+  AND ($6::text IS NULL OR user_type = $6)
+  AND ($7::timestamp IS NULL OR created_at >= $7)
+  AND ($8::timestamp IS NULL OR created_at <= $8)
+ORDER BY created_at DESC
+LIMIT $1 OFFSET $2
+`
+
+type SearchAuditLogsParams struct {
+	Limit     int32            `db:"limit" json:"limit"`
+	Offset    int32            `db:"offset" json:"offset"`
+	TableName pgtype.Text      `db:"table_name" json:"table_name"`
+	Action    pgtype.Text      `db:"action" json:"action"`
+	UserID    pgtype.Int4      `db:"user_id" json:"user_id"`
+	UserType  pgtype.Text      `db:"user_type" json:"user_type"`
+	StartDate pgtype.Timestamp `db:"start_date" json:"start_date"`
+	EndDate   pgtype.Timestamp `db:"end_date" json:"end_date"`
+}
+
+func (q *Queries) SearchAuditLogs(ctx context.Context, arg SearchAuditLogsParams) ([]AuditLog, error) {
+	rows, err := q.db.Query(ctx, searchAuditLogs,
+		arg.Limit,
+		arg.Offset,
+		arg.TableName,
+		arg.Action,
+		arg.UserID,
+		arg.UserType,
+		arg.StartDate,
+		arg.EndDate,
 	)
 	if err != nil {
 		return nil, err

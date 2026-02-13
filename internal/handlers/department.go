@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/ngenohkevin/lms/internal/database/queries"
+	"github.com/ngenohkevin/lms/internal/middleware"
 	"github.com/ngenohkevin/lms/internal/models"
 )
 
@@ -237,6 +238,8 @@ func (h *DepartmentHandler) CreateDepartment(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "departments", department.ID, "CREATE", nil, map[string]interface{}{"name": department.Name})
+
 	c.JSON(http.StatusCreated, SuccessResponse{
 		Success: true,
 		Data:    h.convertToResponse(department),
@@ -376,6 +379,8 @@ func (h *DepartmentHandler) UpdateDepartment(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "departments", int32(id), "UPDATE", map[string]interface{}{"name": existing.Name}, map[string]interface{}{"name": department.Name})
+
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    h.convertToResponse(department),
@@ -450,6 +455,8 @@ func (h *DepartmentHandler) DeleteDepartment(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "departments", int32(id), "DELETE", nil, nil)
+
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    nil,
@@ -496,6 +503,8 @@ func (h *DepartmentHandler) DeactivateDepartment(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "departments", int32(id), "STATUS_CHANGE", map[string]interface{}{"is_active": true}, map[string]interface{}{"is_active": false})
+
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    nil,
@@ -541,6 +550,8 @@ func (h *DepartmentHandler) ActivateDepartment(c *gin.Context) {
 		})
 		return
 	}
+
+	middleware.Audit(c, "departments", int32(id), "STATUS_CHANGE", map[string]interface{}{"is_active": false}, map[string]interface{}{"is_active": true})
 
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,

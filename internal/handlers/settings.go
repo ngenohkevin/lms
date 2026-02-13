@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ngenohkevin/lms/internal/middleware"
 	"github.com/ngenohkevin/lms/internal/services"
 )
 
@@ -143,6 +144,7 @@ func (h *SettingsHandler) UpdateFineSettings(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "settings", 0, "UPDATE", nil, map[string]interface{}{"category": "fines", "fine_per_day": currentSettings.FinePerDay, "lost_book_fine": currentSettings.LostBookFine, "max_fine_amount": currentSettings.MaxFineAmount, "fine_grace_period_days": currentSettings.FineGracePeriodDays})
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Message: "Fine settings updated successfully",

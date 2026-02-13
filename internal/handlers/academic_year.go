@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/ngenohkevin/lms/internal/database/queries"
+	"github.com/ngenohkevin/lms/internal/middleware"
 	"github.com/ngenohkevin/lms/internal/models"
 )
 
@@ -215,6 +216,8 @@ func (h *AcademicYearHandler) CreateAcademicYear(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "academic_years", academicYear.ID, "CREATE", nil, map[string]interface{}{"name": academicYear.Name, "level": academicYear.Level})
+
 	c.JSON(http.StatusCreated, SuccessResponse{
 		Success: true,
 		Data:    h.convertToResponse(academicYear),
@@ -329,6 +332,8 @@ func (h *AcademicYearHandler) UpdateAcademicYear(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "academic_years", int32(id), "UPDATE", map[string]interface{}{"name": existing.Name, "level": existing.Level}, map[string]interface{}{"name": academicYear.Name, "level": academicYear.Level})
+
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    h.convertToResponse(academicYear),
@@ -416,6 +421,8 @@ func (h *AcademicYearHandler) DeleteAcademicYear(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "academic_years", int32(id), "DELETE", map[string]interface{}{"name": ay.Name}, nil)
+
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    nil,
@@ -462,6 +469,8 @@ func (h *AcademicYearHandler) DeactivateAcademicYear(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "academic_years", int32(id), "STATUS_CHANGE", map[string]interface{}{"is_active": true}, map[string]interface{}{"is_active": false})
+
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    nil,
@@ -507,6 +516,8 @@ func (h *AcademicYearHandler) ActivateAcademicYear(c *gin.Context) {
 		})
 		return
 	}
+
+	middleware.Audit(c, "academic_years", int32(id), "STATUS_CHANGE", map[string]interface{}{"is_active": false}, map[string]interface{}{"is_active": true})
 
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,

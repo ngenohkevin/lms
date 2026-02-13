@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ngenohkevin/lms/internal/middleware"
 	"github.com/ngenohkevin/lms/internal/models"
 	"github.com/ngenohkevin/lms/internal/services"
 )
@@ -86,6 +87,10 @@ func (h *BookHandler) CreateBook(c *gin.Context) {
 			},
 		})
 		return
+	}
+
+	if book != nil {
+		middleware.Audit(c, "books", book.ID, "CREATE", nil, map[string]interface{}{"title": book.Title, "isbn": book.ISBN})
 	}
 
 	c.JSON(http.StatusCreated, SuccessResponse{
@@ -287,6 +292,10 @@ func (h *BookHandler) UpdateBook(c *gin.Context) {
 		return
 	}
 
+	if book != nil {
+		middleware.Audit(c, "books", int32(id), "UPDATE", nil, map[string]interface{}{"title": book.Title})
+	}
+
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    book,
@@ -353,6 +362,8 @@ func (h *BookHandler) DeleteBook(c *gin.Context) {
 		})
 		return
 	}
+
+	middleware.Audit(c, "books", int32(id), "DELETE", nil, nil)
 
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,

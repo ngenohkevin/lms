@@ -78,7 +78,7 @@ func (suite *InputValidationSecurityTestSuite) setupRouter() {
 
 	// For security tests, we don't need the full functionality, use nil for additional services
 	bookHandler := handlers.NewBookHandler(suite.bookService, nil, nil)
-	authHandler := handlers.NewAuthHandler(suite.authService, suite.userService, emailService)
+	authHandler := handlers.NewAuthHandler(suite.authService, suite.userService, emailService, nil)
 
 	// Routes
 	router.POST("/api/v1/auth/login", authHandler.Login)

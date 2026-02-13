@@ -136,7 +136,7 @@ func (suite *AuthenticationSecurityTestSuite) setupRouter() {
 	emailService := &mockEmailService{} // Mock email service for tests
 
 	// Create handlers with correct constructor parameters
-	authHandler := handlers.NewAuthHandler(suite.authService, suite.userService, emailService)
+	authHandler := handlers.NewAuthHandler(suite.authService, suite.userService, emailService, nil)
 
 	// Routes
 	auth := router.Group("/api/v1/auth")

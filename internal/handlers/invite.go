@@ -18,14 +18,16 @@ type InviteHandler struct {
 	inviteService *services.InviteService
 	authService   *services.AuthService
 	baseURL       string
+	auditLogger   *middleware.AuditLogger
 }
 
 // NewInviteHandler creates a new InviteHandler
-func NewInviteHandler(inviteService *services.InviteService, authService *services.AuthService, baseURL string) *InviteHandler {
+func NewInviteHandler(inviteService *services.InviteService, authService *services.AuthService, baseURL string, auditLogger *middleware.AuditLogger) *InviteHandler {
 	return &InviteHandler{
 		inviteService: inviteService,
 		authService:   authService,
 		baseURL:       baseURL,
+		auditLogger:   auditLogger,
 	}
 }
 
@@ -94,6 +96,7 @@ func (h *InviteHandler) CreateInvite(c *gin.Context) {
 
 	inviteURL := fmt.Sprintf("%s/accept-invite/%s", h.baseURL, token)
 
+	middleware.Audit(c, "invites", int32(invite.ID), "CREATE", nil, map[string]interface{}{"email": invite.Email, "role": invite.Role})
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
 		"data": models.CreateInviteResponse{
@@ -222,6 +225,7 @@ func (h *InviteHandler) DeleteInvite(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "invites", int32(id), "DELETE", nil, nil)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Invite deleted successfully",
@@ -291,6 +295,7 @@ func (h *InviteHandler) ResendInvite(c *gin.Context) {
 
 	inviteURL := fmt.Sprintf("%s/accept-invite/%s", h.baseURL, token)
 
+	middleware.Audit(c, "invites", int32(invite.ID), "UPDATE", nil, map[string]interface{}{"action": "resend", "email": invite.Email})
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": models.CreateInviteResponse{
@@ -444,6 +449,8 @@ func (h *InviteHandler) AcceptInvite(c *gin.Context) {
 		return
 	}
 
+	userID := int32(user.ID)
+	middleware.AuditAuth(c, h.auditLogger, "CREATE", &userID, "system", map[string]interface{}{"action": "accept_invite", "username": user.Username, "email": user.Email, "role": user.Role})
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
 		"data":    user.ToResponse(),

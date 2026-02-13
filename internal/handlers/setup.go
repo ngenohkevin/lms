@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ngenohkevin/lms/internal/middleware"
 	"github.com/ngenohkevin/lms/internal/models"
 	"github.com/ngenohkevin/lms/internal/services"
 )
@@ -13,13 +14,15 @@ import (
 type SetupHandler struct {
 	setupService *services.SetupService
 	authService  *services.AuthService
+	auditLogger  *middleware.AuditLogger
 }
 
 // NewSetupHandler creates a new SetupHandler
-func NewSetupHandler(setupService *services.SetupService, authService *services.AuthService) *SetupHandler {
+func NewSetupHandler(setupService *services.SetupService, authService *services.AuthService, auditLogger *middleware.AuditLogger) *SetupHandler {
 	return &SetupHandler{
 		setupService: setupService,
 		authService:  authService,
+		auditLogger:  auditLogger,
 	}
 }
 
@@ -171,6 +174,8 @@ func (h *SetupHandler) CreateFirstAdmin(c *gin.Context) {
 		return
 	}
 
+	userID := int32(user.ID)
+	middleware.AuditAuth(c, h.auditLogger, "CREATE", &userID, "system", map[string]interface{}{"action": "create_first_admin", "username": user.Username, "email": user.Email})
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
 		"data":    user.ToResponse(),

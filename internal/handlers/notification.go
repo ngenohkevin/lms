@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ngenohkevin/lms/internal/middleware"
 	"github.com/ngenohkevin/lms/internal/models"
 	"github.com/ngenohkevin/lms/internal/services"
 )
@@ -73,6 +74,8 @@ func (h *NotificationHandler) CreateNotification(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "notifications", notification.ID, "CREATE", nil, map[string]interface{}{"type": notification.Type, "title": notification.Title})
+
 	c.JSON(http.StatusCreated, SuccessResponse{
 		Success: true,
 		Data:    notification,
@@ -119,6 +122,8 @@ func (h *NotificationHandler) CreateBatchNotifications(c *gin.Context) {
 		})
 		return
 	}
+
+	middleware.Audit(c, "notifications", int32(0), "CREATE", nil, map[string]interface{}{"batch": true, "count": len(notifications)})
 
 	c.JSON(http.StatusCreated, SuccessResponse{
 		Success: true,
@@ -431,6 +436,8 @@ func (h *NotificationHandler) MarkNotificationAsRead(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "notifications", int32(id), "UPDATE", map[string]interface{}{"is_read": false}, map[string]interface{}{"is_read": true})
+
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    nil,
@@ -489,6 +496,8 @@ func (h *NotificationHandler) DeleteNotification(c *gin.Context) {
 		})
 		return
 	}
+
+	middleware.Audit(c, "notifications", int32(id), "DELETE", nil, nil)
 
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,

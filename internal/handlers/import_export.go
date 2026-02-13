@@ -118,6 +118,7 @@ func (h *ImportExportHandler) ImportBooks(c *gin.Context) {
 	}
 
 	// Return success response
+	middleware.Audit(c, "books", 0, "IMPORT", nil, map[string]interface{}{"file_name": fileName, "total_records": result.TotalRecords, "success_count": result.SuccessCount, "failure_count": result.FailureCount})
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    result,
@@ -536,6 +537,7 @@ func (h *ImportExportHandler) ImportStudents(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "students", 0, "IMPORT", nil, map[string]interface{}{"file_name": fileName, "total_records": result.TotalRecords, "successful_count": result.SuccessfulCount, "failed_count": result.FailedCount})
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    result,

@@ -17,13 +17,15 @@ type AuthHandler struct {
 	authService  *services.AuthService
 	userService  services.UserServiceInterface
 	emailService services.EmailServiceInterface
+	auditLogger  *middleware.AuditLogger
 }
 
-func NewAuthHandler(authService *services.AuthService, userService services.UserServiceInterface, emailService services.EmailServiceInterface) *AuthHandler {
+func NewAuthHandler(authService *services.AuthService, userService services.UserServiceInterface, emailService services.EmailServiceInterface, auditLogger *middleware.AuditLogger) *AuthHandler {
 	return &AuthHandler{
 		authService:  authService,
 		userService:  userService,
 		emailService: emailService,
+		auditLogger:  auditLogger,
 	}
 }
 
@@ -69,18 +71,21 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		// Verify password
 		isValid, err := h.authService.VerifyPassword(user.PasswordHash, req.Password)
 		if err != nil {
-			// Password verification error (e.g., corrupted hash) should be treated as invalid credentials
-			// This prevents information leakage about user existence vs password hash corruption
+			middleware.AuditAuth(c, h.auditLogger, "LOGIN_FAILED", nil, "librarian", map[string]interface{}{"username": req.Username, "reason": "password_verification_error"})
 			c.JSON(http.StatusUnauthorized, invalidCredentialsResponse)
 			return
 		}
 
 		if !isValid {
+			userID := int32(user.ID)
+			middleware.AuditAuth(c, h.auditLogger, "LOGIN_FAILED", &userID, "librarian", map[string]interface{}{"username": req.Username, "reason": "invalid_password"})
 			c.JSON(http.StatusUnauthorized, invalidCredentialsResponse)
 			return
 		}
 
 		if !user.IsActive {
+			userID := int32(user.ID)
+			middleware.AuditAuth(c, h.auditLogger, "LOGIN_FAILED", &userID, "librarian", map[string]interface{}{"username": req.Username, "reason": "account_inactive"})
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"success": false,
 				"error": gin.H{
@@ -107,6 +112,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		// Update last login (non-critical - don't fail login if this fails)
 		_ = h.userService.UpdateLastLogin(user.ID)
 
+		userID := int32(user.ID)
+		middleware.AuditAuth(c, h.auditLogger, "LOGIN", &userID, "librarian", map[string]interface{}{"username": req.Username, "role": user.Role})
+
 		response := models.LoginResponse{
 			User:         user,
 			AccessToken:  accessToken,
@@ -127,16 +135,18 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	student, err := h.userService.GetStudentByStudentID(req.Username)
 	if err != nil {
 		// Perform dummy password verification to maintain consistent timing
-		// Use a realistic dummy hash to ensure similar timing characteristics
 		dummyHash := "$argon2id$v=19$m=65536,t=3,p=2$wST4GhL1dnC5T2ZYRsn+Rg$FLCDqu8e9OL9XtJDkMVWRxMXUjr5b4KVG+VZYsEDr8g"
 		_, _ = h.authService.VerifyPassword(dummyHash, req.Password)
+		middleware.AuditAuth(c, h.auditLogger, "LOGIN_FAILED", nil, "unknown", map[string]interface{}{"username": req.Username, "reason": "user_not_found"})
 		c.JSON(http.StatusUnauthorized, invalidCredentialsResponse)
 		return
 	}
 
 	// For students, if no password is set, use student ID as default password
+	studentID := int32(student.ID)
 	if student.PasswordHash == nil {
 		if req.Password != student.StudentID {
+			middleware.AuditAuth(c, h.auditLogger, "LOGIN_FAILED", &studentID, "student", map[string]interface{}{"student_id": student.StudentID, "reason": "invalid_password"})
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"success": false,
 				"error": gin.H{
@@ -150,8 +160,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		// Verify password
 		isValid, err := h.authService.VerifyPassword(*student.PasswordHash, req.Password)
 		if err != nil {
-			// Password verification error (e.g., corrupted hash) should be treated as invalid credentials
-			// This prevents information leakage about user existence vs password hash corruption
+			middleware.AuditAuth(c, h.auditLogger, "LOGIN_FAILED", &studentID, "student", map[string]interface{}{"student_id": student.StudentID, "reason": "password_verification_error"})
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"success": false,
 				"error": gin.H{
@@ -163,6 +172,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		}
 
 		if !isValid {
+			middleware.AuditAuth(c, h.auditLogger, "LOGIN_FAILED", &studentID, "student", map[string]interface{}{"student_id": student.StudentID, "reason": "invalid_password"})
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"success": false,
 				"error": gin.H{
@@ -175,6 +185,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	if !student.IsActive {
+		middleware.AuditAuth(c, h.auditLogger, "LOGIN_FAILED", &studentID, "student", map[string]interface{}{"student_id": student.StudentID, "reason": "account_inactive"})
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
 			"error": gin.H{
@@ -197,6 +208,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		})
 		return
 	}
+
+	middleware.AuditAuth(c, h.auditLogger, "LOGIN", &studentID, "student", map[string]interface{}{"student_id": student.StudentID})
 
 	response := models.LoginResponse{
 		Student:      student,
@@ -270,6 +283,17 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		}
 	}
 
+	// Extract user info from token before blacklisting (for audit)
+	var logoutUserID *int32
+	logoutUserType := "unknown"
+	if accessToken != "" {
+		if claims, err := h.authService.ValidateToken(accessToken); err == nil {
+			uid := int32(claims.UserID)
+			logoutUserID = &uid
+			logoutUserType = claims.UserType
+		}
+	}
+
 	// Get refresh token from request body
 	var req LogoutRequest
 	// Bind JSON but don't fail if body is empty
@@ -289,6 +313,8 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 			slog.Warn("Failed to blacklist refresh token", "error", err)
 		}
 	}
+
+	middleware.AuditAuth(c, h.auditLogger, "LOGOUT", logoutUserID, logoutUserType, nil)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -420,6 +446,8 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 			})
 			return
 		}
+
+		middleware.Audit(c, "students", int32(userID), "PASSWORD_CHANGE", nil, map[string]interface{}{"student_id": student.StudentID})
 	} else {
 		user, err := h.userService.GetUserByID(userID)
 		if err != nil {
@@ -471,6 +499,8 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 			})
 			return
 		}
+
+		middleware.Audit(c, "users", int32(userID), "PASSWORD_CHANGE", nil, map[string]interface{}{"username": user.Username})
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -522,9 +552,10 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 		slog.Error("Failed to send password reset email",
 			"email", req.Email,
 			"error", err)
-		// Don't reveal the error to the user for security reasons
-		// Just log it and continue with the success response
 	}
+
+	userID := int32(user.ID)
+	middleware.AuditAuth(c, h.auditLogger, "PASSWORD_RESET", &userID, "librarian", map[string]interface{}{"email": req.Email, "stage": "requested"})
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -600,6 +631,9 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 
 	// Invalidate the reset token (non-critical - password already reset successfully)
 	_ = h.authService.InvalidatePasswordResetToken(req.Token)
+
+	userID := int32(user.ID)
+	middleware.AuditAuth(c, h.auditLogger, "PASSWORD_RESET", &userID, "librarian", map[string]interface{}{"email": email, "stage": "completed"})
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

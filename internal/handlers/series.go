@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ngenohkevin/lms/internal/middleware"
 	"github.com/ngenohkevin/lms/internal/models"
 	"github.com/ngenohkevin/lms/internal/services"
 )
@@ -69,6 +70,8 @@ func (h *SeriesHandler) CreateSeries(c *gin.Context) {
 		})
 		return
 	}
+
+	middleware.Audit(c, "series", series.ID, "CREATE", nil, map[string]interface{}{"name": series.Name})
 
 	c.JSON(http.StatusCreated, SuccessResponse{
 		Success: true,
@@ -247,6 +250,8 @@ func (h *SeriesHandler) UpdateSeries(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "series", int32(id), "UPDATE", nil, map[string]interface{}{"name": series.Name})
+
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    series,
@@ -312,6 +317,8 @@ func (h *SeriesHandler) DeleteSeries(c *gin.Context) {
 		})
 		return
 	}
+
+	middleware.Audit(c, "series", int32(id), "DELETE", nil, nil)
 
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,

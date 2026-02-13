@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ngenohkevin/lms/internal/middleware"
 	"github.com/ngenohkevin/lms/internal/models"
 	"github.com/ngenohkevin/lms/internal/services"
 )
@@ -88,6 +89,7 @@ func (h *BookCopyHandler) CreateBookCopy(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "book_copies", copy.ID, "CREATE", nil, map[string]interface{}{"book_id": req.BookID, "barcode": copy.Barcode})
 	c.JSON(http.StatusCreated, SuccessResponse{
 		Success: true,
 		Data:    copy,
@@ -338,6 +340,7 @@ func (h *BookCopyHandler) UpdateBookCopy(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "book_copies", int32(copyID), "UPDATE", nil, map[string]interface{}{"book_id": bookID})
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    copy,
@@ -437,6 +440,7 @@ func (h *BookCopyHandler) DeleteBookCopy(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "book_copies", int32(copyID), "DELETE", nil, nil)
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Message: "Book copy deleted successfully",
@@ -499,6 +503,7 @@ func (h *BookCopyHandler) GenerateCopies(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "book_copies", int32(bookID), "CREATE", nil, map[string]interface{}{"action": "generate", "book_id": bookID, "count": len(copies)})
 	c.JSON(http.StatusCreated, SuccessResponse{
 		Success: true,
 		Data:    copies,
@@ -554,6 +559,7 @@ func (h *BookCopyHandler) MarkBarcodePrinted(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "book_copies", 0, "UPDATE", nil, map[string]interface{}{"action": "mark_barcode_printed", "copy_ids": req.CopyIDs, "count": len(copies)})
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    copies,

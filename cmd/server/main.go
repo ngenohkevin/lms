@@ -121,6 +121,7 @@ func main() {
 	studentService := services.NewStudentService(db.Queries, authService, cacheService)
 	bookService := services.NewBookService(db.Queries, cacheService)
 	settingsService := services.NewSettingsService(db.Queries)
+	auditLogService := services.NewAuditLogService(db.Queries)
 	transactionService := services.NewTransactionService(db.Queries).
 		WithPool(db.Pool).
 		WithCacheService(cacheService).
@@ -206,8 +207,11 @@ func main() {
 	// Initialize permission middleware
 	permissionMiddleware := middleware.NewPermissionMiddleware(permissionService)
 
+	// Initialize audit logger
+	auditLogger := middleware.NewAuditLogger(db.Pool)
+
 	// Initialize handlers
-	authHandler := handlers.NewAuthHandler(authService, userService, emailService)
+	authHandler := handlers.NewAuthHandler(authService, userService, emailService, auditLogger)
 	healthHandler := handlers.NewHealthHandler(db, redisClient, emailService, cacheService)
 	bookHandler := handlers.NewBookHandler(bookService, isbnService, recommendationService)
 	studentHandler := handlers.NewStudentHandler(studentService)
@@ -224,8 +228,8 @@ func main() {
 	academicYearHandler := handlers.NewAcademicYearHandler(db.Queries)
 	fineHandler := handlers.NewFineHandler(fineService)
 	userHandler := handlers.NewUserHandler(userService, authService, presenceService)
-	inviteHandler := handlers.NewInviteHandler(inviteService, authService, cfg.Server.FrontendURL)
-	setupHandler := handlers.NewSetupHandler(setupService, authService)
+	inviteHandler := handlers.NewInviteHandler(inviteService, authService, cfg.Server.FrontendURL, auditLogger)
+	setupHandler := handlers.NewSetupHandler(setupService, authService, auditLogger)
 	permissionHandler := handlers.NewPermissionHandler(permissionService, userService)
 	bookCopyHandler := handlers.NewBookCopyHandler(bookCopyService)
 	authorHandler := handlers.NewAuthorHandler(authorService)
@@ -233,12 +237,13 @@ func main() {
 	languageHandler := handlers.NewLanguageHandler(languageService)
 	qrCodeHandler := handlers.NewQRCodeHandler(qrCodeService, bookService, bookCopyService, cfg.Server.FrontendURL)
 	settingsHandler := handlers.NewSettingsHandler(settingsService)
+	auditLogHandler := handlers.NewAuditLogHandler(auditLogService)
 	imageProxyHandler := handlers.NewImageProxyHandler(rc)
 
 	// Setup routes
 	setupRoutes(router, authHandler, healthHandler, bookHandler, studentHandler,
 		transactionHandler, reservationHandler, notificationHandler,
-		reportHandler, importExportHandler, uploadHandler, ratingHandler, categoryHandler, departmentHandler, academicYearHandler, fineHandler, userHandler, inviteHandler, setupHandler, permissionHandler, bookCopyHandler, authorHandler, seriesHandler, languageHandler, qrCodeHandler, settingsHandler, imageProxyHandler, authMiddleware, permissionMiddleware)
+		reportHandler, importExportHandler, uploadHandler, ratingHandler, categoryHandler, departmentHandler, academicYearHandler, fineHandler, userHandler, inviteHandler, setupHandler, permissionHandler, bookCopyHandler, authorHandler, seriesHandler, languageHandler, qrCodeHandler, settingsHandler, auditLogHandler, imageProxyHandler, authMiddleware, permissionMiddleware, auditLogger)
 
 	// Start scheduler
 	if err := schedulerService.Start(); err != nil {
@@ -350,9 +355,11 @@ func setupRoutes(
 	languageHandler *handlers.LanguageHandler,
 	qrCodeHandler *handlers.QRCodeHandler,
 	settingsHandler *handlers.SettingsHandler,
+	auditLogHandler *handlers.AuditLogHandler,
 	imageProxyHandler *handlers.ImageProxyHandler,
 	authMiddleware *middleware.AuthMiddleware,
 	permissionMiddleware *middleware.PermissionMiddleware,
+	auditLogger *middleware.AuditLogger,
 ) {
 	// Helper function to require a specific permission
 	requirePerm := permissionMiddleware.RequirePermission
@@ -398,6 +405,7 @@ func setupRoutes(
 		// Protected routes (require authentication)
 		protected := v1.Group("")
 		protected.Use(authMiddleware.RequireAuth())
+		protected.Use(middleware.AuditMiddleware(auditLogger))
 		{
 			// Profile routes (any authenticated user)
 			protected.GET("/profile", authHandler.GetProfile)
@@ -717,6 +725,13 @@ func setupRoutes(
 				// General settings routes
 				settings.GET("", requirePerm("settings.view"), settingsHandler.ListAllSettings)
 				settings.GET("/category/:category", requirePerm("settings.view"), settingsHandler.GetSettingsByCategory)
+			}
+
+			// Audit log routes
+			auditLogs := protected.Group("/audit-logs")
+			{
+				auditLogs.GET("", requirePerm("audit_logs.view"), auditLogHandler.ListAuditLogs)
+				auditLogs.GET("/export", requirePerm("audit_logs.view"), auditLogHandler.ExportAuditLogs)
 			}
 		}
 	}

@@ -154,6 +154,8 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "users", int32(user.ID), "CREATE", nil, map[string]interface{}{"username": user.Username, "email": user.Email, "role": user.Role})
+
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
 		"data":    user.ToResponse(),
@@ -190,6 +192,9 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 
+	// Fetch old user for audit
+	oldUser, _ := h.userService.GetUserByID(id)
+
 	currentUserRole := middleware.GetUserRole(c)
 	user, err := h.userService.UpdateUserProfile(c.Request.Context(), id, &req, currentUserRole)
 	if err != nil {
@@ -223,6 +228,12 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 
+	var oldValues interface{}
+	if oldUser != nil {
+		oldValues = map[string]interface{}{"username": oldUser.Username, "email": oldUser.Email, "role": oldUser.Role}
+	}
+	middleware.Audit(c, "users", int32(id), "UPDATE", oldValues, map[string]interface{}{"username": user.Username, "email": user.Email, "role": user.Role})
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    user.ToResponse(),
@@ -245,6 +256,9 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 		})
 		return
 	}
+
+	// Fetch user for audit before deletion
+	deletedUser, _ := h.userService.GetUserByID(id)
 
 	currentUserID := middleware.GetUserID(c)
 	currentUserRole := middleware.GetUserRole(c)
@@ -290,6 +304,12 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 		})
 		return
 	}
+
+	var delValues interface{}
+	if deletedUser != nil {
+		delValues = map[string]interface{}{"username": deletedUser.Username, "email": deletedUser.Email, "role": deletedUser.Role}
+	}
+	middleware.Audit(c, "users", int32(id), "DELETE", delValues, nil)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -371,6 +391,8 @@ func (h *UserHandler) UpdateUserStatus(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "users", int32(id), "STATUS_CHANGE", map[string]interface{}{"is_active": !req.IsActive}, map[string]interface{}{"is_active": req.IsActive})
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    user.ToResponse(),
@@ -431,6 +453,8 @@ func (h *UserHandler) ResetUserPassword(c *gin.Context) {
 		})
 		return
 	}
+
+	middleware.Audit(c, "users", int32(id), "PASSWORD_RESET", nil, map[string]interface{}{"user_id": id})
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

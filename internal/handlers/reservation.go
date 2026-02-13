@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/ngenohkevin/lms/internal/middleware"
 	"github.com/ngenohkevin/lms/internal/models"
 	"github.com/ngenohkevin/lms/internal/services"
 )
@@ -86,6 +87,7 @@ func (h *ReservationHandler) ReserveBook(c *gin.Context) {
 	}
 
 	response := convertToReservationResponse(reservation)
+	middleware.Audit(c, "reservations", reservation.ID, "CREATE", nil, map[string]interface{}{"student_id": req.StudentID, "book_id": req.BookID})
 	c.JSON(http.StatusCreated, SuccessResponse{
 		Success: true,
 		Data:    response,
@@ -180,6 +182,7 @@ func (h *ReservationHandler) CancelReservation(c *gin.Context) {
 	}
 
 	response := convertToReservationResponse(reservation)
+	middleware.Audit(c, "reservations", reservation.ID, "STATUS_CHANGE", nil, map[string]interface{}{"status": "cancelled"})
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    response,
@@ -226,6 +229,7 @@ func (h *ReservationHandler) DeleteReservation(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "reservations", int32(reservationID), "DELETE", nil, nil)
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    nil,
@@ -273,6 +277,7 @@ func (h *ReservationHandler) FulfillReservation(c *gin.Context) {
 	}
 
 	response := convertToReservationResponse(reservation)
+	middleware.Audit(c, "reservations", reservation.ID, "STATUS_CHANGE", nil, map[string]interface{}{"status": "fulfilled"})
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    response,
@@ -605,6 +610,7 @@ func (h *ReservationHandler) MarkReservationReady(c *gin.Context) {
 	}
 
 	response := convertToReservationResponse(reservation)
+	middleware.Audit(c, "reservations", reservation.ID, "STATUS_CHANGE", nil, map[string]interface{}{"status": "ready"})
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    response,
@@ -634,6 +640,7 @@ func (h *ReservationHandler) ExpireReservations(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "reservations", 0, "STATUS_CHANGE", nil, map[string]interface{}{"status": "expired", "expired_count": expiredCount})
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    map[string]int{"expired_count": expiredCount},

@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ngenohkevin/lms/internal/middleware"
 	"github.com/ngenohkevin/lms/internal/models"
 	"github.com/ngenohkevin/lms/internal/services"
 )
@@ -69,6 +70,8 @@ func (h *LanguageHandler) CreateLanguage(c *gin.Context) {
 		})
 		return
 	}
+
+	middleware.Audit(c, "languages", language.ID, "CREATE", nil, map[string]interface{}{"name": language.Name, "code": language.Code})
 
 	c.JSON(http.StatusCreated, SuccessResponse{
 		Success: true,
@@ -237,6 +240,8 @@ func (h *LanguageHandler) UpdateLanguage(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "languages", int32(id), "UPDATE", nil, map[string]interface{}{"name": language.Name, "code": language.Code})
+
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    language,
@@ -291,6 +296,8 @@ func (h *LanguageHandler) DeleteLanguage(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "languages", int32(id), "DELETE", nil, nil)
+
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Message: "Language deleted successfully",
@@ -333,6 +340,8 @@ func (h *LanguageHandler) ActivateLanguage(c *gin.Context) {
 		})
 		return
 	}
+
+	middleware.Audit(c, "languages", int32(id), "STATUS_CHANGE", map[string]interface{}{"is_active": false}, map[string]interface{}{"is_active": true})
 
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
@@ -377,6 +386,8 @@ func (h *LanguageHandler) DeactivateLanguage(c *gin.Context) {
 		})
 		return
 	}
+
+	middleware.Audit(c, "languages", int32(id), "STATUS_CHANGE", map[string]interface{}{"is_active": true}, map[string]interface{}{"is_active": false})
 
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,

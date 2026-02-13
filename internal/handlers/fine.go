@@ -251,6 +251,7 @@ func (h *FineHandler) PayFine(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "fines", int32(id), "UPDATE", nil, map[string]interface{}{"action": "pay"})
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Message: "Fine paid successfully",
@@ -331,6 +332,7 @@ func (h *FineHandler) WaiveFine(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "fines", int32(id), "UPDATE", nil, map[string]interface{}{"action": "waive", "reason": req.Reason, "waived_by": userID})
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Message: "Fine waived successfully",
@@ -502,6 +504,7 @@ func (h *FineHandler) BulkPayFines(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "fines", 0, "UPDATE", nil, map[string]interface{}{"action": "bulk_pay", "transaction_ids": req.TransactionIDs, "paid_count": count})
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Message: "Fines paid successfully",
@@ -571,6 +574,7 @@ func (h *FineHandler) BulkWaiveFines(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "fines", 0, "UPDATE", nil, map[string]interface{}{"action": "bulk_waive", "transaction_ids": req.TransactionIDs, "waived_count": count, "reason": req.Reason})
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Message: "Fines waived successfully",

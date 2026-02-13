@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ngenohkevin/lms/internal/middleware"
 	"github.com/ngenohkevin/lms/internal/models"
 	"github.com/ngenohkevin/lms/internal/services"
 )
@@ -80,6 +81,8 @@ func (h *RatingHandler) CreateRating(c *gin.Context) {
 		})
 		return
 	}
+
+	middleware.Audit(c, "ratings", rating.ID, "CREATE", nil, map[string]interface{}{"book_id": rating.BookID, "rating": rating.Rating})
 
 	c.JSON(http.StatusCreated, SuccessResponse{
 		Success: true,
@@ -205,6 +208,8 @@ func (h *RatingHandler) UpdateRating(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "ratings", int32(id), "UPDATE", nil, map[string]interface{}{"rating": rating.Rating})
+
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    rating,
@@ -260,6 +265,8 @@ func (h *RatingHandler) DeleteRating(c *gin.Context) {
 		})
 		return
 	}
+
+	middleware.Audit(c, "ratings", int32(id), "DELETE", nil, nil)
 
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,

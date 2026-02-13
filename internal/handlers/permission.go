@@ -164,6 +164,8 @@ func (h *PermissionHandler) UpdateRolePermissions(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "role_permissions", 0, "UPDATE", nil, map[string]interface{}{"role": roleStr, "permissions": req.Permissions})
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Role permissions updated successfully",
@@ -387,6 +389,8 @@ func (h *PermissionHandler) CreateUserOverride(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "user_permission_overrides", int32(id), "CREATE", nil, map[string]interface{}{"permission_code": req.PermissionCode, "override_type": req.OverrideType})
+
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
 		"data":    result,
@@ -467,6 +471,8 @@ func (h *PermissionHandler) DeleteUserOverride(c *gin.Context) {
 		})
 		return
 	}
+
+	middleware.Audit(c, "user_permission_overrides", int32(id), "DELETE", map[string]interface{}{"permission_code": permissionCode}, nil)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

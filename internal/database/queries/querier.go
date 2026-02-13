@@ -73,6 +73,7 @@ type Querier interface {
 	CountPermissions(ctx context.Context) (int64, error)
 	// Renewal-related queries for Phase 6.7
 	CountRenewalsByStudentAndBook(ctx context.Context, arg CountRenewalsByStudentAndBookParams) (int64, error)
+	CountSearchAuditLogs(ctx context.Context, arg CountSearchAuditLogsParams) (int64, error)
 	CountSearchBooks(ctx context.Context, title string) (int64, error)
 	// Count for flexible search with all optional filters
 	CountSearchBooksAdvanced(ctx context.Context, arg CountSearchBooksAdvancedParams) (int64, error)
@@ -398,6 +399,7 @@ type Querier interface {
 	RenewTransaction(ctx context.Context, arg RenewTransactionParams) (Transaction, error)
 	ResetStuckQueueItems(ctx context.Context, processingStartedAt pgtype.Timestamp) error
 	ReturnBook(ctx context.Context, arg ReturnBookParams) (Transaction, error)
+	SearchAuditLogs(ctx context.Context, arg SearchAuditLogsParams) ([]AuditLog, error)
 	SearchAuthors(ctx context.Context, arg SearchAuthorsParams) ([]Author, error)
 	SearchBookCopies(ctx context.Context, arg SearchBookCopiesParams) ([]BookCopy, error)
 	SearchBooks(ctx context.Context, arg SearchBooksParams) ([]Book, error)

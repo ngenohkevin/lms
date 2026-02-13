@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/netip"
 
 	"github.com/gin-gonic/gin"
@@ -230,4 +231,94 @@ func LogAuditFromContext(c *gin.Context, tableName string, recordID int32, actio
 	default:
 		return fmt.Errorf("unknown action: %s", action)
 	}
+}
+
+// Audit is a fire-and-forget audit helper for protected handlers.
+// It extracts user context from gin context automatically and runs in a goroutine.
+// Logs a warning on failure but never blocks the response.
+func Audit(c *gin.Context, tableName string, recordID int32, action string, oldValues, newValues interface{}) {
+	auditLogger, exists := GetAuditLoggerFromContext(c)
+	if !exists {
+		slog.Warn("audit logger not found in context", "table", tableName, "action", action)
+		return
+	}
+
+	userID, _ := c.Get("audit_user_id")
+	userType, _ := c.Get("audit_user_type")
+	ipAddress, _ := c.Get("audit_ip_address")
+	userAgent, _ := c.Get("audit_user_agent")
+
+	var userIDPtr *int32
+	if uid, ok := userID.(*int32); ok {
+		userIDPtr = uid
+	}
+
+	userTypeStr := "system"
+	if ut, ok := userType.(string); ok {
+		userTypeStr = ut
+	}
+
+	ipAddressStr := ""
+	if ip, ok := ipAddress.(string); ok {
+		ipAddressStr = ip
+	}
+
+	userAgentStr := ""
+	if ua, ok := userAgent.(string); ok {
+		userAgentStr = ua
+	}
+
+	go func() {
+		ctx := context.Background()
+		err := auditLogger.logAuditEntry(ctx, AuditLogEntry{
+			TableName: tableName,
+			RecordID:  recordID,
+			Action:    action,
+			OldValues: oldValues,
+			NewValues: newValues,
+			UserID:    userIDPtr,
+			UserType:  userTypeStr,
+			IPAddress: ipAddressStr,
+			UserAgent: userAgentStr,
+		})
+		if err != nil {
+			slog.Warn("failed to write audit log",
+				"table", tableName,
+				"record_id", recordID,
+				"action", action,
+				"error", err,
+			)
+		}
+	}()
+}
+
+// AuditAuth is a fire-and-forget audit helper for auth routes where middleware context
+// isn't available (login/logout/setup). Takes the audit logger directly.
+func AuditAuth(c *gin.Context, auditLogger *AuditLogger, action string, userID *int32, userType string, details interface{}) {
+	if auditLogger == nil {
+		return
+	}
+
+	ipAddress := getClientIP(c)
+	userAgent := c.GetHeader("User-Agent")
+
+	go func() {
+		ctx := context.Background()
+		err := auditLogger.logAuditEntry(ctx, AuditLogEntry{
+			TableName: "auth",
+			RecordID:  0,
+			Action:    action,
+			NewValues: details,
+			UserID:    userID,
+			UserType:  userType,
+			IPAddress: ipAddress,
+			UserAgent: userAgent,
+		})
+		if err != nil {
+			slog.Warn("failed to write auth audit log",
+				"action", action,
+				"error", err,
+			)
+		}
+	}()
 }

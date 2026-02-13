@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ngenohkevin/lms/internal/middleware"
 	"github.com/ngenohkevin/lms/internal/models"
 	"github.com/ngenohkevin/lms/internal/services"
 )
@@ -69,6 +70,8 @@ func (h *AuthorHandler) CreateAuthor(c *gin.Context) {
 		})
 		return
 	}
+
+	middleware.Audit(c, "authors", author.ID, "CREATE", nil, map[string]interface{}{"name": author.Name})
 
 	c.JSON(http.StatusCreated, SuccessResponse{
 		Success: true,
@@ -247,6 +250,8 @@ func (h *AuthorHandler) UpdateAuthor(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "authors", int32(id), "UPDATE", nil, map[string]interface{}{"name": author.Name})
+
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    author,
@@ -312,6 +317,8 @@ func (h *AuthorHandler) DeleteAuthor(c *gin.Context) {
 		})
 		return
 	}
+
+	middleware.Audit(c, "authors", int32(id), "DELETE", nil, nil)
 
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
@@ -430,6 +437,8 @@ func (h *AuthorHandler) AddBookAuthor(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "authors", req.AuthorID, "CREATE", nil, map[string]interface{}{"book_id": int32(bookID), "author_id": req.AuthorID})
+
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Message: "Author added to book successfully",
@@ -487,6 +496,8 @@ func (h *AuthorHandler) RemoveBookAuthor(c *gin.Context) {
 		})
 		return
 	}
+
+	middleware.Audit(c, "authors", int32(authorID), "DELETE", map[string]interface{}{"book_id": int32(bookID), "author_id": int32(authorID)}, nil)
 
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,

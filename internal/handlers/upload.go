@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ngenohkevin/lms/internal/middleware"
 	"github.com/ngenohkevin/lms/internal/models"
 	"github.com/ngenohkevin/lms/internal/services"
 )
@@ -184,6 +185,8 @@ func (h *UploadHandler) UploadBookCover(c *gin.Context) {
 		}
 	}
 
+	middleware.Audit(c, "books", int32(bookID), "UPDATE", nil, map[string]interface{}{"cover_image": imageURL})
+
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data: gin.H{
@@ -295,6 +298,8 @@ func (h *UploadHandler) DeleteBookCover(c *gin.Context) {
 		})
 		return
 	}
+
+	middleware.Audit(c, "books", int32(bookID), "UPDATE", map[string]interface{}{"cover_image": oldCoverURL}, map[string]interface{}{"cover_image": ""})
 
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,

@@ -88,6 +88,8 @@ func (h *StudentHandler) CreateStudent(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "students", student.ID, "CREATE", nil, map[string]interface{}{"student_id": student.StudentID, "name": student.FirstName + " " + student.LastName})
+
 	c.JSON(http.StatusCreated, SuccessResponse{
 		Success: true,
 		Data:    student.ToResponse(),
@@ -217,6 +219,8 @@ func (h *StudentHandler) UpdateStudent(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "students", int32(id), "UPDATE", nil, map[string]interface{}{"student_id": student.StudentID, "name": student.FirstName + " " + student.LastName})
+
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    student.ToResponse(),
@@ -264,6 +268,8 @@ func (h *StudentHandler) DeleteStudent(c *gin.Context) {
 		})
 		return
 	}
+
+	middleware.Audit(c, "students", int32(id), "DELETE", nil, nil)
 
 	c.JSON(http.StatusNoContent, nil)
 }
@@ -657,6 +663,8 @@ func (h *StudentHandler) UpdateStudentProfile(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "students", int32(claims.UserID), "UPDATE", nil, map[string]interface{}{"self_update": true})
+
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    student.ToResponse(),
@@ -767,6 +775,8 @@ func (h *StudentHandler) ChangeStudentPassword(c *gin.Context) {
 		})
 		return
 	}
+
+	middleware.Audit(c, "students", int32(id), "PASSWORD_CHANGE", nil, map[string]interface{}{"admin_reset": true})
 
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
@@ -1038,6 +1048,8 @@ func (h *StudentHandler) UpdateStudentStatus(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "students", int32(id), "STATUS_CHANGE", nil, map[string]interface{}{"is_active": req.IsActive, "reason": req.Reason})
+
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    student,
@@ -1073,6 +1085,8 @@ func (h *StudentHandler) BulkUpdateStatus(c *gin.Context) {
 		})
 		return
 	}
+
+	middleware.Audit(c, "students", 0, "STATUS_CHANGE", nil, map[string]interface{}{"bulk": true, "count": len(req.StudentIDs), "student_ids": req.StudentIDs})
 
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
@@ -1330,6 +1344,8 @@ func (h *StudentHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "students", studentID, "PASSWORD_CHANGE", nil, map[string]interface{}{"self_change": true})
+
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Message: "Password changed successfully",
@@ -1426,6 +1442,8 @@ func (h *StudentHandler) SuspendStudent(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "students", int32(id), "STATUS_CHANGE", nil, map[string]interface{}{"status": "suspended", "reason": req.Reason})
+
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    student.ToResponse(),
@@ -1494,6 +1512,8 @@ func (h *StudentHandler) ReactivateStudent(c *gin.Context) {
 		})
 		return
 	}
+
+	middleware.Audit(c, "students", int32(id), "STATUS_CHANGE", map[string]interface{}{"status": "suspended"}, map[string]interface{}{"status": "active"})
 
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
@@ -1592,6 +1612,8 @@ func (h *StudentHandler) GraduateStudent(c *gin.Context) {
 		return
 	}
 
+	middleware.Audit(c, "students", int32(id), "STATUS_CHANGE", nil, map[string]interface{}{"status": "graduated"})
+
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
 		Data:    student.ToResponse(),
@@ -1664,6 +1686,8 @@ func (h *StudentHandler) UpdateAdminNotes(c *gin.Context) {
 		})
 		return
 	}
+
+	middleware.Audit(c, "students", int32(id), "UPDATE", nil, map[string]interface{}{"field": "admin_notes"})
 
 	c.JSON(http.StatusOK, SuccessResponse{
 		Success: true,
