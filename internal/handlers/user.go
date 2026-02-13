@@ -12,14 +12,16 @@ import (
 )
 
 type UserHandler struct {
-	userService services.UserServiceInterface
-	authService *services.AuthService
+	userService     services.UserServiceInterface
+	authService     *services.AuthService
+	presenceService services.PresenceServiceInterface
 }
 
-func NewUserHandler(userService services.UserServiceInterface, authService *services.AuthService) *UserHandler {
+func NewUserHandler(userService services.UserServiceInterface, authService *services.AuthService, presenceService services.PresenceServiceInterface) *UserHandler {
 	return &UserHandler{
-		userService: userService,
-		authService: authService,
+		userService:     userService,
+		authService:     authService,
+		presenceService: presenceService,
 	}
 }
 
@@ -234,8 +236,9 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 	}
 
 	currentUserID := middleware.GetUserID(c)
+	currentUserRole := middleware.GetUserRole(c)
 
-	err = h.userService.SoftDeleteUser(c.Request.Context(), id, currentUserID)
+	err = h.userService.SoftDeleteUser(c.Request.Context(), id, currentUserID, currentUserRole)
 	if err != nil {
 		if errors.Is(err, services.ErrCannotDeleteSelf) {
 			c.JSON(http.StatusForbidden, gin.H{
@@ -253,6 +256,16 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 				"error": gin.H{
 					"code":    "LAST_ADMIN",
 					"message": "Cannot delete the last admin user",
+				},
+			})
+			return
+		}
+		if errors.Is(err, services.ErrCannotDeleteUnownedUser) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"error": gin.H{
+					"code":    "CANNOT_DELETE_UNOWNED_USER",
+					"message": "You can only delete users you invited",
 				},
 			})
 			return
@@ -407,6 +420,7 @@ func (h *UserHandler) ResetUserPassword(c *gin.Context) {
 // GET /api/v1/users/roles
 func (h *UserHandler) GetRoles(c *gin.Context) {
 	roles := []gin.H{
+		{"value": string(models.RoleSuperAdmin), "label": "Super Admin", "description": "Supreme authority over all users and settings"},
 		{"value": string(models.RoleAdmin), "label": "Admin", "description": "Full system access"},
 		{"value": string(models.RoleLibrarian), "label": "Librarian", "description": "Library management access"},
 		{"value": string(models.RoleStaff), "label": "Staff", "description": "Basic staff access"},
@@ -415,5 +429,37 @@ func (h *UserHandler) GetRoles(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    roles,
+	})
+}
+
+// GetOnlineUsers returns currently online users
+// GET /api/v1/users/online
+func (h *UserHandler) GetOnlineUsers(c *gin.Context) {
+	if h.presenceService == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data": gin.H{
+				"users": []interface{}{},
+				"total": 0,
+			},
+		})
+		return
+	}
+
+	result, err := h.presenceService.GetOnlineUsers(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error": gin.H{
+				"code":    "INTERNAL_ERROR",
+				"message": "Failed to get online users",
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    result,
 	})
 }

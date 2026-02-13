@@ -55,7 +55,7 @@ func TestAuthMiddleware_RequireAuth(t *testing.T) {
 
 	authService := createTestAuthService()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	middleware := NewAuthMiddleware(authService, nil, nil, nil, logger)
+	middleware := NewAuthMiddleware(authService, nil, nil, nil, nil, logger)
 
 	// Create a test user
 	user := &models.User{
@@ -161,7 +161,7 @@ func TestAuthMiddleware_RequireRole(t *testing.T) {
 
 	authService := createTestAuthService()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	middleware := NewAuthMiddleware(authService, nil, nil, nil, logger)
+	middleware := NewAuthMiddleware(authService, nil, nil, nil, nil, logger)
 
 	tests := []struct {
 		name           string
@@ -197,6 +197,20 @@ func TestAuthMiddleware_RequireRole(t *testing.T) {
 			requiredRoles:  []models.UserRole{models.RoleLibrarian, models.RoleAdmin},
 			expectedStatus: http.StatusForbidden,
 			expectedError:  "INSUFFICIENT_PERMISSIONS",
+		},
+		{
+			name:           "super_admin access admin endpoint",
+			userRole:       models.RoleSuperAdmin,
+			requiredRoles:  []models.UserRole{models.RoleAdmin},
+			expectedStatus: http.StatusForbidden,
+			expectedError:  "INSUFFICIENT_PERMISSIONS",
+		},
+		{
+			name:           "super_admin access super_admin+admin endpoint",
+			userRole:       models.RoleSuperAdmin,
+			requiredRoles:  []models.UserRole{models.RoleSuperAdmin, models.RoleAdmin},
+			expectedStatus: http.StatusOK,
+			expectedError:  "",
 		},
 	}
 
@@ -242,7 +256,7 @@ func TestAuthMiddleware_RequireLibrarian(t *testing.T) {
 
 	authService := createTestAuthService()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	middleware := NewAuthMiddleware(authService, nil, nil, nil, logger)
+	middleware := NewAuthMiddleware(authService, nil, nil, nil, nil, logger)
 
 	tests := []struct {
 		name           string
@@ -250,6 +264,12 @@ func TestAuthMiddleware_RequireLibrarian(t *testing.T) {
 		expectedStatus int
 		shouldPass     bool
 	}{
+		{
+			name:           "super_admin access",
+			userRole:       models.RoleSuperAdmin,
+			expectedStatus: http.StatusOK,
+			shouldPass:     true,
+		},
 		{
 			name:           "admin access",
 			userRole:       models.RoleAdmin,
@@ -306,7 +326,7 @@ func TestAuthMiddleware_RequireStudentOrLibrarian(t *testing.T) {
 
 	authService := createTestAuthService()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	middleware := NewAuthMiddleware(authService, nil, nil, nil, logger)
+	middleware := NewAuthMiddleware(authService, nil, nil, nil, nil, logger)
 
 	tests := []struct {
 		name           string
@@ -319,6 +339,13 @@ func TestAuthMiddleware_RequireStudentOrLibrarian(t *testing.T) {
 			name:           "student access",
 			userType:       "student",
 			userRole:       "", // Role not relevant for students
+			expectedStatus: http.StatusOK,
+			shouldPass:     true,
+		},
+		{
+			name:           "super_admin access",
+			userType:       "librarian",
+			userRole:       models.RoleSuperAdmin,
 			expectedStatus: http.StatusOK,
 			shouldPass:     true,
 		},
@@ -419,7 +446,7 @@ func TestAuthMiddleware_MissingUserContext(t *testing.T) {
 
 	authService := createTestAuthService()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	middleware := NewAuthMiddleware(authService, nil, nil, nil, logger)
+	middleware := NewAuthMiddleware(authService, nil, nil, nil, nil, logger)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -438,4 +465,138 @@ func TestAuthMiddleware_MissingUserContext(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 	assert.Contains(t, w.Body.String(), "MISSING_USER_TYPE")
+}
+
+func TestAuthMiddleware_RequireSuperAdmin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	authService := createTestAuthService()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	middleware := NewAuthMiddleware(authService, nil, nil, nil, nil, logger)
+
+	tests := []struct {
+		name           string
+		userRole       models.UserRole
+		expectedStatus int
+		shouldPass     bool
+	}{
+		{
+			name:           "super_admin access",
+			userRole:       models.RoleSuperAdmin,
+			expectedStatus: http.StatusOK,
+			shouldPass:     true,
+		},
+		{
+			name:           "admin rejected",
+			userRole:       models.RoleAdmin,
+			expectedStatus: http.StatusForbidden,
+			shouldPass:     false,
+		},
+		{
+			name:           "librarian rejected",
+			userRole:       models.RoleLibrarian,
+			expectedStatus: http.StatusForbidden,
+			shouldPass:     false,
+		},
+		{
+			name:           "staff rejected",
+			userRole:       models.RoleStaff,
+			expectedStatus: http.StatusForbidden,
+			shouldPass:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+
+			c.Set("user_id", 1)
+			c.Set("username", "testuser")
+			c.Set("user_role", tt.userRole)
+			c.Set("user_type", "librarian")
+
+			handlerCalled := false
+			testHandler := func(c *gin.Context) {
+				handlerCalled = true
+				c.JSON(http.StatusOK, gin.H{"message": "success"})
+			}
+
+			middleware.RequireSuperAdmin()(c)
+
+			if !c.IsAborted() {
+				testHandler(c)
+			}
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+			assert.Equal(t, tt.shouldPass, handlerCalled)
+		})
+	}
+}
+
+func TestAuthMiddleware_RequireAdmin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	authService := createTestAuthService()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	middleware := NewAuthMiddleware(authService, nil, nil, nil, nil, logger)
+
+	tests := []struct {
+		name           string
+		userRole       models.UserRole
+		expectedStatus int
+		shouldPass     bool
+	}{
+		{
+			name:           "super_admin passes RequireAdmin",
+			userRole:       models.RoleSuperAdmin,
+			expectedStatus: http.StatusOK,
+			shouldPass:     true,
+		},
+		{
+			name:           "admin passes RequireAdmin",
+			userRole:       models.RoleAdmin,
+			expectedStatus: http.StatusOK,
+			shouldPass:     true,
+		},
+		{
+			name:           "librarian rejected by RequireAdmin",
+			userRole:       models.RoleLibrarian,
+			expectedStatus: http.StatusForbidden,
+			shouldPass:     false,
+		},
+		{
+			name:           "staff rejected by RequireAdmin",
+			userRole:       models.RoleStaff,
+			expectedStatus: http.StatusForbidden,
+			shouldPass:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+
+			c.Set("user_id", 1)
+			c.Set("username", "testuser")
+			c.Set("user_role", tt.userRole)
+			c.Set("user_type", "librarian")
+
+			handlerCalled := false
+			testHandler := func(c *gin.Context) {
+				handlerCalled = true
+				c.JSON(http.StatusOK, gin.H{"message": "success"})
+			}
+
+			middleware.RequireAdmin()(c)
+
+			if !c.IsAborted() {
+				testHandler(c)
+			}
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+			assert.Equal(t, tt.shouldPass, handlerCalled)
+		})
+	}
 }

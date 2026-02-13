@@ -142,11 +142,12 @@ type UserOverridesResponse struct {
 
 // PermissionMatrixEntry represents a single cell in the permission matrix
 type PermissionMatrixEntry struct {
-	Code      string `json:"code"`
-	Name      string `json:"name"`
-	Admin     bool   `json:"admin"`
-	Librarian bool   `json:"librarian"`
-	Staff     bool   `json:"staff"`
+	Code       string `json:"code"`
+	Name       string `json:"name"`
+	SuperAdmin bool   `json:"super_admin"`
+	Admin      bool   `json:"admin"`
+	Librarian  bool   `json:"librarian"`
+	Staff      bool   `json:"staff"`
 }
 
 // PermissionMatrixCategory represents a category row in the permission matrix
@@ -220,6 +221,7 @@ const (
 	// Users
 	PermUsersView   = "users.view"
 	PermUsersManage = "users.manage"
+	PermUsersOnline = "users.online"
 
 	// Invites
 	PermInvitesManage = "invites.manage"
@@ -259,7 +261,7 @@ func AllPermissionCodes() []string {
 		PermTransactionsView, PermTransactionsBorrow, PermTransactionsReturn,
 		PermReservationsView, PermReservationsManage,
 		PermReportsView, PermReportsExport,
-		PermUsersView, PermUsersManage,
+		PermUsersView, PermUsersManage, PermUsersOnline,
 		PermInvitesManage,
 		PermPermissionsView, PermPermissionsManage,
 		PermFinesView, PermFinesManage,

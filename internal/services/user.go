@@ -16,9 +16,10 @@ import (
 var (
 	ErrUsernameExists       = errors.New("username already exists")
 	ErrUserEmailExists      = errors.New("email already exists")
-	ErrCannotDeleteSelf     = errors.New("cannot delete your own account")
-	ErrLastAdmin            = errors.New("cannot delete or deactivate the last admin user")
-	ErrCannotDeactivateSelf = errors.New("cannot deactivate your own account")
+	ErrCannotDeleteSelf        = errors.New("cannot delete your own account")
+	ErrLastAdmin               = errors.New("cannot delete or deactivate the last admin user")
+	ErrCannotDeactivateSelf    = errors.New("cannot deactivate your own account")
+	ErrCannotDeleteUnownedUser = errors.New("you can only delete users you invited")
 )
 
 // UserServiceInterface defines the interface for user service operations
@@ -37,7 +38,7 @@ type UserServiceInterface interface {
 	UpdateUserProfile(ctx context.Context, id int, req *models.UpdateUserRequest) (*models.User, error)
 	UpdateUserStatus(ctx context.Context, id int, currentUserID int, isActive bool) (*models.User, error)
 	ResetUserPassword(ctx context.Context, id int, hashedPassword string) error
-	SoftDeleteUser(ctx context.Context, id int, currentUserID int) error
+	SoftDeleteUser(ctx context.Context, id int, currentUserID int, currentUserRole models.UserRole) error
 	CheckUsernameExists(ctx context.Context, username string, excludeID *int) (bool, error)
 	CheckEmailExists(ctx context.Context, email string, excludeID *int) (bool, error)
 }
@@ -537,7 +538,7 @@ func (s *UserService) UpdateUserStatus(ctx context.Context, id int, currentUserI
 		if err != nil {
 			return nil, err
 		}
-		if user.Role.Valid && user.Role.String == string(models.RoleAdmin) {
+		if user.Role.Valid && (user.Role.String == string(models.RoleAdmin) || user.Role.String == string(models.RoleSuperAdmin)) {
 			count, err := s.queries.CountAdminUsers(ctx)
 			if err != nil {
 				return nil, err
@@ -574,24 +575,31 @@ func (s *UserService) ResetUserPassword(ctx context.Context, id int, hashedPassw
 }
 
 // SoftDeleteUser soft-deletes a user
-func (s *UserService) SoftDeleteUser(ctx context.Context, id int, currentUserID int) error {
+func (s *UserService) SoftDeleteUser(ctx context.Context, id int, currentUserID int, currentUserRole models.UserRole) error {
 	// Cannot delete yourself
 	if id == currentUserID {
 		return ErrCannotDeleteSelf
 	}
 
-	// Check if this is the last admin
+	// Check if this is the last admin/super_admin
 	user, err := s.queries.GetUserByID(ctx, int32(id))
 	if err != nil {
 		return err
 	}
-	if user.Role.Valid && user.Role.String == string(models.RoleAdmin) {
+	if user.Role.Valid && (user.Role.String == string(models.RoleAdmin) || user.Role.String == string(models.RoleSuperAdmin)) {
 		count, err := s.queries.CountAdminUsers(ctx)
 		if err != nil {
 			return err
 		}
 		if count <= 1 {
 			return ErrLastAdmin
+		}
+	}
+
+	// Non-super_admin users can only delete users they invited
+	if currentUserRole != models.RoleSuperAdmin {
+		if !user.InvitedBy.Valid || int(user.InvitedBy.Int32) != currentUserID {
+			return ErrCannotDeleteUnownedUser
 		}
 	}
 

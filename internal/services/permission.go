@@ -150,11 +150,12 @@ func (s *PermissionService) GetPermissionMatrix(ctx context.Context) (*models.Pe
 		}
 
 		entry := models.PermissionMatrixEntry{
-			Code:      p.Code,
-			Name:      p.Name,
-			Admin:     rolePermMap["admin"][p.Code],
-			Librarian: rolePermMap["librarian"][p.Code],
-			Staff:     rolePermMap["staff"][p.Code],
+			Code:       p.Code,
+			Name:       p.Name,
+			SuperAdmin: rolePermMap["super_admin"][p.Code],
+			Admin:      rolePermMap["admin"][p.Code],
+			Librarian:  rolePermMap["librarian"][p.Code],
+			Staff:      rolePermMap["staff"][p.Code],
 		}
 		categoryMap[p.Category] = append(categoryMap[p.Category], entry)
 	}
@@ -549,7 +550,7 @@ func (s *PermissionService) InvalidateRoleCache(ctx context.Context, role models
 // Helper functions
 
 func isValidRole(role models.UserRole) bool {
-	return role == models.RoleAdmin || role == models.RoleLibrarian || role == models.RoleStaff
+	return role == models.RoleSuperAdmin || role == models.RoleAdmin || role == models.RoleLibrarian || role == models.RoleStaff
 }
 
 func (s *PermissionService) dbPermissionToResponse(p *queries.Permission) models.PermissionResponse {

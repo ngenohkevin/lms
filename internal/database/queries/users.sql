@@ -83,7 +83,7 @@ RETURNING *;
 
 -- name: CountAdminUsers :one
 SELECT COUNT(*) FROM users
-WHERE role = 'admin' AND is_active = true AND deleted_at IS NULL;
+WHERE role IN ('super_admin', 'admin') AND is_active = true AND deleted_at IS NULL;
 
 -- name: UpsertUser :one
 INSERT INTO users (username, email, password_hash, role, is_active)
@@ -163,4 +163,4 @@ UPDATE users SET password_hash = $2, updated_at = NOW() WHERE id = $1;
 -- name: CreateFirstAdmin :one
 -- For first-run setup when no users exist
 INSERT INTO users (username, email, password_hash, role, is_active)
-VALUES ($1, $2, $3, 'admin', true) RETURNING *;
+VALUES ($1, $2, $3, 'super_admin', true) RETURNING *;

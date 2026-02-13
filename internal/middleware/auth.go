@@ -17,12 +17,13 @@ import (
 )
 
 type AuthMiddleware struct {
-	authService    *services.AuthService
-	db             *queries.Queries
-	studentService *services.StudentService
-	redisClient    *redis.Client
-	logger         *slog.Logger
-	roleCacheTTL   time.Duration
+	authService     *services.AuthService
+	db              *queries.Queries
+	studentService  *services.StudentService
+	redisClient     *redis.Client
+	presenceService services.PresenceServiceInterface
+	logger          *slog.Logger
+	roleCacheTTL    time.Duration
 }
 
 func NewAuthMiddleware(
@@ -30,15 +31,17 @@ func NewAuthMiddleware(
 	db *queries.Queries,
 	studentService *services.StudentService,
 	redisClient *redis.Client,
+	presenceService services.PresenceServiceInterface,
 	logger *slog.Logger,
 ) *AuthMiddleware {
 	return &AuthMiddleware{
-		authService:    authService,
-		db:             db,
-		studentService: studentService,
-		redisClient:    redisClient,
-		logger:         logger,
-		roleCacheTTL:   5 * time.Minute, // Cache role for 5 minutes
+		authService:     authService,
+		db:              db,
+		studentService:  studentService,
+		redisClient:     redisClient,
+		presenceService: presenceService,
+		logger:          logger,
+		roleCacheTTL:    5 * time.Minute, // Cache role for 5 minutes
 	}
 }
 
@@ -132,6 +135,21 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 		c.Set("claims", claims)
 		c.Set("token", tokenString) // Store token for blacklisting if needed
 
+		// Fire-and-forget presence update for staff users
+		if claims.UserType == "librarian" && m.presenceService != nil {
+			go func() {
+				bgCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+				defer cancel()
+				_ = m.presenceService.UpdatePresence(bgCtx, services.UserPresenceInfo{
+					UserID:   claims.UserID,
+					Username: claims.Username,
+					Role:     string(actualRole),
+					IPAddr:   c.ClientIP(),
+					Path:     c.Request.URL.Path,
+				})
+			}()
+		}
+
 		c.Next()
 	}
 }
@@ -183,15 +201,19 @@ func (m *AuthMiddleware) RequireRole(allowedRoles ...models.UserRole) gin.Handle
 }
 
 func (m *AuthMiddleware) RequireLibrarian() gin.HandlerFunc {
-	return m.RequireRole(models.RoleAdmin, models.RoleLibrarian, models.RoleStaff)
+	return m.RequireRole(models.RoleSuperAdmin, models.RoleAdmin, models.RoleLibrarian, models.RoleStaff)
 }
 
 func (m *AuthMiddleware) RequireAdmin() gin.HandlerFunc {
-	return m.RequireRole(models.RoleAdmin)
+	return m.RequireRole(models.RoleSuperAdmin, models.RoleAdmin)
+}
+
+func (m *AuthMiddleware) RequireSuperAdmin() gin.HandlerFunc {
+	return m.RequireRole(models.RoleSuperAdmin)
 }
 
 func (m *AuthMiddleware) RequireLibrarianOrAdmin() gin.HandlerFunc {
-	return m.RequireRole(models.RoleAdmin, models.RoleLibrarian)
+	return m.RequireRole(models.RoleSuperAdmin, models.RoleAdmin, models.RoleLibrarian)
 }
 
 func (m *AuthMiddleware) RequireStudentOrLibrarian() gin.HandlerFunc {
@@ -254,7 +276,7 @@ func (m *AuthMiddleware) RequireStudentOrLibrarian() gin.HandlerFunc {
 			return
 		}
 
-		allowedRoles := []models.UserRole{models.RoleAdmin, models.RoleLibrarian, models.RoleStaff}
+		allowedRoles := []models.UserRole{models.RoleSuperAdmin, models.RoleAdmin, models.RoleLibrarian, models.RoleStaff}
 		for _, allowedRole := range allowedRoles {
 			if role == allowedRole {
 				c.Next()

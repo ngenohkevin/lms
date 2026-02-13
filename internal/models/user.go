@@ -9,9 +9,10 @@ import (
 type UserRole string
 
 const (
-	RoleAdmin     UserRole = "admin"
-	RoleLibrarian UserRole = "librarian"
-	RoleStaff     UserRole = "staff"
+	RoleSuperAdmin UserRole = "super_admin"
+	RoleAdmin      UserRole = "admin"
+	RoleLibrarian  UserRole = "librarian"
+	RoleStaff      UserRole = "staff"
 )
 
 type User struct {
@@ -96,13 +97,13 @@ type CreateUserRequest struct {
 	Username string   `json:"username" binding:"required,min=3,max=50"`
 	Email    string   `json:"email" binding:"required,email"`
 	Password string   `json:"password" binding:"required,min=8"`
-	Role     UserRole `json:"role" binding:"required,oneof=admin librarian staff"`
+	Role     UserRole `json:"role" binding:"required,oneof=super_admin admin librarian staff"`
 }
 
 // UpdateUserRequest represents the request to update a user
 type UpdateUserRequest struct {
 	Email    *string   `json:"email,omitempty" binding:"omitempty,email"`
-	Role     *UserRole `json:"role,omitempty" binding:"omitempty,oneof=admin librarian staff"`
+	Role     *UserRole `json:"role,omitempty" binding:"omitempty,oneof=super_admin admin librarian staff"`
 	IsActive *bool     `json:"is_active,omitempty"`
 }
 
@@ -159,7 +160,7 @@ type UserListResponse struct {
 }
 
 // Available roles for dropdown selection
-var AvailableRoles = []UserRole{RoleAdmin, RoleLibrarian, RoleStaff}
+var AvailableRoles = []UserRole{RoleSuperAdmin, RoleAdmin, RoleLibrarian, RoleStaff}
 
 // =====================================================
 // User Invite Types
@@ -195,7 +196,7 @@ type UserInvite struct {
 type CreateInviteRequest struct {
 	Email string   `json:"email" binding:"required,email"`
 	Name  string   `json:"name" binding:"required,min=2,max=100"`
-	Role  UserRole `json:"role" binding:"required,oneof=admin librarian staff"`
+	Role  UserRole `json:"role" binding:"required,oneof=super_admin admin librarian staff"`
 }
 
 // CreateInviteResponse represents the response after creating an invite

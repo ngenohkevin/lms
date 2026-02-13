@@ -100,7 +100,7 @@ func TestSetupService_CreateFirstAdmin(t *testing.T) {
 		assert.NotNil(t, user)
 		assert.Equal(t, req.Username, user.Username)
 		assert.Equal(t, req.Email, user.Email)
-		assert.Equal(t, models.RoleAdmin, user.Role)
+		assert.Equal(t, models.RoleSuperAdmin, user.Role)
 		assert.True(t, user.IsActive)
 
 		// Cleanup

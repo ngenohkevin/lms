@@ -133,7 +133,7 @@ func (m *MockUserService) ResetUserPassword(ctx context.Context, id int, hashedP
 	return nil
 }
 
-func (m *MockUserService) SoftDeleteUser(ctx context.Context, id int, currentUserID int) error {
+func (m *MockUserService) SoftDeleteUser(ctx context.Context, id int, currentUserID int, currentUserRole models.UserRole) error {
 	return nil
 }
 

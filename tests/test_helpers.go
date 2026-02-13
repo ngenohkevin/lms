@@ -217,6 +217,7 @@ func createTestAuthMiddleware(authService *services.AuthService, db *queries.Que
 		db,
 		studentService,
 		rc,
+		nil, // No presence service for tests
 		testLogger,
 	)
 }
@@ -229,6 +230,7 @@ func createSimpleTestAuthMiddleware(authService *services.AuthService) *middlewa
 		nil, // No database for simple tests
 		nil, // No student service for simple tests
 		nil, // No Redis for simple tests
+		nil, // No presence service for simple tests
 		testLogger,
 	)
 }

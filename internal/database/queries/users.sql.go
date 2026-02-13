@@ -51,7 +51,7 @@ func (q *Queries) CheckUsernameExists(ctx context.Context, arg CheckUsernameExis
 
 const countAdminUsers = `-- name: CountAdminUsers :one
 SELECT COUNT(*) FROM users
-WHERE role = 'admin' AND is_active = true AND deleted_at IS NULL
+WHERE role IN ('super_admin', 'admin') AND is_active = true AND deleted_at IS NULL
 `
 
 func (q *Queries) CountAdminUsers(ctx context.Context) (int64, error) {
@@ -125,7 +125,7 @@ func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 
 const createFirstAdmin = `-- name: CreateFirstAdmin :one
 INSERT INTO users (username, email, password_hash, role, is_active)
-VALUES ($1, $2, $3, 'admin', true) RETURNING id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at, invited_by
+VALUES ($1, $2, $3, 'super_admin', true) RETURNING id, username, email, password_hash, role, is_active, last_login, deleted_at, created_at, updated_at, invited_by
 `
 
 type CreateFirstAdminParams struct {

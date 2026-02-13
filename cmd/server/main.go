@@ -187,12 +187,19 @@ func main() {
 	}
 	schedulerService := services.NewSchedulerService(schedulerConfig, schedulerDeps, logger)
 
+	// Initialize presence service
+	var presenceService services.PresenceServiceInterface
+	if rc != nil {
+		presenceService = services.NewPresenceService(rc, logger)
+	}
+
 	// Initialize auth middleware
 	authMiddleware := middleware.NewAuthMiddleware(
 		authService,
 		db.Queries,
 		studentService,
 		rc,
+		presenceService,
 		logger,
 	)
 
@@ -216,7 +223,7 @@ func main() {
 	departmentHandler := handlers.NewDepartmentHandler(db.Queries)
 	academicYearHandler := handlers.NewAcademicYearHandler(db.Queries)
 	fineHandler := handlers.NewFineHandler(fineService)
-	userHandler := handlers.NewUserHandler(userService, authService)
+	userHandler := handlers.NewUserHandler(userService, authService, presenceService)
 	inviteHandler := handlers.NewInviteHandler(inviteService, authService, cfg.Server.FrontendURL)
 	setupHandler := handlers.NewSetupHandler(setupService, authService)
 	permissionHandler := handlers.NewPermissionHandler(permissionService, userService)
@@ -662,6 +669,7 @@ func setupRoutes(
 			{
 				users.GET("", requirePerm("users.view"), userHandler.ListUsers)
 				users.GET("/roles", requirePerm("users.view"), userHandler.GetRoles)
+				users.GET("/online", requirePerm("users.online"), userHandler.GetOnlineUsers)
 				users.POST("", requirePerm("users.manage"), userHandler.CreateUser)
 				users.GET("/:id", requirePerm("users.view"), userHandler.GetUser)
 				users.PUT("/:id", requirePerm("users.manage"), userHandler.UpdateUser)

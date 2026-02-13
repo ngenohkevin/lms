@@ -94,7 +94,7 @@ func (s *SetupService) CreateFirstAdmin(ctx context.Context, req *models.SetupRe
 		return nil, err
 	}
 
-	s.logger.Info("First admin user created", "username", req.Username, "email", req.Email)
+	s.logger.Info("First super admin user created", "username", req.Username, "email", req.Email)
 
 	return s.dbUserToModel(&dbUser), nil
 }
