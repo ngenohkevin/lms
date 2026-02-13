@@ -190,8 +190,19 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 
-	user, err := h.userService.UpdateUserProfile(c.Request.Context(), id, &req)
+	currentUserRole := middleware.GetUserRole(c)
+	user, err := h.userService.UpdateUserProfile(c.Request.Context(), id, &req, currentUserRole)
 	if err != nil {
+		if errors.Is(err, services.ErrCannotModifySuperAdmin) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"error": gin.H{
+					"code":    "CANNOT_MODIFY_SUPER_ADMIN",
+					"message": "Only super admins can modify super admin accounts",
+				},
+			})
+			return
+		}
 		if errors.Is(err, services.ErrUserEmailExists) {
 			c.JSON(http.StatusConflict, gin.H{
 				"success": false,
@@ -316,9 +327,20 @@ func (h *UserHandler) UpdateUserStatus(c *gin.Context) {
 	}
 
 	currentUserID := middleware.GetUserID(c)
+	currentUserRole := middleware.GetUserRole(c)
 
-	user, err := h.userService.UpdateUserStatus(c.Request.Context(), id, currentUserID, req.IsActive)
+	user, err := h.userService.UpdateUserStatus(c.Request.Context(), id, currentUserID, currentUserRole, req.IsActive)
 	if err != nil {
+		if errors.Is(err, services.ErrCannotModifySuperAdmin) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"error": gin.H{
+					"code":    "CANNOT_MODIFY_SUPER_ADMIN",
+					"message": "Only super admins can modify super admin accounts",
+				},
+			})
+			return
+		}
 		if errors.Is(err, services.ErrCannotDeactivateSelf) {
 			c.JSON(http.StatusForbidden, gin.H{
 				"success": false,

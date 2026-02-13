@@ -20,6 +20,7 @@ var (
 	ErrLastAdmin               = errors.New("cannot delete or deactivate the last admin user")
 	ErrCannotDeactivateSelf    = errors.New("cannot deactivate your own account")
 	ErrCannotDeleteUnownedUser = errors.New("you can only delete users you invited")
+	ErrCannotModifySuperAdmin  = errors.New("only super admins can modify super admin accounts")
 )
 
 // UserServiceInterface defines the interface for user service operations
@@ -35,8 +36,8 @@ type UserServiceInterface interface {
 	// User management methods
 	ListUsers(ctx context.Context, params *models.UserSearchParams) (*models.UserListResponse, error)
 	CreateUserWithPassword(ctx context.Context, req *models.CreateUserRequest, hashedPassword string) (*models.User, error)
-	UpdateUserProfile(ctx context.Context, id int, req *models.UpdateUserRequest) (*models.User, error)
-	UpdateUserStatus(ctx context.Context, id int, currentUserID int, isActive bool) (*models.User, error)
+	UpdateUserProfile(ctx context.Context, id int, req *models.UpdateUserRequest, currentUserRole models.UserRole) (*models.User, error)
+	UpdateUserStatus(ctx context.Context, id int, currentUserID int, currentUserRole models.UserRole, isActive bool) (*models.User, error)
 	ResetUserPassword(ctx context.Context, id int, hashedPassword string) error
 	SoftDeleteUser(ctx context.Context, id int, currentUserID int, currentUserRole models.UserRole) error
 	CheckUsernameExists(ctx context.Context, username string, excludeID *int) (bool, error)
@@ -483,7 +484,20 @@ func (s *UserService) CreateUserWithPassword(ctx context.Context, req *models.Cr
 }
 
 // UpdateUserProfile updates a user's email, role, and/or active status
-func (s *UserService) UpdateUserProfile(ctx context.Context, id int, req *models.UpdateUserRequest) (*models.User, error) {
+func (s *UserService) UpdateUserProfile(ctx context.Context, id int, req *models.UpdateUserRequest, currentUserRole models.UserRole) (*models.User, error) {
+	// Prevent non-super_admins from modifying super_admin accounts
+	targetUser, err := s.queries.GetUserByID(ctx, int32(id))
+	if err != nil {
+		return nil, err
+	}
+	if targetUser.Role.Valid && targetUser.Role.String == string(models.RoleSuperAdmin) && currentUserRole != models.RoleSuperAdmin {
+		return nil, ErrCannotModifySuperAdmin
+	}
+	// Prevent non-super_admins from promoting anyone to super_admin
+	if req.Role != nil && *req.Role == models.RoleSuperAdmin && currentUserRole != models.RoleSuperAdmin {
+		return nil, ErrCannotModifySuperAdmin
+	}
+
 	// Check if email is being updated and it already exists
 	if req.Email != nil {
 		exists, err := s.CheckEmailExists(ctx, *req.Email, &id)
@@ -526,10 +540,21 @@ func (s *UserService) UpdateUserProfile(ctx context.Context, id int, req *models
 }
 
 // UpdateUserStatus activates or deactivates a user
-func (s *UserService) UpdateUserStatus(ctx context.Context, id int, currentUserID int, isActive bool) (*models.User, error) {
+func (s *UserService) UpdateUserStatus(ctx context.Context, id int, currentUserID int, currentUserRole models.UserRole, isActive bool) (*models.User, error) {
 	// Cannot deactivate yourself
 	if id == currentUserID && !isActive {
 		return nil, ErrCannotDeactivateSelf
+	}
+
+	// Check target user and enforce super_admin protection
+	{
+		user, err := s.queries.GetUserByID(ctx, int32(id))
+		if err != nil {
+			return nil, err
+		}
+		if user.Role.Valid && user.Role.String == string(models.RoleSuperAdmin) && currentUserRole != models.RoleSuperAdmin {
+			return nil, ErrCannotModifySuperAdmin
+		}
 	}
 
 	// If deactivating, check if this is the last admin

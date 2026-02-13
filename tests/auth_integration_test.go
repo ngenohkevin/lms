@@ -121,11 +121,11 @@ func (m *MockUserService) CreateUserWithPassword(ctx context.Context, req *model
 	return nil, nil
 }
 
-func (m *MockUserService) UpdateUserProfile(ctx context.Context, id int, req *models.UpdateUserRequest) (*models.User, error) {
+func (m *MockUserService) UpdateUserProfile(ctx context.Context, id int, req *models.UpdateUserRequest, currentUserRole models.UserRole) (*models.User, error) {
 	return nil, nil
 }
 
-func (m *MockUserService) UpdateUserStatus(ctx context.Context, id int, currentUserID int, isActive bool) (*models.User, error) {
+func (m *MockUserService) UpdateUserStatus(ctx context.Context, id int, currentUserID int, currentUserRole models.UserRole, isActive bool) (*models.User, error) {
 	return nil, nil
 }
 
