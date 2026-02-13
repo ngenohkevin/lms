@@ -568,6 +568,8 @@ func TestBookHandler_DeleteBook(t *testing.T) {
 			name:   "successful book deletion",
 			bookID: "1",
 			setup: func() {
+				isbn := "123"
+				mockService.On("GetBookByID", mock.Anything, int32(1)).Return(&models.BookResponse{ID: 1, Title: "Test Book", ISBN: &isbn}, nil)
 				mockService.On("DeleteBook", mock.Anything, int32(1)).Return(nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -576,6 +578,7 @@ func TestBookHandler_DeleteBook(t *testing.T) {
 			name:   "book not found",
 			bookID: "999",
 			setup: func() {
+				mockService.On("GetBookByID", mock.Anything, int32(999)).Return(nil, errors.New("not found"))
 				mockService.On("DeleteBook", mock.Anything, int32(999)).Return(errors.New("failed to get book"))
 			},
 			expectedStatus: http.StatusNotFound,
@@ -590,6 +593,7 @@ func TestBookHandler_DeleteBook(t *testing.T) {
 			name:   "internal server error",
 			bookID: "1",
 			setup: func() {
+				mockService.On("GetBookByID", mock.Anything, int32(1)).Return(nil, errors.New("not found"))
 				mockService.On("DeleteBook", mock.Anything, int32(1)).Return(errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,

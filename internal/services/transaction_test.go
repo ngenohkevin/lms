@@ -572,6 +572,8 @@ func TestTransactionService_ReturnBook_Success(t *testing.T) {
 	book := createTestBook()
 	bookCopy := queries.BookCopy{ID: copyID, BookID: bookID, Status: pgtype.Text{String: "available", Valid: true}}
 
+	student := createTestStudent()
+
 	// Setup mocks - using GetTransactionByIDWithCopy for copy-level tracking
 	mockQueries.On("GetTransactionByIDWithCopy", ctx, transactionID).Return(transactionWithCopy, nil)
 	mockQueries.On("ReturnBook", ctx, mock.AnythingOfType("queries.ReturnBookParams")).Return(returnedTransaction, nil)
@@ -579,6 +581,7 @@ func TestTransactionService_ReturnBook_Success(t *testing.T) {
 	mockQueries.On("UpdateBookCopyStatusAndCondition", ctx, mock.AnythingOfType("queries.UpdateBookCopyStatusAndConditionParams")).Return(bookCopy, nil)
 	mockQueries.On("SyncBookCopyCounts", ctx, bookID).Return(nil)
 	mockQueries.On("GetBookByID", ctx, bookID).Return(book, nil)
+	mockQueries.On("GetStudentByID", ctx, int32(1)).Return(student, nil)
 
 	// Execute
 	result, err := service.ReturnBook(ctx, transactionID)
@@ -1196,6 +1199,7 @@ func TestTransactionService_ReturnBook_WithOverdueFine(t *testing.T) {
 	}
 
 	book := createTestBook()
+	student := createTestStudent()
 	bookCopy := queries.BookCopy{ID: copyID, BookID: bookID, Status: pgtype.Text{String: "available", Valid: true}}
 
 	// Setup mocks
@@ -1205,6 +1209,7 @@ func TestTransactionService_ReturnBook_WithOverdueFine(t *testing.T) {
 	mockQueries.On("UpdateBookCopyStatusAndCondition", ctx, mock.AnythingOfType("queries.UpdateBookCopyStatusAndConditionParams")).Return(bookCopy, nil)
 	mockQueries.On("SyncBookCopyCounts", ctx, bookID).Return(nil)
 	mockQueries.On("GetBookByID", ctx, bookID).Return(book, nil)
+	mockQueries.On("GetStudentByID", ctx, int32(1)).Return(student, nil)
 
 	// Execute
 	result, err := service.ReturnBook(ctx, transactionID)
@@ -1580,6 +1585,7 @@ func TestTransactionService_ReturnBookWithCondition_Success(t *testing.T) {
 
 	book := createTestBook()
 	book.Condition = pgtype.Text{String: "good", Valid: true}
+	student := createTestStudent()
 	bookCopy := queries.BookCopy{ID: copyID, BookID: bookID, Status: pgtype.Text{String: "available", Valid: true}}
 
 	// Setup mocks
@@ -1589,6 +1595,7 @@ func TestTransactionService_ReturnBookWithCondition_Success(t *testing.T) {
 	mockQueries.On("UpdateBookCopyStatusAndCondition", ctx, mock.AnythingOfType("queries.UpdateBookCopyStatusAndConditionParams")).Return(bookCopy, nil)
 	mockQueries.On("SyncBookCopyCounts", ctx, bookID).Return(nil)
 	mockQueries.On("GetBookByID", ctx, bookID).Return(book, nil)
+	mockQueries.On("GetStudentByID", ctx, int32(1)).Return(student, nil)
 	mockQueries.On("UpdateBookCondition", ctx, mock.AnythingOfType("queries.UpdateBookConditionParams")).Return(nil)
 
 	// Execute
@@ -1662,6 +1669,7 @@ func TestTransactionService_ReturnBook_AvailabilityUpdate_Success(t *testing.T) 
 
 	book := createTestBook()
 	book.AvailableCopies = pgtype.Int4{Int32: 3, Valid: true} // After sync
+	student := createTestStudent()
 	bookCopy := queries.BookCopy{ID: copyID, BookID: bookID, Status: pgtype.Text{String: "available", Valid: true}}
 
 	// Setup mocks
@@ -1671,6 +1679,7 @@ func TestTransactionService_ReturnBook_AvailabilityUpdate_Success(t *testing.T) 
 	mockQueries.On("UpdateBookCopyStatusAndCondition", ctx, mock.AnythingOfType("queries.UpdateBookCopyStatusAndConditionParams")).Return(bookCopy, nil)
 	mockQueries.On("SyncBookCopyCounts", ctx, bookID).Return(nil)
 	mockQueries.On("GetBookByID", ctx, bookID).Return(book, nil)
+	mockQueries.On("GetStudentByID", ctx, int32(1)).Return(student, nil)
 
 	// Execute
 	result, err := service.ReturnBook(ctx, transactionID)
@@ -1756,6 +1765,7 @@ func TestTransactionService_ReturnBook_AvailabilityUpdate_BoundaryConditions(t *
 	// Book starts with zero available copies (boundary condition)
 	book := createTestBook()
 	book.AvailableCopies = pgtype.Int4{Int32: 0, Valid: true}
+	student := createTestStudent()
 	bookCopy := queries.BookCopy{ID: copyID, BookID: bookID, Status: pgtype.Text{String: "available", Valid: true}}
 
 	// Setup mocks in order of execution:
@@ -1768,6 +1778,7 @@ func TestTransactionService_ReturnBook_AvailabilityUpdate_BoundaryConditions(t *
 	mockQueries.On("SyncBookCopyCounts", ctx, bookID).Return(nil)
 	// 4. Get book to check if condition update is needed
 	mockQueries.On("GetBookByID", ctx, bookID).Return(book, nil)
+	mockQueries.On("GetStudentByID", ctx, int32(1)).Return(student, nil)
 
 	// Execute
 	result, err := service.ReturnBook(ctx, transactionID)
