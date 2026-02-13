@@ -11,9 +11,9 @@ import (
 )
 
 const (
-	presenceKeyPrefix  = "presence:user:"
-	presenceSetKey     = "presence:online_users"
-	presenceTTL        = 15 * time.Minute
+	presenceKeyPrefix = "presence:user:"
+	presenceSetKey    = "presence:online_users"
+	presenceTTL       = 15 * time.Minute
 )
 
 // UserPresenceInfo represents a user's presence data
