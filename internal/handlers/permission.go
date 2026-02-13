@@ -71,12 +71,12 @@ func (h *PermissionHandler) GetRolePermissions(c *gin.Context) {
 	roleStr := c.Param("role")
 	role := models.UserRole(roleStr)
 
-	if role != models.RoleAdmin && role != models.RoleLibrarian && role != models.RoleStaff {
+	if role != models.RoleSuperAdmin && role != models.RoleAdmin && role != models.RoleLibrarian && role != models.RoleStaff {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error": gin.H{
 				"code":    "INVALID_ROLE",
-				"message": "Invalid role. Must be 'admin', 'librarian', or 'staff'",
+				"message": "Invalid role. Must be 'super_admin', 'admin', 'librarian', or 'staff'",
 			},
 		})
 		return
@@ -116,15 +116,30 @@ func (h *PermissionHandler) UpdateRolePermissions(c *gin.Context) {
 	roleStr := c.Param("role")
 	role := models.UserRole(roleStr)
 
-	if role != models.RoleAdmin && role != models.RoleLibrarian && role != models.RoleStaff {
+	if role != models.RoleSuperAdmin && role != models.RoleAdmin && role != models.RoleLibrarian && role != models.RoleStaff {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
 			"error": gin.H{
 				"code":    "INVALID_ROLE",
-				"message": "Invalid role. Must be 'admin', 'librarian', or 'staff'",
+				"message": "Invalid role. Must be 'super_admin', 'admin', 'librarian', or 'staff'",
 			},
 		})
 		return
+	}
+
+	// Only super_admins can modify super_admin role permissions
+	if role == models.RoleSuperAdmin {
+		currentUserRole := middleware.GetUserRole(c)
+		if currentUserRole != models.RoleSuperAdmin {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"error": gin.H{
+					"code":    "CANNOT_MODIFY_SUPER_ADMIN",
+					"message": "Only super admins can modify super admin role permissions",
+				},
+			})
+			return
+		}
 	}
 
 	var req models.UpdateRolePermissionsRequest
