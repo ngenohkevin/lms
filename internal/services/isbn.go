@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -184,6 +185,11 @@ func (s *ISBNService) FetchBookInfoByISBN(ctx context.Context, isbn string) (*mo
 	merged := s.mergeResults(isbn, googleResult, openLibEditionResult, openLibBibkeysResult)
 	if merged == nil {
 		return nil, fmt.Errorf("no book information found for ISBN: %s", isbn)
+	}
+
+	// If no cover image found from primary sources, try fallback sources
+	if merged.CoverImageURL == "" {
+		merged.CoverImageURL = s.fetchCoverFallback(ctx, isbn)
 	}
 
 	// Cache the result in Redis
@@ -510,6 +516,127 @@ func (s *ISBNService) fetchFromOpenLibraryBibkeys(ctx context.Context, isbn stri
 	}
 
 	return bookInfo, nil
+}
+
+// fetchCoverFallback tries direct CDN cover image URLs when primary APIs don't return one.
+// These are static file lookups (not API calls), so they don't have rate limits.
+// Each URL is checked with a HEAD request in parallel; the first valid one wins.
+func (s *ISBNService) fetchCoverFallback(ctx context.Context, isbn string) string {
+	fallbackCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	isbn10 := toISBN10(isbn)
+
+	// Direct CDN image URLs — these serve static files, no API rate limits
+	candidates := []string{
+		// Open Library covers CDN (serves images directly by ISBN)
+		fmt.Sprintf("https://covers.openlibrary.org/b/isbn/%s-L.jpg", isbn),
+	}
+
+	// Amazon product images (only work with ISBN-10)
+	if isbn10 != "" {
+		candidates = append(candidates,
+			fmt.Sprintf("https://images-na.ssl-images-amazon.com/images/P/%s.01.LZZZZZZZ.jpg", isbn10),
+		)
+	}
+
+	type result struct {
+		url string
+	}
+
+	// Race all candidates in parallel, return the first valid one
+	ch := make(chan result, len(candidates))
+	for _, candidateURL := range candidates {
+		go func(u string) {
+			if s.isValidCoverURL(fallbackCtx, u) {
+				ch <- result{url: u}
+			} else {
+				ch <- result{}
+			}
+		}(candidateURL)
+	}
+
+	// Collect results, return first valid one
+	for range candidates {
+		r := <-ch
+		if r.url != "" {
+			return r.url
+		}
+	}
+
+	return ""
+}
+
+// isValidCoverURL checks if a URL returns a real image (not a placeholder).
+// Uses a GET with a range header to verify actual content size since some CDNs
+// don't return Content-Length in HEAD responses.
+func (s *ISBNService) isValidCoverURL(ctx context.Context, imageURL string) bool {
+	// Use GET with a small range to check actual content
+	req, err := http.NewRequestWithContext(ctx, "GET", imageURL, nil)
+	if err != nil {
+		return false
+	}
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		return false
+	}
+
+	// Check content type is actually an image
+	contentType := resp.Header.Get("Content-Type")
+	if contentType != "" && !strings.HasPrefix(contentType, "image/") {
+		return false
+	}
+
+	// If Content-Length is known, use it
+	if resp.ContentLength > 0 {
+		return resp.ContentLength >= 1000
+	}
+
+	// Content-Length unknown (-1) — read up to 1001 bytes to check actual size
+	buf := make([]byte, 1001)
+	n, _ := io.ReadFull(resp.Body, buf)
+	return n >= 1000
+}
+
+// toISBN10 converts an ISBN-13 to ISBN-10 if possible (only for 978-prefixed ISBNs).
+// Returns empty string if conversion isn't possible.
+func toISBN10(isbn string) string {
+	clean := strings.ReplaceAll(strings.ReplaceAll(isbn, "-", ""), " ", "")
+
+	if len(clean) == 10 {
+		return clean
+	}
+
+	if len(clean) != 13 || !strings.HasPrefix(clean, "978") {
+		return ""
+	}
+
+	// Take digits 4-12 of ISBN-13 (drop "978" prefix and old check digit)
+	base := clean[3:12]
+
+	// Calculate ISBN-10 check digit
+	sum := 0
+	for i, c := range base {
+		digit := int(c - '0')
+		sum += digit * (10 - i)
+	}
+	remainder := sum % 11
+	check := (11 - remainder) % 11
+
+	var checkChar string
+	if check == 10 {
+		checkChar = "X"
+	} else {
+		checkChar = strconv.Itoa(check)
+	}
+
+	return base + checkChar
 }
 
 // extractPageCount extracts page count from pagination strings like "400", "xii, 400 p.", "400 pages"

@@ -617,6 +617,124 @@ func (h *BookHandler) FetchBookByISBN(c *gin.Context) {
 	})
 }
 
+// RefreshBookISBN fetches ISBN data and updates only empty fields on an existing book.
+// Returns the updated book and a list of fields that were filled.
+func (h *BookHandler) RefreshBookISBN(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseInt(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error:   ErrorDetail{Code: "VALIDATION_ERROR", Message: "Invalid book ID"},
+		})
+		return
+	}
+
+	// Get the existing book
+	book, err := h.bookService.GetBookByID(c.Request.Context(), int32(id))
+	if err != nil {
+		if isNotFoundError(err) {
+			c.JSON(http.StatusNotFound, ErrorResponse{
+				Success: false,
+				Error:   ErrorDetail{Code: "NOT_FOUND", Message: "Book not found"},
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error:   ErrorDetail{Code: "INTERNAL_ERROR", Message: "Failed to fetch book"},
+		})
+		return
+	}
+
+	// Must have an ISBN to refresh
+	if book.ISBN == nil || *book.ISBN == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Success: false,
+			Error:   ErrorDetail{Code: "VALIDATION_ERROR", Message: "Book has no ISBN to look up"},
+		})
+		return
+	}
+
+	// Fetch ISBN data (hits Redis cache if available — no external API rate limit)
+	isbnInfo, err := h.isbnService.FetchBookInfoByISBN(c.Request.Context(), *book.ISBN)
+	if err != nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{
+			Success: false,
+			Error:   ErrorDetail{Code: "NOT_FOUND", Message: "No ISBN data found"},
+		})
+		return
+	}
+
+	// Build update request with only empty fields
+	updateReq := models.UpdateBookRequest{}
+	var updated []string
+
+	if isbnInfo.Description != "" && (book.Description == nil || *book.Description == "") {
+		updateReq.Description = &isbnInfo.Description
+		updated = append(updated, "description")
+	}
+	if isbnInfo.CoverImageURL != "" && (book.CoverImageURL == nil || *book.CoverImageURL == "") {
+		updateReq.CoverImageURL = &isbnInfo.CoverImageURL
+		updated = append(updated, "cover_image_url")
+	}
+	if isbnInfo.Publisher != "" && (book.Publisher == nil || *book.Publisher == "") {
+		updateReq.Publisher = &isbnInfo.Publisher
+		updated = append(updated, "publisher")
+	}
+	if isbnInfo.PublishedYear > 0 && (book.PublishedYear == nil || *book.PublishedYear == 0) {
+		year := int32(isbnInfo.PublishedYear)
+		updateReq.PublishedYear = &year
+		updated = append(updated, "published_year")
+	}
+	if isbnInfo.Language != "" && (book.Language == nil || *book.Language == "") {
+		updateReq.Language = &isbnInfo.Language
+		updated = append(updated, "language")
+	}
+	if isbnInfo.PageCount > 0 && (book.PageCount == nil || *book.PageCount == 0) {
+		pages := int32(isbnInfo.PageCount)
+		updateReq.PageCount = &pages
+		updated = append(updated, "page_count")
+	}
+
+	// Nothing to update
+	if len(updated) == 0 {
+		c.JSON(http.StatusOK, SuccessResponse{
+			Success: true,
+			Data: gin.H{
+				"book":    book,
+				"updated": updated,
+			},
+			Message: "No empty fields to fill",
+		})
+		return
+	}
+
+	// Apply the update
+	updatedBook, err := h.bookService.UpdateBook(c.Request.Context(), int32(id), updateReq)
+	if err != nil {
+		slog.Error("Failed to update book from ISBN refresh", "book_id", id, "error", err)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Success: false,
+			Error:   ErrorDetail{Code: "INTERNAL_ERROR", Message: "Failed to update book"},
+		})
+		return
+	}
+
+	middleware.Audit(c, "books", int32(id), "ISBN_REFRESH", nil, map[string]interface{}{
+		"updated_fields": updated,
+	})
+
+	c.JSON(http.StatusOK, SuccessResponse{
+		Success: true,
+		Data: gin.H{
+			"book":    updatedBook,
+			"updated": updated,
+		},
+		Message: "Book updated from ISBN data",
+	})
+}
+
 // ProcessBarcode processes a scanned barcode and returns book information
 // @Summary Process barcode scan
 // @Description Process a scanned barcode (ISBN, EAN, UPC) and return book information

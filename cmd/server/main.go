@@ -426,6 +426,7 @@ func setupRoutes(
 
 				// ISBN lookup - requires books.create (used when adding books)
 				books.POST("/isbn/fetch", requirePerm("books.create"), bookHandler.FetchBookByISBN)
+				books.POST("/:id/refresh-isbn", requirePerm("books.update"), bookHandler.RefreshBookISBN)
 				books.POST("/barcode/scan", requirePerm("books.create"), bookHandler.ProcessBarcode)
 				books.POST("/description/process", requirePerm("books.create"), bookHandler.ProcessRichTextDescription)
 
