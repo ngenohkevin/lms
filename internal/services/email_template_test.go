@@ -55,12 +55,12 @@ func TestEmailTemplateProcessing(t *testing.T) {
 		},
 		{
 			name:     "Numeric variables",
-			template: "Fine amount: ${{.FineAmount}} for {{.DaysOverdue}} days overdue",
+			template: "Fine amount: KSH {{.FineAmount}} for {{.DaysOverdue}} days overdue",
 			data: map[string]interface{}{
 				"FineAmount":  10.50,
 				"DaysOverdue": 5,
 			},
-			expected: "Fine amount: $10.5 for 5 days overdue",
+			expected: "Fine amount: KSH 10.5 for 5 days overdue",
 		},
 		{
 			name:     "Template with no variables",

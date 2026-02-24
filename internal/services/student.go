@@ -445,7 +445,7 @@ func (s *StudentService) DeleteStudent(ctx context.Context, id int32, deletedBy 
 	if err == nil && fineStats.UnpaidFines.Valid {
 		unpaidFines, _ := fineStats.UnpaidFines.Float64Value()
 		if unpaidFines.Float64 > 0 {
-			return fmt.Errorf("cannot delete student %s: has unpaid fines ($%.2f) - fines must be paid or waived first", student.StudentID, unpaidFines.Float64)
+			return fmt.Errorf("cannot delete student %s: has unpaid fines (KSH %.2f) - fines must be paid or waived first", student.StudentID, unpaidFines.Float64)
 		}
 	}
 

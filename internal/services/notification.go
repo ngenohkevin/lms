@@ -621,7 +621,7 @@ func (s *NotificationService) SendOverdueReminders(ctx context.Context) error {
 			"This is an urgent reminder that the book \"%s\" by %s is overdue.\n\n"+
 			"Due Date: %s\n"+
 			"Days Overdue: %d\n"+
-			"Fine Amount: $%s\n\n"+
+			"Fine Amount: KSH %s\n\n"+
 			"Please return the book immediately to avoid additional fees.\n\n"+
 			"Book ID: %s\n"+
 			"Student ID: %s\n\n"+
@@ -862,15 +862,15 @@ func (s *NotificationService) SendFineNotices(ctx context.Context) error {
 		}
 
 		// Create personalized notification
-		title := fmt.Sprintf("Outstanding Fine: $%s", fineAmount)
+		title := fmt.Sprintf("Outstanding Fine: KSH %s", fineAmount)
 		message := fmt.Sprintf("Dear %s %s,\n\n"+
-			"You have an outstanding fine of $%s for the book \"%s\" by %s.\n\n"+
+			"You have an outstanding fine of KSH %s for the book \"%s\" by %s.\n\n"+
 			"Book Status: %s\n"+
 			"%s\n\n"+
 			"Please pay this fine at the library as soon as possible.\n\n"+
 			"Book ID: %s\n"+
 			"Student ID: %s\n"+
-			"Fine Amount: $%s\n\n"+
+			"Fine Amount: KSH %s\n\n"+
 			"Contact the library for payment options.\n\n"+
 			"Thank you,\nLibrary Management System",
 			transaction.FirstName, transaction.LastName,

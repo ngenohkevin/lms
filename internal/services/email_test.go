@@ -527,7 +527,7 @@ func TestEmailService_Integration(t *testing.T) {
 			"StudentName": "John Doe",
 			"BookTitle":   "The Great Gatsby",
 			"DueDate":     "2024-01-15",
-			"FineAmount":  "$5.00",
+			"FineAmount":  "KSH 5.00",
 		}
 
 		// Process template (this part can be tested without SMTP)
@@ -540,7 +540,7 @@ func TestEmailService_Integration(t *testing.T) {
 		assert.Contains(t, body, "Dear John Doe")
 		assert.Contains(t, body, "The Great Gatsby")
 		assert.Contains(t, body, "2024-01-15")
-		assert.Contains(t, body, "$5.00")
+		assert.Contains(t, body, "KSH 5.00")
 
 		// Build message
 		message := service.buildMessage(service.config.FromEmail, "user@example.com", subject, body, template.IsHTML)

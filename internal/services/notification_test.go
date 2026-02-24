@@ -1209,7 +1209,7 @@ func TestNotificationService_SendFineNotices(t *testing.T) {
 				ID:           2,
 				StudentID:    2,
 				BookID:       2,
-				FineAmount:   createNumeric("1000"),                                                // $10.00
+				FineAmount:   createNumeric("1000"),                                                // KSH 10.00
 				ReturnedDate: pgtype.Timestamp{Time: time.Now().Add(-time.Hour * 24), Valid: true}, // Returned but fine not paid
 				DueDate:      pgtype.Timestamp{Time: time.Now().Add(-time.Hour * 24 * 3), Valid: true},
 				FirstName:    "Jane",
