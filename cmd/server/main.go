@@ -135,7 +135,7 @@ func main() {
 	reservationService := services.NewReservationService(db.Queries).
 		WithDefaultReservationDays(cfg.Borrowing.ReservationExpiryDays)
 	reportService := services.NewReportService(db.Queries, cacheService)
-	isbnService := services.NewISBNService()
+	isbnService := services.NewISBNService().WithRedis(rc)
 	recommendationService := services.NewRecommendationService(bookService, db.Queries)
 	ratingService := services.NewRatingService(cacheService, bookService, studentService)
 	importExportService := services.NewImportExportService(bookService, isbnService, studentService, db.Queries, "./uploads")

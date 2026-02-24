@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -13,11 +14,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 )
-
-var allowedImageDomains = map[string]bool{
-	"books.google.com":       true,
-	"covers.openlibrary.org": true,
-}
 
 const (
 	imageCacheTTL    = 7 * 24 * time.Hour
@@ -54,8 +50,9 @@ func (h *ImageProxyHandler) ProxyImage(c *gin.Context) {
 		return
 	}
 
-	if !allowedImageDomains[parsed.Hostname()] {
-		c.JSON(http.StatusForbidden, gin.H{"error": "domain not allowed"})
+	// Block private/internal IPs to prevent SSRF
+	if isPrivateHost(parsed.Hostname()) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "internal addresses not allowed"})
 		return
 	}
 
@@ -166,4 +163,24 @@ func (h *ImageProxyHandler) InvalidateCache(ctx context.Context, rawURL string) 
 	hash := sha256.Sum256([]byte(rawURL))
 	key := imageCachePrefix + hex.EncodeToString(hash[:])
 	h.redis.Del(ctx, key, key+":ct")
+}
+
+// isPrivateHost checks if a hostname resolves to a private/internal IP.
+func isPrivateHost(host string) bool {
+	// Block localhost
+	if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+		return true
+	}
+
+	// Resolve hostname and check if any IP is private
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return false
+	}
+	for _, ip := range ips {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+			return true
+		}
+	}
+	return false
 }

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ngenohkevin/lms/internal/models"
+	"github.com/redis/go-redis/v9"
 )
 
 // ISBNServiceInterface defines the interface for ISBN-related operations
@@ -21,10 +22,16 @@ type ISBNServiceInterface interface {
 	ValidateISBN(isbn string) error
 }
 
+const (
+	isbnCachePrefix = "isbn:"
+	isbnCacheTTL    = 30 * 24 * time.Hour // 30 days
+)
+
 // ISBNService handles ISBN-related operations
 type ISBNService struct {
 	httpClient        *http.Client
 	googleBooksAPIKey string
+	redis             *redis.Client
 }
 
 // NewISBNService creates a new ISBN service
@@ -35,6 +42,12 @@ func NewISBNService() *ISBNService {
 		},
 		googleBooksAPIKey: os.Getenv("GOOGLE_BOOKS_API_KEY"),
 	}
+}
+
+// WithRedis sets the Redis client for caching ISBN lookups
+func (s *ISBNService) WithRedis(rc *redis.Client) *ISBNService {
+	s.redis = rc
+	return s
 }
 
 // GoogleBooksResponse represents the Google Books API response
@@ -110,15 +123,28 @@ type OpenLibraryBibkeysResponse map[string]struct {
 	} `json:"cover"`
 }
 
-// FetchBookInfoByISBN fetches book information from multiple APIs in parallel and merges results
+// FetchBookInfoByISBN fetches book information from multiple APIs in parallel and merges results.
+// Results are cached in Redis to avoid rate limiting from external APIs.
 func (s *ISBNService) FetchBookInfoByISBN(ctx context.Context, isbn string) (*models.ISBNBookInfo, error) {
 	// Validate ISBN first
 	if err := s.ValidateISBN(isbn); err != nil {
 		return nil, fmt.Errorf("invalid ISBN: %w", err)
 	}
 
+	// Check Redis cache
+	if s.redis != nil {
+		cacheKey := isbnCachePrefix + isbn
+		cached, err := s.redis.Get(ctx, cacheKey).Bytes()
+		if err == nil {
+			var info models.ISBNBookInfo
+			if json.Unmarshal(cached, &info) == nil {
+				return &info, nil
+			}
+		}
+	}
+
 	// Create a context with timeout for the entire operation
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	fetchCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
 	// Results from each source
@@ -131,7 +157,7 @@ func (s *ISBNService) FetchBookInfoByISBN(ctx context.Context, isbn string) (*mo
 	// Google Books API
 	go func() {
 		defer wg.Done()
-		if result, err := s.fetchFromGoogleBooks(ctx, isbn); err == nil {
+		if result, err := s.fetchFromGoogleBooks(fetchCtx, isbn); err == nil {
 			googleResult = result
 		}
 	}()
@@ -139,7 +165,7 @@ func (s *ISBNService) FetchBookInfoByISBN(ctx context.Context, isbn string) (*mo
 	// Open Library Edition API (/isbn/{isbn}.json)
 	go func() {
 		defer wg.Done()
-		if result, err := s.fetchFromOpenLibraryEdition(ctx, isbn); err == nil {
+		if result, err := s.fetchFromOpenLibraryEdition(fetchCtx, isbn); err == nil {
 			openLibEditionResult = result
 		}
 	}()
@@ -147,7 +173,7 @@ func (s *ISBNService) FetchBookInfoByISBN(ctx context.Context, isbn string) (*mo
 	// Open Library Bibkeys API (has pagination and cover data)
 	go func() {
 		defer wg.Done()
-		if result, err := s.fetchFromOpenLibraryBibkeys(ctx, isbn); err == nil {
+		if result, err := s.fetchFromOpenLibraryBibkeys(fetchCtx, isbn); err == nil {
 			openLibBibkeysResult = result
 		}
 	}()
@@ -158,6 +184,16 @@ func (s *ISBNService) FetchBookInfoByISBN(ctx context.Context, isbn string) (*mo
 	merged := s.mergeResults(isbn, googleResult, openLibEditionResult, openLibBibkeysResult)
 	if merged == nil {
 		return nil, fmt.Errorf("no book information found for ISBN: %s", isbn)
+	}
+
+	// Cache the result in Redis
+	if s.redis != nil {
+		cacheKey := isbnCachePrefix + isbn
+		if data, err := json.Marshal(merged); err == nil {
+			cacheCtx, cacheCancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cacheCancel()
+			s.redis.Set(cacheCtx, cacheKey, data, isbnCacheTTL)
+		}
 	}
 
 	return merged, nil
