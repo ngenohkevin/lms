@@ -20,6 +20,7 @@ SELECT
     t.due_date,
     t.returned_date,
     GREATEST(COALESCE(t.returned_date::date, CURRENT_DATE) - t.due_date::date, 0) as days_overdue,
+    t.fine_reason,
     t.created_at
 FROM transactions t
 INNER JOIN students s ON t.student_id = s.id
@@ -63,6 +64,7 @@ SELECT
     t.due_date,
     t.returned_date,
     GREATEST(COALESCE(t.returned_date::date, CURRENT_DATE) - t.due_date::date, 0) as days_overdue,
+    t.fine_reason,
     t.created_at
 FROM transactions t
 INNER JOIN students s ON t.student_id = s.id
@@ -82,6 +84,7 @@ SELECT
     t.due_date,
     t.returned_date,
     GREATEST(COALESCE(t.returned_date::date, CURRENT_DATE) - t.due_date::date, 0) as days_overdue,
+    t.fine_reason,
     t.created_at
 FROM transactions t
 INNER JOIN books b ON t.book_id = b.id
@@ -156,6 +159,7 @@ WHERE t.due_date < NOW()
 -- name: UpdateFineAmount :exec
 UPDATE transactions
 SET fine_amount = $2,
+    fine_reason = $3,
     updated_at = NOW()
 WHERE id = $1 AND fine_paid = false AND COALESCE(fine_waived, false) = false;
 

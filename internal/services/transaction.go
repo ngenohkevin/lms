@@ -111,8 +111,8 @@ func NewTransactionService(queries TransactionQuerier) *TransactionService {
 	return &TransactionService{
 		queries:         queries,
 		defaultLoanDays: 14,                          // 2 weeks default loan period
-		finePerDay:      decimal.NewFromFloat(0.50),  // $0.50 per day fine
-		lostBookFine:    decimal.NewFromFloat(50.00), // $50 default lost book fine
+		finePerDay:      decimal.NewFromFloat(0.50),  // KSH 0.50 per day fine
+		lostBookFine:    decimal.NewFromFloat(50.00), // KSH 50 default lost book fine
 		maxBooksPerUser: 5,                           // Max 5 books per student
 		maxRenewals:     2,                           // Max 2 renewals per book per student
 	}
@@ -614,18 +614,42 @@ func (s *TransactionService) ReturnBookWithCondition(ctx context.Context, transa
 
 	// Calculate fine if overdue (uses dynamic rate from settings)
 	fine := decimal.Zero
+	returnTime := time.Now()
 	if transactionRow.DueDate.Valid {
-		fine = s.calculateFine(ctx, transactionRow.DueDate.Time, time.Now())
+		fine = s.calculateFine(ctx, transactionRow.DueDate.Time, returnTime)
 	}
 
 	// Convert decimal to pgtype.Numeric with proper precision
 	fineNumeric := pgtype.Numeric{}
+	fineReasonText := pgtype.Text{}
 	if fine.GreaterThan(decimal.Zero) {
 		// Convert to proper numeric format with 2 decimal places
 		fineScaled := fine.Shift(2) // Shift by 2 decimal places for cents
 		fineNumeric.Int = fineScaled.BigInt()
 		fineNumeric.Exp = -2 // 2 decimal places
 		fineNumeric.Valid = true
+
+		// Build fine reason
+		dueDate := transactionRow.DueDate.Time
+		dueMidnight := time.Date(dueDate.Year(), dueDate.Month(), dueDate.Day(), 0, 0, 0, 0, time.UTC)
+		returnMidnight := time.Date(returnTime.Year(), returnTime.Month(), returnTime.Day(), 0, 0, 0, 0, time.UTC)
+		totalDays := int(returnMidnight.Sub(dueMidnight) / (24 * time.Hour))
+		gracePeriod := s.getEffectiveGracePeriod(ctx)
+		effectiveDays := totalDays - gracePeriod
+		if effectiveDays < 1 {
+			effectiveDays = 1
+		}
+		fineRate := s.getEffectiveFinePerDay(ctx)
+		reason := fmt.Sprintf("Returned %d day(s) late (due: %s, returned: %s) at KSH %s/day",
+			effectiveDays, dueDate.Format("Jan 2, 2006"), returnTime.Format("Jan 2, 2006"), fineRate.StringFixed(2))
+		if gracePeriod > 0 {
+			reason += fmt.Sprintf(" (grace: %d days)", gracePeriod)
+		}
+		maxFine := s.getEffectiveMaxFine(ctx)
+		if maxFine.IsPositive() && fine.GreaterThanOrEqual(maxFine) {
+			reason += fmt.Sprintf(" (capped at KSH %s)", maxFine.StringFixed(2))
+		}
+		fineReasonText = pgtype.Text{String: reason, Valid: true}
 	}
 
 	var transaction queries.Transaction
@@ -645,6 +669,7 @@ func (s *TransactionService) ReturnBookWithCondition(ctx context.Context, transa
 			FineAmount:      fineNumeric,
 			ReturnCondition: pgtype.Text{String: returnCondition, Valid: true},
 			ConditionNotes:  pgtype.Text{String: conditionNotes, Valid: conditionNotes != ""},
+			FineReason:      fineReasonText,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to return book: %w", err)
@@ -683,6 +708,7 @@ func (s *TransactionService) ReturnBookWithCondition(ctx context.Context, transa
 			FineAmount:      fineNumeric,
 			ReturnCondition: pgtype.Text{String: returnCondition, Valid: true},
 			ConditionNotes:  pgtype.Text{String: conditionNotes, Valid: conditionNotes != ""},
+			FineReason:      fineReasonText,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to return book: %w", err)

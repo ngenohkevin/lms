@@ -129,6 +129,7 @@ SELECT
     t.due_date,
     t.returned_date,
     GREATEST(COALESCE(t.returned_date::date, CURRENT_DATE) - t.due_date::date, 0) as days_overdue,
+    t.fine_reason,
     t.created_at
 FROM transactions t
 INNER JOIN students s ON t.student_id = s.id
@@ -158,6 +159,7 @@ type GetFineByTransactionIDRow struct {
 	DueDate          pgtype.Timestamp `db:"due_date" json:"due_date"`
 	ReturnedDate     pgtype.Timestamp `db:"returned_date" json:"returned_date"`
 	DaysOverdue      interface{}      `db:"days_overdue" json:"days_overdue"`
+	FineReason       pgtype.Text      `db:"fine_reason" json:"fine_reason"`
 	CreatedAt        pgtype.Timestamp `db:"created_at" json:"created_at"`
 }
 
@@ -184,6 +186,7 @@ func (q *Queries) GetFineByTransactionID(ctx context.Context, id int32) (GetFine
 		&i.DueDate,
 		&i.ReturnedDate,
 		&i.DaysOverdue,
+		&i.FineReason,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -363,6 +366,7 @@ SELECT
     t.due_date,
     t.returned_date,
     GREATEST(COALESCE(t.returned_date::date, CURRENT_DATE) - t.due_date::date, 0) as days_overdue,
+    t.fine_reason,
     t.created_at
 FROM transactions t
 INNER JOIN books b ON t.book_id = b.id
@@ -384,6 +388,7 @@ type GetUnpaidFinesByStudentRow struct {
 	DueDate       pgtype.Timestamp `db:"due_date" json:"due_date"`
 	ReturnedDate  pgtype.Timestamp `db:"returned_date" json:"returned_date"`
 	DaysOverdue   interface{}      `db:"days_overdue" json:"days_overdue"`
+	FineReason    pgtype.Text      `db:"fine_reason" json:"fine_reason"`
 	CreatedAt     pgtype.Timestamp `db:"created_at" json:"created_at"`
 }
 
@@ -406,6 +411,7 @@ func (q *Queries) GetUnpaidFinesByStudent(ctx context.Context, studentID int32) 
 			&i.DueDate,
 			&i.ReturnedDate,
 			&i.DaysOverdue,
+			&i.FineReason,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -439,6 +445,7 @@ SELECT
     t.due_date,
     t.returned_date,
     GREATEST(COALESCE(t.returned_date::date, CURRENT_DATE) - t.due_date::date, 0) as days_overdue,
+    t.fine_reason,
     t.created_at
 FROM transactions t
 INNER JOIN students s ON t.student_id = s.id
@@ -480,6 +487,7 @@ type ListFinesRow struct {
 	DueDate          pgtype.Timestamp `db:"due_date" json:"due_date"`
 	ReturnedDate     pgtype.Timestamp `db:"returned_date" json:"returned_date"`
 	DaysOverdue      interface{}      `db:"days_overdue" json:"days_overdue"`
+	FineReason       pgtype.Text      `db:"fine_reason" json:"fine_reason"`
 	CreatedAt        pgtype.Timestamp `db:"created_at" json:"created_at"`
 }
 
@@ -517,6 +525,7 @@ func (q *Queries) ListFines(ctx context.Context, arg ListFinesParams) ([]ListFin
 			&i.DueDate,
 			&i.ReturnedDate,
 			&i.DaysOverdue,
+			&i.FineReason,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -537,7 +546,7 @@ SET fine_paid = true,
 WHERE id = $1
     AND fine_amount > 0
     AND fine_paid = false
-RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by
+RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by, fine_reason
 `
 
 func (q *Queries) PayFineByTransactionID(ctx context.Context, id int32) (Transaction, error) {
@@ -569,6 +578,7 @@ func (q *Queries) PayFineByTransactionID(ctx context.Context, id int32) (Transac
 		&i.RenewalCount,
 		&i.LastRenewedAt,
 		&i.LastRenewedBy,
+		&i.FineReason,
 	)
 	return i, err
 }
@@ -576,6 +586,7 @@ func (q *Queries) PayFineByTransactionID(ctx context.Context, id int32) (Transac
 const updateFineAmount = `-- name: UpdateFineAmount :exec
 UPDATE transactions
 SET fine_amount = $2,
+    fine_reason = $3,
     updated_at = NOW()
 WHERE id = $1 AND fine_paid = false AND COALESCE(fine_waived, false) = false
 `
@@ -583,10 +594,11 @@ WHERE id = $1 AND fine_paid = false AND COALESCE(fine_waived, false) = false
 type UpdateFineAmountParams struct {
 	ID         int32          `db:"id" json:"id"`
 	FineAmount pgtype.Numeric `db:"fine_amount" json:"fine_amount"`
+	FineReason pgtype.Text    `db:"fine_reason" json:"fine_reason"`
 }
 
 func (q *Queries) UpdateFineAmount(ctx context.Context, arg UpdateFineAmountParams) error {
-	_, err := q.db.Exec(ctx, updateFineAmount, arg.ID, arg.FineAmount)
+	_, err := q.db.Exec(ctx, updateFineAmount, arg.ID, arg.FineAmount, arg.FineReason)
 	return err
 }
 
@@ -602,7 +614,7 @@ SET fine_waived = true,
 WHERE id = $1
     AND fine_amount > 0
     AND fine_paid = false
-RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by
+RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by, fine_reason
 `
 
 type WaiveFineByTransactionIDParams struct {
@@ -640,6 +652,7 @@ func (q *Queries) WaiveFineByTransactionID(ctx context.Context, arg WaiveFineByT
 		&i.RenewalCount,
 		&i.LastRenewedAt,
 		&i.LastRenewedBy,
+		&i.FineReason,
 	)
 	return i, err
 }

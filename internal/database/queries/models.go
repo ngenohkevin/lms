@@ -331,6 +331,7 @@ type Transaction struct {
 	LastRenewedAt pgtype.Timestamp `db:"last_renewed_at" json:"last_renewed_at"`
 	// ID of the user (librarian) who performed the last renewal
 	LastRenewedBy pgtype.Int4 `db:"last_renewed_by" json:"last_renewed_by"`
+	FineReason    pgtype.Text `db:"fine_reason" json:"fine_reason"`
 }
 
 type User struct {

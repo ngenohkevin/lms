@@ -46,6 +46,7 @@ type Fine struct {
 	WaivedAt      *time.Time `json:"waived_at,omitempty"`
 	WaivedBy      *int32     `json:"waived_by,omitempty"`
 	WaivedReason  *string    `json:"waived_reason,omitempty"`
+	Reason        string     `json:"reason"`
 	DueDate       time.Time  `json:"due_date"`
 	ReturnedDate  *time.Time `json:"returned_date,omitempty"`
 	DaysOverdue   int32      `json:"days_overdue"`
@@ -60,6 +61,7 @@ type UnpaidFine struct {
 	BookAuthor    string     `json:"book_author"`
 	BookCoverURL  string     `json:"book_cover_url,omitempty"`
 	Amount        float64    `json:"amount"`
+	Reason        string     `json:"reason"`
 	DueDate       time.Time  `json:"due_date"`
 	ReturnedDate  *time.Time `json:"returned_date,omitempty"`
 	DaysOverdue   int32      `json:"days_overdue"`
@@ -254,6 +256,7 @@ func (s *FineService) GetUnpaidFinesByStudent(ctx context.Context, studentID int
 			BookAuthor:    row.BookAuthor,
 			BookCoverURL:  row.BookCoverUrl.String,
 			Amount:        numericToFloat64(row.FineAmount),
+			Reason:        row.FineReason.String,
 			DueDate:       row.DueDate.Time,
 			DaysOverdue:   daysOverdue,
 			CreatedAt:     row.CreatedAt.Time,
@@ -357,9 +360,19 @@ func (s *FineService) CalculateFinesForOverdueBooks(ctx context.Context) (int, e
 
 		// Only update if fine has changed
 		if expectedFine > currentFine {
+			fineRate := s.getEffectiveFinePerDay(ctx)
+			reason := fmt.Sprintf("%d day(s) overdue at KSH %.2f/day", effectiveDays, fineRate)
+			if s.fineGracePeriodDays > 0 {
+				reason += fmt.Sprintf(" (grace: %d days)", s.fineGracePeriodDays)
+			}
+			if s.maxFineAmount > 0 && expectedFine >= s.maxFineAmount {
+				reason += fmt.Sprintf(" (capped at KSH %.2f)", s.maxFineAmount)
+			}
+
 			err := s.queries.UpdateFineAmount(ctx, queries.UpdateFineAmountParams{
 				ID:         row.ID,
 				FineAmount: float64ToNumeric(expectedFine),
+				FineReason: pgtype.Text{String: reason, Valid: true},
 			})
 			if err != nil {
 				slog.Error("Failed to update fine", "transaction_id", row.ID, "error", err)
@@ -497,6 +510,7 @@ func (s *FineService) rowToFine(row queries.ListFinesRow) Fine {
 		Amount:        numericToFloat64(row.FineAmount),
 		Paid:          row.FinePaid.Bool,
 		Waived:        row.FineWaived,
+		Reason:        row.FineReason.String,
 		DueDate:       row.DueDate.Time,
 		DaysOverdue:   daysOverdue,
 		CreatedAt:     row.CreatedAt.Time,
@@ -546,6 +560,7 @@ func (s *FineService) detailRowToFine(row queries.GetFineByTransactionIDRow) Fin
 		Amount:        numericToFloat64(row.FineAmount),
 		Paid:          row.FinePaid.Bool,
 		Waived:        row.FineWaived,
+		Reason:        row.FineReason.String,
 		DueDate:       row.DueDate.Time,
 		DaysOverdue:   daysOverdue,
 		CreatedAt:     row.CreatedAt.Time,

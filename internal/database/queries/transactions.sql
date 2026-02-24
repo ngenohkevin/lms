@@ -105,7 +105,7 @@ LIMIT $1 OFFSET $2;
 
 -- name: ReturnBook :one
 UPDATE transactions
-SET returned_date = NOW(), fine_amount = $2, return_condition = $3, condition_notes = $4, status = 'completed', updated_at = NOW()
+SET returned_date = NOW(), fine_amount = $2, return_condition = $3, condition_notes = $4, fine_reason = $5, status = 'completed', updated_at = NOW()
 WHERE id = $1 AND returned_date IS NULL
 RETURNING *;
 

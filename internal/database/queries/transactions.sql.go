@@ -24,7 +24,7 @@ SET
 WHERE id = $2
   AND returned_date IS NULL
   AND COALESCE(renewal_count, 0) > 0
-RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by
+RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by, fine_reason
 `
 
 type CancelRenewalParams struct {
@@ -62,6 +62,7 @@ func (q *Queries) CancelRenewal(ctx context.Context, arg CancelRenewalParams) (T
 		&i.RenewalCount,
 		&i.LastRenewedAt,
 		&i.LastRenewedBy,
+		&i.FineReason,
 	)
 	return i, err
 }
@@ -81,7 +82,7 @@ SET
 WHERE id = $2
   AND returned_date IS NULL
   AND transaction_type = 'borrow'
-RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by
+RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by, fine_reason
 `
 
 type CancelTransactionParams struct {
@@ -120,6 +121,7 @@ func (q *Queries) CancelTransaction(ctx context.Context, arg CancelTransactionPa
 		&i.RenewalCount,
 		&i.LastRenewedAt,
 		&i.LastRenewedBy,
+		&i.FineReason,
 	)
 	return i, err
 }
@@ -266,7 +268,7 @@ func (q *Queries) CountTransactions(ctx context.Context) (int64, error) {
 const createTransaction = `-- name: CreateTransaction :one
 INSERT INTO transactions (student_id, book_id, transaction_type, due_date, librarian_id, notes)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by
+RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by, fine_reason
 `
 
 type CreateTransactionParams struct {
@@ -314,6 +316,7 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 		&i.RenewalCount,
 		&i.LastRenewedAt,
 		&i.LastRenewedBy,
+		&i.FineReason,
 	)
 	return i, err
 }
@@ -321,7 +324,7 @@ func (q *Queries) CreateTransaction(ctx context.Context, arg CreateTransactionPa
 const createTransactionWithCopy = `-- name: CreateTransactionWithCopy :one
 INSERT INTO transactions (student_id, book_id, copy_id, transaction_type, due_date, librarian_id, notes)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by
+RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by, fine_reason
 `
 
 type CreateTransactionWithCopyParams struct {
@@ -371,6 +374,7 @@ func (q *Queries) CreateTransactionWithCopy(ctx context.Context, arg CreateTrans
 		&i.RenewalCount,
 		&i.LastRenewedAt,
 		&i.LastRenewedBy,
+		&i.FineReason,
 	)
 	return i, err
 }
@@ -386,7 +390,7 @@ func (q *Queries) DeleteTransaction(ctx context.Context, id int32) error {
 }
 
 const getActiveTransactionByCopy = `-- name: GetActiveTransactionByCopy :one
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by FROM transactions t
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, t.fine_reason FROM transactions t
 WHERE t.copy_id = $1 AND t.returned_date IS NULL
 LIMIT 1
 `
@@ -420,6 +424,7 @@ func (q *Queries) GetActiveTransactionByCopy(ctx context.Context, copyID pgtype.
 		&i.RenewalCount,
 		&i.LastRenewedAt,
 		&i.LastRenewedBy,
+		&i.FineReason,
 	)
 	return i, err
 }
@@ -526,7 +531,7 @@ func (q *Queries) GetTransactionAge(ctx context.Context, id int32) (int32, error
 }
 
 const getTransactionByID = `-- name: GetTransactionByID :one
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, t.fine_reason, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
@@ -559,6 +564,7 @@ type GetTransactionByIDRow struct {
 	RenewalCount     pgtype.Int4      `db:"renewal_count" json:"renewal_count"`
 	LastRenewedAt    pgtype.Timestamp `db:"last_renewed_at" json:"last_renewed_at"`
 	LastRenewedBy    pgtype.Int4      `db:"last_renewed_by" json:"last_renewed_by"`
+	FineReason       pgtype.Text      `db:"fine_reason" json:"fine_reason"`
 	FirstName        string           `db:"first_name" json:"first_name"`
 	LastName         string           `db:"last_name" json:"last_name"`
 	StudentID_2      string           `db:"student_id_2" json:"student_id_2"`
@@ -596,6 +602,7 @@ func (q *Queries) GetTransactionByID(ctx context.Context, id int32) (GetTransact
 		&i.RenewalCount,
 		&i.LastRenewedAt,
 		&i.LastRenewedBy,
+		&i.FineReason,
 		&i.FirstName,
 		&i.LastName,
 		&i.StudentID_2,
@@ -608,7 +615,7 @@ func (q *Queries) GetTransactionByID(ctx context.Context, id int32) (GetTransact
 
 const getTransactionByIDWithCopy = `-- name: GetTransactionByIDWithCopy :one
 
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by,
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, t.fine_reason,
        s.first_name, s.last_name, s.student_id,
        b.title, b.author, b.book_id, b.cover_image_url,
        bc.barcode as copy_barcode, bc.condition as copy_condition,
@@ -648,6 +655,7 @@ type GetTransactionByIDWithCopyRow struct {
 	RenewalCount         pgtype.Int4      `db:"renewal_count" json:"renewal_count"`
 	LastRenewedAt        pgtype.Timestamp `db:"last_renewed_at" json:"last_renewed_at"`
 	LastRenewedBy        pgtype.Int4      `db:"last_renewed_by" json:"last_renewed_by"`
+	FineReason           pgtype.Text      `db:"fine_reason" json:"fine_reason"`
 	FirstName            string           `db:"first_name" json:"first_name"`
 	LastName             string           `db:"last_name" json:"last_name"`
 	StudentID_2          string           `db:"student_id_2" json:"student_id_2"`
@@ -691,6 +699,7 @@ func (q *Queries) GetTransactionByIDWithCopy(ctx context.Context, id int32) (Get
 		&i.RenewalCount,
 		&i.LastRenewedAt,
 		&i.LastRenewedBy,
+		&i.FineReason,
 		&i.FirstName,
 		&i.LastName,
 		&i.StudentID_2,
@@ -740,7 +749,7 @@ func (q *Queries) HasActiveReservationsByOtherStudents(ctx context.Context, arg 
 }
 
 const listActiveBorrowings = `-- name: ListActiveBorrowings :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, t.fine_reason, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
@@ -780,6 +789,7 @@ type ListActiveBorrowingsRow struct {
 	RenewalCount     pgtype.Int4      `db:"renewal_count" json:"renewal_count"`
 	LastRenewedAt    pgtype.Timestamp `db:"last_renewed_at" json:"last_renewed_at"`
 	LastRenewedBy    pgtype.Int4      `db:"last_renewed_by" json:"last_renewed_by"`
+	FineReason       pgtype.Text      `db:"fine_reason" json:"fine_reason"`
 	FirstName        string           `db:"first_name" json:"first_name"`
 	LastName         string           `db:"last_name" json:"last_name"`
 	StudentID_2      string           `db:"student_id_2" json:"student_id_2"`
@@ -823,6 +833,7 @@ func (q *Queries) ListActiveBorrowings(ctx context.Context, arg ListActiveBorrow
 			&i.RenewalCount,
 			&i.LastRenewedAt,
 			&i.LastRenewedBy,
+			&i.FineReason,
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentID_2,
@@ -841,7 +852,7 @@ func (q *Queries) ListActiveBorrowings(ctx context.Context, arg ListActiveBorrow
 }
 
 const listActiveTransactionsByStudent = `-- name: ListActiveTransactionsByStudent :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, b.title, b.author, b.book_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, t.fine_reason, b.title, b.author, b.book_id
 FROM transactions t
 JOIN books b ON t.book_id = b.id
 WHERE t.student_id = $1 AND t.returned_date IS NULL
@@ -874,6 +885,7 @@ type ListActiveTransactionsByStudentRow struct {
 	RenewalCount     pgtype.Int4      `db:"renewal_count" json:"renewal_count"`
 	LastRenewedAt    pgtype.Timestamp `db:"last_renewed_at" json:"last_renewed_at"`
 	LastRenewedBy    pgtype.Int4      `db:"last_renewed_by" json:"last_renewed_by"`
+	FineReason       pgtype.Text      `db:"fine_reason" json:"fine_reason"`
 	Title            string           `db:"title" json:"title"`
 	Author           string           `db:"author" json:"author"`
 	BookID_2         string           `db:"book_id_2" json:"book_id_2"`
@@ -914,6 +926,7 @@ func (q *Queries) ListActiveTransactionsByStudent(ctx context.Context, studentID
 			&i.RenewalCount,
 			&i.LastRenewedAt,
 			&i.LastRenewedBy,
+			&i.FineReason,
 			&i.Title,
 			&i.Author,
 			&i.BookID_2,
@@ -929,7 +942,7 @@ func (q *Queries) ListActiveTransactionsByStudent(ctx context.Context, studentID
 }
 
 const listOverdueTransactions = `-- name: ListOverdueTransactions :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id, b.isbn, b.cover_image_url,
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, t.fine_reason, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id, b.isbn, b.cover_image_url,
     GREATEST(CURRENT_DATE - t.due_date::date, 0)::int as days_overdue
 FROM transactions t
 JOIN students s ON t.student_id = s.id
@@ -973,6 +986,7 @@ type ListOverdueTransactionsRow struct {
 	RenewalCount     pgtype.Int4      `db:"renewal_count" json:"renewal_count"`
 	LastRenewedAt    pgtype.Timestamp `db:"last_renewed_at" json:"last_renewed_at"`
 	LastRenewedBy    pgtype.Int4      `db:"last_renewed_by" json:"last_renewed_by"`
+	FineReason       pgtype.Text      `db:"fine_reason" json:"fine_reason"`
 	FirstName        string           `db:"first_name" json:"first_name"`
 	LastName         string           `db:"last_name" json:"last_name"`
 	StudentID_2      string           `db:"student_id_2" json:"student_id_2"`
@@ -1020,6 +1034,7 @@ func (q *Queries) ListOverdueTransactions(ctx context.Context, arg ListOverdueTr
 			&i.RenewalCount,
 			&i.LastRenewedAt,
 			&i.LastRenewedBy,
+			&i.FineReason,
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentID_2,
@@ -1042,7 +1057,7 @@ func (q *Queries) ListOverdueTransactions(ctx context.Context, arg ListOverdueTr
 }
 
 const listRenewalsByStudentAndBook = `-- name: ListRenewalsByStudentAndBook :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, b.title, b.author, b.book_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, t.fine_reason, b.title, b.author, b.book_id
 FROM transactions t
 JOIN books b ON t.book_id = b.id
 WHERE t.student_id = $1 AND t.book_id = $2 AND t.transaction_type = 'renew'
@@ -1080,6 +1095,7 @@ type ListRenewalsByStudentAndBookRow struct {
 	RenewalCount     pgtype.Int4      `db:"renewal_count" json:"renewal_count"`
 	LastRenewedAt    pgtype.Timestamp `db:"last_renewed_at" json:"last_renewed_at"`
 	LastRenewedBy    pgtype.Int4      `db:"last_renewed_by" json:"last_renewed_by"`
+	FineReason       pgtype.Text      `db:"fine_reason" json:"fine_reason"`
 	Title            string           `db:"title" json:"title"`
 	Author           string           `db:"author" json:"author"`
 	BookID_2         string           `db:"book_id_2" json:"book_id_2"`
@@ -1120,6 +1136,7 @@ func (q *Queries) ListRenewalsByStudentAndBook(ctx context.Context, arg ListRene
 			&i.RenewalCount,
 			&i.LastRenewedAt,
 			&i.LastRenewedBy,
+			&i.FineReason,
 			&i.Title,
 			&i.Author,
 			&i.BookID_2,
@@ -1135,7 +1152,7 @@ func (q *Queries) ListRenewalsByStudentAndBook(ctx context.Context, arg ListRene
 }
 
 const listTransactions = `-- name: ListTransactions :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, t.fine_reason, s.first_name, s.last_name, s.student_id, b.title, b.author, b.book_id
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
@@ -1174,6 +1191,7 @@ type ListTransactionsRow struct {
 	RenewalCount     pgtype.Int4      `db:"renewal_count" json:"renewal_count"`
 	LastRenewedAt    pgtype.Timestamp `db:"last_renewed_at" json:"last_renewed_at"`
 	LastRenewedBy    pgtype.Int4      `db:"last_renewed_by" json:"last_renewed_by"`
+	FineReason       pgtype.Text      `db:"fine_reason" json:"fine_reason"`
 	FirstName        string           `db:"first_name" json:"first_name"`
 	LastName         string           `db:"last_name" json:"last_name"`
 	StudentID_2      string           `db:"student_id_2" json:"student_id_2"`
@@ -1217,6 +1235,7 @@ func (q *Queries) ListTransactions(ctx context.Context, arg ListTransactionsPara
 			&i.RenewalCount,
 			&i.LastRenewedAt,
 			&i.LastRenewedBy,
+			&i.FineReason,
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentID_2,
@@ -1235,7 +1254,7 @@ func (q *Queries) ListTransactions(ctx context.Context, arg ListTransactionsPara
 }
 
 const listTransactionsByBook = `-- name: ListTransactionsByBook :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, s.first_name, s.last_name, s.student_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, t.fine_reason, s.first_name, s.last_name, s.student_id
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 WHERE t.book_id = $1
@@ -1275,6 +1294,7 @@ type ListTransactionsByBookRow struct {
 	RenewalCount     pgtype.Int4      `db:"renewal_count" json:"renewal_count"`
 	LastRenewedAt    pgtype.Timestamp `db:"last_renewed_at" json:"last_renewed_at"`
 	LastRenewedBy    pgtype.Int4      `db:"last_renewed_by" json:"last_renewed_by"`
+	FineReason       pgtype.Text      `db:"fine_reason" json:"fine_reason"`
 	FirstName        string           `db:"first_name" json:"first_name"`
 	LastName         string           `db:"last_name" json:"last_name"`
 	StudentID_2      string           `db:"student_id_2" json:"student_id_2"`
@@ -1315,6 +1335,7 @@ func (q *Queries) ListTransactionsByBook(ctx context.Context, arg ListTransactio
 			&i.RenewalCount,
 			&i.LastRenewedAt,
 			&i.LastRenewedBy,
+			&i.FineReason,
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentID_2,
@@ -1330,7 +1351,7 @@ func (q *Queries) ListTransactionsByBook(ctx context.Context, arg ListTransactio
 }
 
 const listTransactionsByStudent = `-- name: ListTransactionsByStudent :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, b.title, b.author, b.book_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, t.fine_reason, b.title, b.author, b.book_id
 FROM transactions t
 JOIN books b ON t.book_id = b.id
 WHERE t.student_id = $1
@@ -1370,6 +1391,7 @@ type ListTransactionsByStudentRow struct {
 	RenewalCount     pgtype.Int4      `db:"renewal_count" json:"renewal_count"`
 	LastRenewedAt    pgtype.Timestamp `db:"last_renewed_at" json:"last_renewed_at"`
 	LastRenewedBy    pgtype.Int4      `db:"last_renewed_by" json:"last_renewed_by"`
+	FineReason       pgtype.Text      `db:"fine_reason" json:"fine_reason"`
 	Title            string           `db:"title" json:"title"`
 	Author           string           `db:"author" json:"author"`
 	BookID_2         string           `db:"book_id_2" json:"book_id_2"`
@@ -1410,6 +1432,7 @@ func (q *Queries) ListTransactionsByStudent(ctx context.Context, arg ListTransac
 			&i.RenewalCount,
 			&i.LastRenewedAt,
 			&i.LastRenewedBy,
+			&i.FineReason,
 			&i.Title,
 			&i.Author,
 			&i.BookID_2,
@@ -1426,7 +1449,7 @@ func (q *Queries) ListTransactionsByStudent(ctx context.Context, arg ListTransac
 
 const listTransactionsDueSoon = `-- name: ListTransactionsDueSoon :many
 
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, t.fine_reason, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
@@ -1464,6 +1487,7 @@ type ListTransactionsDueSoonRow struct {
 	RenewalCount     pgtype.Int4      `db:"renewal_count" json:"renewal_count"`
 	LastRenewedAt    pgtype.Timestamp `db:"last_renewed_at" json:"last_renewed_at"`
 	LastRenewedBy    pgtype.Int4      `db:"last_renewed_by" json:"last_renewed_by"`
+	FineReason       pgtype.Text      `db:"fine_reason" json:"fine_reason"`
 	FirstName        string           `db:"first_name" json:"first_name"`
 	LastName         string           `db:"last_name" json:"last_name"`
 	StudentID_2      string           `db:"student_id_2" json:"student_id_2"`
@@ -1509,6 +1533,7 @@ func (q *Queries) ListTransactionsDueSoon(ctx context.Context) ([]ListTransactio
 			&i.RenewalCount,
 			&i.LastRenewedAt,
 			&i.LastRenewedBy,
+			&i.FineReason,
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentID_2,
@@ -1528,7 +1553,7 @@ func (q *Queries) ListTransactionsDueSoon(ctx context.Context) ([]ListTransactio
 }
 
 const listTransactionsOverdue = `-- name: ListTransactionsOverdue :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, t.fine_reason, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
@@ -1565,6 +1590,7 @@ type ListTransactionsOverdueRow struct {
 	RenewalCount     pgtype.Int4      `db:"renewal_count" json:"renewal_count"`
 	LastRenewedAt    pgtype.Timestamp `db:"last_renewed_at" json:"last_renewed_at"`
 	LastRenewedBy    pgtype.Int4      `db:"last_renewed_by" json:"last_renewed_by"`
+	FineReason       pgtype.Text      `db:"fine_reason" json:"fine_reason"`
 	FirstName        string           `db:"first_name" json:"first_name"`
 	LastName         string           `db:"last_name" json:"last_name"`
 	StudentID_2      string           `db:"student_id_2" json:"student_id_2"`
@@ -1609,6 +1635,7 @@ func (q *Queries) ListTransactionsOverdue(ctx context.Context) ([]ListTransactio
 			&i.RenewalCount,
 			&i.LastRenewedAt,
 			&i.LastRenewedBy,
+			&i.FineReason,
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentID_2,
@@ -1628,7 +1655,7 @@ func (q *Queries) ListTransactionsOverdue(ctx context.Context) ([]ListTransactio
 }
 
 const listTransactionsWithCopies = `-- name: ListTransactionsWithCopies :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by,
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, t.fine_reason,
        s.first_name, s.last_name, s.student_id,
        b.title, b.author, b.book_id, b.cover_image_url,
        bc.barcode as copy_barcode, bc.condition as copy_condition,
@@ -1674,6 +1701,7 @@ type ListTransactionsWithCopiesRow struct {
 	RenewalCount         pgtype.Int4      `db:"renewal_count" json:"renewal_count"`
 	LastRenewedAt        pgtype.Timestamp `db:"last_renewed_at" json:"last_renewed_at"`
 	LastRenewedBy        pgtype.Int4      `db:"last_renewed_by" json:"last_renewed_by"`
+	FineReason           pgtype.Text      `db:"fine_reason" json:"fine_reason"`
 	FirstName            string           `db:"first_name" json:"first_name"`
 	LastName             string           `db:"last_name" json:"last_name"`
 	StudentID_2          string           `db:"student_id_2" json:"student_id_2"`
@@ -1722,6 +1750,7 @@ func (q *Queries) ListTransactionsWithCopies(ctx context.Context, arg ListTransa
 			&i.RenewalCount,
 			&i.LastRenewedAt,
 			&i.LastRenewedBy,
+			&i.FineReason,
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentID_2,
@@ -1745,7 +1774,7 @@ func (q *Queries) ListTransactionsWithCopies(ctx context.Context, arg ListTransa
 }
 
 const listTransactionsWithUnpaidFines = `-- name: ListTransactionsWithUnpaidFines :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, t.fine_reason, s.first_name, s.last_name, s.student_id, s.email, b.title, b.author, b.book_id
 FROM transactions t
 JOIN students s ON t.student_id = s.id
 JOIN books b ON t.book_id = b.id
@@ -1782,6 +1811,7 @@ type ListTransactionsWithUnpaidFinesRow struct {
 	RenewalCount     pgtype.Int4      `db:"renewal_count" json:"renewal_count"`
 	LastRenewedAt    pgtype.Timestamp `db:"last_renewed_at" json:"last_renewed_at"`
 	LastRenewedBy    pgtype.Int4      `db:"last_renewed_by" json:"last_renewed_by"`
+	FineReason       pgtype.Text      `db:"fine_reason" json:"fine_reason"`
 	FirstName        string           `db:"first_name" json:"first_name"`
 	LastName         string           `db:"last_name" json:"last_name"`
 	StudentID_2      string           `db:"student_id_2" json:"student_id_2"`
@@ -1826,6 +1856,7 @@ func (q *Queries) ListTransactionsWithUnpaidFines(ctx context.Context) ([]ListTr
 			&i.RenewalCount,
 			&i.LastRenewedAt,
 			&i.LastRenewedBy,
+			&i.FineReason,
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentID_2,
@@ -1862,7 +1893,7 @@ SET
     updated_at = NOW()
 WHERE id = $3
   AND transaction_type = 'lost'
-RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by
+RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by, fine_reason
 `
 
 type MarkTransactionAsFoundParams struct {
@@ -1901,6 +1932,7 @@ func (q *Queries) MarkTransactionAsFound(ctx context.Context, arg MarkTransactio
 		&i.RenewalCount,
 		&i.LastRenewedAt,
 		&i.LastRenewedBy,
+		&i.FineReason,
 	)
 	return i, err
 }
@@ -1921,7 +1953,7 @@ SET
 WHERE id = $3
   AND returned_date IS NULL
   AND transaction_type = 'borrow'
-RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by
+RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by, fine_reason
 `
 
 type MarkTransactionAsLostParams struct {
@@ -1960,6 +1992,7 @@ func (q *Queries) MarkTransactionAsLost(ctx context.Context, arg MarkTransaction
 		&i.RenewalCount,
 		&i.LastRenewedAt,
 		&i.LastRenewedBy,
+		&i.FineReason,
 	)
 	return i, err
 }
@@ -1970,7 +2003,7 @@ SET fine_paid = true, fine_paid_at = NOW(), updated_at = NOW()
 WHERE id = $1
     AND fine_amount > 0
     AND fine_paid = false
-RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by
+RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by, fine_reason
 `
 
 func (q *Queries) PayTransactionFine(ctx context.Context, id int32) (Transaction, error) {
@@ -2002,6 +2035,7 @@ func (q *Queries) PayTransactionFine(ctx context.Context, id int32) (Transaction
 		&i.RenewalCount,
 		&i.LastRenewedAt,
 		&i.LastRenewedBy,
+		&i.FineReason,
 	)
 	return i, err
 }
@@ -2021,7 +2055,7 @@ SET
 WHERE id = $3
   AND returned_date IS NULL
   AND transaction_type IN ('borrow', 'renew')
-RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by
+RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by, fine_reason
 `
 
 type RenewTransactionParams struct {
@@ -2061,15 +2095,16 @@ func (q *Queries) RenewTransaction(ctx context.Context, arg RenewTransactionPara
 		&i.RenewalCount,
 		&i.LastRenewedAt,
 		&i.LastRenewedBy,
+		&i.FineReason,
 	)
 	return i, err
 }
 
 const returnBook = `-- name: ReturnBook :one
 UPDATE transactions
-SET returned_date = NOW(), fine_amount = $2, return_condition = $3, condition_notes = $4, status = 'completed', updated_at = NOW()
+SET returned_date = NOW(), fine_amount = $2, return_condition = $3, condition_notes = $4, fine_reason = $5, status = 'completed', updated_at = NOW()
 WHERE id = $1 AND returned_date IS NULL
-RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by
+RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by, fine_reason
 `
 
 type ReturnBookParams struct {
@@ -2077,6 +2112,7 @@ type ReturnBookParams struct {
 	FineAmount      pgtype.Numeric `db:"fine_amount" json:"fine_amount"`
 	ReturnCondition pgtype.Text    `db:"return_condition" json:"return_condition"`
 	ConditionNotes  pgtype.Text    `db:"condition_notes" json:"condition_notes"`
+	FineReason      pgtype.Text    `db:"fine_reason" json:"fine_reason"`
 }
 
 func (q *Queries) ReturnBook(ctx context.Context, arg ReturnBookParams) (Transaction, error) {
@@ -2085,6 +2121,7 @@ func (q *Queries) ReturnBook(ctx context.Context, arg ReturnBookParams) (Transac
 		arg.FineAmount,
 		arg.ReturnCondition,
 		arg.ConditionNotes,
+		arg.FineReason,
 	)
 	var i Transaction
 	err := row.Scan(
@@ -2113,12 +2150,13 @@ func (q *Queries) ReturnBook(ctx context.Context, arg ReturnBookParams) (Transac
 		&i.RenewalCount,
 		&i.LastRenewedAt,
 		&i.LastRenewedBy,
+		&i.FineReason,
 	)
 	return i, err
 }
 
 const searchTransactions = `-- name: SearchTransactions :many
-SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by,
+SELECT t.id, t.student_id, t.book_id, t.transaction_type, t.transaction_date, t.due_date, t.returned_date, t.librarian_id, t.fine_amount, t.fine_paid, t.notes, t.created_at, t.updated_at, t.return_condition, t.condition_notes, t.fine_waived, t.fine_waived_at, t.fine_waived_by, t.fine_waived_reason, t.fine_paid_at, t.copy_id, t.status, t.renewal_count, t.last_renewed_at, t.last_renewed_by, t.fine_reason,
        s.first_name, s.last_name, s.student_id as student_code,
        b.title, b.author, b.book_id as book_code, b.cover_image_url,
        bc.barcode as copy_barcode, bc.condition as copy_condition,
@@ -2190,6 +2228,7 @@ type SearchTransactionsRow struct {
 	RenewalCount         pgtype.Int4      `db:"renewal_count" json:"renewal_count"`
 	LastRenewedAt        pgtype.Timestamp `db:"last_renewed_at" json:"last_renewed_at"`
 	LastRenewedBy        pgtype.Int4      `db:"last_renewed_by" json:"last_renewed_by"`
+	FineReason           pgtype.Text      `db:"fine_reason" json:"fine_reason"`
 	FirstName            string           `db:"first_name" json:"first_name"`
 	LastName             string           `db:"last_name" json:"last_name"`
 	StudentCode          string           `db:"student_code" json:"student_code"`
@@ -2249,6 +2288,7 @@ func (q *Queries) SearchTransactions(ctx context.Context, arg SearchTransactions
 			&i.RenewalCount,
 			&i.LastRenewedAt,
 			&i.LastRenewedBy,
+			&i.FineReason,
 			&i.FirstName,
 			&i.LastName,
 			&i.StudentCode,
@@ -2291,7 +2331,7 @@ const updateTransactionReturn = `-- name: UpdateTransactionReturn :one
 UPDATE transactions
 SET returned_date = NOW(), fine_amount = $2, updated_at = NOW()
 WHERE id = $1
-RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by
+RETURNING id, student_id, book_id, transaction_type, transaction_date, due_date, returned_date, librarian_id, fine_amount, fine_paid, notes, created_at, updated_at, return_condition, condition_notes, fine_waived, fine_waived_at, fine_waived_by, fine_waived_reason, fine_paid_at, copy_id, status, renewal_count, last_renewed_at, last_renewed_by, fine_reason
 `
 
 type UpdateTransactionReturnParams struct {
@@ -2328,6 +2368,7 @@ func (q *Queries) UpdateTransactionReturn(ctx context.Context, arg UpdateTransac
 		&i.RenewalCount,
 		&i.LastRenewedAt,
 		&i.LastRenewedBy,
+		&i.FineReason,
 	)
 	return i, err
 }
