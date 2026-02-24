@@ -656,8 +656,8 @@ func (h *BookHandler) RefreshBookISBN(c *gin.Context) {
 		return
 	}
 
-	// Fetch ISBN data (hits Redis cache if available — no external API rate limit)
-	isbnInfo, err := h.isbnService.FetchBookInfoByISBN(c.Request.Context(), *book.ISBN)
+	// Fetch fresh ISBN data (bypasses cache since user explicitly requested refresh)
+	isbnInfo, err := h.isbnService.FetchBookInfoByISBNFresh(c.Request.Context(), *book.ISBN)
 	if err != nil {
 		c.JSON(http.StatusNotFound, ErrorResponse{
 			Success: false,

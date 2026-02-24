@@ -116,6 +116,15 @@ func (m *MockISBNService) FetchBookInfoByISBN(ctx context.Context, isbn string) 
 	return info, args.Error(1)
 }
 
+func (m *MockISBNService) FetchBookInfoByISBNFresh(ctx context.Context, isbn string) (*models.ISBNBookInfo, error) {
+	args := m.Called(ctx, isbn)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	info := args.Get(0).(*models.ISBNBookInfo)
+	return info, args.Error(1)
+}
+
 func (m *MockISBNService) ValidateISBN(isbn string) error {
 	args := m.Called(isbn)
 	return args.Error(0)

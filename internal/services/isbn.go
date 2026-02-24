@@ -20,6 +20,7 @@ import (
 // ISBNServiceInterface defines the interface for ISBN-related operations
 type ISBNServiceInterface interface {
 	FetchBookInfoByISBN(ctx context.Context, isbn string) (*models.ISBNBookInfo, error)
+	FetchBookInfoByISBNFresh(ctx context.Context, isbn string) (*models.ISBNBookInfo, error)
 	ValidateISBN(isbn string) error
 }
 
@@ -122,6 +123,17 @@ type OpenLibraryBibkeysResponse map[string]struct {
 		Medium string `json:"medium"`
 		Large  string `json:"large"`
 	} `json:"cover"`
+}
+
+// FetchBookInfoByISBNFresh invalidates the cache and fetches fresh ISBN data.
+// Use this when the user explicitly requests a refresh (e.g., the "Refresh ISBN" button).
+func (s *ISBNService) FetchBookInfoByISBNFresh(ctx context.Context, isbn string) (*models.ISBNBookInfo, error) {
+	if s.redis != nil {
+		cleanISBN := strings.ReplaceAll(strings.ReplaceAll(isbn, "-", ""), " ", "")
+		cacheKey := isbnCachePrefix + cleanISBN
+		s.redis.Del(ctx, cacheKey)
+	}
+	return s.FetchBookInfoByISBN(ctx, isbn)
 }
 
 // FetchBookInfoByISBN fetches book information from multiple APIs in parallel and merges results.
