@@ -1392,6 +1392,9 @@ func (rs *ReportService) buildIndividualStudentReport(
 		} else {
 			item.FineAmount = "0.00"
 		}
+		if h.FineReason.Valid {
+			item.FineReason = h.FineReason.String
+		}
 		if h.FinePaid.Valid {
 			item.FinePaid = h.FinePaid.Bool
 		}
@@ -1777,6 +1780,9 @@ func (rs *ReportService) buildFinesCollectionReport(
 		}
 		if f.FineWaivedReason.Valid {
 			item.FineWaivedReason = f.FineWaivedReason.String
+		}
+		if f.FineReason.Valid {
+			item.FineReason = f.FineReason.String
 		}
 		if f.DueDate.Valid {
 			item.DueDate = f.DueDate.Time

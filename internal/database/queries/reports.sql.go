@@ -530,6 +530,7 @@ SELECT
     COALESCE(t.fine_waived, false) as fine_waived,
     t.fine_waived_at,
     t.fine_waived_reason,
+    t.fine_reason,
     t.due_date,
     t.returned_date,
     GREATEST(COALESCE(t.returned_date::date, CURRENT_DATE) - t.due_date::date, 0) as days_overdue,
@@ -569,6 +570,7 @@ type GetFinePaymentHistoryRow struct {
 	FineWaived       bool             `db:"fine_waived" json:"fine_waived"`
 	FineWaivedAt     pgtype.Timestamp `db:"fine_waived_at" json:"fine_waived_at"`
 	FineWaivedReason pgtype.Text      `db:"fine_waived_reason" json:"fine_waived_reason"`
+	FineReason       pgtype.Text      `db:"fine_reason" json:"fine_reason"`
 	DueDate          pgtype.Timestamp `db:"due_date" json:"due_date"`
 	ReturnedDate     pgtype.Timestamp `db:"returned_date" json:"returned_date"`
 	DaysOverdue      interface{}      `db:"days_overdue" json:"days_overdue"`
@@ -602,6 +604,7 @@ func (q *Queries) GetFinePaymentHistory(ctx context.Context, arg GetFinePaymentH
 			&i.FineWaived,
 			&i.FineWaivedAt,
 			&i.FineWaivedReason,
+			&i.FineReason,
 			&i.DueDate,
 			&i.ReturnedDate,
 			&i.DaysOverdue,
@@ -2057,6 +2060,7 @@ SELECT
     t.returned_date,
     t.fine_amount,
     t.fine_paid,
+    t.fine_reason,
     t.renewal_count,
     b.book_id as book_code,
     b.title as book_title,
@@ -2095,6 +2099,7 @@ type GetStudentTransactionHistoryRow struct {
 	ReturnedDate    pgtype.Timestamp `db:"returned_date" json:"returned_date"`
 	FineAmount      pgtype.Numeric   `db:"fine_amount" json:"fine_amount"`
 	FinePaid        pgtype.Bool      `db:"fine_paid" json:"fine_paid"`
+	FineReason      pgtype.Text      `db:"fine_reason" json:"fine_reason"`
 	RenewalCount    pgtype.Int4      `db:"renewal_count" json:"renewal_count"`
 	BookCode        string           `db:"book_code" json:"book_code"`
 	BookTitle       string           `db:"book_title" json:"book_title"`
@@ -2121,6 +2126,7 @@ func (q *Queries) GetStudentTransactionHistory(ctx context.Context, arg GetStude
 			&i.ReturnedDate,
 			&i.FineAmount,
 			&i.FinePaid,
+			&i.FineReason,
 			&i.RenewalCount,
 			&i.BookCode,
 			&i.BookTitle,

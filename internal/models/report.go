@@ -724,6 +724,7 @@ type TransactionHistoryItem struct {
 	DueDate         time.Time  `json:"due_date"`
 	ReturnedDate    *time.Time `json:"returned_date,omitempty"`
 	FineAmount      string     `json:"fine_amount"`
+	FineReason      string     `json:"fine_reason"`
 	FinePaid        bool       `json:"fine_paid"`
 	RenewalCount    int32      `json:"renewal_count"`
 	BookCode        string     `json:"book_code"`
@@ -882,6 +883,7 @@ type FinePaymentHistoryItem struct {
 	FineWaived       bool       `json:"fine_waived"`
 	FineWaivedAt     *time.Time `json:"fine_waived_at,omitempty"`
 	FineWaivedReason string     `json:"fine_waived_reason"`
+	FineReason       string     `json:"fine_reason"`
 	DueDate          time.Time  `json:"due_date"`
 	ReturnedDate     *time.Time `json:"returned_date,omitempty"`
 	DaysOverdue      int32      `json:"days_overdue"`
