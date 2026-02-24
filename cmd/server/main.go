@@ -239,6 +239,7 @@ func main() {
 	settingsHandler := handlers.NewSettingsHandler(settingsService)
 	auditLogHandler := handlers.NewAuditLogHandler(auditLogService)
 	imageProxyHandler := handlers.NewImageProxyHandler(rc)
+	bookHandler.WithImageProxy(imageProxyHandler)
 
 	// Setup routes
 	setupRoutes(router, authHandler, healthHandler, bookHandler, studentHandler,

@@ -17,6 +17,7 @@ type BookHandler struct {
 	bookService           services.BookServiceInterface
 	isbnService           services.ISBNServiceInterface
 	recommendationService services.RecommendationServiceInterface
+	imageProxy            *ImageProxyHandler
 }
 
 // NewBookHandler creates a new book handler
@@ -26,6 +27,12 @@ func NewBookHandler(bookService services.BookServiceInterface, isbnService servi
 		isbnService:           isbnService,
 		recommendationService: recommendationService,
 	}
+}
+
+// WithImageProxy sets the image proxy handler for cache invalidation
+func (h *BookHandler) WithImageProxy(ip *ImageProxyHandler) *BookHandler {
+	h.imageProxy = ip
+	return h
 }
 
 // CreateBook creates a new book
@@ -250,6 +257,14 @@ func (h *BookHandler) UpdateBook(c *gin.Context) {
 		return
 	}
 
+	// Fetch old book to get previous cover URL for cache invalidation
+	var oldCoverURL string
+	if req.CoverImageURL != nil && h.imageProxy != nil {
+		if oldBook, err := h.bookService.GetBookByID(c.Request.Context(), int32(id)); err == nil && oldBook.CoverImageURL != nil {
+			oldCoverURL = *oldBook.CoverImageURL
+		}
+	}
+
 	book, err := h.bookService.UpdateBook(c.Request.Context(), int32(id), req)
 	if err != nil {
 		if isValidationError(err) {
@@ -290,6 +305,17 @@ func (h *BookHandler) UpdateBook(c *gin.Context) {
 			},
 		})
 		return
+	}
+
+	// Invalidate old image cache when cover URL changes
+	if h.imageProxy != nil && req.CoverImageURL != nil && oldCoverURL != "" {
+		newCoverURL := ""
+		if book != nil && book.CoverImageURL != nil {
+			newCoverURL = *book.CoverImageURL
+		}
+		if oldCoverURL != newCoverURL {
+			h.imageProxy.InvalidateCache(c.Request.Context(), oldCoverURL)
+		}
 	}
 
 	if book != nil {
