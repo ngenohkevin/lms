@@ -1388,7 +1388,7 @@ func (rs *ReportService) buildIndividualStudentReport(
 			item.ReturnedDate = &returnedDate
 		}
 		if h.FineAmount.Valid {
-			item.FineAmount = h.FineAmount.Int.String()
+			item.FineAmount = fmt.Sprintf("%.2f", numericToFloat64(h.FineAmount))
 		} else {
 			item.FineAmount = "0.00"
 		}
@@ -1516,7 +1516,7 @@ func (rs *ReportService) buildLostBooksReport(
 			item.LostDate = book.LostDate.Time
 		}
 		if book.ReplacementCost.Valid {
-			item.ReplacementCost = book.ReplacementCost.Int.String()
+			item.ReplacementCost = fmt.Sprintf("%.2f", numericToFloat64(book.ReplacementCost))
 		} else {
 			item.ReplacementCost = "0.00"
 		}
@@ -1744,7 +1744,7 @@ func (rs *ReportService) buildFinesCollectionReport(
 		// Convert pgtype.Numeric to string
 		fineAmount := "0.00"
 		if f.FineAmount.Valid {
-			fineAmount = f.FineAmount.Int.String()
+			fineAmount = fmt.Sprintf("%.2f", numericToFloat64(f.FineAmount))
 		}
 		// Convert pgtype.Bool to bool
 		finePaid := f.FinePaid.Valid && f.FinePaid.Bool
