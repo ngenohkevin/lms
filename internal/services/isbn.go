@@ -195,12 +195,20 @@ func (s *ISBNService) FetchBookInfoByISBN(ctx context.Context, isbn string) (*mo
 
 	// Merge results: prefer non-empty values, prioritize Google Books for most fields
 	merged := s.mergeResults(isbn, googleResult, openLibEditionResult, openLibBibkeysResult)
-	if merged == nil {
-		return nil, fmt.Errorf("no book information found for ISBN: %s", isbn)
-	}
 
-	// If no cover image found from primary sources, try fallback sources
-	if merged.CoverImageURL == "" {
+	// If no results from any API, still try cover fallback CDNs
+	if merged == nil {
+		coverURL := s.fetchCoverFallback(ctx, isbn)
+		if coverURL != "" {
+			merged = &models.ISBNBookInfo{
+				ISBN:          isbn,
+				CoverImageURL: coverURL,
+			}
+		} else {
+			return nil, fmt.Errorf("no book information found for ISBN: %s", isbn)
+		}
+	} else if merged.CoverImageURL == "" {
+		// If APIs returned data but no cover, try fallback sources
 		merged.CoverImageURL = s.fetchCoverFallback(ctx, isbn)
 	}
 
