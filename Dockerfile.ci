@@ -1,0 +1,24 @@
+# CI Dockerfile - uses pre-built binaries from the CI pipeline
+# This avoids rebuilding Go binaries inside Docker (already built in CI)
+FROM gcr.io/distroless/static-debian11:latest
+
+# Add ca-certificates and timezone data
+COPY --from=alpine:latest /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=alpine:latest /usr/share/zoneinfo /usr/share/zoneinfo
+
+WORKDIR /app
+
+# Copy pre-built binaries from CI build step
+COPY lms-server ./main
+COPY lms-cli ./lms-cli
+
+# Use non-root user (built into distroless)
+USER 65532:65532
+
+EXPOSE 8080
+
+LABEL maintainer="LMS Development Team" \
+      description="Library Management System Backend" \
+      version="1.0.0"
+
+ENTRYPOINT ["/app/main"]
