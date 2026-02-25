@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -18,12 +19,14 @@ const (
 
 // UserPresenceInfo represents a user's presence data
 type UserPresenceInfo struct {
-	UserID   int       `json:"user_id"`
-	Username string    `json:"username"`
-	Role     string    `json:"role"`
-	LastSeen time.Time `json:"last_seen"`
-	IPAddr   string    `json:"ip_address,omitempty"`
-	Path     string    `json:"path,omitempty"`
+	UserID    int       `json:"user_id"`
+	Username  string    `json:"username"`
+	Role      string    `json:"role"`
+	LastSeen  time.Time `json:"last_seen"`
+	IPAddr    string    `json:"ip_address,omitempty"`
+	Path      string    `json:"path,omitempty"`
+	UserAgent string    `json:"user_agent,omitempty"`
+	Device    string    `json:"device,omitempty"`
 }
 
 // OnlineUsersResponse represents the response for online users endpoint
@@ -53,6 +56,32 @@ func NewPresenceService(redisClient *redis.Client, logger *slog.Logger) *Presenc
 	}
 }
 
+// parseDevice extracts a device type from a User-Agent string
+func parseDevice(ua string) string {
+	ua = strings.ToLower(ua)
+
+	switch {
+	case strings.Contains(ua, "iphone"):
+		return "iphone"
+	case strings.Contains(ua, "ipad"):
+		return "ipad"
+	case strings.Contains(ua, "android") && strings.Contains(ua, "mobile"):
+		return "android_phone"
+	case strings.Contains(ua, "android"):
+		return "android_tablet"
+	case strings.Contains(ua, "macintosh") || strings.Contains(ua, "mac os"):
+		return "mac"
+	case strings.Contains(ua, "windows"):
+		return "windows"
+	case strings.Contains(ua, "linux"):
+		return "linux"
+	case strings.Contains(ua, "cros"):
+		return "chromebook"
+	default:
+		return "unknown"
+	}
+}
+
 // UpdatePresence updates a user's presence in Redis
 func (s *PresenceService) UpdatePresence(ctx context.Context, info UserPresenceInfo) error {
 	if s.redisClient == nil {
@@ -60,6 +89,9 @@ func (s *PresenceService) UpdatePresence(ctx context.Context, info UserPresenceI
 	}
 
 	info.LastSeen = time.Now()
+	if info.UserAgent != "" && info.Device == "" {
+		info.Device = parseDevice(info.UserAgent)
+	}
 
 	data, err := json.Marshal(info)
 	if err != nil {

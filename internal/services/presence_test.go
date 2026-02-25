@@ -45,3 +45,28 @@ func TestPresenceService_Interface(t *testing.T) {
 	// Verify PresenceService implements PresenceServiceInterface
 	var _ PresenceServiceInterface = (*PresenceService)(nil)
 }
+
+func TestParseDevice(t *testing.T) {
+	tests := []struct {
+		name     string
+		ua       string
+		expected string
+	}{
+		{"iPhone", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", "iphone"},
+		{"iPad", "Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)", "ipad"},
+		{"Android phone", "Mozilla/5.0 (Linux; Android 14; Pixel 8) Mobile", "android_phone"},
+		{"Android tablet", "Mozilla/5.0 (Linux; Android 14; SM-X200)", "android_tablet"},
+		{"Mac", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36", "mac"},
+		{"Windows", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", "windows"},
+		{"Linux", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36", "linux"},
+		{"Chromebook", "Mozilla/5.0 (X11; CrOS x86_64 14541.0.0)", "chromebook"},
+		{"empty", "", "unknown"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parseDevice(tt.ua)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}

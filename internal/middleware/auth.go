@@ -128,18 +128,26 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 		c.Set("claims", claims)
 		c.Set("token", tokenString) // Store token for blacklisting if needed
 
-		// Fire-and-forget presence update for staff users
-		if claims.UserType == "librarian" && m.presenceService != nil {
+		// Fire-and-forget presence update for staff users (all non-student roles)
+		if claims.UserType != "student" && m.presenceService != nil {
+			userAgent := c.Request.UserAgent()
+			clientIP := c.ClientIP()
+			requestPath := c.Request.URL.Path
 			go func() {
 				bgCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 				defer cancel()
-				_ = m.presenceService.UpdatePresence(bgCtx, services.UserPresenceInfo{
-					UserID:   claims.UserID,
-					Username: claims.Username,
-					Role:     string(actualRole),
-					IPAddr:   c.ClientIP(),
-					Path:     c.Request.URL.Path,
-				})
+				if err := m.presenceService.UpdatePresence(bgCtx, services.UserPresenceInfo{
+					UserID:    claims.UserID,
+					Username:  claims.Username,
+					Role:      string(actualRole),
+					IPAddr:    clientIP,
+					Path:      requestPath,
+					UserAgent: userAgent,
+				}); err != nil {
+					m.logger.Warn("Failed to update presence",
+						"user_id", claims.UserID,
+						"error", err)
+				}
 			}()
 		}
 
