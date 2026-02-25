@@ -1,10 +1,13 @@
 # CI Dockerfile - uses pre-built binaries from the CI pipeline
 # This avoids rebuilding Go binaries inside Docker (already built in CI)
+FROM alpine:latest AS assets
+RUN apk add --no-cache ca-certificates tzdata
+
 FROM gcr.io/distroless/static-debian11:latest
 
 # Add ca-certificates and timezone data
-COPY --from=alpine:latest /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=alpine:latest /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=assets /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=assets /usr/share/zoneinfo /usr/share/zoneinfo
 
 WORKDIR /app
 
