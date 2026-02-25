@@ -549,6 +549,8 @@ func (s *ISBNService) fetchCoverFallback(ctx context.Context, isbn string) strin
 
 	// Direct CDN image URLs — these serve static files, no API rate limits
 	candidates := []string{
+		// Google Books direct thumbnail (not an API call, no rate limit)
+		fmt.Sprintf("https://books.google.com/books/content?vid=isbn:%s&printsec=frontcover&img=1&zoom=1", isbn),
 		// Open Library covers CDN (serves images directly by ISBN)
 		fmt.Sprintf("https://covers.openlibrary.org/b/isbn/%s-L.jpg", isbn),
 	}
@@ -614,14 +616,17 @@ func (s *ISBNService) isValidCoverURL(ctx context.Context, imageURL string) bool
 	}
 
 	// If Content-Length is known, use it
+	// Minimum 2000 bytes filters out known placeholders:
+	// - Open Library 1x1 pixel (43 bytes)
+	// - Google Books "no cover" grey icon (1269 bytes)
 	if resp.ContentLength > 0 {
-		return resp.ContentLength >= 1000
+		return resp.ContentLength >= 2000
 	}
 
-	// Content-Length unknown (-1) — read up to 1001 bytes to check actual size
-	buf := make([]byte, 1001)
+	// Content-Length unknown (-1) — read up to 2001 bytes to check actual size
+	buf := make([]byte, 2001)
 	n, _ := io.ReadFull(resp.Body, buf)
-	return n >= 1000
+	return n >= 2000
 }
 
 // toISBN10 converts an ISBN-13 to ISBN-10 if possible (only for 978-prefixed ISBNs).

@@ -111,7 +111,7 @@ func TestIsValidCoverURL(t *testing.T) {
 	svc := NewISBNService()
 
 	t.Run("valid image", func(t *testing.T) {
-		// Serve a fake image (> 1000 bytes)
+		// Serve a fake image (> 2000 bytes)
 		fakeImage := make([]byte, 5000)
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "image/jpeg")
